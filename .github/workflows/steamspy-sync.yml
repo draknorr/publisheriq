@@ -1,0 +1,44 @@
+name: SteamSpy Sync
+
+on:
+  schedule:
+    - cron: '15 2 * * *' # 2:15 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      max_pages:
+        description: 'Maximum pages to fetch (0 = all)'
+        required: false
+        default: '0'
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run SteamSpy sync
+        run: pnpm --filter @publisheriq/ingestion steamspy-sync
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          MAX_PAGES: ${{ github.event.inputs.max_pages || '0' }}

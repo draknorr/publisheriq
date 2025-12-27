@@ -50,6 +50,12 @@ export const BATCH_SIZES = {
 
   /** Number of community pages to scrape per worker run */
   SCRAPER_BATCH: 50,
+
+  /** Number of apps to calculate trends for per batch */
+  TRENDS_BATCH: 500,
+
+  /** Number of apps to calculate priority for per batch */
+  PRIORITY_BATCH: 1000,
 } as const;
 
 /**

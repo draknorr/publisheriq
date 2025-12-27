@@ -1,0 +1,49 @@
+name: Reviews Sync
+
+on:
+  schedule:
+    # Run 5 times per day during active hours
+    - cron: '30 6 * * *'   # 6:30 AM UTC
+    - cron: '30 10 * * *'  # 10:30 AM UTC
+    - cron: '30 14 * * *'  # 2:30 PM UTC
+    - cron: '30 18 * * *'  # 6:30 PM UTC
+    - cron: '30 22 * * *'  # 10:30 PM UTC
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of apps to process'
+        required: false
+        default: '200'
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run Reviews sync
+        run: pnpm --filter @publisheriq/ingestion reviews-sync
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '200' }}

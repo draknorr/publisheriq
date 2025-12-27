@@ -1,0 +1,39 @@
+name: Steam App List Sync
+
+on:
+  schedule:
+    - cron: '15 0 * * *' # 12:15 AM UTC daily
+  workflow_dispatch:
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run App List sync
+        run: pnpm --filter @publisheriq/ingestion applist-sync
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
