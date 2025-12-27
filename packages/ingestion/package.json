@@ -1,0 +1,39 @@
+{
+  "name": "@publisheriq/ingestion",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src/",
+    "steamspy-sync": "tsx src/workers/steamspy-worker.ts",
+    "applist-sync": "tsx src/workers/applist-worker.ts",
+    "storefront-sync": "tsx src/workers/storefront-worker.ts",
+    "reviews-sync": "tsx src/workers/reviews-worker.ts",
+    "histogram-sync": "tsx src/workers/histogram-worker.ts",
+    "scrape-creation-dates": "tsx src/workers/scraper-worker.ts",
+    "calculate-trends": "tsx src/workers/trends-worker.ts",
+    "update-priorities": "tsx src/workers/priority-worker.ts"
+  },
+  "dependencies": {
+    "@publisheriq/database": "workspace:*",
+    "@publisheriq/shared": "workspace:*",
+    "cheerio": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

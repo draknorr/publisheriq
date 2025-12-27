@@ -1,0 +1,47 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "check-types": {
+      "dependsOn": ["^build"]
+    },
+    "steamspy-sync": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "applist-sync": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "storefront-sync": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "reviews-sync": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "histogram-sync": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "scrape-creation-dates": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "calculate-trends": {
+      "dependsOn": ["build"],
+      "cache": false
+    }
+  }
+}

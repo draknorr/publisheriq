@@ -1,0 +1,30 @@
+{
+  "name": "@publisheriq/database",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src/",
+    "generate-types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/types.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "supabase": "^1.225.3",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}
