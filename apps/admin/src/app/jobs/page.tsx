@@ -1,18 +1,28 @@
+import Link from 'next/link';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
+import { formatDuration } from '@/lib/sync-queries';
 
 export const dynamic = 'force-dynamic';
 
-async function getJobs() {
+const JOB_TYPES = ['all', 'steamspy', 'storefront', 'reviews', 'histogram', 'priority', 'applist'] as const;
+
+async function getJobs(filter?: string) {
   if (!isSupabaseConfigured()) {
     return [];
   }
   const supabase = getSupabase();
-  const { data, error } = await supabase
+  let query = supabase
     .from('sync_jobs')
     .select('*')
     .order('started_at', { ascending: false })
     .limit(100);
+
+  if (filter && filter !== 'all') {
+    query = query.ilike('job_type', `%${filter}%`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching jobs:', error);
@@ -38,24 +48,119 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatDuration(startedAt: string, completedAt: string | null): string {
+function formatJobDuration(startedAt: string, completedAt: string | null): string {
   if (!completedAt) return 'Running...';
 
   const start = new Date(startedAt).getTime();
   const end = new Date(completedAt).getTime();
   const durationMs = end - start;
 
-  if (durationMs < 1000) return `${durationMs}ms`;
-  if (durationMs < 60000) return `${(durationMs / 1000).toFixed(1)}s`;
-  return `${(durationMs / 60000).toFixed(1)}m`;
+  return formatDuration(durationMs);
 }
 
-export default async function JobsPage() {
-  const jobs = await getJobs();
+function JobTypeFilter({ selected }: { selected: string }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {JOB_TYPES.map((type) => (
+        <Link
+          key={type}
+          href={type === 'all' ? '/jobs' : `/jobs?filter=${type}`}
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+            selected === type
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+          }`}
+        >
+          {type.charAt(0).toUpperCase() + type.slice(1)}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
+interface JobStats {
+  total: number;
+  completed: number;
+  failed: number;
+  running: number;
+  avgDurationMs: number | null;
+}
+
+function calculateJobStats(jobs: Array<{ status: string; started_at: string; completed_at: string | null }>): JobStats {
+  const completed = jobs.filter(j => j.status === 'completed');
+  const failed = jobs.filter(j => j.status === 'failed');
+  const running = jobs.filter(j => j.status === 'running');
+
+  const durations = completed
+    .filter(j => j.completed_at)
+    .map(j => new Date(j.completed_at!).getTime() - new Date(j.started_at).getTime());
+
+  const avgDurationMs = durations.length > 0
+    ? durations.reduce((a, b) => a + b, 0) / durations.length
+    : null;
+
+  return {
+    total: jobs.length,
+    completed: completed.length,
+    failed: failed.length,
+    running: running.length,
+    avgDurationMs,
+  };
+}
+
+function JobStatsBar({ stats }: { stats: JobStats }) {
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-lg border border-gray-800 bg-gray-900 px-4 py-3">
+      <span className="text-sm text-gray-400">
+        <span className="font-medium text-white">{stats.total}</span> jobs
+      </span>
+      <span className="text-gray-700">|</span>
+      <span className="text-sm">
+        <span className="font-medium text-green-400">{stats.completed}</span>
+        <span className="text-gray-400"> completed</span>
+      </span>
+      {stats.failed > 0 && (
+        <>
+          <span className="text-gray-700">|</span>
+          <span className="text-sm">
+            <span className="font-medium text-red-400">{stats.failed}</span>
+            <span className="text-gray-400"> failed</span>
+          </span>
+        </>
+      )}
+      {stats.running > 0 && (
+        <>
+          <span className="text-gray-700">|</span>
+          <span className="text-sm">
+            <span className="font-medium text-blue-400">{stats.running}</span>
+            <span className="text-gray-400"> running</span>
+          </span>
+        </>
+      )}
+      {stats.avgDurationMs && (
+        <>
+          <span className="text-gray-700">|</span>
+          <span className="text-sm text-gray-400">
+            Avg: <span className="font-medium text-white">{formatDuration(stats.avgDurationMs)}</span>
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
   if (!isSupabaseConfigured()) {
     return <ConfigurationRequired />;
   }
+
+  const { filter = 'all' } = await searchParams;
+  const jobs = await getJobs(filter);
+  const stats = calculateJobStats(jobs);
 
   return (
     <div>
@@ -64,6 +169,12 @@ export default async function JobsPage() {
         <p className="mt-2 text-gray-400">
           View history of all data synchronization jobs
         </p>
+      </div>
+
+      {/* Filter and Stats */}
+      <div className="mb-6 space-y-4">
+        <JobTypeFilter selected={filter} />
+        {jobs.length > 0 && <JobStatsBar stats={stats} />}
       </div>
 
       {jobs.length === 0 ? (
@@ -81,9 +192,13 @@ export default async function JobsPage() {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-white">No sync jobs yet</h3>
+          <h3 className="mt-4 text-lg font-medium text-white">
+            {filter === 'all' ? 'No sync jobs yet' : `No ${filter} jobs found`}
+          </h3>
           <p className="mt-2 text-gray-400">
-            Trigger a GitHub Action workflow to start syncing data from Steam.
+            {filter === 'all'
+              ? 'Trigger a GitHub Action workflow to start syncing data from Steam.'
+              : 'Try a different filter or wait for jobs to run.'}
           </p>
         </div>
       ) : (
@@ -144,7 +259,7 @@ export default async function JobsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-400">
-                    {formatDuration(job.started_at, job.completed_at)}
+                    {formatJobDuration(job.started_at, job.completed_at)}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-400">
                     {new Date(job.started_at).toLocaleString()}
@@ -188,7 +303,7 @@ export default async function JobsPage() {
                       {new Date(job.started_at).toLocaleString()}
                     </span>
                   </div>
-                  <pre className="mt-2 overflow-x-auto text-sm text-red-300">
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-sm text-red-300">
                     {job.error_message}
                   </pre>
                 </div>

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
+import { SyncHealthCards, LastSyncTimes } from '@/components/SyncHealthCards';
+import { getSyncHealthData } from '@/lib/sync-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +11,7 @@ async function getStats() {
     return null;
   }
   const supabase = getSupabase();
-  const [appsResult, publishersResult, developersResult, jobsResult] = await Promise.all([
+  const [appsResult, publishersResult, developersResult, jobsResult, syncHealth] = await Promise.all([
     supabase.from('apps').select('*', { count: 'exact', head: true }),
     supabase.from('publishers').select('*', { count: 'exact', head: true }),
     supabase.from('developers').select('*', { count: 'exact', head: true }),
@@ -18,6 +20,7 @@ async function getStats() {
       .select('*')
       .order('started_at', { ascending: false })
       .limit(5),
+    getSyncHealthData(supabase),
   ]);
 
   return {
@@ -25,6 +28,7 @@ async function getStats() {
     publisherCount: publishersResult.count ?? 0,
     developerCount: developersResult.count ?? 0,
     recentJobs: jobsResult.data ?? [],
+    syncHealth,
   };
 }
 
@@ -73,7 +77,7 @@ export default async function DashboardPage() {
     return <ConfigurationRequired />;
   }
 
-  const { appCount, publisherCount, developerCount, recentJobs } = stats;
+  const { appCount, publisherCount, developerCount, recentJobs, syncHealth } = stats;
 
   return (
     <div>
@@ -82,6 +86,23 @@ export default async function DashboardPage() {
         <p className="mt-2 text-gray-400">
           Steam data acquisition platform overview
         </p>
+      </div>
+
+      {/* Sync Health Overview */}
+      <div className="mb-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-white">Sync Health</h2>
+          <Link
+            href="/sync-status"
+            className="text-sm font-medium text-blue-400 hover:text-blue-300"
+          >
+            View details
+          </Link>
+        </div>
+        <SyncHealthCards data={syncHealth} />
+        <div className="mt-4">
+          <LastSyncTimes lastSyncs={syncHealth.lastSyncs} />
+        </div>
       </div>
 
       {/* Stats Grid */}
