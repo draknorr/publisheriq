@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { ChevronDown, ChevronRight, Database, User, Bot } from 'lucide-react';
 import type { ChatToolCall } from '@/lib/llm/types';
+import { MessageContent, CopyButton, CodeBlock } from './content';
 
 interface DisplayMessage {
   id: string;
@@ -38,18 +39,33 @@ export function ChatMessage({ message }: ChatMessageProps) {
       </div>
 
       {/* Message content */}
-      <div className={`flex-1 max-w-[80%] ${isUser ? 'flex flex-col items-end' : ''}`}>
+      <div className={`flex-1 max-w-[85%] ${isUser ? 'flex flex-col items-end' : ''}`}>
         <Card
           variant={isUser ? 'default' : 'elevated'}
           padding="md"
-          className={isUser ? 'bg-accent-blue/10 border-accent-blue/20' : ''}
+          className={`relative group ${isUser ? 'bg-accent-blue/10 border-accent-blue/20' : ''}`}
         >
+          {/* Copy button for assistant messages */}
+          {!isUser && (
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <CopyButton text={message.content} size="sm" />
+            </div>
+          )}
+
           {/* Message text */}
-          <div className="text-body text-text-primary whitespace-pre-wrap">{message.content}</div>
+          {isUser ? (
+            <div className="text-body text-text-primary whitespace-pre-wrap">
+              {message.content}
+            </div>
+          ) : (
+            <div className="pr-8">
+              <MessageContent content={message.content} />
+            </div>
+          )}
 
           {/* Query details (for assistant messages with tool calls) */}
           {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-border-subtle">
+            <div className="mt-4 pt-3 border-t border-border-subtle">
               <button
                 onClick={() => setShowQueries(!showQueries)}
                 className="flex items-center gap-2 text-body-sm text-text-secondary hover:text-text-primary transition-colors"
@@ -67,25 +83,31 @@ export function ChatMessage({ message }: ChatMessageProps) {
               </button>
 
               {showQueries && (
-                <div className="mt-2 space-y-3">
+                <div className="mt-3 space-y-4">
                   {message.toolCalls.map((tc, idx) => {
                     const args = tc.arguments as { reasoning?: string; sql?: string };
                     return (
-                      <div key={idx} className="p-3 bg-surface-overlay rounded-md">
-                        <p className="text-caption text-text-muted mb-2">{args.reasoning}</p>
-                        <pre className="text-caption text-text-tertiary font-mono overflow-x-auto whitespace-pre-wrap">
-                          {args.sql}
-                        </pre>
-                        {tc.result.success ? (
-                          <p className="text-caption text-accent-green mt-2">
-                            {tc.result.rowCount} rows returned
-                            {tc.result.truncated && ' (truncated)'}
-                          </p>
-                        ) : (
-                          <p className="text-caption text-accent-red mt-2">
-                            Error: {tc.result.error}
+                      <div key={idx} className="space-y-2">
+                        {args.reasoning && (
+                          <p className="text-body-sm text-text-secondary italic">
+                            {args.reasoning}
                           </p>
                         )}
+                        {args.sql && <CodeBlock code={args.sql} language="sql" />}
+                        <div className="flex items-center gap-2">
+                          {tc.result.success ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                              {tc.result.rowCount} rows returned
+                              {tc.result.truncated && ' (truncated)'}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                              Error: {tc.result.error}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -96,7 +118,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
         </Card>
 
         {/* Timestamp */}
-        <p className={`text-caption text-text-muted mt-1 px-1 ${isUser ? 'text-right' : ''}`}>
+        <p className={`text-caption text-text-muted mt-1.5 px-1 ${isUser ? 'text-right' : ''}`}>
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
