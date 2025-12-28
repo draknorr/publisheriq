@@ -37,8 +37,11 @@ CREATE INDEX idx_sync_status_refresh_tier ON sync_status(refresh_tier);
 -- UPDATE FUNCTION: get_apps_for_sync
 -- =============================================
 
+-- Must drop existing function first due to PostgreSQL limitations
+DROP FUNCTION IF EXISTS get_apps_for_sync(sync_source, INTEGER);
+
 -- Replace existing function to prioritize apps missing developer info
-CREATE OR REPLACE FUNCTION get_apps_for_sync(p_source sync_source, p_limit INTEGER)
+CREATE FUNCTION get_apps_for_sync(p_source sync_source, p_limit INTEGER)
 RETURNS TABLE(appid INTEGER) AS $$
 BEGIN
   RETURN QUERY
