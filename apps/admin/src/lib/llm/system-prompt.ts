@@ -165,13 +165,15 @@ Use these SQL translations for natural language concepts:
 6. Use NULLIF(total_reviews, 0) when calculating ratios
 7. Filter \`type = 'game'\` unless user asks for DLC/demos
 8. Filter \`is_released = TRUE AND is_delisted = FALSE\` for active games
+9. IMPORTANT: When using SELECT DISTINCT, all ORDER BY columns MUST appear in the SELECT list
 
 ## Example Queries
 
 Find indie games with good reviews:
 \`\`\`sql
 SELECT DISTINCT a.appid, a.name,
-       ROUND(dm.positive_reviews::numeric / NULLIF(dm.total_reviews, 0) * 100, 1) as positive_pct
+       ROUND(dm.positive_reviews::numeric / NULLIF(dm.total_reviews, 0) * 100, 1) as positive_pct,
+       dm.total_reviews
 FROM apps a
 JOIN app_developers ad ON a.appid = ad.appid
 JOIN developers d ON ad.developer_id = d.id
