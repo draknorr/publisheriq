@@ -81,11 +81,14 @@ export function validateQuery(sql: string): ValidationResult {
     }
   }
 
-  // Ensure LIMIT exists, add if missing
+  // Sanitize the query
   let sanitizedSql = sql.trim();
+
+  // Always remove trailing semicolon (causes syntax error in subquery wrapper)
+  sanitizedSql = sanitizedSql.replace(/;\s*$/, '');
+
+  // Ensure LIMIT exists, add if missing
   if (!/\bLIMIT\s+\d+/i.test(sanitizedSql)) {
-    // Remove trailing semicolon if present
-    sanitizedSql = sanitizedSql.replace(/;\s*$/, '');
     sanitizedSql += ` LIMIT ${MAX_ROWS}`;
   } else {
     // Ensure existing LIMIT doesn't exceed MAX_ROWS
