@@ -46,6 +46,16 @@ export interface AppWithError {
   last_error_at: string | null;
 }
 
+export interface SourceCompletionStats {
+  source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'page_creation';
+  totalApps: number;
+  syncedApps: number;
+  neverSynced: number;
+  staleApps: number;
+  completionPercent: number;
+  lastSyncTime: string | null;
+}
+
 /**
  * Get job statistics for the last 24 hours
  */
@@ -288,6 +298,161 @@ export async function getAppsWithErrors(supabase: SupabaseClient<Database>, limi
     last_error_message: s.last_error_message,
     last_error_at: s.last_error_at,
   }));
+}
+
+/**
+ * Get completion stats for each sync source
+ * Shows how many apps have been synced vs never synced per source
+ */
+export async function getSourceCompletionStats(
+  supabase: SupabaseClient<Database>
+): Promise<SourceCompletionStats[]> {
+  // Get total syncable apps count
+  const { count: totalApps } = await supabase
+    .from('sync_status')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_syncable', true);
+
+  const total = totalApps ?? 0;
+  const now = new Date();
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Query each source's completion and staleness in parallel
+  const [
+    steamspySynced,
+    storefrontSynced,
+    reviewsSynced,
+    histogramSynced,
+    pageCreationSynced,
+    steamspyStale,
+    storefrontStale,
+    reviewsStale,
+    histogramStale,
+  ] = await Promise.all([
+    // Synced counts (NOT NULL)
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_steamspy_sync', 'is', null),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_storefront_sync', 'is', null),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_reviews_sync', 'is', null),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_histogram_sync', 'is', null),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_page_creation_scrape', 'is', null),
+    // Stale counts (synced but older than threshold)
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_steamspy_sync', 'is', null)
+      .lt('last_steamspy_sync', oneDayAgo),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_storefront_sync', 'is', null)
+      .lt('last_storefront_sync', oneDayAgo),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_reviews_sync', 'is', null)
+      .lt('last_reviews_sync', oneDayAgo),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_histogram_sync', 'is', null)
+      .lt('last_histogram_sync', sevenDaysAgo),
+  ]);
+
+  // Get last sync times from jobs
+  const lastSyncs = await getLastSyncTimes(supabase);
+
+  const sources: SourceCompletionStats[] = [
+    {
+      source: 'steamspy',
+      totalApps: total,
+      syncedApps: steamspySynced.count ?? 0,
+      neverSynced: total - (steamspySynced.count ?? 0),
+      staleApps: steamspyStale.count ?? 0,
+      completionPercent: total > 0 ? ((steamspySynced.count ?? 0) / total) * 100 : 0,
+      lastSyncTime: lastSyncs.steamspy,
+    },
+    {
+      source: 'storefront',
+      totalApps: total,
+      syncedApps: storefrontSynced.count ?? 0,
+      neverSynced: total - (storefrontSynced.count ?? 0),
+      staleApps: storefrontStale.count ?? 0,
+      completionPercent: total > 0 ? ((storefrontSynced.count ?? 0) / total) * 100 : 0,
+      lastSyncTime: lastSyncs.storefront,
+    },
+    {
+      source: 'reviews',
+      totalApps: total,
+      syncedApps: reviewsSynced.count ?? 0,
+      neverSynced: total - (reviewsSynced.count ?? 0),
+      staleApps: reviewsStale.count ?? 0,
+      completionPercent: total > 0 ? ((reviewsSynced.count ?? 0) / total) * 100 : 0,
+      lastSyncTime: lastSyncs.reviews,
+    },
+    {
+      source: 'histogram',
+      totalApps: total,
+      syncedApps: histogramSynced.count ?? 0,
+      neverSynced: total - (histogramSynced.count ?? 0),
+      staleApps: histogramStale.count ?? 0,
+      completionPercent: total > 0 ? ((histogramSynced.count ?? 0) / total) * 100 : 0,
+      lastSyncTime: lastSyncs.histogram,
+    },
+    {
+      source: 'page_creation',
+      totalApps: total,
+      syncedApps: pageCreationSynced.count ?? 0,
+      neverSynced: total - (pageCreationSynced.count ?? 0),
+      staleApps: 0, // page_creation doesn't go stale
+      completionPercent: total > 0 ? ((pageCreationSynced.count ?? 0) / total) * 100 : 0,
+      lastSyncTime: null,
+    },
+  ];
+
+  return sources;
+}
+
+/**
+ * Get count of apps that have ALL sources synced at least once
+ */
+export async function getFullyCompletedAppsCount(
+  supabase: SupabaseClient<Database>
+): Promise<number> {
+  const { count } = await supabase
+    .from('sync_status')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_syncable', true)
+    .not('last_steamspy_sync', 'is', null)
+    .not('last_storefront_sync', 'is', null)
+    .not('last_reviews_sync', 'is', null)
+    .not('last_histogram_sync', 'is', null);
+
+  return count ?? 0;
 }
 
 /**
