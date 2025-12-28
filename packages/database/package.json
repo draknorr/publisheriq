@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "eslint": "^9.39.2",
     "supabase": "^1.225.3",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"

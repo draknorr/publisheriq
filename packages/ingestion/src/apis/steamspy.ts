@@ -1,4 +1,4 @@
-import { API_URLS, logger, ApiError, BATCH_SIZES } from '@publisheriq/shared';
+import { API_URLS, logger, ApiError } from '@publisheriq/shared';
 import { withRetry } from '../utils/retry.js';
 import { rateLimiters } from '../utils/rate-limiter.js';
 
