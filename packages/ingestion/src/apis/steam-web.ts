@@ -4,14 +4,18 @@ import { withRetry } from '../utils/retry.js';
 const log = logger.child({ component: 'SteamWebAPI' });
 
 /**
- * Response from Steam's GetAppList API
+ * Response from Steam's IStoreService/GetAppList API
  */
-interface AppListResponse {
-  applist: {
+interface StoreAppListResponse {
+  response: {
     apps: Array<{
       appid: number;
       name: string;
+      last_modified: number;
+      price_change_number: number;
     }>;
+    have_more_results?: boolean;
+    last_appid?: number;
   };
 }
 
@@ -24,30 +28,61 @@ export interface SteamApp {
 }
 
 /**
- * Fetch the complete list of all apps on Steam
- * This includes games, DLC, demos, videos, etc.
+ * Fetch the complete list of all apps on Steam using IStoreService
+ * This is the recommended endpoint as ISteamApps/GetAppList is deprecated.
+ * Requires a Steam Web API key.
  *
  * @returns Array of all Steam apps with appid and name
  */
 export async function fetchSteamAppList(): Promise<SteamApp[]> {
-  const url = `${API_URLS.STEAM_WEB}/ISteamApps/GetAppList/v2/`;
+  const apiKey = process.env.STEAM_API_KEY;
+  if (!apiKey) {
+    throw new Error('STEAM_API_KEY environment variable is required');
+  }
 
-  log.info('Fetching Steam app list');
+  const allApps: SteamApp[] = [];
+  let lastAppId: number | undefined;
+  let hasMore = true;
+  let pageCount = 0;
 
-  const response = await withRetry(async () => {
-    const res = await fetch(url);
+  log.info('Fetching Steam app list from IStoreService');
 
-    if (!res.ok) {
-      throw new ApiError(`Failed to fetch app list: ${res.statusText}`, res.status, url);
+  while (hasMore) {
+    pageCount++;
+    const url = new URL(`${API_URLS.STEAM_WEB}/IStoreService/GetAppList/v1/`);
+    url.searchParams.set('key', apiKey);
+    url.searchParams.set('max_results', '50000');
+    if (lastAppId !== undefined) {
+      url.searchParams.set('last_appid', lastAppId.toString());
     }
 
-    return res.json() as Promise<AppListResponse>;
-  });
+    const response = await withRetry(async () => {
+      const res = await fetch(url.toString());
 
-  const apps = response.applist.apps;
-  log.info('Fetched Steam app list', { count: apps.length });
+      if (!res.ok) {
+        throw new ApiError(`Failed to fetch app list: ${res.statusText}`, res.status, url.toString());
+      }
 
-  return apps;
+      return res.json() as Promise<StoreAppListResponse>;
+    });
+
+    const apps = response.response.apps || [];
+    for (const app of apps) {
+      allApps.push({
+        appid: app.appid,
+        name: app.name,
+      });
+    }
+
+    hasMore = response.response.have_more_results === true;
+    lastAppId = response.response.last_appid;
+
+    log.info('Fetched app list page', { page: pageCount, appsInPage: apps.length, totalApps: allApps.length });
+  }
+
+  log.info('Fetched complete Steam app list', { count: allApps.length, pages: pageCount });
+
+  return allApps;
 }
 
 /**
