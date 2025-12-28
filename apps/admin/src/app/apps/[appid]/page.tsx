@@ -5,7 +5,7 @@ import { PageSubHeader } from '@/components/layout';
 import { Card } from '@/components/ui';
 import { MetricCard, TypeBadge, ReviewScoreBadge, RatioBar } from '@/components/data-display';
 import { ExternalLink } from 'lucide-react';
-import { AppDetailTabs } from './AppDetailTabs';
+import { AppDetailSections } from './AppDetailSections';
 
 export const dynamic = 'force-dynamic';
 
@@ -225,17 +225,14 @@ function formatNumber(n: number | null): string {
 
 export default async function AppDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ appid: string }>;
-  searchParams: Promise<{ tab?: string }>;
 }) {
   if (!isSupabaseConfigured()) {
     return <ConfigurationRequired />;
   }
 
   const { appid: appidStr } = await params;
-  const { tab = 'overview' } = await searchParams;
   const appid = parseInt(appidStr, 10);
 
   if (isNaN(appid)) {
@@ -348,10 +345,8 @@ export default async function AppDetailPage({
         />
       </div>
 
-      {/* Tabs */}
-      <AppDetailTabs
-        currentTab={tab}
-        appid={appid}
+      {/* All sections */}
+      <AppDetailSections
         app={app}
         developers={developers}
         publishers={publishers}

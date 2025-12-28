@@ -6,27 +6,27 @@ module.exports = {
   ],
   theme: {
     extend: {
-      // Refined dark color palette
+      // Lighter dark color palette
       colors: {
-        // Surface hierarchy
+        // Surface hierarchy (lighter backgrounds)
         surface: {
-          DEFAULT: '#0a0a0b',
-          raised: '#111113',
-          elevated: '#18181b',
-          overlay: '#1f1f23',
+          DEFAULT: '#131316',
+          raised: '#1a1a1f',
+          elevated: '#222228',
+          overlay: '#2a2a32',
         },
-        // Border hierarchy
+        // Border hierarchy (more visible)
         border: {
-          subtle: '#1f1f23',
-          muted: '#27272a',
-          prominent: '#3f3f46',
+          subtle: '#2a2a32',
+          muted: '#36363e',
+          prominent: '#48485a',
         },
-        // Text hierarchy
+        // Text hierarchy (better contrast)
         text: {
-          primary: '#fafafa',
-          secondary: '#a1a1aa',
-          tertiary: '#71717a',
-          muted: '#52525b',
+          primary: '#f4f4f5',
+          secondary: '#b4b4bc',
+          tertiary: '#8e8e96',
+          muted: '#6e6e78',
         },
         // Accent colors
         accent: {

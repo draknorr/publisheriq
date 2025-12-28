@@ -81,7 +81,7 @@ export function AreaChartComponent({
           {showGrid && (
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="#27272a"
+              stroke="#36363e"
               vertical={false}
             />
           )}
@@ -90,7 +90,7 @@ export function AreaChartComponent({
               dataKey={xKey}
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#71717a', fontSize: 11 }}
+              tick={{ fill: '#8e8e96', fontSize: 11 }}
               tickFormatter={formatXAxis}
               dy={8}
             />
@@ -99,20 +99,20 @@ export function AreaChartComponent({
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#71717a', fontSize: 11 }}
+              tick={{ fill: '#8e8e96', fontSize: 11 }}
               tickFormatter={formatYAxis}
               width={50}
             />
           )}
           <Tooltip
             contentStyle={{
-              backgroundColor: '#111113',
-              border: '1px solid #27272a',
+              backgroundColor: '#1a1a1f',
+              border: '1px solid #36363e',
               borderRadius: '8px',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             }}
-            labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
-            itemStyle={{ color: '#fafafa' }}
+            labelStyle={{ color: '#b4b4bc', marginBottom: '4px' }}
+            itemStyle={{ color: '#f4f4f5' }}
             formatter={(value: number | undefined) => {
               if (value === undefined) return ['—', ''];
               return [
@@ -206,7 +206,7 @@ export function MultiAreaChart({
           {showGrid && (
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="#27272a"
+              stroke="#36363e"
               vertical={false}
             />
           )}
@@ -215,7 +215,7 @@ export function MultiAreaChart({
               dataKey={xKey}
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#71717a', fontSize: 11 }}
+              tick={{ fill: '#8e8e96', fontSize: 11 }}
               tickFormatter={formatXAxis}
               dy={8}
             />
@@ -224,19 +224,19 @@ export function MultiAreaChart({
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#71717a', fontSize: 11 }}
+              tick={{ fill: '#8e8e96', fontSize: 11 }}
               tickFormatter={formatYAxis}
               width={50}
             />
           )}
           <Tooltip
             contentStyle={{
-              backgroundColor: '#111113',
-              border: '1px solid #27272a',
+              backgroundColor: '#1a1a1f',
+              border: '1px solid #36363e',
               borderRadius: '8px',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             }}
-            labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
+            labelStyle={{ color: '#b4b4bc', marginBottom: '4px' }}
           />
           {series.map((s) => (
             <Area
