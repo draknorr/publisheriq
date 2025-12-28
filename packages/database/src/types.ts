@@ -46,6 +46,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       developers: {
         Row: {
@@ -81,6 +82,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       apps: {
         Row: {
@@ -134,6 +136,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       app_developers: {
         Row: {
@@ -148,6 +151,20 @@ export type Database = {
           appid?: number;
           developer_id?: number;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'app_developers_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+          {
+            foreignKeyName: 'app_developers_developer_id_fkey';
+            columns: ['developer_id'];
+            referencedRelation: 'developers';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       app_publishers: {
         Row: {
@@ -162,6 +179,20 @@ export type Database = {
           appid?: number;
           publisher_id?: number;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'app_publishers_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+          {
+            foreignKeyName: 'app_publishers_publisher_id_fkey';
+            columns: ['publisher_id'];
+            referencedRelation: 'publishers';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       app_tags: {
         Row: {
@@ -179,6 +210,14 @@ export type Database = {
           tag?: string;
           vote_count?: number;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'app_tags_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+        ];
       };
       daily_metrics: {
         Row: {
@@ -244,6 +283,14 @@ export type Database = {
           price_cents?: number | null;
           discount_percent?: number;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'daily_metrics_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+        ];
       };
       review_histogram: {
         Row: {
@@ -270,6 +317,14 @@ export type Database = {
           recommendations_down?: number;
           fetched_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'review_histogram_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+        ];
       };
       app_trends: {
         Row: {
@@ -311,6 +366,14 @@ export type Database = {
           ccu_trend_7d_pct?: number | null;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'app_trends_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+        ];
       };
       sync_status: {
         Row: {
@@ -367,6 +430,14 @@ export type Database = {
           needs_page_creation_scrape?: boolean;
           is_syncable?: boolean;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'sync_status_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+        ];
       };
       sync_jobs: {
         Row: {
@@ -411,14 +482,39 @@ export type Database = {
           github_run_id?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      get_apps_for_sync: {
+        Args: {
+          p_source: Database['public']['Enums']['sync_source'];
+          p_limit?: number;
+        };
+        Returns: Array<{
+          appid: number;
+          priority_score: number;
+        }>;
+      };
+      upsert_developer: {
+        Args: {
+          p_name: string;
+        };
+        Returns: number;
+      };
+      upsert_publisher: {
+        Args: {
+          p_name: string;
+        };
+        Returns: number;
+      };
+    };
     Enums: {
       app_type: 'game' | 'dlc' | 'demo' | 'mod' | 'video' | 'hardware' | 'music';
       sync_source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper';
       trend_direction: 'up' | 'down' | 'stable';
     };
+    CompositeTypes: Record<string, never>;
   };
 };
