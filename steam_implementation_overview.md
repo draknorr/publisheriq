@@ -6,12 +6,36 @@
 
 ```
 publisheriq/
-├── apps/admin/          # Next.js 15 admin dashboard
+├── apps/admin/          # Next.js 15 admin dashboard + Chat interface
 ├── packages/database/   # Supabase client & types
 ├── packages/ingestion/  # API clients & workers
 ├── packages/shared/     # Constants, logger, utilities
 └── supabase/migrations/ # Database schema
 ```
+
+## Chat Interface
+
+Natural language interface for querying the Steam database. See [Chat Interface Guide](docs/CHAT_INTERFACE.md) for usage.
+
+**Features:**
+- Query database using plain English
+- Structured responses with markdown tables
+- Clickable game links (`[Game Name](game:APPID)` → `/apps/{appid}`)
+- SQL syntax highlighting with copy button
+- Expandable query details (SQL + reasoning)
+- Collapsible long responses
+
+**LLM Providers:**
+- **Anthropic:** Claude 3.5 Haiku (default)
+- **OpenAI:** GPT-4o-mini (fallback)
+- Selection via `LLM_PROVIDER` environment variable
+
+**Security:**
+- Read-only queries only (SELECT)
+- Dual-layer validation (client + database function)
+- 50 row result limit
+- 5000 character query limit
+- Blocked: INSERT, UPDATE, DELETE, DROP, and 27 other dangerous keywords
 
 ## Data Source Hierarchy
 
@@ -44,6 +68,14 @@ LAYER 3 - SCRAPING:
 
 ## Database Schema (Supabase)
 
+### Enums
+```sql
+app_type: 'game', 'dlc', 'demo', 'mod', 'video', 'hardware', 'music'
+sync_source: 'steamspy', 'storefront', 'reviews', 'histogram', 'scraper'
+trend_direction: 'up', 'down', 'stable'
+refresh_tier: 'active', 'moderate', 'dormant', 'dead'
+```
+
 ### Core Tables
 ```sql
 -- Apps (source: GetAppList + Storefront API)
@@ -55,7 +87,7 @@ apps (
     release_date DATE,
     page_creation_date DATE,  -- scraped
     has_workshop BOOLEAN,     -- categories contains id:30
-    has_developer_info BOOLEAN,
+    has_developer_info BOOLEAN,  -- TRUE once dev/pub fetched from Storefront API
     current_price_cents INTEGER,
     current_discount_percent INTEGER
 )
@@ -105,11 +137,25 @@ sync_status (
     refresh_tier refresh_tier,  -- 'active', 'moderate', 'dormant', 'dead'
     sync_interval_hours INTEGER,
     next_sync_after TIMESTAMPTZ,
+    last_activity_at TIMESTAMPTZ,  -- for dormancy detection
     consecutive_errors INTEGER,
     is_syncable BOOLEAN
 )
 
 sync_jobs (id, job_type, status, started_at, completed_at, items_processed, items_succeeded, items_failed)
+```
+
+### Database Functions
+```sql
+-- Safe query execution for chat interface
+execute_readonly_query(query_text TEXT) RETURNS JSONB
+  -- Validates query starts with SELECT
+  -- Blocks dangerous keywords
+  -- Returns results as JSONB array
+
+-- Auto-update game counts via triggers
+update_developer_game_count()  -- on app_developers INSERT/DELETE
+update_publisher_game_count()  -- on app_publishers INSERT/DELETE
 ```
 
 ## Smart Caching Strategy
@@ -174,9 +220,17 @@ Dead game (CCU=0, velocity<0.1): -50 pts
 ## Environment Variables
 
 ```bash
+# Database
 SUPABASE_URL=         # Supabase project URL
 SUPABASE_SERVICE_KEY= # Service role key (full access)
+
+# Steam API
 STEAM_API_KEY=        # Steam Web API key
+
+# Chat Interface (choose one provider)
+LLM_PROVIDER=anthropic  # 'anthropic' or 'openai'
+ANTHROPIC_API_KEY=      # Anthropic API key (for Claude)
+OPENAI_API_KEY=         # OpenAI API key (for GPT-4o-mini)
 ```
 
 ## File Locations
@@ -190,3 +244,9 @@ STEAM_API_KEY=        # Steam Web API key
 | Schema | `supabase/migrations/` |
 | Types | `packages/database/src/types.ts` |
 | GitHub Actions | `.github/workflows/` |
+| Chat page | `apps/admin/src/app/chat/page.tsx` |
+| Chat API | `apps/admin/src/app/api/chat/route.ts` |
+| Query executor | `apps/admin/src/lib/query-executor.ts` |
+| LLM providers | `apps/admin/src/lib/llm/providers/` |
+| System prompt | `apps/admin/src/lib/llm/system-prompt.ts` |
+| Chat components | `apps/admin/src/components/chat/` |

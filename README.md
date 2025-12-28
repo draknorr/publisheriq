@@ -1,12 +1,21 @@
 # PublisherIQ
 
-Steam Publisher & Developer data acquisition platform for tracking games, reviews, trends, and historical metrics.
+Steam Publisher & Developer data acquisition platform for tracking games, reviews, trends, and historical metrics. Features an AI-powered natural language interface for querying the database.
+
+## Features
+
+- **Data Ingestion** - Automated collection from Steam APIs and SteamSpy
+- **Historical Tracking** - Daily snapshots of reviews, CCU, and pricing
+- **Trend Analysis** - 30/90-day trend calculations with review velocity
+- **Chat Interface** - Natural language queries powered by Claude AI ([Guide](docs/CHAT_INTERFACE.md))
+- **Admin Dashboard** - Browse publishers, developers, games, and sync status
 
 ## Architecture
 
 - **Database:** Supabase (PostgreSQL)
 - **Workers:** GitHub Actions (scheduled data ingestion)
-- **Dashboard:** Next.js on Vercel (minimal admin UI)
+- **Dashboard:** Next.js 15 on Vercel
+- **AI:** Anthropic Claude 3.5 Haiku / OpenAI GPT-4o-mini
 - **Language:** TypeScript throughout
 
 ## Project Structure
@@ -51,6 +60,12 @@ publisheriq/
    SUPABASE_URL=https://xxx.supabase.co
    SUPABASE_SERVICE_KEY=eyJ...
    STEAM_API_KEY=xxx
+
+   # For chat interface (choose one)
+   ANTHROPIC_API_KEY=sk-ant-...
+   # or
+   OPENAI_API_KEY=sk-...
+   LLM_PROVIDER=anthropic  # or 'openai'
    ```
 
 6. Apply database migrations in Supabase SQL Editor

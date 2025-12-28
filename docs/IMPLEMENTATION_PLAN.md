@@ -246,12 +246,44 @@ Each worker:
 3. **Publishers** - List/search publishers, game counts
 4. **Developers** - List/search developers, game counts
 5. **Games** - Search games, view trends
+6. **Chat Interface** - Natural language database queries
 
 ### Tech Stack
-- Next.js 14+ (App Router)
+- Next.js 15 (App Router)
 - Tailwind CSS
 - Supabase client (read-only anon key)
+- LLM: Claude 3.5 Haiku (Anthropic) / GPT-4o-mini (OpenAI)
 - Deploy to Vercel
+
+## Phase 4: Chat Interface (COMPLETE)
+
+### AI-Powered Query Interface
+
+Natural language interface for querying the Steam database using Claude AI.
+
+**Features Implemented:**
+- Query database using plain English
+- Structured responses with markdown tables
+- Clickable game links (`[Game Name](game:APPID)`)
+- SQL syntax highlighting with Shiki
+- Expandable query details (SQL + reasoning)
+- Collapsible long responses
+- Copy buttons for code blocks
+
+**Key Files:**
+- `apps/admin/src/app/chat/page.tsx` - Chat page
+- `apps/admin/src/app/api/chat/route.ts` - Chat API endpoint
+- `apps/admin/src/lib/query-executor.ts` - Query validation & execution
+- `apps/admin/src/lib/llm/system-prompt.ts` - Schema documentation for AI
+- `apps/admin/src/lib/llm/providers/` - LLM provider implementations
+
+**Security:**
+- Dual-layer query validation (client + database function)
+- 31 blocked SQL keywords
+- 50 row result limit
+- 5000 character query limit
+
+See [Chat Interface Guide](CHAT_INTERFACE.md) for user documentation.
 
 ---
 
@@ -268,6 +300,12 @@ STEAM_API_KEY=xxx
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_KEY=eyJ...
+
+# Chat Interface (choose one provider)
+LLM_PROVIDER=anthropic  # 'anthropic' or 'openai'
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 ```
 
 ---
@@ -373,6 +411,7 @@ Page creation dates are immutable - only need to scrape once per app.
 CREATE TYPE app_type AS ENUM ('game', 'dlc', 'demo', 'mod', 'video', 'hardware', 'music');
 CREATE TYPE sync_source AS ENUM ('steamspy', 'storefront', 'reviews', 'histogram', 'scraper');
 CREATE TYPE trend_direction AS ENUM ('up', 'down', 'stable');
+CREATE TYPE refresh_tier AS ENUM ('active', 'moderate', 'dormant', 'dead');
 
 -- =============================================
 -- CORE ENTITIES
@@ -412,6 +451,7 @@ CREATE TABLE apps (
     page_creation_date DATE,
     page_creation_date_raw TEXT,
     has_workshop BOOLEAN DEFAULT FALSE,
+    has_developer_info BOOLEAN DEFAULT FALSE,  -- TRUE once dev/pub fetched
     current_price_cents INTEGER,
     current_discount_percent INTEGER DEFAULT 0,
     is_released BOOLEAN DEFAULT TRUE,
@@ -507,12 +547,14 @@ CREATE TABLE sync_status (
     last_page_creation_scrape TIMESTAMPTZ,
     priority_score INTEGER DEFAULT 0,
     priority_calculated_at TIMESTAMPTZ,
+    refresh_tier refresh_tier DEFAULT 'moderate',
     next_sync_after TIMESTAMPTZ DEFAULT NOW(),
     sync_interval_hours INTEGER DEFAULT 24,
     consecutive_errors INTEGER DEFAULT 0,
     last_error_source sync_source,
     last_error_message TEXT,
     last_error_at TIMESTAMPTZ,
+    last_activity_at TIMESTAMPTZ,
     needs_page_creation_scrape BOOLEAN DEFAULT TRUE,
     is_syncable BOOLEAN DEFAULT TRUE
 );

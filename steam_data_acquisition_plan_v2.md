@@ -1,5 +1,5 @@
 # Steam Publisher & Developer Data Acquisition Plan
-## Version 2.0 - Implementation Complete
+## Version 2.1 - Implementation Complete
 
 ## Executive Summary
 
@@ -13,6 +13,7 @@ This document describes the implemented data acquisition system for building a n
 - Workshop support as boolean only
 - Historical tracking of all metrics
 - Priority-based update cycles distributed via GitHub Actions
+- Natural language chat interface for database queries (Claude AI)
 
 ---
 
@@ -275,6 +276,10 @@ CREATE TYPE app_type AS ENUM ('game', 'dlc', 'demo', 'mod', 'video', 'hardware',
 CREATE TYPE sync_source AS ENUM ('steamspy', 'storefront', 'reviews', 'histogram', 'scraper');
 CREATE TYPE trend_direction AS ENUM ('up', 'down', 'stable');
 CREATE TYPE refresh_tier AS ENUM ('active', 'moderate', 'dormant', 'dead');
+-- active: CCU>100 or reviews/day>1 (sync every 6-12h)
+-- moderate: CCU>0 (sync every 24-48h)
+-- dormant: no activity 90 days (weekly)
+-- dead: no activity 1 year (monthly)
 
 -- Publishers
 CREATE TABLE publishers (
@@ -489,6 +494,61 @@ BEGIN
   LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Execute read-only SQL queries for chat interface
+CREATE FUNCTION execute_readonly_query(query_text TEXT) RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    -- Validate query starts with SELECT
+    IF NOT (UPPER(TRIM(query_text)) LIKE 'SELECT%') THEN
+        RAISE EXCEPTION 'Only SELECT queries are allowed';
+    END IF;
+
+    -- Block dangerous keywords
+    IF query_text ~* '\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|EXECUTE)\b' THEN
+        RAISE EXCEPTION 'Query contains forbidden keywords';
+    END IF;
+
+    -- Execute and return results as JSONB
+    EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || query_text || ') t'
+    INTO result;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Auto-update game counts on developers
+CREATE FUNCTION update_developer_game_count() RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        UPDATE developers SET game_count = game_count + 1 WHERE id = NEW.developer_id;
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE developers SET game_count = game_count - 1 WHERE id = OLD.developer_id;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_app_developers_count
+    AFTER INSERT OR DELETE ON app_developers
+    FOR EACH ROW EXECUTE FUNCTION update_developer_game_count();
+
+-- Auto-update game counts on publishers
+CREATE FUNCTION update_publisher_game_count() RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        UPDATE publishers SET game_count = game_count + 1 WHERE id = NEW.publisher_id;
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE publishers SET game_count = game_count - 1 WHERE id = OLD.publisher_id;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_app_publishers_count
+    AFTER INSERT OR DELETE ON app_publishers
+    FOR EACH ROW EXECUTE FUNCTION update_publisher_game_count();
 ```
 
 ---
@@ -710,3 +770,9 @@ ORDER BY p.name, month DESC;
 | Migrations | `supabase/migrations/` |
 | GitHub Actions | `.github/workflows/` |
 | Admin Dashboard | `apps/admin/` |
+| Chat Interface | `apps/admin/src/app/chat/` |
+| Chat API Route | `apps/admin/src/app/api/chat/route.ts` |
+| Query Executor | `apps/admin/src/lib/query-executor.ts` |
+| LLM Providers | `apps/admin/src/lib/llm/providers/` |
+| System Prompt | `apps/admin/src/lib/llm/system-prompt.ts` |
+| Chat Components | `apps/admin/src/components/chat/` |
