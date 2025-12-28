@@ -4,6 +4,9 @@
  * Fetches all apps from SteamSpy's paginated API and syncs to database.
  * Rate limited to 1 request per 60 seconds for the "all" endpoint.
  *
+ * NOTE: SteamSpy is used ONLY for enrichment data (CCU, owners, playtime, metrics).
+ * Developers and publishers should come from Steam Storefront API, not SteamSpy.
+ *
  * Run with: pnpm --filter @publisheriq/ingestion steamspy-sync
  */
 
@@ -17,8 +20,6 @@ interface SyncStats {
   appsProcessed: number;
   appsCreated: number;
   appsUpdated: number;
-  developersCreated: number;
-  publishersCreated: number;
   errors: number;
 }
 
@@ -62,43 +63,8 @@ async function processBatch(
         stats.appsUpdated++;
       }
 
-      // Upsert developer if exists
-      if (app.developer && app.developer.trim()) {
-        const { data: devData, error: devError } = await supabase.rpc('upsert_developer', {
-          p_name: app.developer.trim(),
-        });
-
-        if (devError) {
-          log.error('Failed to upsert developer', { developer: app.developer, error: devError });
-        } else if (devData) {
-          stats.developersCreated++;
-
-          // Link app to developer
-          await supabase.from('app_developers').upsert(
-            { appid: app.appid, developer_id: devData },
-            { onConflict: 'appid,developer_id' }
-          );
-        }
-      }
-
-      // Upsert publisher if exists
-      if (app.publisher && app.publisher.trim()) {
-        const { data: pubData, error: pubError } = await supabase.rpc('upsert_publisher', {
-          p_name: app.publisher.trim(),
-        });
-
-        if (pubError) {
-          log.error('Failed to upsert publisher', { publisher: app.publisher, error: pubError });
-        } else if (pubData) {
-          stats.publishersCreated++;
-
-          // Link app to publisher
-          await supabase.from('app_publishers').upsert(
-            { appid: app.appid, publisher_id: pubData },
-            { onConflict: 'appid,publisher_id' }
-          );
-        }
-      }
+      // NOTE: Developers and publishers are NOT synced from SteamSpy
+      // They should come from Steam Storefront API which is authoritative
 
       // Upsert sync_status
       await supabase.from('sync_status').upsert(
@@ -164,8 +130,6 @@ async function main(): Promise<void> {
     appsProcessed: 0,
     appsCreated: 0,
     appsUpdated: 0,
-    developersCreated: 0,
-    publishersCreated: 0,
     errors: 0,
   };
 
@@ -208,8 +172,6 @@ async function main(): Promise<void> {
       appsProcessed: stats.appsProcessed,
       appsCreated: stats.appsCreated,
       appsUpdated: stats.appsUpdated,
-      developersCreated: stats.developersCreated,
-      publishersCreated: stats.publishersCreated,
       errors: stats.errors,
     });
   } catch (error) {
