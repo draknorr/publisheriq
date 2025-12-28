@@ -86,6 +86,21 @@ function calculateSyncInterval(priority: number): number {
   }
 }
 
+type RefreshTier = 'active' | 'moderate' | 'dormant' | 'dead';
+
+function calculateRefreshTier(priority: number): RefreshTier {
+  // Map priority scores to refresh tiers for dashboard clarity
+  if (priority >= 100) {
+    return 'active'; // 6-12hr intervals, high activity games
+  } else if (priority >= 25) {
+    return 'moderate'; // 24-48hr intervals, moderate activity
+  } else if (priority > 0) {
+    return 'dormant'; // weekly intervals, low activity
+  } else {
+    return 'dead'; // no measurable activity
+  }
+}
+
 async function main(): Promise<void> {
   const startTime = Date.now();
   const githubRunId = process.env.GITHUB_RUN_ID;
@@ -176,6 +191,7 @@ async function main(): Promise<void> {
         appid: number;
         priority_score: number;
         sync_interval_hours: number;
+        refresh_tier: RefreshTier;
         priority_calculated_at: string;
         next_sync_after: string;
       }> = [];
@@ -198,6 +214,7 @@ async function main(): Promise<void> {
 
         const priority = calculatePriorityScore(app);
         const syncInterval = calculateSyncInterval(priority);
+        const refreshTier = calculateRefreshTier(priority);
 
         const now = new Date();
         const nextSync = new Date(now.getTime() + syncInterval * 60 * 60 * 1000);
@@ -206,6 +223,7 @@ async function main(): Promise<void> {
           appid,
           priority_score: priority,
           sync_interval_hours: syncInterval,
+          refresh_tier: refreshTier,
           priority_calculated_at: now.toISOString(),
           next_sync_after: nextSync.toISOString(),
         });
@@ -218,6 +236,7 @@ async function main(): Promise<void> {
           .update({
             priority_score: update.priority_score,
             sync_interval_hours: update.sync_interval_hours,
+            refresh_tier: update.refresh_tier,
             priority_calculated_at: update.priority_calculated_at,
             next_sync_after: update.next_sync_after,
           })

@@ -64,6 +64,24 @@ async function main(): Promise<void> {
     log.info('Found apps to sync', { count: appsToSync.length });
     const today = new Date().toISOString().split('T')[0];
 
+    // Fetch previous review counts to detect activity
+    const appIds = appsToSync.map((a: { appid: number }) => a.appid);
+    const { data: previousMetrics } = await supabase
+      .from('daily_metrics')
+      .select('appid, total_reviews')
+      .in('appid', appIds)
+      .order('metric_date', { ascending: false });
+
+    // Build a map of previous review counts (most recent per app)
+    const previousReviewCounts = new Map<number, number>();
+    if (previousMetrics) {
+      for (const m of previousMetrics) {
+        if (!previousReviewCounts.has(m.appid)) {
+          previousReviewCounts.set(m.appid, m.total_reviews ?? 0);
+        }
+      }
+    }
+
     for (const { appid } of appsToSync) {
       stats.appsProcessed++;
 
@@ -74,6 +92,10 @@ async function main(): Promise<void> {
           stats.appsFailed++;
           continue;
         }
+
+        // Check if app has new reviews (indicates activity)
+        const previousCount = previousReviewCounts.get(appid) ?? 0;
+        const hasNewReviews = summary.totalReviews > previousCount;
 
         // Update daily metrics with review data
         await supabase.from('daily_metrics').upsert(
@@ -89,14 +111,17 @@ async function main(): Promise<void> {
           { onConflict: 'appid,metric_date' }
         );
 
-        // Update sync status
-        await supabase
-          .from('sync_status')
-          .update({
-            last_reviews_sync: new Date().toISOString(),
-            consecutive_errors: 0,
-          })
-          .eq('appid', appid);
+        // Update sync status (include last_activity_at if new reviews detected)
+        const syncUpdate: Record<string, unknown> = {
+          last_reviews_sync: new Date().toISOString(),
+          consecutive_errors: 0,
+        };
+
+        if (hasNewReviews) {
+          syncUpdate.last_activity_at = new Date().toISOString();
+        }
+
+        await supabase.from('sync_status').update(syncUpdate).eq('appid', appid);
 
         stats.appsSucceeded++;
       } catch (error) {

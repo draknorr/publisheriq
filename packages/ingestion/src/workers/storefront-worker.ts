@@ -116,6 +116,7 @@ async function main(): Promise<void> {
         }
 
         // Upsert developers
+        let hasDevOrPub = false;
         for (const devName of details.developers) {
           if (devName.trim()) {
             const { data: devId } = await supabase.rpc('upsert_developer', {
@@ -127,6 +128,7 @@ async function main(): Promise<void> {
                 { appid, developer_id: devId },
                 { onConflict: 'appid,developer_id' }
               );
+              hasDevOrPub = true;
             }
           }
         }
@@ -143,8 +145,17 @@ async function main(): Promise<void> {
                 { appid, publisher_id: pubId },
                 { onConflict: 'appid,publisher_id' }
               );
+              hasDevOrPub = true;
             }
           }
+        }
+
+        // Mark app as having developer info if we successfully linked any
+        if (hasDevOrPub) {
+          await supabase
+            .from('apps')
+            .update({ has_developer_info: true })
+            .eq('appid', appid);
         }
 
         // Update sync status
