@@ -521,8 +521,8 @@ export default async function AppsPage({
                     <div>
                       <p className="text-caption text-text-tertiary">Reviews</p>
                       <p className="text-body-sm text-text-primary mt-0.5">
-                        {app.review_score !== null ? (
-                          <ReviewScoreBadge score={app.review_score} />
+                        {app.total_reviews && app.total_reviews > 0 ? (
+                          <ReviewScoreBadge score={Math.round((app.positive_reviews ?? 0) / app.total_reviews * 100)} />
                         ) : (
                           '—'
                         )}
@@ -605,8 +605,11 @@ export default async function AppsPage({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      {app.review_score !== null ? (
-                        <ReviewScoreBadge score={app.review_score} description={app.review_score_desc ?? undefined} />
+                      {app.total_reviews && app.total_reviews > 0 ? (
+                        <ReviewScoreBadge
+                          score={Math.round((app.positive_reviews ?? 0) / app.total_reviews * 100)}
+                          description={app.review_score_desc ?? undefined}
+                        />
                       ) : (
                         <span className="text-text-muted">—</span>
                       )}

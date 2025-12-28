@@ -304,8 +304,11 @@ export default async function AppDetailPage({
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
         <Card className="col-span-2 p-4">
           <div className="flex items-center justify-between mb-2">
-            {latestMetrics?.review_score !== null ? (
-              <ReviewScoreBadge score={latestMetrics.review_score} description={latestMetrics.review_score_desc ?? undefined} />
+            {latestMetrics && latestMetrics.total_reviews && latestMetrics.total_reviews > 0 ? (
+              <ReviewScoreBadge
+                score={Math.round((latestMetrics.positive_reviews ?? 0) / latestMetrics.total_reviews * 100)}
+                description={latestMetrics.review_score_desc ?? undefined}
+              />
             ) : (
               <span className="text-text-muted text-body-sm">No reviews</span>
             )}
