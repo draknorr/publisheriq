@@ -1,8 +1,12 @@
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 
 export const dynamic = 'force-dynamic';
 
 async function getPublishers(search?: string) {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
   const supabase = getSupabase();
   let query = supabase
     .from('publishers')
@@ -25,6 +29,9 @@ async function getPublishers(search?: string) {
 }
 
 async function getPublisherCount() {
+  if (!isSupabaseConfigured()) {
+    return 0;
+  }
   const supabase = getSupabase();
   const { count } = await supabase
     .from('publishers')
@@ -37,6 +44,10 @@ export default async function PublishersPage({
 }: {
   searchParams: Promise<{ search?: string }>;
 }) {
+  if (!isSupabaseConfigured()) {
+    return <ConfigurationRequired />;
+  }
+
   const { search } = await searchParams;
   const [publishers, totalCount] = await Promise.all([
     getPublishers(search),

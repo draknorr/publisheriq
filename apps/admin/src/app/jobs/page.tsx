@@ -1,8 +1,12 @@
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 
 export const dynamic = 'force-dynamic';
 
 async function getJobs() {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from('sync_jobs')
@@ -48,6 +52,10 @@ function formatDuration(startedAt: string, completedAt: string | null): string {
 
 export default async function JobsPage() {
   const jobs = await getJobs();
+
+  if (!isSupabaseConfigured()) {
+    return <ConfigurationRequired />;
+  }
 
   return (
     <div>

@@ -1,9 +1,13 @@
 import Link from 'next/link';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 
 export const dynamic = 'force-dynamic';
 
 async function getStats() {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
   const supabase = getSupabase();
   const [appsResult, publishersResult, developersResult, jobsResult] = await Promise.all([
     supabase.from('apps').select('*', { count: 'exact', head: true }),
@@ -63,7 +67,13 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default async function DashboardPage() {
-  const { appCount, publisherCount, developerCount, recentJobs } = await getStats();
+  const stats = await getStats();
+
+  if (!stats) {
+    return <ConfigurationRequired />;
+  }
+
+  const { appCount, publisherCount, developerCount, recentJobs } = stats;
 
   return (
     <div>

@@ -1,8 +1,12 @@
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 
 export const dynamic = 'force-dynamic';
 
 async function getDevelopers(search?: string) {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
   const supabase = getSupabase();
   let query = supabase
     .from('developers')
@@ -25,6 +29,9 @@ async function getDevelopers(search?: string) {
 }
 
 async function getDeveloperCount() {
+  if (!isSupabaseConfigured()) {
+    return 0;
+  }
   const supabase = getSupabase();
   const { count } = await supabase
     .from('developers')
@@ -37,6 +44,10 @@ export default async function DevelopersPage({
 }: {
   searchParams: Promise<{ search?: string }>;
 }) {
+  if (!isSupabaseConfigured()) {
+    return <ConfigurationRequired />;
+  }
+
   const { search } = await searchParams;
   const [developers, totalCount] = await Promise.all([
     getDevelopers(search),

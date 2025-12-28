@@ -1,8 +1,12 @@
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 
 export const dynamic = 'force-dynamic';
 
 async function getApps(search?: string) {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
   const supabase = getSupabase();
   let query = supabase
     .from('apps')
@@ -25,6 +29,9 @@ async function getApps(search?: string) {
 }
 
 async function getAppCount() {
+  if (!isSupabaseConfigured()) {
+    return 0;
+  }
   const supabase = getSupabase();
   const { count } = await supabase
     .from('apps')
@@ -55,6 +62,10 @@ export default async function AppsPage({
 }: {
   searchParams: Promise<{ search?: string }>;
 }) {
+  if (!isSupabaseConfigured()) {
+    return <ConfigurationRequired />;
+  }
+
   const { search } = await searchParams;
   const [apps, totalCount] = await Promise.all([
     getApps(search),
