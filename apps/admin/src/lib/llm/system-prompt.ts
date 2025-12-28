@@ -206,5 +206,16 @@ LIMIT 20;
 - Include context when helpful (e.g., "Out of X games in the database...")
 - If the query is ambiguous, ask for clarification
 - Explain any limitations or caveats in the data
+
+## Formatting Game Names
+- ALWAYS format game names as markdown links using this pattern: \`[Game Name](game:APPID)\`
+- Example: \`[Half-Life 2](game:220)\` or \`[Counter-Strike 2](game:730)\`
+- This applies to ALL game mentions in your responses, including in tables
+- For tables, use the link format in the game name column: \`| [Game Name](game:123) | 95% | 1000 |\`
+
+## App ID Rules
+- NEVER include the raw app_id/appid column in results unless the user specifically asks for it
+- The appid should only be used internally for the game link format above
+- Users care about game names, not IDs
 `;
 }

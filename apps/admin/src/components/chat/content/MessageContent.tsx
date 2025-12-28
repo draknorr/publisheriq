@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { parseMessageContent, type ContentBlock } from './parsers';
 import { MarkdownTable } from './MarkdownTable';
 import { CodeBlock } from './CodeBlock';
@@ -79,14 +80,21 @@ function TextBlock({ content }: TextBlockProps) {
 }
 
 /**
- * Format inline text elements (bold, inline code, etc.)
+ * Format inline text elements (bold, inline code, game links, etc.)
  */
 function formatTextContent(text: string): React.ReactNode {
-  // First pass: split by patterns and mark segments
-  type Segment = { type: 'text' | 'bold' | 'code'; content: string };
+  // Combined pattern for: game links [Name](game:ID), bold **text**, inline code `code`
+  type Segment =
+    | { type: 'text'; content: string }
+    | { type: 'bold'; content: string }
+    | { type: 'code'; content: string }
+    | { type: 'gameLink'; name: string; appId: string };
+
   const segments: Segment[] = [];
   let lastIndex = 0;
-  const combinedPattern = /(\*\*(.+?)\*\*|`([^`]+)`)/g;
+
+  // Pattern matches: [Game Name](game:12345) OR **bold** OR `code`
+  const combinedPattern = /(\[([^\]]+)\]\(game:(\d+)\)|\*\*(.+?)\*\*|`([^`]+)`)/g;
   let match;
 
   while ((match = combinedPattern.exec(text)) !== null) {
@@ -96,10 +104,15 @@ function formatTextContent(text: string): React.ReactNode {
     }
 
     // Determine match type
-    if (match[0].startsWith('**')) {
-      segments.push({ type: 'bold', content: match[2] });
+    if (match[0].startsWith('[') && match[0].includes('](game:')) {
+      // Game link: [Name](game:ID)
+      segments.push({ type: 'gameLink', name: match[2], appId: match[3] });
+    } else if (match[0].startsWith('**')) {
+      // Bold text
+      segments.push({ type: 'bold', content: match[4] });
     } else if (match[0].startsWith('`')) {
-      segments.push({ type: 'code', content: match[3] });
+      // Inline code
+      segments.push({ type: 'code', content: match[5] });
     }
 
     lastIndex = match.index + match[0].length;
@@ -117,6 +130,16 @@ function formatTextContent(text: string): React.ReactNode {
 
   return segments.map((segment, idx) => {
     switch (segment.type) {
+      case 'gameLink':
+        return (
+          <Link
+            key={idx}
+            href={`/apps/${segment.appId}`}
+            className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+          >
+            {segment.name}
+          </Link>
+        );
       case 'bold':
         return (
           <strong key={idx} className="font-semibold text-text-primary">
@@ -137,3 +160,8 @@ function formatTextContent(text: string): React.ReactNode {
     }
   });
 }
+
+/**
+ * Export formatTextContent for use in other components (like MarkdownTable)
+ */
+export { formatTextContent };

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { Alignment } from './parsers';
 
 interface MarkdownTableProps {
@@ -76,9 +77,22 @@ export function MarkdownTable({ headers, rows, alignments }: MarkdownTableProps)
 }
 
 /**
- * Format cell content - handle numbers, percentages, etc.
+ * Format cell content - handle game links, numbers, percentages, etc.
  */
 function formatCellContent(content: string): React.ReactNode {
+  // Check for game link pattern: [Game Name](game:12345)
+  const gameLinkMatch = content.match(/^\[([^\]]+)\]\(game:(\d+)\)$/);
+  if (gameLinkMatch) {
+    return (
+      <Link
+        href={`/apps/${gameLinkMatch[2]}`}
+        className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+      >
+        {gameLinkMatch[1]}
+      </Link>
+    );
+  }
+
   // Check if it's a percentage
   if (/^\d+\.?\d*%$/.test(content.trim())) {
     return <span className="tabular-nums">{content}</span>;
