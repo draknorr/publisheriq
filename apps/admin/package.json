@@ -12,9 +12,11 @@
   "dependencies": {
     "@publisheriq/database": "workspace:*",
     "@supabase/supabase-js": "^2.47.10",
+    "lucide-react": "^0.562.0",
     "next": "^15.1.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "recharts": "^3.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

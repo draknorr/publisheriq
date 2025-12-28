@@ -3,6 +3,10 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { SyncHealthCards, LastSyncTimes } from '@/components/SyncHealthCards';
 import { getSyncHealthData } from '@/lib/sync-queries';
+import { PageHeader, Section, Grid } from '@/components/layout';
+import { Card } from '@/components/ui';
+import { Badge } from '@/components/ui/Badge';
+import { RefreshCw, Gamepad2, Building2, Users, ArrowRight } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,38 +40,38 @@ function StatCard({
   title,
   value,
   href,
+  icon: Icon,
+  color,
 }: {
   title: string;
   value: number | string;
   href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="block rounded-xl border border-gray-800 bg-gray-900 p-6 transition-colors hover:border-gray-700 hover:bg-gray-800"
-    >
-      <p className="text-sm font-medium text-gray-400">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-white">
-        {typeof value === 'number' ? value.toLocaleString() : value}
-      </p>
+    <Link href={href}>
+      <Card variant="interactive" className="p-5 group">
+        <div className="flex items-start justify-between">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-text-secondary transition-colors" />
+        </div>
+        <div className="mt-4">
+          <p className="text-display text-text-primary">
+            {typeof value === 'number' ? value.toLocaleString() : value}
+          </p>
+          <p className="text-body-sm text-text-secondary mt-1">{title}</p>
+        </div>
+      </Card>
     </Link>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    running: 'bg-blue-500/20 text-blue-400',
-    completed: 'bg-green-500/20 text-green-400',
-    failed: 'bg-red-500/20 text-red-400',
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[status] ?? 'bg-gray-500/20 text-gray-400'}`}
-    >
-      {status}
-    </span>
-  );
+  const variant = status === 'completed' ? 'success' : status === 'running' ? 'info' : status === 'failed' ? 'error' : 'default';
+  return <Badge variant={variant}>{status}</Badge>;
 }
 
 export default async function DashboardPage() {
@@ -81,170 +85,178 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-        <p className="mt-2 text-gray-400">
-          Steam data acquisition platform overview
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Steam data acquisition platform overview"
+      />
 
       {/* Sync Health Overview */}
-      <div className="mb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Sync Health</h2>
+      <Section
+        title="Sync Health"
+        actions={
           <Link
             href="/sync-status"
-            className="text-sm font-medium text-blue-400 hover:text-blue-300"
+            className="text-body-sm font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
           >
             View details
           </Link>
-        </div>
+        }
+        className="mb-8"
+      >
         <SyncHealthCards data={syncHealth} />
         <div className="mt-4">
           <LastSyncTimes lastSyncs={syncHealth.lastSyncs} />
         </div>
-      </div>
+      </Section>
 
       {/* Stats Grid */}
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Apps" value={appCount} href="/apps" />
-        <StatCard title="Publishers" value={publisherCount} href="/publishers" />
-        <StatCard title="Developers" value={developerCount} href="/developers" />
-        <StatCard title="Sync Jobs" value={recentJobs.length > 0 ? 'View All' : 'No Jobs'} href="/jobs" />
-      </div>
+      <Section className="mb-8">
+        <Grid cols={4} gap="md">
+          <StatCard
+            title="Total Apps"
+            value={appCount}
+            href="/apps"
+            icon={Gamepad2}
+            color="bg-accent-purple/15 text-accent-purple"
+          />
+          <StatCard
+            title="Publishers"
+            value={publisherCount}
+            href="/publishers"
+            icon={Building2}
+            color="bg-accent-green/15 text-accent-green"
+          />
+          <StatCard
+            title="Developers"
+            value={developerCount}
+            href="/developers"
+            icon={Users}
+            color="bg-accent-orange/15 text-accent-orange"
+          />
+          <StatCard
+            title="Sync Jobs"
+            value={recentJobs.length > 0 ? recentJobs.length : 0}
+            href="/jobs"
+            icon={RefreshCw}
+            color="bg-accent-blue/15 text-accent-blue"
+          />
+        </Grid>
+      </Section>
 
       {/* Quick Links */}
-      <div className="mb-8">
-        <h2 className="mb-4 text-xl font-semibold text-white">Quick Links</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Link
-            href="/jobs"
-            className="flex items-center gap-4 rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-gray-700"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-medium text-white">Sync Jobs</p>
-              <p className="text-sm text-gray-400">View job history and status</p>
-            </div>
+      <Section title="Quick Links" className="mb-8">
+        <Grid cols={3} gap="md">
+          <Link href="/jobs">
+            <Card variant="interactive" className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-blue/15 text-accent-blue">
+                  <RefreshCw className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-body font-medium text-text-primary">Sync Jobs</p>
+                  <p className="text-body-sm text-text-secondary">View job history and status</p>
+                </div>
+              </div>
+            </Card>
           </Link>
 
-          <Link
-            href="/apps"
-            className="flex items-center gap-4 rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-gray-700"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-medium text-white">Browse Apps</p>
-              <p className="text-sm text-gray-400">Search and explore games</p>
-            </div>
+          <Link href="/apps">
+            <Card variant="interactive" className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-purple/15 text-accent-purple">
+                  <Gamepad2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-body font-medium text-text-primary">Browse Apps</p>
+                  <p className="text-body-sm text-text-secondary">Search and explore games</p>
+                </div>
+              </div>
+            </Card>
           </Link>
 
-          <Link
-            href="/publishers"
-            className="flex items-center gap-4 rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-gray-700"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/20 text-green-400">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-medium text-white">Publishers</p>
-              <p className="text-sm text-gray-400">View publisher data</p>
-            </div>
+          <Link href="/publishers">
+            <Card variant="interactive" className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-green/15 text-accent-green">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-body font-medium text-text-primary">Publishers</p>
+                  <p className="text-body-sm text-text-secondary">View publisher data</p>
+                </div>
+              </div>
+            </Card>
           </Link>
-
-          <Link
-            href="/developers"
-            className="flex items-center gap-4 rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-gray-700"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/20 text-orange-400">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-medium text-white">Developers</p>
-              <p className="text-sm text-gray-400">View developer data</p>
-            </div>
-          </Link>
-        </div>
-      </div>
+        </Grid>
+      </Section>
 
       {/* Recent Jobs */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Recent Sync Jobs</h2>
+      <Section
+        title="Recent Sync Jobs"
+        actions={
           <Link
             href="/jobs"
-            className="text-sm font-medium text-blue-400 hover:text-blue-300"
+            className="text-body-sm font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
           >
             View all
           </Link>
-        </div>
-
+        }
+      >
         {recentJobs.length === 0 ? (
-          <div className="rounded-lg border border-gray-800 bg-gray-900 p-8 text-center">
-            <p className="text-gray-400">No sync jobs yet</p>
-            <p className="mt-2 text-sm text-gray-500">
+          <Card className="p-8 text-center">
+            <p className="text-text-secondary">No sync jobs yet</p>
+            <p className="mt-2 text-body-sm text-text-muted">
               Run a GitHub Action workflow to start syncing data
             </p>
-          </div>
+          </Card>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-gray-800">
-            <table className="w-full">
-              <thead className="bg-gray-900">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">
-                    Job Type
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">
-                    Processed
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">
-                    Started
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {recentJobs.map((job) => (
-                  <tr key={job.id} className="bg-gray-900/50">
-                    <td className="px-4 py-3 text-sm font-medium text-white">
-                      {job.job_type}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <StatusBadge status={job.status} />
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-300">
-                      {job.items_succeeded}/{job.items_processed}
-                      {job.items_failed > 0 && (
-                        <span className="ml-1 text-red-400">
-                          ({job.items_failed} failed)
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-400">
-                      {new Date(job.started_at).toLocaleString()}
-                    </td>
+          <Card padding="none">
+            <div className="overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-surface-elevated">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
+                      Job Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
+                      Processed
+                    </th>
+                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
+                      Started
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {recentJobs.map((job) => (
+                    <tr key={job.id} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
+                      <td className="px-4 py-3 text-body-sm font-medium text-text-primary">
+                        {job.job_type}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={job.status} />
+                      </td>
+                      <td className="px-4 py-3 text-body-sm text-text-secondary">
+                        {job.items_succeeded}/{job.items_processed}
+                        {job.items_failed > 0 && (
+                          <span className="ml-1 text-accent-red">
+                            ({job.items_failed} failed)
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-body-sm text-text-tertiary">
+                        {new Date(job.started_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
-      </div>
+      </Section>
     </div>
   );
 }
