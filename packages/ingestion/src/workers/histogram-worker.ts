@@ -45,6 +45,20 @@ async function main(): Promise<void> {
 
     if (!appsToSync || appsToSync.length === 0) {
       log.info('No apps due for histogram sync');
+
+      // Mark job as completed with 0 items
+      if (job) {
+        await supabase
+          .from('sync_jobs')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            items_processed: 0,
+            items_succeeded: 0,
+            items_failed: 0,
+          })
+          .eq('id', job.id);
+      }
       return;
     }
 
