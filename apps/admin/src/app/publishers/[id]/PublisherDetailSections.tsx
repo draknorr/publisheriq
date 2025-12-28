@@ -136,8 +136,8 @@ export function PublisherDetailSections({
   return (
     <div>
       {/* Sticky section navigation */}
-      <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-sm border-b border-border-subtle -mx-8 px-8 py-3 mb-6">
-        <nav className="flex items-center gap-1">
+      <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-sm border-b border-border-subtle -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-6">
+        <nav className="flex items-center gap-1 overflow-x-auto scrollbar-none">
           {sections.map((section, index) => (
             <button
               key={section.id}
