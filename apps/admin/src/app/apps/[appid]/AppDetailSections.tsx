@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui';
 import { Grid } from '@/components/layout';
 import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar } from '@/components/data-display';
@@ -76,8 +77,8 @@ interface SyncStatus {
 
 interface AppDetailSectionsProps {
   app: AppDetails;
-  developers: string[];
-  publishers: string[];
+  developers: { id: number; name: string }[];
+  publishers: { id: number; name: string }[];
   tags: { tag: string; vote_count: number }[];
   metrics: DailyMetric[];
   histogram: ReviewHistogram[];
@@ -221,8 +222,8 @@ function OverviewSection({
 }: {
   id: string;
   app: AppDetails;
-  developers: string[];
-  publishers: string[];
+  developers: { id: number; name: string }[];
+  publishers: { id: number; name: string }[];
   tags: { tag: string; vote_count: number }[];
   trends: AppTrends | null;
 }) {
@@ -268,9 +269,13 @@ function OverviewSection({
             {developers.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {developers.map((dev) => (
-                  <span key={dev} className="px-3 py-1.5 rounded-md bg-surface-overlay text-body-sm text-text-secondary">
-                    {dev}
-                  </span>
+                  <Link
+                    key={dev.id}
+                    href={`/developers/${dev.id}`}
+                    className="px-3 py-1.5 rounded-md bg-surface-overlay text-body-sm text-text-secondary hover:bg-surface-elevated hover:text-accent-blue transition-colors"
+                  >
+                    {dev.name}
+                  </Link>
                 ))}
               </div>
             ) : (
@@ -282,9 +287,13 @@ function OverviewSection({
             {publishers.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {publishers.map((pub) => (
-                  <span key={pub} className="px-3 py-1.5 rounded-md bg-surface-overlay text-body-sm text-text-secondary">
-                    {pub}
-                  </span>
+                  <Link
+                    key={pub.id}
+                    href={`/publishers/${pub.id}`}
+                    className="px-3 py-1.5 rounded-md bg-surface-overlay text-body-sm text-text-secondary hover:bg-surface-elevated hover:text-accent-blue transition-colors"
+                  >
+                    {pub.name}
+                  </Link>
                 ))}
               </div>
             ) : (

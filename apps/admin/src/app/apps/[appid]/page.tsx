@@ -96,28 +96,32 @@ async function getAppDetails(appid: number) {
   } as AppDetails;
 }
 
-async function getDevelopers(appid: number): Promise<string[]> {
+async function getDevelopers(appid: number): Promise<{ id: number; name: string }[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
 
   const { data } = await supabase
     .from('app_developers')
-    .select('developers(name)')
+    .select('developers(id, name)')
     .eq('appid', appid);
 
-  return (data ?? []).map((d: { developers: { name: string } | null }) => d.developers?.name).filter((name): name is string => Boolean(name));
+  return (data ?? [])
+    .map((d: { developers: { id: number; name: string } | null }) => d.developers)
+    .filter((dev): dev is { id: number; name: string } => dev !== null);
 }
 
-async function getPublishers(appid: number): Promise<string[]> {
+async function getPublishers(appid: number): Promise<{ id: number; name: string }[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
 
   const { data } = await supabase
     .from('app_publishers')
-    .select('publishers(name)')
+    .select('publishers(id, name)')
     .eq('appid', appid);
 
-  return (data ?? []).map((p: { publishers: { name: string } | null }) => p.publishers?.name).filter((name): name is string => Boolean(name));
+  return (data ?? [])
+    .map((p: { publishers: { id: number; name: string } | null }) => p.publishers)
+    .filter((pub): pub is { id: number; name: string } => pub !== null);
 }
 
 async function getTags(appid: number): Promise<{ tag: string; vote_count: number }[]> {
