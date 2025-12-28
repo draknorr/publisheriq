@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui';
 import { Grid } from '@/components/layout';
-import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar } from '@/components/data-display';
+import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover, MonthlyReviewBreakdownPopover } from '@/components/data-display';
 import { Calendar, ChevronRight, Users, Building2 } from 'lucide-react';
 
 interface Publisher {
@@ -53,10 +53,18 @@ interface SimilarPublisher {
   shared_tags: number;
 }
 
+interface ReviewHistogramGame {
+  appid: number;
+  name: string;
+  recommendations_up: number;
+  recommendations_down: number;
+}
+
 interface ReviewHistogram {
   month_start: string;
   recommendations_up: number;
   recommendations_down: number;
+  games?: ReviewHistogramGame[];
 }
 
 interface PublisherDetailSectionsProps {
@@ -161,7 +169,7 @@ export function PublisherDetailSections({
       <div className="space-y-12">
         <OverviewSection id="overview" publisher={publisher} tags={tags} />
         <GamesSection id="games" apps={apps} />
-        <ReviewsSection id="reviews" histogram={histogram} />
+        <ReviewsSection id="reviews" histogram={histogram} apps={apps} />
         <NetworkSection
           id="network"
           relatedDevelopers={relatedDevelopers}
@@ -345,9 +353,11 @@ function GamesSection({
 function ReviewsSection({
   id,
   histogram,
+  apps,
 }: {
   id: string;
   histogram: ReviewHistogram[];
+  apps: PublisherApp[];
 }) {
   const histogramData = [...histogram].reverse().slice(-12).map((h) => ({
     month: new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
@@ -355,11 +365,63 @@ function ReviewsSection({
     negative: h.recommendations_down,
   }));
 
+  // Prepare game data for the aggregated popover
+  const gameReviewData = apps
+    .filter((app) => app.total_reviews && app.total_reviews > 0)
+    .map((app) => ({
+      appid: app.appid,
+      name: app.name,
+      positive_reviews: app.positive_reviews ?? 0,
+      negative_reviews: app.negative_reviews ?? 0,
+      total_reviews: app.total_reviews ?? 0,
+    }));
+
+  // Calculate aggregated review score
+  const totalPositive = apps.reduce((sum, app) => sum + (app.positive_reviews ?? 0), 0);
+  const totalNegative = apps.reduce((sum, app) => sum + (app.negative_reviews ?? 0), 0);
+  const totalReviews = totalPositive + totalNegative;
+  const aggregatedScore = totalReviews > 0 ? Math.round((totalPositive / totalReviews) * 100) : 0;
+
   return (
     <section>
       <SectionHeader title="Reviews" id={id} />
       {histogram.length > 0 ? (
         <div className="space-y-6">
+          {/* Aggregated Review Summary with Popover */}
+          {totalReviews > 0 && (
+            <Card padding="lg">
+              <h3 className="text-subheading text-text-primary mb-4">Overall Review Summary</h3>
+              <p className="text-body-sm text-text-tertiary mb-4">Hover or click to see game breakdown</p>
+              <div className="flex items-center gap-6">
+                <ReviewBreakdownPopover
+                  games={gameReviewData}
+                  trigger={
+                    <div className="flex items-center gap-3 p-3 -m-3 rounded-lg hover:bg-surface-elevated transition-colors cursor-pointer">
+                      <ReviewScoreBadge score={aggregatedScore} className="text-lg px-3 py-1" />
+                      <span className="text-body-sm text-text-secondary">
+                        {totalReviews.toLocaleString()} total reviews
+                      </span>
+                    </div>
+                  }
+                  title="Overall Review Breakdown"
+                />
+                <ReviewBreakdownPopover
+                  games={gameReviewData}
+                  trigger={
+                    <div className="flex-1 max-w-xs p-3 -m-3 rounded-lg hover:bg-surface-elevated transition-colors cursor-pointer">
+                      <RatioBar positive={totalPositive} negative={totalNegative} />
+                      <div className="flex justify-between mt-2 text-caption">
+                        <span className="text-accent-green">{totalPositive.toLocaleString()} positive</span>
+                        <span className="text-accent-red">{totalNegative.toLocaleString()} negative</span>
+                      </div>
+                    </div>
+                  }
+                  title="Overall Review Breakdown"
+                />
+              </div>
+            </Card>
+          )}
+
           <Card padding="lg">
             <h3 className="text-subheading text-text-primary mb-4">Monthly Review Distribution</h3>
             <p className="text-body-sm text-text-tertiary mb-4">Aggregated across all games</p>
@@ -375,6 +437,7 @@ function ReviewsSection({
           <Card padding="none">
             <div className="px-4 py-3 border-b border-border-subtle">
               <h3 className="text-subheading text-text-primary">Monthly Breakdown</h3>
+              <p className="text-caption text-text-tertiary mt-1">Hover or click rows to see game breakdown</p>
             </div>
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full min-w-[600px]">
@@ -392,10 +455,12 @@ function ReviewsSection({
                   {histogram.slice(0, 6).map((h) => {
                     const total = h.recommendations_up + h.recommendations_down;
                     const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
-                    return (
-                      <tr key={h.month_start} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
+                    const monthLabel = new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+                    const rowContent = (
+                      <>
                         <td className="px-4 py-3 text-body-sm text-text-primary">
-                          {new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                          {monthLabel}
                         </td>
                         <td className="px-4 py-3 text-right text-body-sm text-accent-green">{h.recommendations_up.toLocaleString()}</td>
                         <td className="px-4 py-3 text-right text-body-sm text-accent-red">{h.recommendations_down.toLocaleString()}</td>
@@ -404,6 +469,28 @@ function ReviewsSection({
                         <td className="px-4 py-3">
                           <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
                         </td>
+                      </>
+                    );
+
+                    // If we have per-game breakdown for this month, wrap with popover
+                    if (h.games && h.games.length > 0) {
+                      return (
+                        <MonthlyReviewBreakdownPopover
+                          key={h.month_start}
+                          games={h.games}
+                          monthLabel={monthLabel}
+                          trigger={
+                            <tr className="bg-surface-raised hover:bg-surface-elevated transition-colors cursor-pointer">
+                              {rowContent}
+                            </tr>
+                          }
+                        />
+                      );
+                    }
+
+                    return (
+                      <tr key={h.month_start} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
+                        {rowContent}
                       </tr>
                     );
                   })}

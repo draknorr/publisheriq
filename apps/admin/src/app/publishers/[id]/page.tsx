@@ -55,10 +55,18 @@ interface SimilarPublisher {
   shared_tags: number;
 }
 
+interface ReviewHistogramGame {
+  appid: number;
+  name: string;
+  recommendations_up: number;
+  recommendations_down: number;
+}
+
 interface ReviewHistogram {
   month_start: string;
   recommendations_up: number;
   recommendations_down: number;
+  games: ReviewHistogramGame[];
 }
 
 async function getPublisher(id: number): Promise<Publisher | null> {
@@ -241,40 +249,68 @@ async function getPublisherReviewHistogram(publisherId: number): Promise<ReviewH
   if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
 
-  // Get all apps by this publisher
+  // Get all apps by this publisher with their names
   const { data: appLinks } = await supabase
     .from('app_publishers')
-    .select('appid')
+    .select('appid, apps(name)')
     .eq('publisher_id', publisherId);
 
   if (!appLinks || appLinks.length === 0) return [];
 
   const appIds = appLinks.map(a => a.appid);
+  const appNameMap = new Map<number, string>();
+  for (const link of appLinks) {
+    const appData = link.apps as { name: string } | null;
+    if (appData) {
+      appNameMap.set(link.appid, appData.name);
+    }
+  }
 
-  // Get histogram data for all apps
+  // Get histogram data for all apps with appid included
   const { data } = await supabase
     .from('review_histogram')
-    .select('month_start, recommendations_up, recommendations_down')
+    .select('appid, month_start, recommendations_up, recommendations_down')
     .in('appid', appIds)
     .order('month_start', { ascending: false });
 
   if (!data) return [];
 
-  // Aggregate by month
-  const monthMap = new Map<string, { up: number; down: number }>();
+  // Aggregate by month while preserving per-game data
+  const monthMap = new Map<string, {
+    up: number;
+    down: number;
+    games: Map<number, { up: number; down: number }>;
+  }>();
+
   for (const h of data) {
-    const existing = monthMap.get(h.month_start) ?? { up: 0, down: 0 };
-    monthMap.set(h.month_start, {
-      up: existing.up + h.recommendations_up,
-      down: existing.down + h.recommendations_down,
-    });
+    const existing = monthMap.get(h.month_start) ?? { up: 0, down: 0, games: new Map() };
+
+    // Update totals
+    existing.up += h.recommendations_up;
+    existing.down += h.recommendations_down;
+
+    // Update per-game data
+    const gameData = existing.games.get(h.appid) ?? { up: 0, down: 0 };
+    gameData.up += h.recommendations_up;
+    gameData.down += h.recommendations_down;
+    existing.games.set(h.appid, gameData);
+
+    monthMap.set(h.month_start, existing);
   }
 
   return [...monthMap.entries()]
-    .map(([month_start, { up, down }]) => ({
+    .map(([month_start, { up, down, games }]) => ({
       month_start,
       recommendations_up: up,
       recommendations_down: down,
+      games: [...games.entries()]
+        .map(([appid, data]) => ({
+          appid,
+          name: appNameMap.get(appid) ?? `App ${appid}`,
+          recommendations_up: data.up,
+          recommendations_down: data.down,
+        }))
+        .sort((a, b) => b.recommendations_down - a.recommendations_down), // Sort by negative reviews
     }))
     .sort((a, b) => b.month_start.localeCompare(a.month_start))
     .slice(0, 24);

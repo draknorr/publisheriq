@@ -18,3 +18,9 @@ export {
   TableCardStats,
   TableCardFooter,
 } from './DataTable';
+export {
+  ReviewBreakdownPopover,
+  MonthlyReviewBreakdownPopover,
+  type GameReviewData,
+  type MonthlyGameReviewData,
+} from './ReviewBreakdownPopover';

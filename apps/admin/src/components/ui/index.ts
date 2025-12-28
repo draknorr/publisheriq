@@ -4,3 +4,4 @@ export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 export { Input, SearchInput } from './Input';
 export { Tabs, TabsList, TabsTrigger, TabsContent, UnderlineTabs } from './Tabs';
 export { Skeleton, SkeletonText, SkeletonCard, SkeletonTable } from './Skeleton';
+export { Popover } from './Popover';
