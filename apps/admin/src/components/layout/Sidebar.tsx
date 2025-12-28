@@ -12,6 +12,7 @@ import {
   Users,
   Menu,
   X,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
@@ -24,6 +25,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/sync-status', label: 'Sync Status', icon: Activity },
   { href: '/jobs', label: 'Sync Jobs', icon: RefreshCw },
   { href: '/apps', label: 'Apps', icon: Gamepad2 },
