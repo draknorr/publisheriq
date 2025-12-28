@@ -15,21 +15,23 @@ const log = logger.child({ worker: 'steamspy-sync' });
 
 interface SyncStats {
   appsProcessed: number;
-  appsInserted: number;
+  appsCreated: number;
   appsUpdated: number;
-  developersUpserted: number;
-  publishersUpserted: number;
+  developersCreated: number;
+  publishersCreated: number;
   errors: number;
 }
 
 async function processBatch(
   supabase: ReturnType<typeof getServiceClient>,
   apps: SteamSpyAppSummary[],
-  stats: SyncStats
+  stats: SyncStats,
+  existingAppIds: Set<number>
 ): Promise<void> {
   for (const app of apps) {
     try {
       stats.appsProcessed++;
+      const isNewApp = !existingAppIds.has(app.appid);
 
       // Parse owner estimate
       const owners = parseOwnerEstimate(app.owners);
@@ -52,6 +54,14 @@ async function processBatch(
         continue;
       }
 
+      // Track whether this was a create or update
+      if (isNewApp) {
+        stats.appsCreated++;
+        existingAppIds.add(app.appid); // Add to set so subsequent duplicates in batch are counted as updates
+      } else {
+        stats.appsUpdated++;
+      }
+
       // Upsert developer if exists
       if (app.developer && app.developer.trim()) {
         const { data: devData, error: devError } = await supabase.rpc('upsert_developer', {
@@ -61,7 +71,7 @@ async function processBatch(
         if (devError) {
           log.error('Failed to upsert developer', { developer: app.developer, error: devError });
         } else if (devData) {
-          stats.developersUpserted++;
+          stats.developersCreated++;
 
           // Link app to developer
           await supabase.from('app_developers').upsert(
@@ -80,7 +90,7 @@ async function processBatch(
         if (pubError) {
           log.error('Failed to upsert publisher', { publisher: app.publisher, error: pubError });
         } else if (pubData) {
-          stats.publishersUpserted++;
+          stats.publishersCreated++;
 
           // Link app to publisher
           await supabase.from('app_publishers').upsert(
@@ -119,8 +129,6 @@ async function processBatch(
         },
         { onConflict: 'appid,metric_date' }
       );
-
-      stats.appsInserted++;
     } catch (error) {
       log.error('Error processing app', { appid: app.appid, error });
       stats.errors++;
@@ -154,18 +162,30 @@ async function main(): Promise<void> {
 
   const stats: SyncStats = {
     appsProcessed: 0,
-    appsInserted: 0,
+    appsCreated: 0,
     appsUpdated: 0,
-    developersUpserted: 0,
-    publishersUpserted: 0,
+    developersCreated: 0,
+    publishersCreated: 0,
     errors: 0,
   };
 
   try {
+    // Fetch existing app IDs to distinguish creates from updates
+    log.info('Fetching existing app IDs from database');
+    const { data: existingApps } = await supabase.from('apps').select('appid');
+    const existingAppIds = new Set((existingApps || []).map((a) => a.appid));
+    log.info('Found existing apps', { count: existingAppIds.size });
+
     await fetchAllSteamSpyApps(maxPages, async (apps, page) => {
       log.info('Processing SteamSpy page', { page, appsCount: apps.length });
-      await processBatch(supabase, apps, stats);
-      log.info('Completed SteamSpy page', { page, stats });
+      await processBatch(supabase, apps, stats, existingAppIds);
+      log.info('Completed SteamSpy page', {
+        page,
+        processed: stats.appsProcessed,
+        created: stats.appsCreated,
+        updated: stats.appsUpdated,
+        errors: stats.errors,
+      });
     });
 
     // Update sync job as completed
@@ -176,14 +196,22 @@ async function main(): Promise<void> {
           status: 'completed',
           completed_at: new Date().toISOString(),
           items_processed: stats.appsProcessed,
-          items_succeeded: stats.appsInserted,
+          items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.errors,
         })
         .eq('id', job.id);
     }
 
     const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-    log.info('SteamSpy sync completed', { ...stats, durationMinutes: duration });
+    log.info('SteamSpy sync completed', {
+      durationMinutes: duration,
+      appsProcessed: stats.appsProcessed,
+      appsCreated: stats.appsCreated,
+      appsUpdated: stats.appsUpdated,
+      developersCreated: stats.developersCreated,
+      publishersCreated: stats.publishersCreated,
+      errors: stats.errors,
+    });
   } catch (error) {
     log.error('SteamSpy sync failed', { error });
 
@@ -196,7 +224,7 @@ async function main(): Promise<void> {
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
           items_processed: stats.appsProcessed,
-          items_succeeded: stats.appsInserted,
+          items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.errors,
         })
         .eq('id', job.id);
