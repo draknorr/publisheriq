@@ -544,7 +544,7 @@ type TabType = 'health' | 'jobs';
 export function AdminDashboardTabs({ data }: { data: AdminDashboardData }) {
   const [activeTab, setActiveTab] = useState<TabType>('health');
   const [jobFilter, setJobFilter] = useState<string>('all');
-  const [runningJobsExpanded, setRunningJobsExpanded] = useState(true);
+  const [runningJobsExpanded, setRunningJobsExpanded] = useState(false);
   const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(new Set());
 
   const filteredJobs =
