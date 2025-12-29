@@ -47,30 +47,10 @@ async function getDevelopers(params: FilterParams): Promise<DeveloperWithMetrics
   if (!isSupabaseConfigured()) {
     return [];
   }
-  const supabase = getSupabase();
 
-  // Use the new RPC function for server-side filtering
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)('get_developers_with_metrics', {
-    p_search: params.search || null,
-    p_min_owners: params.minOwners || null,
-    p_min_ccu: params.minCcu || null,
-    p_min_score: params.minScore || null,
-    p_min_games: params.filter === 'prolific' ? 5 : (params.minGames || null),
-    p_status: params.status || null,
-    p_sort_field: params.sort,
-    p_sort_order: params.order,
-    p_limit: 100,
-    p_offset: 0,
-  }) as { data: DeveloperWithMetrics[] | null; error: Error | null };
-
-  if (error) {
-    console.error('Error fetching developers:', error);
-    // Fallback to basic query if RPC fails (e.g., materialized view not created yet)
-    return getDevelopersFallback(params);
-  }
-
-  return data ?? [];
+  // TEMPORARY: Skip RPC and use fallback to debug
+  // TODO: Re-enable RPC once migrations are confirmed working
+  return getDevelopersFallback(params);
 }
 
 // Fallback query without metrics (in case materialized view doesn't exist)
@@ -127,21 +107,9 @@ async function getDeveloperStats() {
   }
   const supabase = getSupabase();
 
-  // Single query to get all stats using RPC for efficiency
-  // This avoids 4 separate COUNT queries
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)('get_developer_stats') as {
-    data: { total: number; prolific: number; recentlyActive: number } | null;
-    error: Error | null;
-  };
-
-  if (error) {
-    // Fallback to single count query if RPC doesn't exist
-    const { count } = await supabase.from('developers').select('*', { count: 'exact', head: true });
-    return { total: count ?? 0, prolific: 0, recentlyActive: 0 };
-  }
-
-  return data ?? { total: 0, prolific: 0, recentlyActive: 0 };
+  // TEMPORARY: Skip RPC and use basic count to debug
+  const { count } = await supabase.from('developers').select('*', { count: 'exact', head: true });
+  return { total: count ?? 0, prolific: 0, recentlyActive: 0 };
 }
 
 // Format helpers
