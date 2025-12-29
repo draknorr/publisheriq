@@ -592,15 +592,15 @@ export type Database = {
       };
       steam_categories: {
         Row: {
-          id: number;
+          category_id: number;
           name: string;
         };
         Insert: {
-          id: number;
+          category_id: number;
           name: string;
         };
         Update: {
-          id?: number;
+          category_id?: number;
           name?: string;
         };
         Relationships: [];
@@ -629,21 +629,21 @@ export type Database = {
             foreignKeyName: 'app_categories_category_id_fkey';
             columns: ['category_id'];
             referencedRelation: 'steam_categories';
-            referencedColumns: ['id'];
+            referencedColumns: ['category_id'];
           },
         ];
       };
       steam_genres: {
         Row: {
-          id: number;
+          genre_id: number;
           name: string;
         };
         Insert: {
-          id: number;
+          genre_id: number;
           name: string;
         };
         Update: {
-          id?: number;
+          genre_id?: number;
           name?: string;
         };
         Relationships: [];
@@ -672,7 +672,7 @@ export type Database = {
             foreignKeyName: 'app_genres_genre_id_fkey';
             columns: ['genre_id'];
             referencedRelation: 'steam_genres';
-            referencedColumns: ['id'];
+            referencedColumns: ['genre_id'];
           },
         ];
       };
@@ -724,15 +724,15 @@ export type Database = {
       };
       steam_tags: {
         Row: {
-          id: number;
+          tag_id: number;
           name: string;
         };
         Insert: {
-          id: number;
+          tag_id: number;
           name: string;
         };
         Update: {
-          id?: number;
+          tag_id?: number;
           name?: string;
         };
         Relationships: [];
@@ -761,7 +761,7 @@ export type Database = {
             foreignKeyName: 'app_steam_tags_tag_id_fkey';
             columns: ['tag_id'];
             referencedRelation: 'steam_tags';
-            referencedColumns: ['id'];
+            referencedColumns: ['tag_id'];
           },
         ];
       };

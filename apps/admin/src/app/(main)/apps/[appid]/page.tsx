@@ -251,11 +251,12 @@ async function getGenres(appid: number): Promise<Genre[]> {
 
   const { data } = await supabase
     .from('app_genres')
-    .select('steam_genres(id, name)')
+    .select('steam_genres(genre_id, name)')
     .eq('appid', appid);
 
   return (data ?? [])
-    .map((g: { steam_genres: { id: number; name: string } | null }) => g.steam_genres)
+    .map((g: { steam_genres: { genre_id: number; name: string } | null }) =>
+      g.steam_genres ? { id: g.steam_genres.genre_id, name: g.steam_genres.name } : null)
     .filter((genre): genre is Genre => genre !== null);
 }
 
@@ -265,11 +266,12 @@ async function getCategories(appid: number): Promise<Category[]> {
 
   const { data } = await supabase
     .from('app_categories')
-    .select('steam_categories(id, name)')
+    .select('steam_categories(category_id, name)')
     .eq('appid', appid);
 
   return (data ?? [])
-    .map((c: { steam_categories: { id: number; name: string } | null }) => c.steam_categories)
+    .map((c: { steam_categories: { category_id: number; name: string } | null }) =>
+      c.steam_categories ? { id: c.steam_categories.category_id, name: c.steam_categories.name } : null)
     .filter((category): category is Category => category !== null);
 }
 
