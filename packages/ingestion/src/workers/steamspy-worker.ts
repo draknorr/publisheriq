@@ -162,6 +162,8 @@ async function main(): Promise<void> {
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.errors,
+          items_created: stats.appsCreated,
+          items_updated: stats.appsUpdated,
         })
         .eq('id', job.id);
     }
@@ -188,6 +190,8 @@ async function main(): Promise<void> {
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.errors,
+          items_created: stats.appsCreated,
+          items_updated: stats.appsUpdated,
         })
         .eq('id', job.id);
     }

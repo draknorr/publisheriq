@@ -449,6 +449,8 @@ export type Database = {
           items_processed: number;
           items_succeeded: number;
           items_failed: number;
+          items_created: number;
+          items_updated: number;
           batch_size: number | null;
           error_message: string | null;
           github_run_id: string | null;
@@ -463,6 +465,8 @@ export type Database = {
           items_processed?: number;
           items_succeeded?: number;
           items_failed?: number;
+          items_created?: number;
+          items_updated?: number;
           batch_size?: number | null;
           error_message?: string | null;
           github_run_id?: string | null;
@@ -477,6 +481,8 @@ export type Database = {
           items_processed?: number;
           items_succeeded?: number;
           items_failed?: number;
+          items_created?: number;
+          items_updated?: number;
           batch_size?: number | null;
           error_message?: string | null;
           github_run_id?: string | null;

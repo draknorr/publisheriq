@@ -69,6 +69,8 @@ async function main(): Promise<void> {
             items_processed: 0,
             items_succeeded: 0,
             items_failed: 0,
+            items_created: 0,
+            items_updated: 0,
           })
           .eq('id', job.id);
       }
@@ -148,6 +150,7 @@ async function main(): Promise<void> {
       }
     }
 
+    // Note: reviews only updates existing apps, so items_created is always 0
     if (job) {
       await supabase
         .from('sync_jobs')
@@ -157,6 +160,8 @@ async function main(): Promise<void> {
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsSucceeded,
           items_failed: stats.appsFailed,
+          items_created: 0,
+          items_updated: stats.appsSucceeded,
         })
         .eq('id', job.id);
     }
@@ -173,6 +178,11 @@ async function main(): Promise<void> {
           status: 'failed',
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
+          items_processed: stats.appsProcessed,
+          items_succeeded: stats.appsSucceeded,
+          items_failed: stats.appsFailed,
+          items_created: 0,
+          items_updated: stats.appsSucceeded,
         })
         .eq('id', job.id);
     }

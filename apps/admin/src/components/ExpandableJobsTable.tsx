@@ -10,6 +10,8 @@ export interface SyncJobDetail {
   items_processed: number | null;
   items_succeeded: number | null;
   items_failed: number | null;
+  items_created: number | null;
+  items_updated: number | null;
   started_at: string;
   completed_at: string | null;
   error_message: string | null;
@@ -119,7 +121,15 @@ function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded:
               <div className="text-sm">
                 <span className="text-gray-500">Processing:</span>
                 <span className="ml-2">
-                  <span className="text-green-400">{job.items_succeeded ?? 0} succeeded</span>
+                  {(job.items_created !== null || job.items_updated !== null) ? (
+                    <>
+                      <span className="text-blue-400">{job.items_created ?? 0} new</span>
+                      <span className="text-gray-500"> | </span>
+                      <span className="text-green-400">{job.items_updated ?? 0} updated</span>
+                    </>
+                  ) : (
+                    <span className="text-green-400">{job.items_succeeded ?? 0} succeeded</span>
+                  )}
                   {(job.items_failed ?? 0) > 0 && (
                     <>
                       <span className="text-gray-500"> | </span>
@@ -145,7 +155,7 @@ function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded:
               {job.github_run_id && (
                 <div className="text-sm">
                   <a
-                    href={`https://github.com/rbohannon/publisheriq/actions/runs/${job.github_run_id}`}
+                    href={`https://github.com/draknorr/publisheriq/actions/runs/${job.github_run_id}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"

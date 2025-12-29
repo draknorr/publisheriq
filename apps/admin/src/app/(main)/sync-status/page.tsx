@@ -399,6 +399,8 @@ interface SyncJob {
   items_processed: number | null;
   items_succeeded: number | null;
   items_failed: number | null;
+  items_created: number | null;
+  items_updated: number | null;
   started_at: string;
   completed_at: string | null;
   error_message: string | null;
