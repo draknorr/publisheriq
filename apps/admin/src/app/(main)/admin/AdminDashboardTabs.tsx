@@ -9,10 +9,12 @@ import {
   type QueueStatus,
   type AppWithError,
   type SourceCompletionStats,
+  type PICSSyncState,
+  type PICSDataStats,
 } from '@/lib/sync-queries';
 import type { AdminDashboardData, SyncJob } from './page';
 
-const JOB_TYPES = ['all', 'steamspy', 'storefront', 'reviews', 'histogram', 'priority', 'applist'] as const;
+const JOB_TYPES = ['all', 'steamspy', 'storefront', 'reviews', 'histogram', 'priority', 'applist', 'pics'] as const;
 
 // ============================================
 // Sync Health Tab Components
@@ -219,6 +221,97 @@ function CompletionProgressBar({ stats }: { stats: SourceCompletionStats }) {
       {stats.lastSyncTime && (
         <div className="mt-2 text-xs text-gray-500">Last job: {formatRelativeTime(stats.lastSyncTime)}</div>
       )}
+    </div>
+  );
+}
+
+function PICSStatusCard({
+  picsSyncState,
+  picsDataStats,
+}: {
+  picsSyncState: PICSSyncState;
+  picsDataStats: PICSDataStats;
+}) {
+  const dataFields = [
+    { label: 'PICS Synced', count: picsDataStats.withPicsSync, icon: '🔄', color: 'text-blue-400' },
+    { label: 'Steam Deck', count: picsDataStats.withSteamDeck, icon: '🎮', color: 'text-green-400' },
+    { label: 'Categories', count: picsDataStats.withCategories, icon: '📁', color: 'text-purple-400' },
+    { label: 'Genres', count: picsDataStats.withGenres, icon: '🎯', color: 'text-orange-400' },
+    { label: 'Franchises', count: picsDataStats.withFranchises, icon: '🏢', color: 'text-cyan-400' },
+    { label: 'Parent Info', count: picsDataStats.withParentInfo, icon: '🔗', color: 'text-yellow-400' },
+  ];
+
+  return (
+    <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+          <span className="text-xl">⚡</span>
+          PICS Data Service
+        </h3>
+        {picsSyncState.lastChangeNumber > 0 && (
+          <span className="rounded-full bg-green-500/20 px-2.5 py-0.5 text-xs font-medium text-green-400">
+            Active
+          </span>
+        )}
+      </div>
+      <p className="mb-6 text-sm text-gray-400">
+        Real-time Steam PICS data fetching service deployed on Railway.
+      </p>
+
+      {/* Sync State */}
+      <div className="mb-6 grid grid-cols-2 gap-4">
+        <div className="rounded-lg bg-gray-800/50 p-4">
+          <p className="text-xs text-gray-500 uppercase tracking-wide">Change Number</p>
+          <p className="mt-1 text-xl font-bold text-white">
+            {picsSyncState.lastChangeNumber > 0 ? picsSyncState.lastChangeNumber.toLocaleString() : '-'}
+          </p>
+        </div>
+        <div className="rounded-lg bg-gray-800/50 p-4">
+          <p className="text-xs text-gray-500 uppercase tracking-wide">Last Updated</p>
+          <p className="mt-1 text-xl font-bold text-white">
+            {picsSyncState.updatedAt ? formatRelativeTime(picsSyncState.updatedAt) : '-'}
+          </p>
+        </div>
+      </div>
+
+      {/* Data Coverage */}
+      <div className="border-t border-gray-800 pt-4">
+        <p className="text-sm font-medium text-gray-300 mb-4">Data Coverage</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {dataFields.map((field) => {
+            const percentage = picsDataStats.totalApps > 0
+              ? (field.count / picsDataStats.totalApps) * 100
+              : 0;
+            return (
+              <div key={field.label} className="rounded-lg bg-gray-800/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span>{field.icon}</span>
+                  <span className="text-xs text-gray-400">{field.label}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-700 mb-1">
+                  <div
+                    className={`h-full ${
+                      percentage >= 80 ? 'bg-green-500' :
+                      percentage >= 50 ? 'bg-blue-500' :
+                      percentage >= 20 ? 'bg-orange-500' : 'bg-gray-600'
+                    } transition-all duration-500`}
+                    style={{ width: `${Math.max(percentage, 1)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-medium ${field.color}`}>
+                    {field.count.toLocaleString()}
+                  </span>
+                  <span className="text-xs text-gray-500">{percentage.toFixed(1)}%</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 text-xs text-gray-500">
+          Total apps tracked: <span className="font-medium text-white">{picsDataStats.totalApps.toLocaleString()}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -627,6 +720,12 @@ export function AdminDashboardTabs({ data }: { data: AdminDashboardData }) {
               jobs={data.runningJobs}
               isExpanded={runningJobsExpanded}
               onToggle={() => setRunningJobsExpanded(!runningJobsExpanded)}
+            />
+
+            {/* PICS Data Service Status */}
+            <PICSStatusCard
+              picsSyncState={data.picsSyncState}
+              picsDataStats={data.picsDataStats}
             />
 
             {/* First-Pass Completion */}

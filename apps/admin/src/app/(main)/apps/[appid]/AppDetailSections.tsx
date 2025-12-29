@@ -21,8 +21,42 @@ interface AppDetails {
   is_released: boolean;
   is_delisted: boolean;
   has_developer_info: boolean;
+  // PICS data
+  controller_support: string | null;
+  pics_review_score: number | null;
+  pics_review_percentage: number | null;
+  metacritic_score: number | null;
+  metacritic_url: string | null;
+  platforms: string | null;
+  release_state: string | null;
+  parent_appid: number | null;
+  homepage_url: string | null;
+  last_content_update: string | null;
+  languages: Record<string, unknown> | null;
+  content_descriptors: unknown[] | null;
   created_at: string;
   updated_at: string;
+}
+
+interface SteamDeckInfo {
+  category: 'verified' | 'playable' | 'unsupported' | 'unknown';
+  tests_passed: string[] | null;
+  tests_failed: string[] | null;
+}
+
+interface Genre {
+  id: number;
+  name: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface Franchise {
+  id: number;
+  name: string;
 }
 
 interface DailyMetric {
@@ -84,10 +118,15 @@ interface AppDetailSectionsProps {
   histogram: ReviewHistogram[];
   trends: AppTrends | null;
   syncStatus: SyncStatus | null;
+  steamDeck: SteamDeckInfo | null;
+  genres: Genre[];
+  categories: Category[];
+  franchises: Franchise[];
 }
 
 const sections = [
   { id: 'overview', label: 'Overview' },
+  { id: 'pics', label: 'PICS Data' },
   { id: 'metrics', label: 'Metrics' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'sync', label: 'Sync Status' },
@@ -131,6 +170,10 @@ export function AppDetailSections({
   histogram,
   trends,
   syncStatus,
+  steamDeck,
+  genres,
+  categories,
+  franchises,
 }: AppDetailSectionsProps) {
   const [activeSection, setActiveSection] = useState('overview');
 
@@ -195,6 +238,14 @@ export function AppDetailSections({
           publishers={publishers}
           tags={tags}
           trends={trends}
+          genres={genres}
+          franchises={franchises}
+        />
+        <PICSSection
+          id="pics"
+          app={app}
+          steamDeck={steamDeck}
+          categories={categories}
         />
         <MetricsSection id="metrics" metrics={metrics} />
         <ReviewsSection id="reviews" histogram={histogram} />
@@ -219,6 +270,8 @@ function OverviewSection({
   publishers,
   tags,
   trends,
+  genres,
+  franchises,
 }: {
   id: string;
   app: AppDetails;
@@ -226,6 +279,8 @@ function OverviewSection({
   publishers: { id: number; name: string }[];
   tags: { tag: string; vote_count: number }[];
   trends: AppTrends | null;
+  genres: Genre[];
+  franchises: Franchise[];
 }) {
   return (
     <section>
@@ -301,6 +356,42 @@ function OverviewSection({
             )}
           </Card>
         </div>
+
+        {/* Genres & Franchises */}
+        {(genres.length > 0 || franchises.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {genres.length > 0 && (
+              <Card padding="lg">
+                <h3 className="text-subheading text-text-primary mb-4">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {genres.map((genre) => (
+                    <span
+                      key={genre.id}
+                      className="px-3 py-1.5 rounded-md bg-accent-purple/10 text-body-sm text-accent-purple"
+                    >
+                      {genre.name}
+                    </span>
+                  ))}
+                </div>
+              </Card>
+            )}
+            {franchises.length > 0 && (
+              <Card padding="lg">
+                <h3 className="text-subheading text-text-primary mb-4">Franchises</h3>
+                <div className="flex flex-wrap gap-2">
+                  {franchises.map((franchise) => (
+                    <span
+                      key={franchise.id}
+                      className="px-3 py-1.5 rounded-md bg-accent-cyan/10 text-body-sm text-accent-cyan"
+                    >
+                      {franchise.name}
+                    </span>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* Tags */}
         {tags.length > 0 && (
@@ -383,6 +474,177 @@ function OverviewSection({
           </div>
         </Card>
       </div>
+    </section>
+  );
+}
+
+function PICSSection({
+  id,
+  app,
+  steamDeck,
+  categories,
+}: {
+  id: string;
+  app: AppDetails;
+  steamDeck: SteamDeckInfo | null;
+  categories: Category[];
+}) {
+  const hasPICSData = steamDeck || categories.length > 0 || app.controller_support || app.platforms || app.metacritic_score || app.parent_appid || app.languages;
+
+  return (
+    <section>
+      <SectionHeader title="PICS Data" id={id} />
+      {hasPICSData ? (
+        <div className="space-y-6">
+          {/* Steam Deck Compatibility */}
+          {steamDeck && (
+            <Card padding="lg">
+              <h3 className="text-subheading text-text-primary mb-4">Steam Deck Compatibility</h3>
+              <div className="flex items-center gap-4 mb-4">
+                <span className={`px-3 py-1.5 rounded-md text-body font-medium ${
+                  steamDeck.category === 'verified' ? 'bg-accent-green/15 text-accent-green' :
+                  steamDeck.category === 'playable' ? 'bg-accent-yellow/15 text-accent-yellow' :
+                  steamDeck.category === 'unsupported' ? 'bg-accent-red/15 text-accent-red' :
+                  'bg-surface-elevated text-text-muted'
+                }`}>
+                  {steamDeck.category === 'verified' ? 'Verified' :
+                   steamDeck.category === 'playable' ? 'Playable' :
+                   steamDeck.category === 'unsupported' ? 'Unsupported' : 'Unknown'}
+                </span>
+              </div>
+              {(steamDeck.tests_passed && steamDeck.tests_passed.length > 0) && (
+                <div className="mb-3">
+                  <p className="text-caption text-text-tertiary mb-2">Tests Passed</p>
+                  <div className="flex flex-wrap gap-2">
+                    {steamDeck.tests_passed.map((test) => (
+                      <span key={test} className="px-2 py-1 rounded text-caption bg-accent-green/10 text-accent-green flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {test}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(steamDeck.tests_failed && steamDeck.tests_failed.length > 0) && (
+                <div>
+                  <p className="text-caption text-text-tertiary mb-2">Tests Failed</p>
+                  <div className="flex flex-wrap gap-2">
+                    {steamDeck.tests_failed.map((test) => (
+                      <span key={test} className="px-2 py-1 rounded text-caption bg-accent-red/10 text-accent-red flex items-center gap-1">
+                        <XCircle className="h-3 w-3" />
+                        {test}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Categories (Features) */}
+          {categories.length > 0 && (
+            <Card padding="lg">
+              <h3 className="text-subheading text-text-primary mb-4">Features</h3>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((category) => (
+                  <span
+                    key={category.id}
+                    className="px-3 py-1.5 rounded-md bg-surface-elevated border border-border-subtle text-body-sm text-text-secondary"
+                  >
+                    {category.name}
+                  </span>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* PICS Metadata */}
+          <Card padding="lg">
+            <h3 className="text-subheading text-text-primary mb-4">PICS Metadata</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              {app.platforms && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Platforms</p>
+                  <p className="text-body text-text-primary capitalize">{app.platforms.replace(/,/g, ', ')}</p>
+                </div>
+              )}
+              {app.controller_support && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Controller Support</p>
+                  <p className="text-body text-text-primary capitalize">{app.controller_support}</p>
+                </div>
+              )}
+              {app.metacritic_score !== null && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Metacritic</p>
+                  <p className={`text-body font-medium ${
+                    app.metacritic_score >= 75 ? 'text-accent-green' :
+                    app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
+                  }`}>
+                    {app.metacritic_score}
+                  </p>
+                </div>
+              )}
+              {app.pics_review_percentage !== null && (
+                <div>
+                  <p className="text-caption text-text-tertiary">PICS Review %</p>
+                  <p className="text-body text-text-primary">{app.pics_review_percentage}%</p>
+                </div>
+              )}
+              {app.parent_appid !== null && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Parent App</p>
+                  <Link href={`/apps/${app.parent_appid}`} className="text-body text-accent-blue hover:underline">
+                    {app.parent_appid}
+                  </Link>
+                </div>
+              )}
+              {app.release_state && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Release State</p>
+                  <p className="text-body text-text-primary capitalize">{app.release_state}</p>
+                </div>
+              )}
+              {app.last_content_update && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Last Content Update</p>
+                  <p className="text-body text-text-primary">{formatDateTime(app.last_content_update)}</p>
+                </div>
+              )}
+              {app.homepage_url && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Homepage</p>
+                  <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body text-accent-blue hover:underline truncate block">
+                    {app.homepage_url.replace(/^https?:\/\//, '')}
+                  </a>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Languages */}
+          {app.languages && Object.keys(app.languages).length > 0 && (
+            <Card padding="lg">
+              <h3 className="text-subheading text-text-primary mb-4">Supported Languages</h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(app.languages).map((lang) => (
+                  <span
+                    key={lang}
+                    className="px-2 py-1 rounded text-caption bg-surface-elevated text-text-secondary"
+                  >
+                    {lang}
+                  </span>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      ) : (
+        <Card className="p-12 text-center">
+          <p className="text-text-muted">No PICS data available for this app</p>
+          <p className="text-caption text-text-tertiary mt-2">PICS data is synced from Steam&apos;s Product Info Cache Server</p>
+        </Card>
+      )}
     </section>
   );
 }

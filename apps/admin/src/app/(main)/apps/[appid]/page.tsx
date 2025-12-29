@@ -23,8 +23,42 @@ interface AppDetails {
   is_released: boolean;
   is_delisted: boolean;
   has_developer_info: boolean;
+  // PICS data
+  controller_support: string | null;
+  pics_review_score: number | null;
+  pics_review_percentage: number | null;
+  metacritic_score: number | null;
+  metacritic_url: string | null;
+  platforms: string | null;
+  release_state: string | null;
+  parent_appid: number | null;
+  homepage_url: string | null;
+  last_content_update: string | null;
+  languages: Record<string, unknown> | null;
+  content_descriptors: unknown[] | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SteamDeckInfo {
+  category: 'verified' | 'playable' | 'unsupported' | 'unknown';
+  tests_passed: string[] | null;
+  tests_failed: string[] | null;
+}
+
+export interface Genre {
+  id: number;
+  name: string;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+}
+
+export interface Franchise {
+  id: number;
+  name: string;
 }
 
 interface DailyMetric {
@@ -198,6 +232,61 @@ async function getSyncStatus(appid: number): Promise<SyncStatus | null> {
   } as SyncStatus;
 }
 
+async function getSteamDeckInfo(appid: number): Promise<SteamDeckInfo | null> {
+  if (!isSupabaseConfigured()) return null;
+  const supabase = getSupabase();
+
+  const { data } = await supabase
+    .from('app_steam_deck')
+    .select('category, tests_passed, tests_failed')
+    .eq('appid', appid)
+    .single();
+
+  return data as SteamDeckInfo | null;
+}
+
+async function getGenres(appid: number): Promise<Genre[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabase();
+
+  const { data } = await supabase
+    .from('app_genres')
+    .select('steam_genres(id, name)')
+    .eq('appid', appid);
+
+  return (data ?? [])
+    .map((g: { steam_genres: { id: number; name: string } | null }) => g.steam_genres)
+    .filter((genre): genre is Genre => genre !== null);
+}
+
+async function getCategories(appid: number): Promise<Category[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabase();
+
+  const { data } = await supabase
+    .from('app_categories')
+    .select('steam_categories(id, name)')
+    .eq('appid', appid);
+
+  return (data ?? [])
+    .map((c: { steam_categories: { id: number; name: string } | null }) => c.steam_categories)
+    .filter((category): category is Category => category !== null);
+}
+
+async function getFranchises(appid: number): Promise<Franchise[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabase();
+
+  const { data } = await supabase
+    .from('app_franchises')
+    .select('franchises(id, name)')
+    .eq('appid', appid);
+
+  return (data ?? [])
+    .map((f: { franchises: { id: number; name: string } | null }) => f.franchises)
+    .filter((franchise): franchise is Franchise => franchise !== null);
+}
+
 function formatPrice(cents: number | null, isFree: boolean): string {
   if (isFree) return 'Free';
   if (cents === null) return '—';
@@ -243,7 +332,7 @@ export default async function AppDetailPage({
     notFound();
   }
 
-  const [app, developers, publishers, tags, metrics, histogram, trends, syncStatus] = await Promise.all([
+  const [app, developers, publishers, tags, metrics, histogram, trends, syncStatus, steamDeck, genres, categories, franchises] = await Promise.all([
     getAppDetails(appid),
     getDevelopers(appid),
     getPublishers(appid),
@@ -252,6 +341,10 @@ export default async function AppDetailPage({
     getReviewHistogram(appid),
     getTrends(appid),
     getSyncStatus(appid),
+    getSteamDeckInfo(appid),
+    getGenres(appid),
+    getCategories(appid),
+    getFranchises(appid),
   ]);
 
   if (!app) {
@@ -282,6 +375,18 @@ export default async function AppDetailPage({
       {/* App meta */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <TypeBadge type={app.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video'} />
+        {steamDeck && (
+          <span className={`px-2 py-0.5 rounded text-caption font-medium ${
+            steamDeck.category === 'verified' ? 'bg-accent-green/15 text-accent-green' :
+            steamDeck.category === 'playable' ? 'bg-accent-yellow/15 text-accent-yellow' :
+            steamDeck.category === 'unsupported' ? 'bg-accent-red/15 text-accent-red' :
+            'bg-surface-elevated text-text-muted'
+          }`}>
+            {steamDeck.category === 'verified' ? 'Deck Verified' :
+             steamDeck.category === 'playable' ? 'Deck Playable' :
+             steamDeck.category === 'unsupported' ? 'Deck Unsupported' : 'Deck Unknown'}
+          </span>
+        )}
         {app.is_delisted && (
           <span className="px-2 py-0.5 rounded text-caption bg-accent-red/15 text-accent-red font-medium">
             Delisted
@@ -362,6 +467,10 @@ export default async function AppDetailPage({
         histogram={histogram}
         trends={trends}
         syncStatus={syncStatus}
+        steamDeck={steamDeck}
+        genres={genres}
+        categories={categories}
+        franchises={franchises}
       />
     </div>
   );

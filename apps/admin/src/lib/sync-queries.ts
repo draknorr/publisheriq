@@ -47,13 +47,28 @@ export interface AppWithError {
 }
 
 export interface SourceCompletionStats {
-  source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'page_creation';
+  source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'page_creation' | 'pics';
   totalApps: number;
   syncedApps: number;
   neverSynced: number;
   staleApps: number;
   completionPercent: number;
   lastSyncTime: string | null;
+}
+
+export interface PICSSyncState {
+  lastChangeNumber: number;
+  updatedAt: string | null;
+}
+
+export interface PICSDataStats {
+  totalApps: number;
+  withPicsSync: number;
+  withSteamDeck: number;
+  withCategories: number;
+  withGenres: number;
+  withFranchises: number;
+  withParentInfo: number;
 }
 
 /**
@@ -479,4 +494,87 @@ export function formatRelativeTime(timestamp: string | null): string {
   if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)}m ago`;
   if (diffMs < 86400000) return `${Math.floor(diffMs / 3600000)}h ago`;
   return `${Math.floor(diffMs / 86400000)}d ago`;
+}
+
+/**
+ * Get PICS sync state (change number tracking)
+ */
+export async function getPICSSyncState(
+  supabase: SupabaseClient<Database>
+): Promise<PICSSyncState> {
+  try {
+    const { data } = await supabase
+      .from('pics_sync_state')
+      .select('last_change_number, updated_at')
+      .eq('id', 1)
+      .single();
+
+    return {
+      lastChangeNumber: data?.last_change_number ?? 0,
+      updatedAt: data?.updated_at ?? null,
+    };
+  } catch {
+    return { lastChangeNumber: 0, updatedAt: null };
+  }
+}
+
+/**
+ * Get PICS data completion statistics
+ */
+export async function getPICSDataStats(
+  supabase: SupabaseClient<Database>
+): Promise<PICSDataStats> {
+  // Get total syncable apps
+  const { count: totalApps } = await supabase
+    .from('sync_status')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_syncable', true);
+
+  // Run all PICS data checks in parallel
+  const [
+    withPicsSync,
+    withSteamDeck,
+    withCategories,
+    withGenres,
+    withFranchises,
+    withParentInfo,
+  ] = await Promise.all([
+    // Apps with last_pics_sync set
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_pics_sync', 'is', null),
+    // Apps with Steam Deck data
+    supabase
+      .from('app_steam_deck')
+      .select('*', { count: 'exact', head: true }),
+    // Apps with categories
+    supabase
+      .from('app_categories')
+      .select('appid', { count: 'exact', head: true }),
+    // Apps with genres
+    supabase
+      .from('app_genres')
+      .select('appid', { count: 'exact', head: true }),
+    // Apps with franchises
+    supabase
+      .from('app_franchises')
+      .select('appid', { count: 'exact', head: true }),
+    // Apps with parent_appid set (DLC/demos)
+    supabase
+      .from('apps')
+      .select('*', { count: 'exact', head: true })
+      .not('parent_appid', 'is', null),
+  ]);
+
+  return {
+    totalApps: totalApps ?? 0,
+    withPicsSync: withPicsSync.count ?? 0,
+    withSteamDeck: withSteamDeck.count ?? 0,
+    withCategories: withCategories.count ?? 0,
+    withGenres: withGenres.count ?? 0,
+    withFranchises: withFranchises.count ?? 0,
+    withParentInfo: withParentInfo.count ?? 0,
+  };
 }

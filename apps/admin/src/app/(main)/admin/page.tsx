@@ -7,11 +7,15 @@ import {
   getAppsWithErrors,
   getSourceCompletionStats,
   getFullyCompletedAppsCount,
+  getPICSSyncState,
+  getPICSDataStats,
   type PriorityDistribution,
   type QueueStatus,
   type AppWithError,
   type SourceCompletionStats,
   type SyncHealthData,
+  type PICSSyncState,
+  type PICSDataStats,
 } from '@/lib/sync-queries';
 import { AdminDashboardTabs } from './AdminDashboardTabs';
 
@@ -43,6 +47,8 @@ export interface AdminDashboardData {
   runningJobs: SyncJob[];
   recentJobs: SyncJob[];
   allJobs: SyncJob[];
+  picsSyncState: PICSSyncState;
+  picsDataStats: PICSDataStats;
 }
 
 async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
@@ -61,6 +67,8 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
     runningJobs,
     recentJobs,
     allJobs,
+    picsSyncState,
+    picsDataStats,
   ] = await Promise.all([
     getSyncHealthData(supabase),
     getPriorityDistribution(supabase),
@@ -83,6 +91,8 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
       .select('*')
       .order('started_at', { ascending: false })
       .limit(100),
+    getPICSSyncState(supabase),
+    getPICSDataStats(supabase),
   ]);
 
   return {
@@ -95,6 +105,8 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
     runningJobs: runningJobs.data ?? [],
     recentJobs: recentJobs.data ?? [],
     allJobs: allJobs.data ?? [],
+    picsSyncState,
+    picsDataStats,
   };
 }
 

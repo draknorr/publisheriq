@@ -100,6 +100,20 @@ export type Database = {
           current_discount_percent: number;
           is_released: boolean;
           is_delisted: boolean;
+          controller_support: string | null;
+          pics_review_score: number | null;
+          pics_review_percentage: number | null;
+          metacritic_score: number | null;
+          metacritic_url: string | null;
+          platforms: string | null;
+          release_state: string | null;
+          parent_appid: number | null;
+          homepage_url: string | null;
+          app_state: string | null;
+          last_content_update: string | null;
+          current_build_id: string | null;
+          content_descriptors: Json | null;
+          languages: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -118,6 +132,20 @@ export type Database = {
           current_discount_percent?: number;
           is_released?: boolean;
           is_delisted?: boolean;
+          controller_support?: string | null;
+          pics_review_score?: number | null;
+          pics_review_percentage?: number | null;
+          metacritic_score?: number | null;
+          metacritic_url?: string | null;
+          platforms?: string | null;
+          release_state?: string | null;
+          parent_appid?: number | null;
+          homepage_url?: string | null;
+          app_state?: string | null;
+          last_content_update?: string | null;
+          current_build_id?: string | null;
+          content_descriptors?: Json | null;
+          languages?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -136,6 +164,20 @@ export type Database = {
           current_discount_percent?: number;
           is_released?: boolean;
           is_delisted?: boolean;
+          controller_support?: string | null;
+          pics_review_score?: number | null;
+          pics_review_percentage?: number | null;
+          metacritic_score?: number | null;
+          metacritic_url?: string | null;
+          platforms?: string | null;
+          release_state?: string | null;
+          parent_appid?: number | null;
+          homepage_url?: string | null;
+          app_state?: string | null;
+          last_content_update?: string | null;
+          current_build_id?: string | null;
+          content_descriptors?: Json | null;
+          languages?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -386,12 +428,14 @@ export type Database = {
           last_reviews_sync: string | null;
           last_histogram_sync: string | null;
           last_page_creation_scrape: string | null;
+          last_pics_sync: string | null;
+          pics_change_number: number | null;
           priority_score: number;
           priority_calculated_at: string | null;
           next_sync_after: string;
           sync_interval_hours: number;
           consecutive_errors: number;
-          last_error_source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper' | null;
+          last_error_source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper' | 'pics' | null;
           last_error_message: string | null;
           last_error_at: string | null;
           needs_page_creation_scrape: boolean;
@@ -404,12 +448,14 @@ export type Database = {
           last_reviews_sync?: string | null;
           last_histogram_sync?: string | null;
           last_page_creation_scrape?: string | null;
+          last_pics_sync?: string | null;
+          pics_change_number?: number | null;
           priority_score?: number;
           priority_calculated_at?: string | null;
           next_sync_after?: string;
           sync_interval_hours?: number;
           consecutive_errors?: number;
-          last_error_source?: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper' | null;
+          last_error_source?: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper' | 'pics' | null;
           last_error_message?: string | null;
           last_error_at?: string | null;
           needs_page_creation_scrape?: boolean;
@@ -422,12 +468,14 @@ export type Database = {
           last_reviews_sync?: string | null;
           last_histogram_sync?: string | null;
           last_page_creation_scrape?: string | null;
+          last_pics_sync?: string | null;
+          pics_change_number?: number | null;
           priority_score?: number;
           priority_calculated_at?: string | null;
           next_sync_after?: string;
           sync_interval_hours?: number;
           consecutive_errors?: number;
-          last_error_source?: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper' | null;
+          last_error_source?: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper' | 'pics' | null;
           last_error_message?: string | null;
           last_error_at?: string | null;
           needs_page_creation_scrape?: boolean;
@@ -492,6 +540,230 @@ export type Database = {
           created_at?: string;
         };
         Relationships: [];
+      };
+      pics_sync_state: {
+        Row: {
+          id: number;
+          last_change_number: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          last_change_number?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          last_change_number?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      app_steam_deck: {
+        Row: {
+          appid: number;
+          category: 'verified' | 'playable' | 'unsupported' | 'unknown';
+          tests_passed: string[] | null;
+          tests_failed: string[] | null;
+          updated_at: string;
+        };
+        Insert: {
+          appid: number;
+          category?: 'verified' | 'playable' | 'unsupported' | 'unknown';
+          tests_passed?: string[] | null;
+          tests_failed?: string[] | null;
+          updated_at?: string;
+        };
+        Update: {
+          appid?: number;
+          category?: 'verified' | 'playable' | 'unsupported' | 'unknown';
+          tests_passed?: string[] | null;
+          tests_failed?: string[] | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'app_steam_deck_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+        ];
+      };
+      steam_categories: {
+        Row: {
+          id: number;
+          name: string;
+        };
+        Insert: {
+          id: number;
+          name: string;
+        };
+        Update: {
+          id?: number;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      app_categories: {
+        Row: {
+          appid: number;
+          category_id: number;
+        };
+        Insert: {
+          appid: number;
+          category_id: number;
+        };
+        Update: {
+          appid?: number;
+          category_id?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'app_categories_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+          {
+            foreignKeyName: 'app_categories_category_id_fkey';
+            columns: ['category_id'];
+            referencedRelation: 'steam_categories';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      steam_genres: {
+        Row: {
+          id: number;
+          name: string;
+        };
+        Insert: {
+          id: number;
+          name: string;
+        };
+        Update: {
+          id?: number;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      app_genres: {
+        Row: {
+          appid: number;
+          genre_id: number;
+        };
+        Insert: {
+          appid: number;
+          genre_id: number;
+        };
+        Update: {
+          appid?: number;
+          genre_id?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'app_genres_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+          {
+            foreignKeyName: 'app_genres_genre_id_fkey';
+            columns: ['genre_id'];
+            referencedRelation: 'steam_genres';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      franchises: {
+        Row: {
+          id: number;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          name?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      app_franchises: {
+        Row: {
+          appid: number;
+          franchise_id: number;
+        };
+        Insert: {
+          appid: number;
+          franchise_id: number;
+        };
+        Update: {
+          appid?: number;
+          franchise_id?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'app_franchises_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+          {
+            foreignKeyName: 'app_franchises_franchise_id_fkey';
+            columns: ['franchise_id'];
+            referencedRelation: 'franchises';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      steam_tags: {
+        Row: {
+          id: number;
+          name: string;
+        };
+        Insert: {
+          id: number;
+          name: string;
+        };
+        Update: {
+          id?: number;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      app_steam_tags: {
+        Row: {
+          appid: number;
+          tag_id: number;
+        };
+        Insert: {
+          appid: number;
+          tag_id: number;
+        };
+        Update: {
+          appid?: number;
+          tag_id?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'app_steam_tags_appid_fkey';
+            columns: ['appid'];
+            referencedRelation: 'apps';
+            referencedColumns: ['appid'];
+          },
+          {
+            foreignKeyName: 'app_steam_tags_tag_id_fkey';
+            columns: ['tag_id'];
+            referencedRelation: 'steam_tags';
+            referencedColumns: ['id'];
+          },
+        ];
       };
     };
     Views: Record<string, never>;

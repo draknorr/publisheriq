@@ -44,6 +44,9 @@ interface AppWithDetails {
   developers: string[];
   publishers: string[];
   tags: string[];
+  steam_deck_category: 'verified' | 'playable' | 'unsupported' | 'unknown' | null;
+  platforms: string | null;
+  controller_support: string | null;
 }
 
 async function getApps(search?: string, sort: SortField = 'appid', order: SortOrder = 'asc', filter?: string): Promise<AppWithDetails[]> {
@@ -66,6 +69,8 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
       current_discount_percent,
       is_released,
       is_delisted,
+      platforms,
+      controller_support,
       daily_metrics (
         review_score,
         review_score_desc,
@@ -99,6 +104,9 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
       app_tags (
         tag,
         vote_count
+      ),
+      app_steam_deck (
+        category
       )
     `)
     .limit(100);
@@ -128,6 +136,7 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
   type DevRow = { developers: { name: string } | null };
   type PubRow = { publishers: { name: string } | null };
   type TagRow = { tag: string; vote_count: number | null };
+  type SteamDeckRow = { category: 'verified' | 'playable' | 'unsupported' | 'unknown' };
 
   const apps: AppWithDetails[] = (data ?? []).map((app: Record<string, unknown>) => {
     const metricsArr = app.daily_metrics as MetricRow[] | MetricRow | null;
@@ -157,6 +166,9 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
       .sort((a, b) => (b.vote_count ?? 0) - (a.vote_count ?? 0))
       .slice(0, 5)
       .map((t) => t.tag);
+
+    const steamDeckArr = app.app_steam_deck as SteamDeckRow[] | SteamDeckRow | null;
+    const steamDeck = Array.isArray(steamDeckArr) ? steamDeckArr[0] : steamDeckArr;
 
     return {
       appid: app.appid as number,
@@ -191,6 +203,9 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
       developers,
       publishers,
       tags,
+      steam_deck_category: steamDeck?.category ?? null,
+      platforms: app.platforms as string | null,
+      controller_support: app.controller_support as string | null,
     };
   });
 
@@ -276,6 +291,9 @@ async function getAppsSimple(search?: string): Promise<AppWithDetails[]> {
     developers: [],
     publishers: [],
     tags: [],
+    steam_deck_category: null,
+    platforms: null,
+    controller_support: null,
   }));
 }
 
@@ -548,6 +566,7 @@ export default async function AppsPage({
                   <SortHeader field="appid" label="App ID" currentSort={sort} currentOrder={order} />
                   <SortHeader field="name" label="Name" currentSort={sort} currentOrder={order} className="min-w-[200px]" />
                   <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Type</th>
+                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Deck</th>
                   <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Developer</th>
                   <SortHeader field="review_score" label="Reviews" currentSort={sort} currentOrder={order} />
                   <SortHeader field="total_reviews" label="Count" currentSort={sort} currentOrder={order} />
@@ -594,6 +613,22 @@ export default async function AppsPage({
                     </td>
                     <td className="px-4 py-3">
                       <TypeBadge type={app.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video'} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {app.steam_deck_category ? (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium ${
+                          app.steam_deck_category === 'verified' ? 'bg-accent-green/15 text-accent-green' :
+                          app.steam_deck_category === 'playable' ? 'bg-accent-yellow/15 text-accent-yellow' :
+                          app.steam_deck_category === 'unsupported' ? 'bg-accent-red/15 text-accent-red' :
+                          'bg-surface-elevated text-text-muted'
+                        }`}>
+                          {app.steam_deck_category === 'verified' ? 'OK' :
+                           app.steam_deck_category === 'playable' ? '~' :
+                           app.steam_deck_category === 'unsupported' ? 'X' : '?'}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-body-sm">
