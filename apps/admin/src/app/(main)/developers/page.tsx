@@ -2,31 +2,79 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout';
-import { MetricCard } from '@/components/data-display';
+import { MetricCard, ReviewScoreBadge, TierBadge } from '@/components/data-display';
 import { Card } from '@/components/ui';
-import { Users, Layers, TrendingUp, ExternalLink } from 'lucide-react';
+import { Users, Layers, TrendingUp, ExternalLink, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-type SortField = 'name' | 'game_count' | 'first_game_release_date';
+type SortField = 'name' | 'game_count' | 'first_game_release_date' | 'total_owners_max' | 'total_ccu_peak' | 'weighted_review_score' | 'estimated_revenue_usd' | 'games_trending_up';
 type SortOrder = 'asc' | 'desc';
 
-interface Developer {
+interface DeveloperWithMetrics {
   id: number;
   name: string;
   normalized_name: string;
   steam_vanity_url: string | null;
   first_game_release_date: string | null;
-  first_page_creation_date: string | null;
   game_count: number;
-  created_at: string;
-  updated_at: string;
+  total_owners_min: number;
+  total_owners_max: number;
+  total_ccu_peak: number;
+  max_ccu_peak: number;
+  total_reviews: number;
+  weighted_review_score: number | null;
+  estimated_revenue_usd: number;
+  games_trending_up: number;
+  games_trending_down: number;
+  games_released_last_year: number;
+  computed_at: string | null;
 }
 
-async function getDevelopers(search?: string, sort: SortField = 'game_count', order: SortOrder = 'desc', filter?: string): Promise<Developer[]> {
+interface FilterParams {
+  search?: string;
+  sort: SortField;
+  order: SortOrder;
+  filter?: string;
+  minOwners?: number;
+  minCcu?: number;
+  minScore?: number;
+  minGames?: number;
+  status?: 'active' | 'dormant';
+}
+
+async function getDevelopers(params: FilterParams): Promise<DeveloperWithMetrics[]> {
   if (!isSupabaseConfigured()) {
     return [];
   }
+  const supabase = getSupabase();
+
+  // Use the new RPC function for server-side filtering
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('get_developers_with_metrics', {
+    p_search: params.search || null,
+    p_min_owners: params.minOwners || null,
+    p_min_ccu: params.minCcu || null,
+    p_min_score: params.minScore || null,
+    p_min_games: params.filter === 'prolific' ? 5 : (params.minGames || null),
+    p_status: params.status || null,
+    p_sort_field: params.sort,
+    p_sort_order: params.order,
+    p_limit: 100,
+    p_offset: 0,
+  }) as { data: DeveloperWithMetrics[] | null; error: Error | null };
+
+  if (error) {
+    console.error('Error fetching developers:', error);
+    // Fallback to basic query if RPC fails (e.g., materialized view not created yet)
+    return getDevelopersFallback(params);
+  }
+
+  return data ?? [];
+}
+
+// Fallback query without metrics (in case materialized view doesn't exist)
+async function getDevelopersFallback(params: FilterParams): Promise<DeveloperWithMetrics[]> {
   const supabase = getSupabase();
 
   let query = supabase
@@ -34,39 +82,43 @@ async function getDevelopers(search?: string, sort: SortField = 'game_count', or
     .select('*')
     .limit(100);
 
-  if (search) {
-    query = query.ilike('name', `%${search}%`);
+  if (params.search) {
+    query = query.ilike('name', `%${params.search}%`);
   }
 
-  if (filter === 'prolific') {
+  if (params.filter === 'prolific') {
     query = query.gte('game_count', 5);
-  } else if (filter === 'recent') {
+  } else if (params.filter === 'recent') {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     query = query.gte('first_game_release_date', oneYearAgo.toISOString().split('T')[0]);
   }
 
-  query = query.order(sort, { ascending: order === 'asc' });
+  const basicSort = ['name', 'game_count', 'first_game_release_date'].includes(params.sort) ? params.sort : 'game_count';
+  query = query.order(basicSort, { ascending: params.order === 'asc' });
 
   const { data, error } = await query;
 
   if (error) {
-    console.error('Error fetching developers:', error);
+    console.error('Error fetching developers (fallback):', error);
     return [];
   }
 
-  return data ?? [];
-}
-
-async function getDeveloperCount() {
-  if (!isSupabaseConfigured()) {
-    return 0;
-  }
-  const supabase = getSupabase();
-  const { count } = await supabase
-    .from('developers')
-    .select('*', { count: 'exact', head: true });
-  return count ?? 0;
+  // Map to expected interface with zeroed metrics
+  return (data ?? []).map(d => ({
+    ...d,
+    total_owners_min: 0,
+    total_owners_max: 0,
+    total_ccu_peak: 0,
+    max_ccu_peak: 0,
+    total_reviews: 0,
+    weighted_review_score: null,
+    estimated_revenue_usd: 0,
+    games_trending_up: 0,
+    games_trending_down: 0,
+    games_released_last_year: 0,
+    computed_at: null,
+  }));
 }
 
 async function getDeveloperStats() {
@@ -75,20 +127,49 @@ async function getDeveloperStats() {
   }
   const supabase = getSupabase();
 
-  const oneYearAgo = new Date();
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-  const [totalResult, prolificResult, recentResult] = await Promise.all([
-    supabase.from('developers').select('*', { count: 'exact', head: true }),
-    supabase.from('developers').select('*', { count: 'exact', head: true }).gte('game_count', 5),
-    supabase.from('developers').select('*', { count: 'exact', head: true }).gte('first_game_release_date', oneYearAgo.toISOString().split('T')[0]),
-  ]);
-
-  return {
-    total: totalResult.count ?? 0,
-    prolific: prolificResult.count ?? 0,
-    recentlyActive: recentResult.count ?? 0,
+  // Single query to get all stats using RPC for efficiency
+  // This avoids 4 separate COUNT queries
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('get_developer_stats') as {
+    data: { total: number; prolific: number; recentlyActive: number } | null;
+    error: Error | null;
   };
+
+  if (error) {
+    // Fallback to single count query if RPC doesn't exist
+    const { count } = await supabase.from('developers').select('*', { count: 'exact', head: true });
+    return { total: count ?? 0, prolific: 0, recentlyActive: 0 };
+  }
+
+  return data ?? { total: 0, prolific: 0, recentlyActive: 0 };
+}
+
+// Format helpers
+function formatOwners(min: number, max: number): string {
+  if (min === 0 && max === 0) return '—';
+
+  const formatNum = (n: number) => {
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
+    return n.toString();
+  };
+
+  return `${formatNum(min)} - ${formatNum(max)}`;
+}
+
+function formatCompactNumber(n: number): string {
+  if (n === 0) return '—';
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
+  return n.toLocaleString();
+}
+
+function formatRevenue(n: number): string {
+  if (n === 0) return '—';
+  if (n >= 1000000000) return `$${(n / 1000000000).toFixed(1)}B`;
+  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `$${(n / 1000).toFixed(0)}K`;
+  return `$${n.toLocaleString()}`;
 }
 
 function SortHeader({
@@ -96,25 +177,29 @@ function SortHeader({
   label,
   currentSort,
   currentOrder,
-  filter,
+  searchParams,
   className = '',
 }: {
   field: SortField;
   label: string;
   currentSort: SortField;
   currentOrder: SortOrder;
-  filter?: string;
+  searchParams: URLSearchParams;
   className?: string;
 }) {
   const isActive = currentSort === field;
   const nextOrder = isActive && currentOrder === 'desc' ? 'asc' : 'desc';
   const arrow = isActive ? (currentOrder === 'asc' ? ' ↑' : ' ↓') : '';
-  const filterParam = filter ? `&filter=${filter}` : '';
+
+  // Build URL preserving other params
+  const newParams = new URLSearchParams(searchParams);
+  newParams.set('sort', field);
+  newParams.set('order', nextOrder);
 
   return (
     <th className={`px-4 py-3 text-left text-caption font-medium text-text-secondary ${className}`}>
       <Link
-        href={`?sort=${field}&order=${nextOrder}${filterParam}`}
+        href={`?${newParams.toString()}`}
         className={`hover:text-text-primary transition-colors ${isActive ? 'text-accent-blue' : ''}`}
       >
         {label}{arrow}
@@ -123,23 +208,69 @@ function SortHeader({
   );
 }
 
+function TrendingBadge({ up, down }: { up: number; down: number }) {
+  if (up === 0 && down === 0) return <span className="text-text-muted">—</span>;
+
+  return (
+    <div className="flex items-center gap-2 text-caption">
+      {up > 0 && (
+        <span className="inline-flex items-center gap-0.5 text-accent-green">
+          <ChevronUp className="h-3 w-3" />
+          {up}
+        </span>
+      )}
+      {down > 0 && (
+        <span className="inline-flex items-center gap-0.5 text-accent-red">
+          <ChevronDown className="h-3 w-3" />
+          {down}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default async function DevelopersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; sort?: SortField; order?: SortOrder; filter?: string }>;
+  searchParams: Promise<{
+    search?: string;
+    sort?: SortField;
+    order?: SortOrder;
+    filter?: string;
+    minOwners?: string;
+    minCcu?: string;
+    minScore?: string;
+    minGames?: string;
+    status?: 'active' | 'dormant';
+  }>;
 }) {
   if (!isSupabaseConfigured()) {
     return <ConfigurationRequired />;
   }
 
   const params = await searchParams;
-  const { search, filter } = params;
+  const { search, filter, status } = params;
   const sort = params.sort ?? 'game_count';
   const order = params.order ?? 'desc';
+  const minOwners = params.minOwners ? parseInt(params.minOwners) : undefined;
+  const minCcu = params.minCcu ? parseInt(params.minCcu) : undefined;
+  const minScore = params.minScore ? parseInt(params.minScore) : undefined;
+  const minGames = params.minGames ? parseInt(params.minGames) : undefined;
 
-  const [developers, totalCount, stats] = await Promise.all([
-    getDevelopers(search, sort, order, filter),
-    getDeveloperCount(),
+  // Build URLSearchParams for passing to SortHeader
+  const currentParams = new URLSearchParams();
+  if (search) currentParams.set('search', search);
+  if (filter) currentParams.set('filter', filter);
+  if (status) currentParams.set('status', status);
+  if (minOwners) currentParams.set('minOwners', minOwners.toString());
+  if (minCcu) currentParams.set('minCcu', minCcu.toString());
+  if (minScore) currentParams.set('minScore', minScore.toString());
+  if (minGames) currentParams.set('minGames', minGames.toString());
+
+  const hasAdvancedFilters = minOwners || minCcu || minScore || minGames || status;
+
+  const [developers, stats] = await Promise.all([
+    getDevelopers({ search, sort, order, filter, minOwners, minCcu, minScore, minGames, status }),
     getDeveloperStats(),
   ]);
 
@@ -147,7 +278,7 @@ export default async function DevelopersPage({
     <div>
       <PageHeader
         title="Developers"
-        description={`Browse Steam developers (${totalCount.toLocaleString()} total)`}
+        description={`Browse Steam developers (${stats.total.toLocaleString()} total)`}
       />
 
       {/* Stats Cards */}
@@ -158,7 +289,7 @@ export default async function DevelopersPage({
           icon={<Users className="h-4 w-4" />}
         />
         <MetricCard
-          label="Prolific developers (5+ games)"
+          label="Prolific (5+ games)"
           value={stats.prolific}
           icon={<Layers className="h-4 w-4" />}
         />
@@ -170,7 +301,7 @@ export default async function DevelopersPage({
       </div>
 
       {/* Search & Filters */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
         <form className="flex-1">
           <div className="relative">
             <input
@@ -195,11 +326,11 @@ export default async function DevelopersPage({
             </svg>
           </div>
         </form>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Link
             href="/developers"
             className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
-              !filter
+              !filter && !hasAdvancedFilters
                 ? 'bg-accent-blue text-white'
                 : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
             }`}
@@ -217,16 +348,135 @@ export default async function DevelopersPage({
             Prolific
           </Link>
           <Link
-            href="/developers?filter=recent"
+            href="/developers?status=active"
             className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
-              filter === 'recent'
+              status === 'active'
                 ? 'bg-accent-green/20 text-accent-green border border-accent-green/30'
                 : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
             }`}
           >
-            Recent
+            Active
+          </Link>
+          <Link
+            href="/developers?minOwners=100000"
+            className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
+              minOwners && minOwners >= 100000
+                ? 'bg-accent-purple/20 text-accent-purple border border-accent-purple/30'
+                : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
+            }`}
+          >
+            100K+ Owners
+          </Link>
+          <Link
+            href="/developers?minScore=80"
+            className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
+              minScore && minScore >= 80
+                ? 'bg-accent-yellow/20 text-accent-yellow border border-accent-yellow/30'
+                : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
+            }`}
+          >
+            80%+ Reviews
           </Link>
         </div>
+      </div>
+
+      {/* Advanced Filters Row */}
+      <div className="mb-6 p-4 rounded-lg bg-surface-elevated border border-border-subtle">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="h-4 w-4 text-text-tertiary" />
+          <span className="text-body-sm font-medium text-text-secondary">Advanced Filters</span>
+        </div>
+        <form className="flex flex-wrap gap-4">
+          {/* Preserve search param */}
+          {search && <input type="hidden" name="search" value={search} />}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-caption text-text-tertiary">Min Owners</label>
+            <select
+              name="minOwners"
+              defaultValue={minOwners?.toString() ?? ''}
+              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
+              onChange={(e) => e.target.form?.submit()}
+            >
+              <option value="">Any</option>
+              <option value="1000">1K+</option>
+              <option value="10000">10K+</option>
+              <option value="100000">100K+</option>
+              <option value="1000000">1M+</option>
+              <option value="10000000">10M+</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-caption text-text-tertiary">Min CCU Peak</label>
+            <select
+              name="minCcu"
+              defaultValue={minCcu?.toString() ?? ''}
+              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
+              onChange={(e) => e.target.form?.submit()}
+            >
+              <option value="">Any</option>
+              <option value="100">100+</option>
+              <option value="1000">1K+</option>
+              <option value="10000">10K+</option>
+              <option value="100000">100K+</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-caption text-text-tertiary">Min Review Score</label>
+            <select
+              name="minScore"
+              defaultValue={minScore?.toString() ?? ''}
+              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
+              onChange={(e) => e.target.form?.submit()}
+            >
+              <option value="">Any</option>
+              <option value="50">50%+</option>
+              <option value="70">70%+</option>
+              <option value="80">80%+</option>
+              <option value="90">90%+</option>
+              <option value="95">95%+</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-caption text-text-tertiary">Min Games</label>
+            <select
+              name="minGames"
+              defaultValue={minGames?.toString() ?? ''}
+              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
+              onChange={(e) => e.target.form?.submit()}
+            >
+              <option value="">Any</option>
+              <option value="2">2+</option>
+              <option value="5">5+</option>
+              <option value="10">10+</option>
+              <option value="25">25+</option>
+              <option value="50">50+</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-caption text-text-tertiary">Activity Status</label>
+            <select
+              name="status"
+              defaultValue={status ?? ''}
+              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
+              onChange={(e) => e.target.form?.submit()}
+            >
+              <option value="">Any</option>
+              <option value="active">Active (released in last year)</option>
+              <option value="dormant">Dormant</option>
+            </select>
+          </div>
+
+          <noscript>
+            <button type="submit" className="h-9 px-4 bg-accent-blue text-white rounded-md text-body-sm font-medium self-end">
+              Apply
+            </button>
+          </noscript>
+        </form>
       </div>
 
       {developers.length === 0 ? (
@@ -236,8 +486,8 @@ export default async function DevelopersPage({
           </div>
           <h3 className="text-subheading text-text-primary">No developers found</h3>
           <p className="mt-2 text-body-sm text-text-secondary">
-            {search
-              ? 'Try a different search term'
+            {search || hasAdvancedFilters
+              ? 'Try adjusting your filters'
               : 'Run the Storefront sync to populate developers'}
           </p>
         </Card>
@@ -248,25 +498,42 @@ export default async function DevelopersPage({
             {developers.map((developer) => (
               <Link key={developer.id} href={`/developers/${developer.id}`}>
                 <Card variant="interactive" className="p-4">
-                  <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-start justify-between gap-3 mb-3">
                     <span className="text-body font-medium text-text-primary">
                       {developer.name}
                     </span>
-                    {developer.game_count >= 5 && (
-                      <span className="px-1.5 py-0.5 rounded text-caption bg-accent-cyan/15 text-accent-cyan">
-                        Prolific
-                      </span>
-                    )}
+                    <div className="flex gap-1.5">
+                      {developer.game_count >= 5 && (
+                        <span className="px-1.5 py-0.5 rounded text-caption bg-accent-cyan/15 text-accent-cyan">
+                          Prolific
+                        </span>
+                      )}
+                      {developer.games_released_last_year > 0 && (
+                        <TierBadge tier="active" />
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-body-sm">
-                    <span className="text-text-secondary">
-                      <span className="font-medium text-text-primary">{developer.game_count}</span> games
-                    </span>
-                    {developer.first_game_release_date && (
-                      <span className="text-text-tertiary">
-                        Since {new Date(developer.first_game_release_date).getFullYear()}
-                      </span>
-                    )}
+                  <div className="grid grid-cols-2 gap-3 text-body-sm">
+                    <div>
+                      <p className="text-caption text-text-tertiary">Games</p>
+                      <p className="text-text-primary font-medium">{developer.game_count}</p>
+                    </div>
+                    <div>
+                      <p className="text-caption text-text-tertiary">Owners</p>
+                      <p className="text-text-primary">{formatOwners(developer.total_owners_min, developer.total_owners_max)}</p>
+                    </div>
+                    <div>
+                      <p className="text-caption text-text-tertiary">Peak CCU</p>
+                      <p className="text-text-primary">{formatCompactNumber(developer.total_ccu_peak)}</p>
+                    </div>
+                    <div>
+                      <p className="text-caption text-text-tertiary">Review Score</p>
+                      {developer.weighted_review_score !== null ? (
+                        <ReviewScoreBadge score={developer.weighted_review_score} />
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
+                    </div>
                   </div>
                 </Card>
               </Link>
@@ -278,9 +545,13 @@ export default async function DevelopersPage({
             <table className="w-full">
               <thead className="bg-surface-elevated sticky top-0 z-10">
                 <tr>
-                  <SortHeader field="name" label="Name" currentSort={sort} currentOrder={order} filter={filter} className="min-w-[200px]" />
-                  <SortHeader field="game_count" label="Games" currentSort={sort} currentOrder={order} filter={filter} />
-                  <SortHeader field="first_game_release_date" label="First Release" currentSort={sort} currentOrder={order} filter={filter} />
+                  <SortHeader field="name" label="Name" currentSort={sort} currentOrder={order} searchParams={currentParams} className="min-w-[200px]" />
+                  <SortHeader field="game_count" label="Games" currentSort={sort} currentOrder={order} searchParams={currentParams} />
+                  <SortHeader field="total_owners_max" label="Owners" currentSort={sort} currentOrder={order} searchParams={currentParams} />
+                  <SortHeader field="total_ccu_peak" label="Peak CCU" currentSort={sort} currentOrder={order} searchParams={currentParams} />
+                  <SortHeader field="weighted_review_score" label="Reviews" currentSort={sort} currentOrder={order} searchParams={currentParams} />
+                  <SortHeader field="estimated_revenue_usd" label="Est. Revenue" currentSort={sort} currentOrder={order} searchParams={currentParams} />
+                  <SortHeader field="games_trending_up" label="Trending" currentSort={sort} currentOrder={order} searchParams={currentParams} />
                   <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Steam</th>
                 </tr>
               </thead>
@@ -300,15 +571,32 @@ export default async function DevelopersPage({
                             Prolific
                           </span>
                         )}
+                        {developer.games_released_last_year > 0 && (
+                          <TierBadge tier="active" />
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-body-sm text-text-secondary">
                       {developer.game_count.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-body-sm text-text-tertiary">
-                      {developer.first_game_release_date
-                        ? new Date(developer.first_game_release_date).getFullYear()
-                        : '—'}
+                    <td className="px-4 py-3 text-body-sm text-text-secondary">
+                      {formatOwners(developer.total_owners_min, developer.total_owners_max)}
+                    </td>
+                    <td className="px-4 py-3 text-body-sm text-text-secondary">
+                      {formatCompactNumber(developer.total_ccu_peak)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {developer.weighted_review_score !== null ? (
+                        <ReviewScoreBadge score={developer.weighted_review_score} />
+                      ) : (
+                        <span className="text-text-muted text-body-sm">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-body-sm text-text-secondary">
+                      {formatRevenue(developer.estimated_revenue_usd)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <TrendingBadge up={developer.games_trending_up} down={developer.games_trending_down} />
                     </td>
                     <td className="px-4 py-3">
                       {developer.steam_vanity_url ? (
@@ -336,7 +624,13 @@ export default async function DevelopersPage({
 
       {developers.length === 100 && (
         <p className="mt-4 text-center text-body-sm text-text-tertiary">
-          Showing first 100 results. Use search to find specific developers.
+          Showing first 100 results. Use filters to narrow down.
+        </p>
+      )}
+
+      {developers[0]?.computed_at && (
+        <p className="mt-2 text-center text-caption text-text-muted">
+          Metrics last updated: {new Date(developers[0].computed_at).toLocaleString()}
         </p>
       )}
     </div>
