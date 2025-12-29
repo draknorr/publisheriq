@@ -13,6 +13,80 @@ logger = logging.getLogger(__name__)
 
 STEAM_TAGS_URL = "https://store.steampowered.com/tagdata/populartags/english"
 
+# Genre ID → Name mapping (from Steam PICS data)
+GENRE_NAMES: Dict[int, str] = {
+    1: "Action",
+    2: "Strategy",
+    3: "RPG",
+    4: "Casual",
+    5: "Racing",
+    9: "Racing",
+    12: "Sports",
+    18: "Sports",
+    23: "Indie",
+    25: "Adventure",
+    28: "Simulation",
+    29: "Massively Multiplayer",
+    37: "Free to Play",
+    51: "Animation & Modeling",
+    53: "Design & Illustration",
+    54: "Education",
+    55: "Software Training",
+    56: "Utilities",
+    57: "Video Production",
+    58: "Web Publishing",
+    59: "Game Development",
+    60: "Photo Editing",
+    70: "Early Access",
+    71: "Audio Production",
+    72: "Accounting",
+    81: "Documentary",
+    82: "Episodic",
+    83: "Feature Film",
+    84: "Short",
+    85: "Benchmark",
+    86: "VR",
+    87: "360 Video",
+}
+
+# Category ID → Name mapping (Steam feature categories)
+CATEGORY_NAMES: Dict[int, str] = {
+    1: "Multi-player",
+    2: "Single-player",
+    9: "Co-op",
+    20: "MMO",
+    22: "Steam Achievements",
+    23: "Steam Cloud",
+    27: "Cross-Platform Multiplayer",
+    28: "Full Controller Support",
+    29: "Steam Trading Cards",
+    30: "Steam Workshop",
+    35: "In-App Purchases",
+    36: "Online PvP",
+    37: "Online Co-op",
+    38: "Local Co-op",
+    41: "Shared/Split Screen",
+    42: "Partial Controller Support",
+    43: "Remote Play on TV",
+    44: "Remote Play Together",
+    45: "Captions Available",
+    46: "LAN PvP",
+    47: "LAN Co-op",
+    48: "HDR",
+    49: "VR Supported",
+    50: "VR Only",
+    51: "Steam China Workshop",
+    52: "Tracked Controller Support",
+    53: "Family Sharing",
+    55: "Timeline Support",
+    56: "GPU Recording",
+    57: "Cloud Gaming",
+    59: "Co-op Campaigns",
+    60: "Steam Overlay Support",
+    61: "Remote Play on Phone",
+    62: "Remote Play on Tablet",
+}
+
 
 class PICSDatabase:
     """Database operations for PICS data."""
@@ -181,7 +255,10 @@ class PICSDatabase:
                 return
 
             # Batch upsert categories into lookup table
-            cat_records = [{"category_id": cat_id, "name": f"Category {cat_id}"} for cat_id in enabled_cat_ids]
+            cat_records = [
+                {"category_id": cat_id, "name": CATEGORY_NAMES.get(cat_id, f"Category {cat_id}")}
+                for cat_id in enabled_cat_ids
+            ]
             self._db.client.table("steam_categories").upsert(cat_records, on_conflict="category_id").execute()
 
             # Insert new
@@ -200,7 +277,10 @@ class PICSDatabase:
                 return
 
             # Batch upsert genres into lookup table
-            genre_records = [{"genre_id": genre_id, "name": f"Genre {genre_id}"} for genre_id in genres]
+            genre_records = [
+                {"genre_id": genre_id, "name": GENRE_NAMES.get(genre_id, f"Genre {genre_id}")}
+                for genre_id in genres
+            ]
             self._db.client.table("steam_genres").upsert(genre_records, on_conflict="genre_id").execute()
 
             # Insert new
