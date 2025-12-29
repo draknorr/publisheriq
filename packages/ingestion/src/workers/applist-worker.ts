@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     .single();
 
   let newApps = 0;
-  let existingApps = 0;
+  let updatedApps = 0;
   let errors = 0;
 
   try {
@@ -39,50 +39,80 @@ async function main(): Promise<void> {
     const apps = await fetchSteamAppList();
     log.info('Fetched app list', { count: apps.length });
 
-    // Get existing app IDs for comparison
-    const { data: existingIds } = await supabase.from('apps').select('appid');
-    const existingSet = new Set((existingIds || []).map((a) => a.appid));
+    // Get existing app IDs for comparison (paginate to get ALL, not just 1000)
+    const existingSet = new Set<number>();
+    let from = 0;
+    const pageSize = 10000;
+
+    while (true) {
+      const { data: existingIds, error: fetchError } = await supabase
+        .from('apps')
+        .select('appid')
+        .range(from, from + pageSize - 1);
+
+      if (fetchError) {
+        log.error('Error fetching existing apps', { error: fetchError });
+        break;
+      }
+
+      if (!existingIds || existingIds.length === 0) break;
+
+      for (const app of existingIds) {
+        existingSet.add(app.appid);
+      }
+
+      if (existingIds.length < pageSize) break;
+      from += pageSize;
+    }
 
     log.info('Existing apps in database', { count: existingSet.size });
 
-    // Filter to new apps only
-    const newAppsList = apps.filter((app) => !existingSet.has(app.appid));
-    log.info('New apps to insert', { count: newAppsList.length });
-
-    // Batch insert new apps
+    // Batch upsert all apps (handles both new and existing)
     const batchSize = 500;
-    for (let i = 0; i < newAppsList.length; i += batchSize) {
-      const batch = newAppsList.slice(i, i + batchSize);
+    for (let i = 0; i < apps.length; i += batchSize) {
+      const batch = apps.slice(i, i + batchSize);
 
-      const { error } = await supabase.from('apps').insert(
+      // Track which are new before upserting
+      const newInBatch = batch.filter((app) => !existingSet.has(app.appid));
+      const existingInBatch = batch.length - newInBatch.length;
+
+      const { error } = await supabase.from('apps').upsert(
         batch.map((app) => ({
           appid: app.appid,
           name: app.name,
-        }))
+        })),
+        { onConflict: 'appid', ignoreDuplicates: false }
       );
 
       if (error) {
-        log.error('Failed to insert batch', { batchStart: i, error });
+        log.error('Failed to upsert batch', { batchStart: i, error });
         errors += batch.length;
       } else {
-        newApps += batch.length;
+        newApps += newInBatch.length;
+        updatedApps += existingInBatch;
+
+        // Mark new apps in existingSet to avoid double-counting
+        for (const app of newInBatch) {
+          existingSet.add(app.appid);
+        }
 
         // Also create sync_status entries for new apps
-        await supabase.from('sync_status').insert(
-          batch.map((app) => ({
-            appid: app.appid,
-            priority_score: 0,
-            needs_page_creation_scrape: true,
-          }))
-        );
+        if (newInBatch.length > 0) {
+          await supabase.from('sync_status').upsert(
+            newInBatch.map((app) => ({
+              appid: app.appid,
+              priority_score: 0,
+              needs_page_creation_scrape: true,
+            })),
+            { onConflict: 'appid' }
+          );
+        }
       }
 
-      if ((i + batchSize) % 5000 === 0) {
-        log.info('Insert progress', { processed: i + batchSize, newApps, errors });
+      if ((i + batchSize) % 10000 === 0) {
+        log.info('Upsert progress', { processed: i + batchSize, newApps, updatedApps, errors });
       }
     }
-
-    existingApps = existingSet.size;
 
     if (job) {
       await supabase
@@ -91,8 +121,10 @@ async function main(): Promise<void> {
           status: 'completed',
           completed_at: new Date().toISOString(),
           items_processed: apps.length,
-          items_succeeded: newApps,
+          items_succeeded: newApps + updatedApps,
           items_failed: errors,
+          items_created: newApps,
+          items_updated: updatedApps,
         })
         .eq('id', job.id);
     }
@@ -100,8 +132,8 @@ async function main(): Promise<void> {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     log.info('App List sync completed', {
       totalApps: apps.length,
-      existingApps,
       newApps,
+      updatedApps,
       errors,
       durationSeconds: duration,
     });
@@ -115,6 +147,9 @@ async function main(): Promise<void> {
           status: 'failed',
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
+          items_created: newApps,
+          items_updated: updatedApps,
+          items_failed: errors,
         })
         .eq('id', job.id);
     }
