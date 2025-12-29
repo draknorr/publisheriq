@@ -553,9 +553,9 @@ export async function getPICSDataStats(
     supabase
       .from('app_genres')
       .select('appid', { count: 'exact', head: true }),
-    // Apps with tags (distinct count of apps that have tags)
+    // Apps with PICS tags (distinct count of apps that have tags from PICS)
     supabase
-      .from('app_tags')
+      .from('app_steam_tags')
       .select('appid', { count: 'exact', head: true }),
     // Apps with franchises
     supabase
