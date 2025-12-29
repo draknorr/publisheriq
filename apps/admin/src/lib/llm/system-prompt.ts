@@ -5,6 +5,7 @@ const SCHEMA = `
 - app_type: 'game', 'dlc', 'demo', 'mod', 'video', 'hardware', 'music'
 - trend_direction: 'up', 'down', 'stable'
 - refresh_tier: 'active', 'moderate', 'dormant', 'dead'
+- steam_deck_category: 'unknown', 'unsupported', 'playable', 'verified'
 
 ## Tables
 
@@ -39,6 +40,18 @@ const SCHEMA = `
 | is_released | BOOLEAN | Whether app is released |
 | is_delisted | BOOLEAN | Whether app is removed from store |
 | has_workshop | BOOLEAN | Has Steam Workshop support |
+| pics_review_score | SMALLINT | PICS review score (1-9 scale) |
+| pics_review_percentage | SMALLINT | PICS positive review percentage (0-100) |
+| metacritic_score | SMALLINT | Metacritic score (0-100), may be NULL |
+| platforms | TEXT | Supported platforms, comma-separated: "windows,macos,linux" |
+| controller_support | TEXT | Controller support: "full", "partial", or NULL |
+| release_state | TEXT | Release state: "released", "prerelease", "unavailable" |
+| parent_appid | INTEGER | Parent app ID for DLC/demos (FK to apps.appid) |
+| content_descriptors | JSONB | Mature content descriptors |
+| languages | JSONB | Supported languages |
+| homepage_url | TEXT | Developer/publisher homepage URL |
+| last_content_update | TIMESTAMPTZ | Last depot/content update timestamp |
+| current_build_id | TEXT | Current build ID |
 
 ### app_developers (Junction table)
 | Column | Type | Description |
@@ -106,11 +119,84 @@ Unique: (appid, month_start)
 | review_velocity_30d | DECIMAL(10,2) | Reviews per day (30-day avg) |
 | ccu_trend_7d_pct | DECIMAL(6,2) | CCU change % over 7 days |
 
+### steam_tags (Reference table)
+| Column | Type | Description |
+|--------|------|-------------|
+| tag_id | INTEGER | Primary key (Steam tag ID) |
+| name | TEXT | Tag name (e.g., "RPG", "Indie", "Multiplayer") |
+
+### steam_genres (Reference table)
+| Column | Type | Description |
+|--------|------|-------------|
+| genre_id | INTEGER | Primary key (Steam genre ID) |
+| name | TEXT | Genre name (e.g., "Action", "Adventure", "RPG") |
+
+### steam_categories (Reference table - Steam features)
+| Column | Type | Description |
+|--------|------|-------------|
+| category_id | INTEGER | Primary key (Steam category ID) |
+| name | TEXT | Feature name (e.g., "Single-player", "Steam Achievements") |
+| description | TEXT | Feature description |
+
+Common categories: Single-player (2), Multi-player (1), Co-op (9), Steam Achievements (22), Steam Cloud (23), Steam Trading Cards (29), Steam Workshop (30), Full Controller Support (28), VR Supported (49), VR Only (50), Online Co-op (37), Local Co-op (38), Remote Play Together (44), Family Sharing (53)
+
+### franchises (Reference table)
+| Column | Type | Description |
+|--------|------|-------------|
+| id | SERIAL | Primary key |
+| name | TEXT | Franchise name (e.g., "Half-Life", "Counter-Strike") |
+| normalized_name | TEXT | Lowercase name for lookups |
+
+### app_steam_tags (Junction table)
+| Column | Type | Description |
+|--------|------|-------------|
+| appid | INTEGER | FK to apps.appid |
+| tag_id | INTEGER | FK to steam_tags.tag_id |
+| rank | INTEGER | Tag relevance rank (lower = more relevant) |
+Primary Key: (appid, tag_id)
+
+### app_genres (Junction table)
+| Column | Type | Description |
+|--------|------|-------------|
+| appid | INTEGER | FK to apps.appid |
+| genre_id | INTEGER | FK to steam_genres.genre_id |
+| is_primary | BOOLEAN | TRUE if this is the app's primary genre |
+Primary Key: (appid, genre_id)
+
+### app_categories (Junction table)
+| Column | Type | Description |
+|--------|------|-------------|
+| appid | INTEGER | FK to apps.appid |
+| category_id | INTEGER | FK to steam_categories.category_id |
+Primary Key: (appid, category_id)
+
+### app_franchises (Junction table)
+| Column | Type | Description |
+|--------|------|-------------|
+| appid | INTEGER | FK to apps.appid |
+| franchise_id | INTEGER | FK to franchises.id |
+Primary Key: (appid, franchise_id)
+
+### app_steam_deck (Steam Deck compatibility)
+| Column | Type | Description |
+|--------|------|-------------|
+| appid | INTEGER | Primary key (FK to apps.appid) |
+| category | steam_deck_category | Compatibility: 'unknown', 'unsupported', 'playable', 'verified' |
+| test_timestamp | TIMESTAMPTZ | When Valve tested this app |
+| tested_build_id | TEXT | Build ID that was tested |
+| tests | JSONB | Detailed test results |
+
 ## Key Joins
 - apps to publishers: \`apps JOIN app_publishers ON apps.appid = app_publishers.appid JOIN publishers ON app_publishers.publisher_id = publishers.id\`
 - apps to developers: \`apps JOIN app_developers ON apps.appid = app_developers.appid JOIN developers ON app_developers.developer_id = developers.id\`
 - apps to metrics: \`apps JOIN daily_metrics ON apps.appid = daily_metrics.appid\`
 - apps to trends: \`apps JOIN app_trends ON apps.appid = app_trends.appid\`
+- apps to steam tags: \`apps a JOIN app_steam_tags ast ON a.appid = ast.appid JOIN steam_tags st ON ast.tag_id = st.tag_id\`
+- apps to genres: \`apps a JOIN app_genres ag ON a.appid = ag.appid JOIN steam_genres sg ON ag.genre_id = sg.genre_id\`
+- apps to categories: \`apps a JOIN app_categories ac ON a.appid = ac.appid JOIN steam_categories sc ON ac.category_id = sc.category_id\`
+- apps to franchises: \`apps a JOIN app_franchises af ON a.appid = af.appid JOIN franchises f ON af.franchise_id = f.id\`
+- apps to Steam Deck: \`apps a LEFT JOIN app_steam_deck sd ON a.appid = sd.appid\`
+- apps to DLC: \`apps base JOIN apps dlc ON dlc.parent_appid = base.appid\`
 
 ## Review Score Reference
 | Score | Description | Positive % Range |
@@ -145,7 +231,7 @@ Use these SQL translations for natural language concepts:
 | Concept | SQL Condition |
 |---------|---------------|
 | "indie" / "independent" | Developer name equals publisher name: \`d.name = p.name\` |
-| "well reviewed" / "good reviews" | \`review_score >= 7\` OR \`(positive_reviews::float / NULLIF(total_reviews, 0)) >= 0.70\` |
+| "well reviewed" / "good reviews" | \`review_score >= 7\` OR \`pics_review_percentage >= 70\` |
 | "popular" | \`ccu_peak > 1000\` |
 | "trending up" | \`trend_30d_direction = 'up'\` |
 | "trending down" | \`trend_30d_direction = 'down'\` |
@@ -155,6 +241,41 @@ Use these SQL translations for natural language concepts:
 | "dead game" | \`review_velocity_7d < 0.1\` |
 | "free game" | \`is_free = TRUE\` |
 | "on sale" | \`current_discount_percent > 0\` |
+| "VR games" / "virtual reality" | JOIN app_categories + steam_categories WHERE \`sc.name IN ('VR Supported', 'VR Only')\` |
+| "VR only" / "VR exclusive" | JOIN app_categories + steam_categories WHERE \`sc.name = 'VR Only'\` |
+| "Steam Deck verified" | JOIN app_steam_deck WHERE \`category = 'verified'\` |
+| "Steam Deck playable" | JOIN app_steam_deck WHERE \`category IN ('verified', 'playable')\` |
+| "Steam Deck compatible" | JOIN app_steam_deck WHERE \`category IN ('verified', 'playable')\` |
+| "runs on Mac" / "Mac games" | \`platforms ILIKE '%macos%'\` |
+| "Linux games" / "runs on Linux" | \`platforms ILIKE '%linux%'\` |
+| "Windows only" | \`platforms = 'windows'\` |
+| "cross-platform" | \`platforms LIKE '%,%'\` (has comma = multiple platforms) |
+| "controller support" / "gamepad" | \`controller_support IS NOT NULL\` |
+| "full controller support" | \`controller_support = 'full'\` |
+| "multiplayer" | JOIN app_categories WHERE \`category_id = 1\` |
+| "single-player" | JOIN app_categories WHERE \`category_id = 2\` |
+| "co-op" / "cooperative" | JOIN app_categories WHERE \`category_id IN (9, 37, 38)\` |
+| "local co-op" | JOIN app_categories WHERE \`category_id = 38\` |
+| "online co-op" | JOIN app_categories WHERE \`category_id = 37\` |
+| "has achievements" | JOIN app_categories WHERE \`category_id = 22\` |
+| "has trading cards" | JOIN app_categories WHERE \`category_id = 29\` |
+| "has workshop" / "mod support" | JOIN app_categories WHERE \`category_id = 30\` OR \`has_workshop = TRUE\` |
+| "has cloud saves" | JOIN app_categories WHERE \`category_id = 23\` |
+| "remote play" | JOIN app_categories WHERE \`category_id = 44\` |
+| "family sharing" | JOIN app_categories WHERE \`category_id = 53\` |
+| "franchise" / "series" | JOIN app_franchises + franchises by name |
+| "same franchise as X" | \`franchise_id = (SELECT af.franchise_id FROM app_franchises af JOIN apps a2 ON af.appid = a2.appid WHERE a2.name ILIKE '%X%' LIMIT 1)\` |
+| "DLC for X" / "expansions for X" | \`parent_appid = X\` |
+| "base game" / "has DLC" | \`EXISTS (SELECT 1 FROM apps dlc WHERE dlc.parent_appid = a.appid)\` |
+| "is DLC" / "is expansion" | \`parent_appid IS NOT NULL\` |
+| "high metacritic" | \`metacritic_score >= 80\` |
+| "metacritic score above X" | \`metacritic_score >= X\` |
+| "genre: RPG" / "RPG games" | JOIN app_genres + steam_genres WHERE \`sg.name ILIKE '%RPG%'\` |
+| "genre: Action" | JOIN app_genres + steam_genres WHERE \`sg.name ILIKE '%Action%'\` |
+| "tagged with X" / "has tag X" | JOIN app_steam_tags + steam_tags WHERE \`st.name ILIKE '%X%'\` |
+| "roguelike" / "roguelite" | JOIN app_steam_tags + steam_tags WHERE \`st.name ILIKE '%rogue%'\` |
+| "souls-like" | JOIN app_steam_tags + steam_tags WHERE \`st.name ILIKE '%souls%'\` |
+| "metroidvania" | JOIN app_steam_tags + steam_tags WHERE \`st.name ILIKE '%metroidvania%'\` |
 
 ## SQL Rules
 1. Only SELECT queries - never modify data
@@ -166,6 +287,12 @@ Use these SQL translations for natural language concepts:
 7. Filter \`type = 'game'\` unless user asks for DLC/demos
 8. Filter \`is_released = TRUE AND is_delisted = FALSE\` for active games
 9. IMPORTANT: When using SELECT DISTINCT, all ORDER BY columns MUST appear in the SELECT list
+10. For genres/tags/categories: ALWAYS join through the reference table to get names (e.g., \`JOIN steam_tags st ON ast.tag_id = st.tag_id\`)
+11. Use ILIKE for tag, genre, and category name matching to handle case variations
+12. For Steam Deck queries: Use LEFT JOIN - NULL means not tested, 'unknown' means tested but inconclusive
+13. For platform queries: The \`platforms\` column is comma-separated (e.g., "windows,macos,linux")
+14. For franchise queries: Use normalized_name for consistent matching
+15. For DLC queries: \`parent_appid IS NOT NULL\` identifies DLC, join back to apps to find the parent game
 
 ## Example Queries
 
@@ -197,6 +324,97 @@ JOIN app_trends at ON a.appid = at.appid
 WHERE a.type = 'game'
   AND at.trend_30d_direction = 'down'
 ORDER BY at.trend_30d_change_pct ASC
+LIMIT 20;
+\`\`\`
+
+Find VR games with good reviews:
+\`\`\`sql
+SELECT DISTINCT a.appid, a.name, a.pics_review_percentage
+FROM apps a
+JOIN app_categories ac ON a.appid = ac.appid
+JOIN steam_categories sc ON ac.category_id = sc.category_id
+WHERE a.type = 'game' AND a.is_released = TRUE AND a.is_delisted = FALSE
+  AND sc.name IN ('VR Supported', 'VR Only')
+  AND a.pics_review_percentage >= 80
+ORDER BY a.pics_review_percentage DESC
+LIMIT 20;
+\`\`\`
+
+Find Steam Deck verified roguelikes:
+\`\`\`sql
+SELECT DISTINCT a.appid, a.name, sd.category as deck_status
+FROM apps a
+JOIN app_steam_deck sd ON a.appid = sd.appid
+JOIN app_steam_tags ast ON a.appid = ast.appid
+JOIN steam_tags st ON ast.tag_id = st.tag_id
+WHERE a.type = 'game' AND a.is_released = TRUE AND a.is_delisted = FALSE
+  AND sd.category = 'verified'
+  AND st.name ILIKE '%roguelike%'
+LIMIT 20;
+\`\`\`
+
+Find games in the same franchise as a given game:
+\`\`\`sql
+SELECT a.appid, a.name, a.release_date, f.name as franchise
+FROM apps a
+JOIN app_franchises af ON a.appid = af.appid
+JOIN franchises f ON af.franchise_id = f.id
+WHERE af.franchise_id = (
+  SELECT af2.franchise_id FROM app_franchises af2
+  JOIN apps a2 ON af2.appid = a2.appid
+  WHERE a2.name ILIKE '%half-life%' LIMIT 1
+)
+ORDER BY a.release_date
+LIMIT 20;
+\`\`\`
+
+Find co-op games on Linux with controller support:
+\`\`\`sql
+SELECT DISTINCT a.appid, a.name, a.platforms, a.controller_support
+FROM apps a
+JOIN app_categories ac ON a.appid = ac.appid
+JOIN steam_categories sc ON ac.category_id = sc.category_id
+WHERE a.type = 'game' AND a.is_released = TRUE AND a.is_delisted = FALSE
+  AND a.platforms ILIKE '%linux%'
+  AND a.controller_support IS NOT NULL
+  AND sc.name ILIKE '%co-op%'
+LIMIT 20;
+\`\`\`
+
+Find DLC for a specific game:
+\`\`\`sql
+SELECT dlc.appid, dlc.name, dlc.release_date
+FROM apps dlc
+JOIN apps base ON dlc.parent_appid = base.appid
+WHERE base.name ILIKE '%elden ring%'
+  AND dlc.type = 'dlc'
+ORDER BY dlc.release_date
+LIMIT 20;
+\`\`\`
+
+Find games by genre with high metacritic:
+\`\`\`sql
+SELECT DISTINCT a.appid, a.name, a.metacritic_score, sg.name as genre
+FROM apps a
+JOIN app_genres ag ON a.appid = ag.appid
+JOIN steam_genres sg ON ag.genre_id = sg.genre_id
+WHERE a.type = 'game' AND a.is_released = TRUE AND a.is_delisted = FALSE
+  AND sg.name ILIKE '%RPG%'
+  AND a.metacritic_score >= 80
+ORDER BY a.metacritic_score DESC
+LIMIT 20;
+\`\`\`
+
+Find games with specific tags:
+\`\`\`sql
+SELECT DISTINCT a.appid, a.name, a.pics_review_percentage, st.name as tag
+FROM apps a
+JOIN app_steam_tags ast ON a.appid = ast.appid
+JOIN steam_tags st ON ast.tag_id = st.tag_id
+WHERE a.type = 'game' AND a.is_released = TRUE AND a.is_delisted = FALSE
+  AND st.name ILIKE '%souls-like%'
+  AND ast.rank <= 5  -- Only top 5 tags for relevance
+ORDER BY a.pics_review_percentage DESC
 LIMIT 20;
 \`\`\`
 
