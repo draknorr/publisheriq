@@ -1,0 +1,278 @@
+"""Database operations for PICS data."""
+
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from .client import SupabaseClient
+from ..extractors.common import ExtractedPICSData, Association
+
+logger = logging.getLogger(__name__)
+
+
+class PICSDatabase:
+    """Database operations for PICS data."""
+
+    UPSERT_BATCH_SIZE = 500
+
+    def __init__(self):
+        self._db = SupabaseClient.get_instance()
+
+    def upsert_apps_batch(self, apps: List[ExtractedPICSData]) -> Dict[str, int]:
+        """
+        Upsert a batch of apps with their relationships.
+
+        Returns stats dict with created/updated/failed counts.
+        """
+        stats = {"created": 0, "updated": 0, "failed": 0}
+
+        # Prepare app records
+        app_records = []
+        for app in apps:
+            record = self._build_app_record(app)
+            if record:
+                app_records.append(record)
+
+        # Upsert apps in batches
+        for i in range(0, len(app_records), self.UPSERT_BATCH_SIZE):
+            batch = app_records[i : i + self.UPSERT_BATCH_SIZE]
+            try:
+                self._db.client.table("apps").upsert(batch, on_conflict="appid").execute()
+                stats["updated"] += len(batch)
+            except Exception as e:
+                logger.error(f"Failed to upsert app batch: {e}")
+                stats["failed"] += len(batch)
+
+        # Process relationships
+        self._sync_relationships(apps)
+
+        return stats
+
+    def _build_app_record(self, app: ExtractedPICSData) -> Optional[Dict[str, Any]]:
+        """Build a database record from extracted PICS data."""
+        try:
+            return {
+                "appid": app.appid,
+                # Only update name/type if they exist (don't overwrite with None)
+                **({"name": app.name} if app.name else {}),
+                **({"type": self._map_app_type(app.type)} if app.type else {}),
+                # PICS-specific fields
+                "pics_review_score": app.review_score,
+                "pics_review_percentage": app.review_percentage,
+                "controller_support": app.controller_support,
+                "metacritic_score": app.metacritic_score,
+                "metacritic_url": app.metacritic_url,
+                "platforms": ",".join(app.platforms) if app.platforms else None,
+                "release_state": app.release_state,
+                "parent_appid": app.parent_appid,
+                "homepage_url": app.homepage_url,
+                "app_state": app.app_state,
+                "last_content_update": (
+                    app.last_update_timestamp.isoformat() if app.last_update_timestamp else None
+                ),
+                "current_build_id": app.current_build_id,
+                "content_descriptors": app.content_descriptors if app.content_descriptors else None,
+                "languages": app.languages if app.languages else None,
+                "has_workshop": app.has_workshop,
+                "is_free": app.is_free,
+                # Release date from PICS
+                **(
+                    {"release_date": app.steam_release_date.date().isoformat()}
+                    if app.steam_release_date
+                    else {}
+                ),
+                "is_released": app.release_state == "released",
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Failed to build record for app {app.appid}: {e}")
+            return None
+
+    def _sync_relationships(self, apps: List[ExtractedPICSData]):
+        """Sync developer/publisher/tag/genre/category/franchise relationships."""
+        for app in apps:
+            try:
+                # Steam Deck compatibility
+                if app.steam_deck:
+                    self._upsert_steam_deck(app.appid, app.steam_deck)
+
+                # Categories
+                if app.categories:
+                    self._sync_categories(app.appid, app.categories)
+
+                # Genres
+                if app.genres:
+                    self._sync_genres(app.appid, app.genres, app.primary_genre)
+
+                # Store tags
+                if app.store_tags:
+                    self._sync_store_tags(app.appid, app.store_tags)
+
+                # Franchises from associations
+                franchises = [a for a in app.associations if a.type == "franchise"]
+                for franchise in franchises:
+                    self._upsert_franchise_link(app.appid, franchise.name)
+
+                # Sync status
+                self._update_sync_status(app.appid)
+
+            except Exception as e:
+                logger.error(f"Failed to sync relationships for app {app.appid}: {e}")
+
+    def _upsert_steam_deck(self, appid: int, deck: "SteamDeckCompatibility"):
+        """Upsert Steam Deck compatibility data."""
+        from ..extractors.common import SteamDeckCompatibility
+
+        category_map = {0: "unknown", 1: "unsupported", 2: "playable", 3: "verified"}
+
+        try:
+            self._db.client.table("app_steam_deck").upsert(
+                {
+                    "appid": appid,
+                    "category": category_map.get(deck.category, "unknown"),
+                    "test_timestamp": (
+                        datetime.fromtimestamp(deck.test_timestamp).isoformat()
+                        if deck.test_timestamp
+                        else None
+                    ),
+                    "tested_build_id": deck.tested_build_id,
+                    "tests": deck.tests,
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+                on_conflict="appid",
+            ).execute()
+        except Exception as e:
+            logger.error(f"Failed to upsert Steam Deck data for {appid}: {e}")
+
+    def _sync_categories(self, appid: int, categories: Dict[int, bool]):
+        """Sync app categories."""
+        try:
+            # Delete existing
+            self._db.client.table("app_categories").delete().eq("appid", appid).execute()
+
+            # Insert new
+            records = [
+                {"appid": appid, "category_id": cat_id}
+                for cat_id, enabled in categories.items()
+                if enabled
+            ]
+            if records:
+                self._db.client.table("app_categories").insert(records).execute()
+        except Exception as e:
+            logger.error(f"Failed to sync categories for {appid}: {e}")
+
+    def _sync_genres(self, appid: int, genres: List[int], primary_genre: Optional[int]):
+        """Sync app genres."""
+        try:
+            # Delete existing
+            self._db.client.table("app_genres").delete().eq("appid", appid).execute()
+
+            # Insert new
+            records = [
+                {"appid": appid, "genre_id": genre_id, "is_primary": genre_id == primary_genre}
+                for genre_id in genres
+            ]
+            if records:
+                self._db.client.table("app_genres").insert(records).execute()
+        except Exception as e:
+            logger.error(f"Failed to sync genres for {appid}: {e}")
+
+    def _sync_store_tags(self, appid: int, tag_ids: List[int]):
+        """Sync store tags for an app."""
+        try:
+            # Delete existing
+            self._db.client.table("app_steam_tags").delete().eq("appid", appid).execute()
+
+            # Insert new with rank
+            records = [
+                {"appid": appid, "tag_id": tag_id, "rank": idx}
+                for idx, tag_id in enumerate(tag_ids)
+            ]
+
+            # First ensure tags exist in steam_tags table
+            for tag_id in tag_ids:
+                self._db.client.table("steam_tags").upsert(
+                    {"tag_id": tag_id, "name": f"Tag {tag_id}", "updated_at": datetime.utcnow().isoformat()},
+                    on_conflict="tag_id",
+                ).execute()
+
+            if records:
+                self._db.client.table("app_steam_tags").insert(records).execute()
+        except Exception as e:
+            logger.error(f"Failed to sync store tags for {appid}: {e}")
+
+    def _upsert_franchise_link(self, appid: int, franchise_name: str):
+        """Create/update franchise and link to app."""
+        try:
+            # Upsert franchise
+            result = self._db.client.rpc("upsert_franchise", {"p_name": franchise_name}).execute()
+            franchise_id = result.data
+
+            if franchise_id:
+                # Link to app
+                self._db.client.table("app_franchises").upsert(
+                    {"appid": appid, "franchise_id": franchise_id},
+                    on_conflict="appid,franchise_id",
+                ).execute()
+        except Exception as e:
+            logger.error(f"Failed to link franchise {franchise_name} to {appid}: {e}")
+
+    def _update_sync_status(self, appid: int):
+        """Update sync status for an app."""
+        try:
+            self._db.client.table("sync_status").upsert(
+                {"appid": appid, "last_pics_sync": datetime.utcnow().isoformat()},
+                on_conflict="appid",
+            ).execute()
+        except Exception as e:
+            logger.error(f"Failed to update sync status for {appid}: {e}")
+
+    def _map_app_type(self, pics_type: Optional[str]) -> str:
+        """Map PICS type to database enum."""
+        if not pics_type:
+            return "game"
+        type_map = {
+            "game": "game",
+            "dlc": "dlc",
+            "demo": "demo",
+            "mod": "mod",
+            "video": "video",
+            "tool": "game",
+            "application": "game",
+            "hardware": "hardware",
+            "music": "music",
+        }
+        return type_map.get(pics_type.lower(), "game")
+
+    def get_all_app_ids(self) -> List[int]:
+        """Get list of all app IDs from database."""
+        result = self._db.client.table("apps").select("appid").execute()
+        return [r["appid"] for r in result.data]
+
+    def get_last_change_number(self) -> int:
+        """Get the last processed PICS change number."""
+        try:
+            result = (
+                self._db.client.table("pics_sync_state")
+                .select("last_change_number")
+                .eq("id", 1)
+                .single()
+                .execute()
+            )
+            return result.data.get("last_change_number", 0) if result.data else 0
+        except Exception as e:
+            logger.warning(f"Could not get last change number: {e}")
+            return 0
+
+    def set_last_change_number(self, change_number: int):
+        """Update the last processed PICS change number."""
+        try:
+            self._db.client.table("pics_sync_state").upsert(
+                {
+                    "id": 1,
+                    "last_change_number": change_number,
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+            ).execute()
+        except Exception as e:
+            logger.error(f"Failed to update change number: {e}")
