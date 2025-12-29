@@ -271,10 +271,43 @@ export default async function PublishersPage({
 
   const hasAdvancedFilters = minOwners || minCcu || minScore || minGames || minDevelopers || status;
 
-  const [publishers, stats] = await Promise.all([
-    getPublishers({ search, sort, order, filter, minOwners, minCcu, minScore, minGames, minDevelopers, status }),
-    getPublisherStats(),
-  ]);
+  let publishers: PublisherWithMetrics[] = [];
+  let stats = { total: 0, major: 0, recentlyActive: 0 };
+  let fetchError: string | null = null;
+
+  try {
+    [publishers, stats] = await Promise.all([
+      getPublishers({ search, sort, order, filter, minOwners, minCcu, minScore, minGames, minDevelopers, status }),
+      getPublisherStats(),
+    ]);
+  } catch (error) {
+    fetchError = error instanceof Error ? error.message : String(error);
+    console.error('Publishers page error:', error);
+  }
+
+  if (fetchError) {
+    return (
+      <div className="p-6">
+        <Card className="p-6 border-accent-red/50 bg-accent-red/10">
+          <h2 className="text-subheading text-accent-red mb-2">Error Loading Publishers</h2>
+          <p className="text-body text-text-secondary mb-4">
+            There was an error fetching publisher data. This might be due to missing database migrations.
+          </p>
+          <pre className="p-4 bg-surface-raised rounded-lg text-caption text-text-muted overflow-x-auto">
+            {fetchError}
+          </pre>
+          <p className="mt-4 text-body-sm text-text-tertiary">
+            Ensure the following migrations have been applied:
+          </p>
+          <ul className="list-disc list-inside text-body-sm text-text-tertiary mt-2">
+            <li>20251228100000_add_developer_metrics_view.sql</li>
+            <li>20251228100001_add_publisher_metrics_view.sql</li>
+            <li>20251228100002_add_metrics_refresh_function.sql</li>
+          </ul>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>

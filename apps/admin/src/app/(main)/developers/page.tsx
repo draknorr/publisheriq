@@ -269,10 +269,43 @@ export default async function DevelopersPage({
 
   const hasAdvancedFilters = minOwners || minCcu || minScore || minGames || status;
 
-  const [developers, stats] = await Promise.all([
-    getDevelopers({ search, sort, order, filter, minOwners, minCcu, minScore, minGames, status }),
-    getDeveloperStats(),
-  ]);
+  let developers: DeveloperWithMetrics[] = [];
+  let stats = { total: 0, prolific: 0, recentlyActive: 0 };
+  let fetchError: string | null = null;
+
+  try {
+    [developers, stats] = await Promise.all([
+      getDevelopers({ search, sort, order, filter, minOwners, minCcu, minScore, minGames, status }),
+      getDeveloperStats(),
+    ]);
+  } catch (error) {
+    fetchError = error instanceof Error ? error.message : String(error);
+    console.error('Developers page error:', error);
+  }
+
+  if (fetchError) {
+    return (
+      <div className="p-6">
+        <Card className="p-6 border-accent-red/50 bg-accent-red/10">
+          <h2 className="text-subheading text-accent-red mb-2">Error Loading Developers</h2>
+          <p className="text-body text-text-secondary mb-4">
+            There was an error fetching developer data. This might be due to missing database migrations.
+          </p>
+          <pre className="p-4 bg-surface-raised rounded-lg text-caption text-text-muted overflow-x-auto">
+            {fetchError}
+          </pre>
+          <p className="mt-4 text-body-sm text-text-tertiary">
+            Ensure the following migrations have been applied:
+          </p>
+          <ul className="list-disc list-inside text-body-sm text-text-tertiary mt-2">
+            <li>20251228100000_add_developer_metrics_view.sql</li>
+            <li>20251228100001_add_publisher_metrics_view.sql</li>
+            <li>20251228100002_add_metrics_refresh_function.sql</li>
+          </ul>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
