@@ -34,6 +34,8 @@ interface AppDetails {
   parent_appid: number | null;
   homepage_url: string | null;
   last_content_update: string | null;
+  current_build_id: string | null;
+  app_state: string | null;
   languages: Record<string, unknown> | null;
   content_descriptors: unknown[] | null;
   created_at: string;
@@ -49,6 +51,7 @@ export interface SteamDeckInfo {
 export interface Genre {
   id: number;
   name: string;
+  is_primary: boolean;
 }
 
 export interface Category {
@@ -59,6 +62,18 @@ export interface Category {
 export interface Franchise {
   id: number;
   name: string;
+}
+
+export interface SteamTag {
+  id: number;
+  name: string;
+  rank: number;
+}
+
+export interface DLCApp {
+  appid: number;
+  name: string;
+  type: string;
 }
 
 interface DailyMetric {
@@ -251,12 +266,14 @@ async function getGenres(appid: number): Promise<Genre[]> {
 
   const { data } = await supabase
     .from('app_genres')
-    .select('steam_genres(genre_id, name)')
-    .eq('appid', appid);
+    .select('is_primary, steam_genres(genre_id, name)')
+    .eq('appid', appid)
+    .order('is_primary', { ascending: false });
 
-  return (data ?? [])
-    .map((g: { steam_genres: { genre_id: number; name: string } | null }) =>
-      g.steam_genres ? { id: g.steam_genres.genre_id, name: g.steam_genres.name } : null)
+  type GenreRow = { is_primary: boolean; steam_genres: { genre_id: number; name: string } | null };
+  return ((data ?? []) as unknown as GenreRow[])
+    .map((g) =>
+      g.steam_genres ? { id: g.steam_genres.genre_id, name: g.steam_genres.name, is_primary: g.is_primary ?? false } : null)
     .filter((genre): genre is Genre => genre !== null);
 }
 
@@ -287,6 +304,36 @@ async function getFranchises(appid: number): Promise<Franchise[]> {
   return (data ?? [])
     .map((f: { franchises: { id: number; name: string } | null }) => f.franchises)
     .filter((franchise): franchise is Franchise => franchise !== null);
+}
+
+async function getDLCs(appid: number): Promise<DLCApp[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabase();
+
+  const { data } = await supabase
+    .from('apps')
+    .select('appid, name, type')
+    .eq('parent_appid', appid)
+    .order('name');
+
+  return (data ?? []) as DLCApp[];
+}
+
+async function getSteamTags(appid: number): Promise<SteamTag[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabase();
+
+  const { data } = await supabase
+    .from('app_steam_tags')
+    .select('rank, steam_tags(tag_id, name)')
+    .eq('appid', appid)
+    .order('rank');
+
+  type TagRow = { rank: number; steam_tags: { tag_id: number; name: string } | null };
+  return ((data ?? []) as unknown as TagRow[])
+    .map((t) =>
+      t.steam_tags ? { id: t.steam_tags.tag_id, name: t.steam_tags.name, rank: t.rank } : null)
+    .filter((tag): tag is SteamTag => tag !== null);
 }
 
 function formatPrice(cents: number | null, isFree: boolean): string {
@@ -334,7 +381,7 @@ export default async function AppDetailPage({
     notFound();
   }
 
-  const [app, developers, publishers, tags, metrics, histogram, trends, syncStatus, steamDeck, genres, categories, franchises] = await Promise.all([
+  const [app, developers, publishers, tags, metrics, histogram, trends, syncStatus, steamDeck, genres, categories, franchises, dlcs, steamTags] = await Promise.all([
     getAppDetails(appid),
     getDevelopers(appid),
     getPublishers(appid),
@@ -347,6 +394,8 @@ export default async function AppDetailPage({
     getGenres(appid),
     getCategories(appid),
     getFranchises(appid),
+    getDLCs(appid),
+    getSteamTags(appid),
   ]);
 
   if (!app) {
@@ -473,6 +522,8 @@ export default async function AppDetailPage({
         genres={genres}
         categories={categories}
         franchises={franchises}
+        dlcs={dlcs}
+        steamTags={steamTags}
       />
     </div>
   );

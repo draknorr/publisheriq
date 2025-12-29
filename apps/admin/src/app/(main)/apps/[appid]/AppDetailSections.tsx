@@ -32,6 +32,8 @@ interface AppDetails {
   parent_appid: number | null;
   homepage_url: string | null;
   last_content_update: string | null;
+  current_build_id: string | null;
+  app_state: string | null;
   languages: Record<string, unknown> | null;
   content_descriptors: unknown[] | null;
   created_at: string;
@@ -47,6 +49,7 @@ interface SteamDeckInfo {
 interface Genre {
   id: number;
   name: string;
+  is_primary: boolean;
 }
 
 interface Category {
@@ -57,6 +60,18 @@ interface Category {
 interface Franchise {
   id: number;
   name: string;
+}
+
+interface SteamTag {
+  id: number;
+  name: string;
+  rank: number;
+}
+
+interface DLCApp {
+  appid: number;
+  name: string;
+  type: string;
 }
 
 interface DailyMetric {
@@ -122,6 +137,8 @@ interface AppDetailSectionsProps {
   genres: Genre[];
   categories: Category[];
   franchises: Franchise[];
+  dlcs: DLCApp[];
+  steamTags: SteamTag[];
 }
 
 const sections = [
@@ -161,6 +178,41 @@ function formatNumber(n: number | null): string {
   return n.toLocaleString();
 }
 
+function getPICSReviewScoreDescription(score: number): string {
+  const descriptions: Record<number, string> = {
+    9: 'Overwhelmingly Positive',
+    8: 'Very Positive',
+    7: 'Positive',
+    6: 'Mostly Positive',
+    5: 'Mixed',
+    4: 'Mostly Negative',
+    3: 'Negative',
+    2: 'Very Negative',
+    1: 'Overwhelmingly Negative',
+  };
+  return descriptions[score] ?? 'Unknown';
+}
+
+function parseContentDescriptors(descriptors: unknown[] | null): { id: string; label: string; severity: 'high' | 'medium' }[] {
+  if (!descriptors || !Array.isArray(descriptors)) return [];
+
+  const descriptorMap: Record<string, { label: string; severity: 'high' | 'medium' }> = {
+    '1': { label: 'Some Nudity or Sexual Content', severity: 'medium' },
+    '2': { label: 'Frequent Violence or Gore', severity: 'medium' },
+    '3': { label: 'Adult Only Sexual Content', severity: 'high' },
+    '4': { label: 'Frequent Nudity or Sexual Content', severity: 'high' },
+    '5': { label: 'General Mature Content', severity: 'medium' },
+  };
+
+  return descriptors
+    .map(d => {
+      const id = String(d);
+      const info = descriptorMap[id];
+      return info ? { id, ...info } : null;
+    })
+    .filter((d): d is { id: string; label: string; severity: 'high' | 'medium' } => d !== null);
+}
+
 export function AppDetailSections({
   app,
   developers,
@@ -174,6 +226,8 @@ export function AppDetailSections({
   genres,
   categories,
   franchises,
+  dlcs,
+  steamTags,
 }: AppDetailSectionsProps) {
   const [activeSection, setActiveSection] = useState('overview');
 
@@ -237,6 +291,7 @@ export function AppDetailSections({
           developers={developers}
           publishers={publishers}
           tags={tags}
+          steamTags={steamTags}
           trends={trends}
           genres={genres}
           franchises={franchises}
@@ -246,6 +301,7 @@ export function AppDetailSections({
           app={app}
           steamDeck={steamDeck}
           categories={categories}
+          dlcs={dlcs}
         />
         <MetricsSection id="metrics" metrics={metrics} />
         <ReviewsSection id="reviews" histogram={histogram} />
@@ -269,6 +325,7 @@ function OverviewSection({
   developers,
   publishers,
   tags,
+  steamTags,
   trends,
   genres,
   franchises,
@@ -278,6 +335,7 @@ function OverviewSection({
   developers: { id: number; name: string }[];
   publishers: { id: number; name: string }[];
   tags: { tag: string; vote_count: number }[];
+  steamTags: SteamTag[];
   trends: AppTrends | null;
   genres: Genre[];
   franchises: Franchise[];
@@ -367,8 +425,13 @@ function OverviewSection({
                   {genres.map((genre) => (
                     <span
                       key={genre.id}
-                      className="px-3 py-1.5 rounded-md bg-accent-purple/10 text-body-sm text-accent-purple"
+                      className={`px-3 py-1.5 rounded-md text-body-sm ${
+                        genre.is_primary
+                          ? 'bg-accent-purple/20 text-accent-purple font-medium border border-accent-purple/30'
+                          : 'bg-accent-purple/10 text-accent-purple'
+                      }`}
                     >
+                      {genre.is_primary && <span className="mr-1">★</span>}
                       {genre.name}
                     </span>
                   ))}
@@ -393,8 +456,31 @@ function OverviewSection({
           </div>
         )}
 
-        {/* Tags */}
-        {tags.length > 0 && (
+        {/* PICS Steam Tags (ranked) */}
+        {steamTags.length > 0 && (
+          <div>
+            <h3 className="text-subheading text-text-primary mb-4">Steam Tags</h3>
+            <div className="flex flex-wrap gap-2">
+              {steamTags.slice(0, 20).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="px-3 py-1.5 rounded-md bg-accent-blue/10 border border-accent-blue/20 text-body-sm text-accent-blue"
+                  title={`Rank #${tag.rank}`}
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {steamTags.length > 20 && (
+                <span className="px-3 py-1.5 text-body-sm text-text-muted">
+                  +{steamTags.length - 20} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SteamSpy Tags (vote-based) - shown if no PICS tags or as secondary */}
+        {tags.length > 0 && steamTags.length === 0 && (
           <div>
             <h3 className="text-subheading text-text-primary mb-4">Tags</h3>
             <div className="flex flex-wrap gap-2">
@@ -483,13 +569,16 @@ function PICSSection({
   app,
   steamDeck,
   categories,
+  dlcs,
 }: {
   id: string;
   app: AppDetails;
   steamDeck: SteamDeckInfo | null;
   categories: Category[];
+  dlcs: DLCApp[];
 }) {
-  const hasPICSData = steamDeck || categories.length > 0 || app.controller_support || app.platforms || app.metacritic_score || app.parent_appid || app.languages;
+  const hasPICSData = steamDeck || categories.length > 0 || app.controller_support || app.platforms || app.metacritic_score || app.parent_appid || app.languages || dlcs.length > 0 || app.pics_review_score;
+  const contentDescriptors = parseContentDescriptors(app.content_descriptors);
 
   return (
     <section>
@@ -561,7 +650,49 @@ function PICSSection({
           {/* PICS Metadata */}
           <Card padding="lg">
             <h3 className="text-subheading text-text-primary mb-4">PICS Metadata</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {app.pics_review_score !== null && (
+                <div>
+                  <p className="text-caption text-text-tertiary">PICS Review Score</p>
+                  <p className={`text-body font-medium ${
+                    app.pics_review_score >= 7 ? 'text-accent-green' :
+                    app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
+                  }`}>
+                    {app.pics_review_score} - {getPICSReviewScoreDescription(app.pics_review_score)}
+                  </p>
+                </div>
+              )}
+              {app.pics_review_percentage !== null && (
+                <div>
+                  <p className="text-caption text-text-tertiary">PICS Review %</p>
+                  <p className="text-body text-text-primary">{app.pics_review_percentage}%</p>
+                </div>
+              )}
+              {app.metacritic_score !== null && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Metacritic</p>
+                  {app.metacritic_url ? (
+                    <a
+                      href={app.metacritic_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`text-body font-medium hover:underline ${
+                        app.metacritic_score >= 75 ? 'text-accent-green' :
+                        app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
+                      }`}
+                    >
+                      {app.metacritic_score}
+                    </a>
+                  ) : (
+                    <p className={`text-body font-medium ${
+                      app.metacritic_score >= 75 ? 'text-accent-green' :
+                      app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
+                    }`}>
+                      {app.metacritic_score}
+                    </p>
+                  )}
+                </div>
+              )}
               {app.platforms && (
                 <div>
                   <p className="text-caption text-text-tertiary">Platforms</p>
@@ -572,23 +703,6 @@ function PICSSection({
                 <div>
                   <p className="text-caption text-text-tertiary">Controller Support</p>
                   <p className="text-body text-text-primary capitalize">{app.controller_support}</p>
-                </div>
-              )}
-              {app.metacritic_score !== null && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Metacritic</p>
-                  <p className={`text-body font-medium ${
-                    app.metacritic_score >= 75 ? 'text-accent-green' :
-                    app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
-                  }`}>
-                    {app.metacritic_score}
-                  </p>
-                </div>
-              )}
-              {app.pics_review_percentage !== null && (
-                <div>
-                  <p className="text-caption text-text-tertiary">PICS Review %</p>
-                  <p className="text-body text-text-primary">{app.pics_review_percentage}%</p>
                 </div>
               )}
               {app.parent_appid !== null && (
@@ -605,10 +719,22 @@ function PICSSection({
                   <p className="text-body text-text-primary capitalize">{app.release_state}</p>
                 </div>
               )}
+              {app.app_state && (
+                <div>
+                  <p className="text-caption text-text-tertiary">App State</p>
+                  <p className="text-body text-text-primary">{app.app_state}</p>
+                </div>
+              )}
               {app.last_content_update && (
                 <div>
                   <p className="text-caption text-text-tertiary">Last Content Update</p>
                   <p className="text-body text-text-primary">{formatDateTime(app.last_content_update)}</p>
+                </div>
+              )}
+              {app.current_build_id && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Build ID</p>
+                  <p className="text-body text-text-primary font-mono text-body-sm">{app.current_build_id}</p>
                 </div>
               )}
               {app.homepage_url && (
@@ -619,8 +745,54 @@ function PICSSection({
                   </a>
                 </div>
               )}
+              {app.is_free && (
+                <div>
+                  <p className="text-caption text-text-tertiary">Pricing</p>
+                  <p className="text-body text-accent-green font-medium">Free to Play</p>
+                </div>
+              )}
             </div>
           </Card>
+
+          {/* Content Descriptors (Mature Content) */}
+          {contentDescriptors.length > 0 && (
+            <Card padding="lg">
+              <h3 className="text-subheading text-text-primary mb-4">Content Warnings</h3>
+              <div className="flex flex-wrap gap-2">
+                {contentDescriptors.map((descriptor) => (
+                  <span
+                    key={descriptor.id}
+                    className={`px-3 py-1.5 rounded-md text-body-sm font-medium ${
+                      descriptor.severity === 'high'
+                        ? 'bg-accent-red/15 text-accent-red border border-accent-red/30'
+                        : 'bg-accent-orange/15 text-accent-orange border border-accent-orange/30'
+                    }`}
+                  >
+                    {descriptor.label}
+                  </span>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* DLC List */}
+          {dlcs.length > 0 && (
+            <Card padding="lg">
+              <h3 className="text-subheading text-text-primary mb-4">DLC ({dlcs.length})</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {dlcs.map((dlc) => (
+                  <Link
+                    key={dlc.appid}
+                    href={`/apps/${dlc.appid}`}
+                    className="flex items-center justify-between p-2 rounded-md hover:bg-surface-elevated transition-colors"
+                  >
+                    <span className="text-body-sm text-text-primary">{dlc.name}</span>
+                    <span className="text-caption text-text-muted font-mono">{dlc.appid}</span>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Languages */}
           {app.languages && Object.keys(app.languages).length > 0 && (

@@ -11,6 +11,12 @@ export const dynamic = 'force-dynamic';
 type SortField = 'appid' | 'name' | 'release_date' | 'review_score' | 'total_reviews' | 'owners_max' | 'ccu_peak';
 type SortOrder = 'asc' | 'desc';
 
+interface Genre {
+  id: number;
+  name: string;
+  is_primary: boolean;
+}
+
 interface AppWithDetails {
   appid: number;
   name: string;
@@ -47,6 +53,8 @@ interface AppWithDetails {
   steam_deck_category: 'verified' | 'playable' | 'unsupported' | 'unknown' | null;
   platforms: string | null;
   controller_support: string | null;
+  metacritic_score: number | null;
+  genres: Genre[];
 }
 
 async function getApps(search?: string, sort: SortField = 'appid', order: SortOrder = 'asc', filter?: string): Promise<AppWithDetails[]> {
@@ -71,6 +79,7 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
       is_delisted,
       platforms,
       controller_support,
+      metacritic_score,
       daily_metrics (
         review_score,
         review_score_desc,
@@ -107,6 +116,10 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
       ),
       app_steam_deck (
         category
+      ),
+      app_genres (
+        is_primary,
+        steam_genres (genre_id, name)
       )
     `)
     .limit(100);
@@ -137,6 +150,7 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
   type PubRow = { publishers: { name: string } | null };
   type TagRow = { tag: string; vote_count: number | null };
   type SteamDeckRow = { category: 'verified' | 'playable' | 'unsupported' | 'unknown' };
+  type GenreRow = { is_primary: boolean; steam_genres: { genre_id: number; name: string } | null };
 
   const apps: AppWithDetails[] = (data ?? []).map((app: Record<string, unknown>) => {
     const metricsArr = app.daily_metrics as MetricRow[] | MetricRow | null;
@@ -169,6 +183,12 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
 
     const steamDeckArr = app.app_steam_deck as SteamDeckRow[] | SteamDeckRow | null;
     const steamDeck = Array.isArray(steamDeckArr) ? steamDeckArr[0] : steamDeckArr;
+
+    const genreArr = (app.app_genres ?? []) as GenreRow[];
+    const genres: Genre[] = genreArr
+      .map((g) => g.steam_genres ? { id: g.steam_genres.genre_id, name: g.steam_genres.name, is_primary: g.is_primary ?? false } : null)
+      .filter((g): g is Genre => g !== null)
+      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0)); // Primary first
 
     return {
       appid: app.appid as number,
@@ -206,6 +226,8 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
       steam_deck_category: steamDeck?.category ?? null,
       platforms: app.platforms as string | null,
       controller_support: app.controller_support as string | null,
+      metacritic_score: app.metacritic_score as number | null,
+      genres,
     };
   });
 
@@ -294,6 +316,8 @@ async function getAppsSimple(search?: string): Promise<AppWithDetails[]> {
     steam_deck_category: null,
     platforms: null,
     controller_support: null,
+    metacritic_score: null,
+    genres: [],
   }));
 }
 
@@ -566,7 +590,9 @@ export default async function AppsPage({
                   <SortHeader field="appid" label="App ID" currentSort={sort} currentOrder={order} />
                   <SortHeader field="name" label="Name" currentSort={sort} currentOrder={order} className="min-w-[200px]" />
                   <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Type</th>
+                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Genres</th>
                   <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Deck</th>
+                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">MC</th>
                   <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Developer</th>
                   <SortHeader field="review_score" label="Reviews" currentSort={sort} currentOrder={order} />
                   <SortHeader field="total_reviews" label="Count" currentSort={sort} currentOrder={order} />
@@ -615,6 +641,27 @@ export default async function AppsPage({
                       <TypeBadge type={app.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video'} />
                     </td>
                     <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1 max-w-[150px]">
+                        {app.genres.slice(0, 2).map((genre) => (
+                          <span
+                            key={genre.id}
+                            className={`px-1.5 py-0.5 rounded text-caption ${
+                              genre.is_primary
+                                ? 'bg-accent-purple/20 text-accent-purple font-medium'
+                                : 'bg-accent-purple/10 text-accent-purple'
+                            }`}
+                            title={genre.is_primary ? 'Primary genre' : undefined}
+                          >
+                            {genre.is_primary && '★ '}
+                            {genre.name}
+                          </span>
+                        ))}
+                        {app.genres.length === 0 && (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
                       {app.steam_deck_category ? (
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium ${
                           app.steam_deck_category === 'verified' ? 'bg-accent-green/15 text-accent-green' :
@@ -625,6 +672,18 @@ export default async function AppsPage({
                           {app.steam_deck_category === 'verified' ? 'OK' :
                            app.steam_deck_category === 'playable' ? '~' :
                            app.steam_deck_category === 'unsupported' ? 'X' : '?'}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {app.metacritic_score !== null ? (
+                        <span className={`text-body-sm font-medium ${
+                          app.metacritic_score >= 75 ? 'text-accent-green' :
+                          app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
+                        }`}>
+                          {app.metacritic_score}
                         </span>
                       ) : (
                         <span className="text-text-muted">—</span>
