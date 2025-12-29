@@ -6,6 +6,7 @@ import { ChatInput } from './ChatInput';
 import { ChatLoadingIndicator } from './ChatLoadingIndicator';
 import { MessageSquare } from 'lucide-react';
 import type { Message, ChatResponse } from '@/lib/llm/types';
+import { getRandomPrompts } from '@/lib/example-prompts';
 
 interface ChatContainerProps {
   initialQuery?: string;
@@ -15,6 +16,7 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions] = useState(() => getRandomPrompts(4));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasSubmittedInitialQuery = useRef(false);
 
@@ -100,12 +102,7 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
               Ask questions in plain English and I&apos;ll query the database for you.
             </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-              {[
-                'What publisher has the most games?',
-                'Show me indie games with great reviews',
-                'What games are trending up?',
-                'How many games did Valve release?',
-              ].map((suggestion) => (
+              {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => sendMessage(suggestion)}

@@ -3,16 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, MessageSquare } from 'lucide-react';
-
-const suggestions = [
-  'What publisher has the most games?',
-  'Show me indie games with great reviews',
-  'What games are trending up?',
-  'How many games did Valve release?',
-];
+import { getRandomPrompts } from '@/lib/example-prompts';
 
 export function DashboardSearch() {
   const [query, setQuery] = useState('');
+  const [suggestions] = useState(() => getRandomPrompts(4));
   const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
