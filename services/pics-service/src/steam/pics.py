@@ -41,10 +41,13 @@ class PICSFetcher:
         Returns:
             Dict mapping appid to PICS data
         """
-        if not self._client.is_connected:
-            raise RuntimeError("Not connected to Steam")
-
         for attempt in range(max_retries):
+            # Check connection before each attempt and reconnect if needed
+            if not self._client.is_connected:
+                logger.warning("Not connected to Steam, attempting reconnect...")
+                if not self._client.reconnect():
+                    raise RuntimeError("Failed to reconnect to Steam")
+
             try:
                 response = self._client.client.get_product_info(apps=appids, timeout=30)
 
