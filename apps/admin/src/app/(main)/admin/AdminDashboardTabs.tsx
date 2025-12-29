@@ -234,11 +234,11 @@ function PICSStatusCard({
 }) {
   const dataFields = [
     { label: 'PICS Synced', count: picsDataStats.withPicsSync, icon: '🔄', color: 'text-blue-400' },
-    { label: 'Steam Deck', count: picsDataStats.withSteamDeck, icon: '🎮', color: 'text-green-400' },
+    { label: 'Tags', count: picsDataStats.withTags, icon: '🏷️', color: 'text-green-400' },
     { label: 'Categories', count: picsDataStats.withCategories, icon: '📁', color: 'text-purple-400' },
     { label: 'Genres', count: picsDataStats.withGenres, icon: '🎯', color: 'text-orange-400' },
     { label: 'Franchises', count: picsDataStats.withFranchises, icon: '🏢', color: 'text-cyan-400' },
-    { label: 'Parent Info', count: picsDataStats.withParentInfo, icon: '🔗', color: 'text-yellow-400' },
+    { label: 'Parent App', count: picsDataStats.withParentApp, icon: '🔗', color: 'text-yellow-400' },
   ];
 
   return (

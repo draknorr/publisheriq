@@ -64,11 +64,11 @@ export interface PICSSyncState {
 export interface PICSDataStats {
   totalApps: number;
   withPicsSync: number;
-  withSteamDeck: number;
   withCategories: number;
   withGenres: number;
+  withTags: number;
   withFranchises: number;
-  withParentInfo: number;
+  withParentApp: number;
 }
 
 /**
@@ -533,11 +533,11 @@ export async function getPICSDataStats(
   // Run all PICS data checks in parallel
   const [
     withPicsSync,
-    withSteamDeck,
     withCategories,
     withGenres,
+    withTags,
     withFranchises,
-    withParentInfo,
+    withParentApp,
   ] = await Promise.all([
     // Apps with last_pics_sync set
     supabase
@@ -545,10 +545,6 @@ export async function getPICSDataStats(
       .select('*', { count: 'exact', head: true })
       .eq('is_syncable', true)
       .not('last_pics_sync', 'is', null),
-    // Apps with Steam Deck data
-    supabase
-      .from('app_steam_deck')
-      .select('*', { count: 'exact', head: true }),
     // Apps with categories
     supabase
       .from('app_categories')
@@ -557,11 +553,15 @@ export async function getPICSDataStats(
     supabase
       .from('app_genres')
       .select('appid', { count: 'exact', head: true }),
+    // Apps with tags (distinct count of apps that have tags)
+    supabase
+      .from('app_tags')
+      .select('appid', { count: 'exact', head: true }),
     // Apps with franchises
     supabase
       .from('app_franchises')
       .select('appid', { count: 'exact', head: true }),
-    // Apps with parent_appid set (DLC/demos)
+    // Apps with parent_appid set (DLC/demos linked to parent game)
     supabase
       .from('apps')
       .select('*', { count: 'exact', head: true })
@@ -571,10 +571,10 @@ export async function getPICSDataStats(
   return {
     totalApps: totalApps ?? 0,
     withPicsSync: withPicsSync.count ?? 0,
-    withSteamDeck: withSteamDeck.count ?? 0,
     withCategories: withCategories.count ?? 0,
     withGenres: withGenres.count ?? 0,
+    withTags: withTags.count ?? 0,
     withFranchises: withFranchises.count ?? 0,
-    withParentInfo: withParentInfo.count ?? 0,
+    withParentApp: withParentApp.count ?? 0,
   };
 }
