@@ -175,12 +175,18 @@ class PICSDatabase:
             # Delete existing
             self._db.client.table("app_categories").delete().eq("appid", appid).execute()
 
+            # Get enabled category IDs
+            enabled_cat_ids = [cat_id for cat_id, enabled in categories.items() if enabled]
+
+            # Ensure categories exist in steam_categories table
+            for cat_id in enabled_cat_ids:
+                self._db.client.table("steam_categories").upsert(
+                    {"category_id": cat_id, "name": f"Category {cat_id}"},
+                    on_conflict="category_id",
+                ).execute()
+
             # Insert new
-            records = [
-                {"appid": appid, "category_id": cat_id}
-                for cat_id, enabled in categories.items()
-                if enabled
-            ]
+            records = [{"appid": appid, "category_id": cat_id} for cat_id in enabled_cat_ids]
             if records:
                 self._db.client.table("app_categories").insert(records).execute()
         except Exception as e:
@@ -191,6 +197,13 @@ class PICSDatabase:
         try:
             # Delete existing
             self._db.client.table("app_genres").delete().eq("appid", appid).execute()
+
+            # Ensure genres exist in steam_genres table
+            for genre_id in genres:
+                self._db.client.table("steam_genres").upsert(
+                    {"genre_id": genre_id, "name": f"Genre {genre_id}"},
+                    on_conflict="genre_id",
+                ).execute()
 
             # Insert new
             records = [
