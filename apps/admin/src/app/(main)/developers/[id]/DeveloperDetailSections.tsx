@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { Card } from '@/components/ui';
 import { Grid } from '@/components/layout';
 import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover, MonthlyReviewBreakdownPopover } from '@/components/data-display';
-import { Calendar, ChevronRight, Users, Building2 } from 'lucide-react';
+import { Calendar, ChevronRight, Users, Building2, Monitor, Gamepad2, AlertTriangle } from 'lucide-react';
+import type { PortfolioPICSData } from '@/lib/portfolio-pics';
 
 interface Developer {
   id: number;
@@ -74,10 +75,12 @@ interface DeveloperDetailSectionsProps {
   tags: { tag: string; vote_count: number }[];
   histogram: ReviewHistogram[];
   similarDevelopers: SimilarDeveloper[];
+  picsData: PortfolioPICSData | null;
 }
 
 const sections = [
   { id: 'overview', label: 'Overview' },
+  { id: 'pics', label: 'Portfolio PICS' },
   { id: 'games', label: 'Games' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'network', label: 'Network' },
@@ -110,6 +113,7 @@ export function DeveloperDetailSections({
   tags,
   histogram,
   similarDevelopers,
+  picsData,
 }: DeveloperDetailSectionsProps) {
   const [activeSection, setActiveSection] = useState('overview');
 
@@ -168,6 +172,7 @@ export function DeveloperDetailSections({
       {/* All sections in scrollable view */}
       <div className="space-y-12">
         <OverviewSection id="overview" developer={developer} tags={tags} />
+        <PortfolioPICSSection id="pics" picsData={picsData} totalGames={apps.length} />
         <GamesSection id="games" apps={apps} />
         <ReviewsSection id="reviews" histogram={histogram} apps={apps} />
         <NetworkSection
@@ -254,6 +259,244 @@ function OverviewSection({
         </Card>
       </div>
     </section>
+  );
+}
+
+function PortfolioPICSSection({
+  id,
+  picsData,
+  totalGames,
+}: {
+  id: string;
+  picsData: PortfolioPICSData | null;
+  totalGames: number;
+}) {
+  if (!picsData) {
+    return (
+      <section>
+        <SectionHeader title="Portfolio PICS" id={id} />
+        <Card className="p-12 text-center">
+          <p className="text-text-muted">No PICS data available for this portfolio</p>
+          <p className="text-caption text-text-tertiary mt-2">PICS data is synced from Steam&apos;s Product Info Cache Server</p>
+        </Card>
+      </section>
+    );
+  }
+
+  const { genres, categories, platformStats, franchises, languages, contentDescriptors } = picsData;
+
+  return (
+    <section>
+      <SectionHeader title="Portfolio PICS" id={id} />
+      <div className="space-y-6">
+        {/* Platform / Steam Deck / Controller Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Platform Coverage */}
+          <Card padding="lg">
+            <div className="flex items-center gap-2 mb-4">
+              <Monitor className="h-4 w-4 text-text-tertiary" />
+              <h3 className="text-subheading text-text-primary">Platform Coverage</h3>
+            </div>
+            <div className="space-y-3">
+              <PlatformBar label="Windows" count={platformStats.platforms.windows} total={totalGames} />
+              <PlatformBar label="macOS" count={platformStats.platforms.macos} total={totalGames} />
+              <PlatformBar label="Linux" count={platformStats.platforms.linux} total={totalGames} />
+            </div>
+          </Card>
+
+          {/* Steam Deck */}
+          <Card padding="lg">
+            <div className="flex items-center gap-2 mb-4">
+              <Gamepad2 className="h-4 w-4 text-text-tertiary" />
+              <h3 className="text-subheading text-text-primary">Steam Deck</h3>
+            </div>
+            <div className="space-y-2">
+              <DistributionRow label="Verified" count={platformStats.steamDeck.verified} total={totalGames} color="green" />
+              <DistributionRow label="Playable" count={platformStats.steamDeck.playable} total={totalGames} color="yellow" />
+              <DistributionRow label="Unsupported" count={platformStats.steamDeck.unsupported} total={totalGames} color="red" />
+              <DistributionRow label="Unknown" count={platformStats.steamDeck.unknown} total={totalGames} color="gray" />
+            </div>
+          </Card>
+
+          {/* Controller Support */}
+          <Card padding="lg">
+            <div className="flex items-center gap-2 mb-4">
+              <Gamepad2 className="h-4 w-4 text-text-tertiary" />
+              <h3 className="text-subheading text-text-primary">Controller Support</h3>
+            </div>
+            <div className="space-y-2">
+              <DistributionRow label="Full" count={platformStats.controllerSupport.full} total={totalGames} color="green" />
+              <DistributionRow label="Partial" count={platformStats.controllerSupport.partial} total={totalGames} color="yellow" />
+              <DistributionRow label="None" count={platformStats.controllerSupport.none} total={totalGames} color="gray" />
+            </div>
+          </Card>
+        </div>
+
+        {/* Genre Distribution */}
+        {genres.length > 0 && (
+          <Card padding="lg">
+            <h3 className="text-subheading text-text-primary mb-4">Genre Distribution</h3>
+            <div className="space-y-2">
+              {genres.slice(0, 10).map((genre) => (
+                <div key={genre.genre_id} className="flex items-center gap-3">
+                  <div className="w-32 text-body-sm text-text-secondary truncate">{genre.name}</div>
+                  <div className="flex-1 h-4 bg-surface-elevated rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-accent-purple/60 rounded-full"
+                      style={{ width: `${(genre.game_count / totalGames) * 100}%` }}
+                    />
+                  </div>
+                  <div className="w-24 text-body-sm text-text-tertiary text-right">
+                    {genre.game_count} {genre.is_primary_count > 0 && (
+                      <span className="text-accent-purple">({genre.is_primary_count} primary)</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {genres.length > 10 && (
+                <p className="text-caption text-text-muted mt-2">+{genres.length - 10} more genres</p>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Features/Categories */}
+        {categories.length > 0 && (
+          <Card padding="lg">
+            <h3 className="text-subheading text-text-primary mb-4">Features</h3>
+            <div className="flex flex-wrap gap-2">
+              {categories.slice(0, 15).map((category) => (
+                <span
+                  key={category.category_id}
+                  className="px-3 py-1.5 rounded-md bg-surface-elevated border border-border-subtle text-body-sm text-text-secondary"
+                >
+                  {category.name}
+                  <span className="ml-2 text-text-muted">{category.game_count}</span>
+                </span>
+              ))}
+              {categories.length > 15 && (
+                <span className="px-3 py-1.5 text-body-sm text-text-muted">
+                  +{categories.length - 15} more
+                </span>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Franchises */}
+        {franchises.length > 0 && (
+          <Card padding="lg">
+            <h3 className="text-subheading text-text-primary mb-4">Franchises</h3>
+            <div className="flex flex-wrap gap-2">
+              {franchises.map((franchise) => (
+                <span
+                  key={franchise.id}
+                  className="px-3 py-1.5 rounded-md bg-accent-cyan/10 text-body-sm text-accent-cyan"
+                >
+                  {franchise.name}
+                  <span className="ml-2 opacity-70">{franchise.game_count} games</span>
+                </span>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Languages */}
+        {languages.length > 0 && (
+          <Card padding="lg">
+            <h3 className="text-subheading text-text-primary mb-4">Language Support</h3>
+            <div className="flex flex-wrap gap-2">
+              {languages.slice(0, 12).map((lang) => (
+                <span
+                  key={lang.language}
+                  className="px-2 py-1 rounded text-caption bg-surface-elevated text-text-secondary"
+                >
+                  {lang.language}
+                  <span className="ml-1.5 text-text-muted">{lang.game_count}</span>
+                </span>
+              ))}
+              {languages.length > 12 && (
+                <span className="px-2 py-1 text-caption text-text-muted">
+                  +{languages.length - 12} more
+                </span>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Content Descriptors */}
+        {contentDescriptors.length > 0 && (
+          <Card padding="lg">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="h-4 w-4 text-accent-orange" />
+              <h3 className="text-subheading text-text-primary">Content Warnings</h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {contentDescriptors.map((descriptor) => (
+                <span
+                  key={descriptor.descriptor_id}
+                  className={`px-3 py-1.5 rounded-md text-body-sm font-medium ${
+                    descriptor.severity === 'high'
+                      ? 'bg-accent-red/15 text-accent-red border border-accent-red/30'
+                      : 'bg-accent-orange/15 text-accent-orange border border-accent-orange/30'
+                  }`}
+                >
+                  {descriptor.label}
+                  <span className="ml-2 opacity-70">{descriptor.game_count} games</span>
+                </span>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function PlatformBar({ label, count, total }: { label: string; count: number; total: number }) {
+  const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-16 text-body-sm text-text-secondary">{label}</div>
+      <div className="flex-1 h-3 bg-surface-elevated rounded-full overflow-hidden">
+        <div
+          className="h-full bg-accent-blue/60 rounded-full"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <div className="w-12 text-body-sm text-text-tertiary text-right">{percentage}%</div>
+    </div>
+  );
+}
+
+function DistributionRow({
+  label,
+  count,
+  total,
+  color,
+}: {
+  label: string;
+  count: number;
+  total: number;
+  color: 'green' | 'yellow' | 'red' | 'gray';
+}) {
+  const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+  const colorClasses = {
+    green: 'bg-accent-green/15 text-accent-green',
+    yellow: 'bg-accent-yellow/15 text-accent-yellow',
+    red: 'bg-accent-red/15 text-accent-red',
+    gray: 'bg-surface-elevated text-text-muted',
+  };
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className={`px-2 py-0.5 rounded text-caption font-medium ${colorClasses[color]}`}>
+        {label}
+      </span>
+      <span className="text-body-sm text-text-secondary">
+        {count} <span className="text-text-muted">({percentage}%)</span>
+      </span>
+    </div>
   );
 }
 

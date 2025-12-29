@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getPortfolioPICSData } from '@/lib/portfolio-pics';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
@@ -397,12 +398,13 @@ export default async function DeveloperDetailPage({
     notFound();
   }
 
-  const [developer, apps, relatedPublishers, tags, histogram] = await Promise.all([
+  const [developer, apps, relatedPublishers, tags, histogram, picsData] = await Promise.all([
     getDeveloper(id),
     getDeveloperApps(id),
     getRelatedPublishers(id),
     getDeveloperTags(id),
     getDeveloperReviewHistogram(id),
+    getPortfolioPICSData('developer', id),
   ]);
 
   if (!developer) {
@@ -516,6 +518,7 @@ export default async function DeveloperDetailPage({
         tags={tags}
         histogram={histogram}
         similarDevelopers={similarDevelopers}
+        picsData={picsData}
       />
     </div>
   );

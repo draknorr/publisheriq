@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getPortfolioPICSData } from '@/lib/portfolio-pics';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
@@ -397,12 +398,13 @@ export default async function PublisherDetailPage({
     notFound();
   }
 
-  const [publisher, apps, relatedDevelopers, tags, histogram] = await Promise.all([
+  const [publisher, apps, relatedDevelopers, tags, histogram, picsData] = await Promise.all([
     getPublisher(id),
     getPublisherApps(id),
     getRelatedDevelopers(id),
     getPublisherTags(id),
     getPublisherReviewHistogram(id),
+    getPortfolioPICSData('publisher', id),
   ]);
 
   if (!publisher) {
@@ -516,6 +518,7 @@ export default async function PublisherDetailPage({
         tags={tags}
         histogram={histogram}
         similarPublishers={similarPublishers}
+        picsData={picsData}
       />
     </div>
   );
