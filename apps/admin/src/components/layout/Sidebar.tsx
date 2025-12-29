@@ -5,14 +5,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Activity,
-  RefreshCw,
   Gamepad2,
   Building2,
   Users,
   Menu,
   X,
   MessageSquare,
+  Shield,
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
@@ -26,11 +25,10 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
-  { href: '/sync-status', label: 'Sync Status', icon: Activity },
-  { href: '/jobs', label: 'Sync Jobs', icon: RefreshCw },
   { href: '/apps', label: 'Apps', icon: Gamepad2 },
   { href: '/publishers', label: 'Publishers', icon: Building2 },
   { href: '/developers', label: 'Developers', icon: Users },
+  { href: '/admin', label: 'Admin Dashboard', icon: Shield },
 ];
 
 export function Sidebar() {
@@ -149,7 +147,17 @@ export function Sidebar() {
           <div className="border-t border-border-subtle p-4">
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-accent-green animate-pulse-subtle" />
-              <p className="text-caption text-text-muted">Steam Data Platform</p>
+              <p className="text-caption text-text-muted">
+                Made by{' '}
+                <a
+                  href="https://www.ryanbohmann.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  Ryan
+                </a>
+              </p>
             </div>
           </div>
         </div>
