@@ -1,12 +1,10 @@
 import Link from 'next/link';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
-import { SyncHealthCards, LastSyncTimes } from '@/components/SyncHealthCards';
-import { getSyncHealthData } from '@/lib/sync-queries';
 import { PageHeader, Section, Grid } from '@/components/layout';
 import { Card } from '@/components/ui';
-import { Badge } from '@/components/ui/Badge';
-import { RefreshCw, Gamepad2, Building2, Users, ArrowRight } from 'lucide-react';
+import { Gamepad2, Building2, Users, ArrowRight } from 'lucide-react';
+import { DashboardSearch } from './DashboardSearch';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,24 +13,16 @@ async function getStats() {
     return null;
   }
   const supabase = getSupabase();
-  const [appsResult, publishersResult, developersResult, jobsResult, syncHealth] = await Promise.all([
+  const [appsResult, publishersResult, developersResult] = await Promise.all([
     supabase.from('apps').select('*', { count: 'exact', head: true }),
     supabase.from('publishers').select('*', { count: 'exact', head: true }),
     supabase.from('developers').select('*', { count: 'exact', head: true }),
-    supabase
-      .from('sync_jobs')
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(5),
-    getSyncHealthData(supabase),
   ]);
 
   return {
     appCount: appsResult.count ?? 0,
     publisherCount: publishersResult.count ?? 0,
     developerCount: developersResult.count ?? 0,
-    recentJobs: jobsResult.data ?? [],
-    syncHealth,
   };
 }
 
@@ -69,11 +59,6 @@ function StatCard({
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const variant = status === 'completed' ? 'success' : status === 'running' ? 'info' : status === 'failed' ? 'error' : 'default';
-  return <Badge variant={variant}>{status}</Badge>;
-}
-
 export default async function DashboardPage() {
   const stats = await getStats();
 
@@ -81,37 +66,21 @@ export default async function DashboardPage() {
     return <ConfigurationRequired />;
   }
 
-  const { appCount, publisherCount, developerCount, recentJobs, syncHealth } = stats;
+  const { appCount, publisherCount, developerCount } = stats;
 
   return (
     <div>
       <PageHeader
         title="Dashboard"
-        description="Steam data acquisition platform overview"
+        description="Explore Steam game data with natural language"
       />
 
-      {/* Sync Health Overview */}
-      <Section
-        title="Sync Health"
-        actions={
-          <Link
-            href="/sync-status"
-            className="text-body-sm font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
-          >
-            View details
-          </Link>
-        }
-        className="mb-8"
-      >
-        <SyncHealthCards data={syncHealth} />
-        <div className="mt-4">
-          <LastSyncTimes lastSyncs={syncHealth.lastSyncs} />
-        </div>
-      </Section>
+      {/* Search Hero Section */}
+      <DashboardSearch />
 
       {/* Stats Grid */}
       <Section className="mb-8">
-        <Grid cols={4} gap="md">
+        <Grid cols={3} gap="md">
           <StatCard
             title="Total Apps"
             value={appCount}
@@ -133,33 +102,12 @@ export default async function DashboardPage() {
             icon={Users}
             color="bg-accent-orange/15 text-accent-orange"
           />
-          <StatCard
-            title="Sync Jobs"
-            value={recentJobs.length > 0 ? recentJobs.length : 0}
-            href="/jobs"
-            icon={RefreshCw}
-            color="bg-accent-blue/15 text-accent-blue"
-          />
         </Grid>
       </Section>
 
       {/* Quick Links */}
-      <Section title="Quick Links" className="mb-8">
+      <Section title="Quick Links">
         <Grid cols={3} gap="md">
-          <Link href="/jobs">
-            <Card variant="interactive" className="p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-blue/15 text-accent-blue">
-                  <RefreshCw className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-body font-medium text-text-primary">Sync Jobs</p>
-                  <p className="text-body-sm text-text-secondary">View job history and status</p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-
           <Link href="/apps">
             <Card variant="interactive" className="p-4">
               <div className="flex items-center gap-4">
@@ -187,75 +135,21 @@ export default async function DashboardPage() {
               </div>
             </Card>
           </Link>
-        </Grid>
-      </Section>
 
-      {/* Recent Jobs */}
-      <Section
-        title="Recent Sync Jobs"
-        actions={
-          <Link
-            href="/jobs"
-            className="text-body-sm font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
-          >
-            View all
+          <Link href="/developers">
+            <Card variant="interactive" className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-orange/15 text-accent-orange">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-body font-medium text-text-primary">Developers</p>
+                  <p className="text-body-sm text-text-secondary">Explore developer studios</p>
+                </div>
+              </div>
+            </Card>
           </Link>
-        }
-      >
-        {recentJobs.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-text-secondary">No sync jobs yet</p>
-            <p className="mt-2 text-body-sm text-text-muted">
-              Run a GitHub Action workflow to start syncing data
-            </p>
-          </Card>
-        ) : (
-          <Card padding="none">
-            <div className="overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-surface-elevated">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Job Type
-                    </th>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Processed
-                    </th>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Started
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle">
-                  {recentJobs.map((job) => (
-                    <tr key={job.id} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
-                      <td className="px-4 py-3 text-body-sm font-medium text-text-primary">
-                        {job.job_type}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={job.status} />
-                      </td>
-                      <td className="px-4 py-3 text-body-sm text-text-secondary">
-                        {job.items_succeeded}/{job.items_processed}
-                        {job.items_failed > 0 && (
-                          <span className="ml-1 text-accent-red">
-                            ({job.items_failed} failed)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-body-sm text-text-tertiary">
-                        {new Date(job.started_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
+        </Grid>
       </Section>
     </div>
   );

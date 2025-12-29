@@ -7,11 +7,16 @@ import { ChatLoadingIndicator } from './ChatLoadingIndicator';
 import { MessageSquare } from 'lucide-react';
 import type { Message, ChatResponse } from '@/lib/llm/types';
 
-export function ChatContainer() {
+interface ChatContainerProps {
+  initialQuery?: string;
+}
+
+export function ChatContainer({ initialQuery }: ChatContainerProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasSubmittedInitialQuery = useRef(false);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
@@ -21,6 +26,14 @@ export function ChatContainer() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading, scrollToBottom]);
+
+  // Auto-submit initial query from URL
+  useEffect(() => {
+    if (initialQuery && !hasSubmittedInitialQuery.current && !isLoading) {
+      hasSubmittedInitialQuery.current = true;
+      sendMessage(initialQuery);
+    }
+  }, [initialQuery]);
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
