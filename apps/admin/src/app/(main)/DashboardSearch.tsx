@@ -36,10 +36,10 @@ export function DashboardSearch() {
 
         {/* Heading */}
         <h2 className="text-heading text-text-primary mb-3">
-          Ask about Steam data
+          Welcome to PublisherIQ
         </h2>
         <p className="text-body text-text-secondary mb-8">
-          Ask questions in plain English and get instant answers from the database
+          Ask anything about Steam or browse the full catalogue of data
         </p>
 
         {/* Search Input */}
