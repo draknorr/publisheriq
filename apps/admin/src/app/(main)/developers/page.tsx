@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/layout';
 import { MetricCard, ReviewScoreBadge, TierBadge } from '@/components/data-display';
 import { Card } from '@/components/ui';
-import { Users, Layers, TrendingUp, ExternalLink, ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { Users, Layers, TrendingUp, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { AdvancedFilters } from '@/components/filters/AdvancedFilters';
 
 export const dynamic = 'force-dynamic';
 
@@ -382,103 +383,67 @@ export default async function DevelopersPage({
       </div>
 
       {/* Advanced Filters Row */}
-      <div className="mb-6 p-4 rounded-lg bg-surface-elevated border border-border-subtle">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="h-4 w-4 text-text-tertiary" />
-          <span className="text-body-sm font-medium text-text-secondary">Advanced Filters</span>
-        </div>
-        <form className="flex flex-wrap gap-4">
-          {/* Preserve search param */}
-          {search && <input type="hidden" name="search" value={search} />}
-
-          <div className="flex flex-col gap-1">
-            <label className="text-caption text-text-tertiary">Min Owners</label>
-            <select
-              name="minOwners"
-              defaultValue={minOwners?.toString() ?? ''}
-              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
-              onChange={(e) => e.target.form?.submit()}
-            >
-              <option value="">Any</option>
-              <option value="1000">1K+</option>
-              <option value="10000">10K+</option>
-              <option value="100000">100K+</option>
-              <option value="1000000">1M+</option>
-              <option value="10000000">10M+</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-caption text-text-tertiary">Min CCU Peak</label>
-            <select
-              name="minCcu"
-              defaultValue={minCcu?.toString() ?? ''}
-              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
-              onChange={(e) => e.target.form?.submit()}
-            >
-              <option value="">Any</option>
-              <option value="100">100+</option>
-              <option value="1000">1K+</option>
-              <option value="10000">10K+</option>
-              <option value="100000">100K+</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-caption text-text-tertiary">Min Review Score</label>
-            <select
-              name="minScore"
-              defaultValue={minScore?.toString() ?? ''}
-              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
-              onChange={(e) => e.target.form?.submit()}
-            >
-              <option value="">Any</option>
-              <option value="50">50%+</option>
-              <option value="70">70%+</option>
-              <option value="80">80%+</option>
-              <option value="90">90%+</option>
-              <option value="95">95%+</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-caption text-text-tertiary">Min Games</label>
-            <select
-              name="minGames"
-              defaultValue={minGames?.toString() ?? ''}
-              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
-              onChange={(e) => e.target.form?.submit()}
-            >
-              <option value="">Any</option>
-              <option value="2">2+</option>
-              <option value="5">5+</option>
-              <option value="10">10+</option>
-              <option value="25">25+</option>
-              <option value="50">50+</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-caption text-text-tertiary">Activity Status</label>
-            <select
-              name="status"
-              defaultValue={status ?? ''}
-              className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
-              onChange={(e) => e.target.form?.submit()}
-            >
-              <option value="">Any</option>
-              <option value="active">Active (released in last year)</option>
-              <option value="dormant">Dormant</option>
-            </select>
-          </div>
-
-          <noscript>
-            <button type="submit" className="h-9 px-4 bg-accent-blue text-white rounded-md text-body-sm font-medium self-end">
-              Apply
-            </button>
-          </noscript>
-        </form>
-      </div>
+      <AdvancedFilters
+        basePath="/developers"
+        filters={[
+          {
+            name: 'minOwners',
+            label: 'Min Owners',
+            options: [
+              { value: '', label: 'Any' },
+              { value: '1000', label: '1K+' },
+              { value: '10000', label: '10K+' },
+              { value: '100000', label: '100K+' },
+              { value: '1000000', label: '1M+' },
+              { value: '10000000', label: '10M+' },
+            ],
+          },
+          {
+            name: 'minCcu',
+            label: 'Min CCU Peak',
+            options: [
+              { value: '', label: 'Any' },
+              { value: '100', label: '100+' },
+              { value: '1000', label: '1K+' },
+              { value: '10000', label: '10K+' },
+              { value: '100000', label: '100K+' },
+            ],
+          },
+          {
+            name: 'minScore',
+            label: 'Min Review Score',
+            options: [
+              { value: '', label: 'Any' },
+              { value: '50', label: '50%+' },
+              { value: '70', label: '70%+' },
+              { value: '80', label: '80%+' },
+              { value: '90', label: '90%+' },
+              { value: '95', label: '95%+' },
+            ],
+          },
+          {
+            name: 'minGames',
+            label: 'Min Games',
+            options: [
+              { value: '', label: 'Any' },
+              { value: '2', label: '2+' },
+              { value: '5', label: '5+' },
+              { value: '10', label: '10+' },
+              { value: '25', label: '25+' },
+              { value: '50', label: '50+' },
+            ],
+          },
+          {
+            name: 'status',
+            label: 'Activity Status',
+            options: [
+              { value: '', label: 'Any' },
+              { value: 'active', label: 'Active (released in last year)' },
+              { value: 'dormant', label: 'Dormant' },
+            ],
+          },
+        ]}
+      />
 
       {developers.length === 0 ? (
         <Card className="p-12 text-center">
