@@ -177,18 +177,16 @@ class PICSDatabase:
 
             # Get enabled category IDs
             enabled_cat_ids = [cat_id for cat_id, enabled in categories.items() if enabled]
+            if not enabled_cat_ids:
+                return
 
-            # Ensure categories exist in steam_categories table
-            for cat_id in enabled_cat_ids:
-                self._db.client.table("steam_categories").upsert(
-                    {"category_id": cat_id, "name": f"Category {cat_id}"},
-                    on_conflict="category_id",
-                ).execute()
+            # Batch upsert categories into lookup table
+            cat_records = [{"category_id": cat_id, "name": f"Category {cat_id}"} for cat_id in enabled_cat_ids]
+            self._db.client.table("steam_categories").upsert(cat_records, on_conflict="category_id").execute()
 
             # Insert new
             records = [{"appid": appid, "category_id": cat_id} for cat_id in enabled_cat_ids]
-            if records:
-                self._db.client.table("app_categories").insert(records).execute()
+            self._db.client.table("app_categories").insert(records).execute()
         except Exception as e:
             logger.error(f"Failed to sync categories for {appid}: {e}")
 
@@ -198,20 +196,19 @@ class PICSDatabase:
             # Delete existing
             self._db.client.table("app_genres").delete().eq("appid", appid).execute()
 
-            # Ensure genres exist in steam_genres table
-            for genre_id in genres:
-                self._db.client.table("steam_genres").upsert(
-                    {"genre_id": genre_id, "name": f"Genre {genre_id}"},
-                    on_conflict="genre_id",
-                ).execute()
+            if not genres:
+                return
+
+            # Batch upsert genres into lookup table
+            genre_records = [{"genre_id": genre_id, "name": f"Genre {genre_id}"} for genre_id in genres]
+            self._db.client.table("steam_genres").upsert(genre_records, on_conflict="genre_id").execute()
 
             # Insert new
             records = [
                 {"appid": appid, "genre_id": genre_id, "is_primary": genre_id == primary_genre}
                 for genre_id in genres
             ]
-            if records:
-                self._db.client.table("app_genres").insert(records).execute()
+            self._db.client.table("app_genres").insert(records).execute()
         except Exception as e:
             logger.error(f"Failed to sync genres for {appid}: {e}")
 
@@ -221,21 +218,23 @@ class PICSDatabase:
             # Delete existing
             self._db.client.table("app_steam_tags").delete().eq("appid", appid).execute()
 
+            if not tag_ids:
+                return
+
+            # Batch upsert tags into lookup table
+            now = datetime.utcnow().isoformat()
+            tag_records = [
+                {"tag_id": tag_id, "name": self._get_tag_name(tag_id), "updated_at": now}
+                for tag_id in tag_ids
+            ]
+            self._db.client.table("steam_tags").upsert(tag_records, on_conflict="tag_id").execute()
+
             # Insert new with rank
             records = [
                 {"appid": appid, "tag_id": tag_id, "rank": idx}
                 for idx, tag_id in enumerate(tag_ids)
             ]
-
-            # First ensure tags exist in steam_tags table with proper names
-            for tag_id in tag_ids:
-                self._db.client.table("steam_tags").upsert(
-                    {"tag_id": tag_id, "name": self._get_tag_name(tag_id), "updated_at": datetime.utcnow().isoformat()},
-                    on_conflict="tag_id",
-                ).execute()
-
-            if records:
-                self._db.client.table("app_steam_tags").insert(records).execute()
+            self._db.client.table("app_steam_tags").insert(records).execute()
         except Exception as e:
             logger.error(f"Failed to sync store tags for {appid}: {e}")
 
@@ -282,10 +281,26 @@ class PICSDatabase:
         }
         return type_map.get(pics_type.lower(), "game")
 
-    def get_all_app_ids(self) -> List[int]:
-        """Get list of all app IDs from database."""
-        result = self._db.client.table("apps").select("appid").execute()
-        return [r["appid"] for r in result.data]
+    def get_all_app_ids(self, unsynced_only: bool = False) -> List[int]:
+        """Get list of app IDs from database.
+
+        Args:
+            unsynced_only: If True, only return apps that haven't been PICS synced yet.
+        """
+        if unsynced_only:
+            # Get apps that don't have a sync_status record (never synced)
+            # Using RPC for efficient NOT EXISTS query
+            try:
+                result = self._db.client.rpc("get_unsynced_app_ids").execute()
+                return result.data if result.data else []
+            except Exception as e:
+                logger.warning(f"RPC get_unsynced_app_ids failed, falling back to full list: {e}")
+                # Fallback: get all apps
+                result = self._db.client.table("apps").select("appid").execute()
+                return [r["appid"] for r in result.data]
+        else:
+            result = self._db.client.table("apps").select("appid").execute()
+            return [r["appid"] for r in result.data]
 
     def get_last_change_number(self) -> int:
         """Get the last processed PICS change number."""

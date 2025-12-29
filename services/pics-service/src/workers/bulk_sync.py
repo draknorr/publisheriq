@@ -52,10 +52,10 @@ class BulkSyncWorker:
             request_delay=settings.bulk_request_delay,
         )
 
-        # Get app IDs if not provided
+        # Get app IDs if not provided (only unsynced apps for resume capability)
         if app_ids is None:
-            app_ids = self._db.get_all_app_ids()
-            logger.info(f"Fetched {len(app_ids)} app IDs from database")
+            app_ids = self._db.get_all_app_ids(unsynced_only=True)
+            logger.info(f"Fetched {len(app_ids)} unsynced app IDs from database")
 
         if not app_ids:
             logger.warning("No app IDs to sync")
