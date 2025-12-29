@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
-import { PageHeader, Section, Grid } from '@/components/layout';
+import { Section, Grid } from '@/components/layout';
 import { Card } from '@/components/ui';
 import { Gamepad2, Building2, Users, ArrowRight } from 'lucide-react';
 import { DashboardSearch } from './DashboardSearch';
@@ -70,11 +70,6 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Dashboard"
-        description="Explore Steam game data with natural language"
-      />
-
       {/* Search Hero Section */}
       <DashboardSearch />
 
