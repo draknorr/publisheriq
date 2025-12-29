@@ -22,6 +22,7 @@ interface SyncStats {
   created: number;  // First-time enrichment
   updated: number;  // Refresh of existing data
   failed: number;
+  skipped: number;  // Apps with no histogram data available
 }
 
 type SupabaseClient = ReturnType<typeof getServiceClient>;
@@ -42,7 +43,13 @@ async function processApp(
     const histogram = await fetchReviewHistogram(appid);
 
     if (!histogram || histogram.length === 0) {
-      stats.failed++;
+      stats.skipped++;
+
+      // Still update sync timestamp so this app isn't re-queued immediately
+      await supabase
+        .from('sync_status')
+        .update({ last_histogram_sync: new Date().toISOString() })
+        .eq('appid', appid);
       return;
     }
 
@@ -106,6 +113,7 @@ async function main(): Promise<void> {
     created: 0,
     updated: 0,
     failed: 0,
+    skipped: 0,
   };
 
   try {
@@ -185,6 +193,7 @@ async function main(): Promise<void> {
           items_processed: stats.processed,
           items_succeeded: stats.created + stats.updated,
           items_failed: stats.failed,
+          items_skipped: stats.skipped,
           items_created: stats.created,
           items_updated: stats.updated,
         })
@@ -206,6 +215,7 @@ async function main(): Promise<void> {
           items_processed: stats.processed,
           items_succeeded: stats.created + stats.updated,
           items_failed: stats.failed,
+          items_skipped: stats.skipped,
           items_created: stats.created,
           items_updated: stats.updated,
         })
