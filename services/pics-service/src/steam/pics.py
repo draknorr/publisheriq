@@ -30,12 +30,13 @@ class PICSFetcher:
         self.batch_size = batch_size or self.BATCH_SIZE
         self.request_delay = request_delay or self.REQUEST_DELAY
 
-    def fetch_apps_batch(self, appids: List[int]) -> Dict[int, Dict[str, Any]]:
+    def fetch_apps_batch(self, appids: List[int], max_retries: int = 3) -> Dict[int, Dict[str, Any]]:
         """
-        Fetch PICS data for a batch of apps.
+        Fetch PICS data for a batch of apps with retry logic.
 
         Args:
             appids: List of app IDs to fetch (max ~200 recommended)
+            max_retries: Number of retry attempts on failure
 
         Returns:
             Dict mapping appid to PICS data
@@ -43,17 +44,23 @@ class PICSFetcher:
         if not self._client.is_connected:
             raise RuntimeError("Not connected to Steam")
 
-        try:
-            response = self._client.client.get_product_info(apps=appids)
+        for attempt in range(max_retries):
+            try:
+                response = self._client.client.get_product_info(apps=appids, timeout=30)
 
-            if response is None:
-                logger.warning(f"No response for batch starting at {appids[0] if appids else 'empty'}")
-                return {}
+                if response is None:
+                    logger.warning(f"No response for batch starting at {appids[0] if appids else 'empty'}")
+                    return {}
 
-            return response.get("apps", {})
-        except Exception as e:
-            logger.error(f"Error fetching PICS data: {e}")
-            raise
+                return response.get("apps", {})
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = 2 ** (attempt + 1)  # 2, 4, 8 seconds
+                    logger.warning(f"Batch attempt {attempt + 1}/{max_retries} failed, retrying in {delay}s: {e}")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Error fetching PICS data after {max_retries} attempts: {e}")
+                    raise
 
     def fetch_all_apps(
         self,
@@ -75,6 +82,7 @@ class PICSFetcher:
         """
         total_apps = len(appids)
         processed = 0
+        failed_batches: List[List[int]] = []
 
         for i in range(0, total_apps, self.batch_size):
             batch = appids[i : i + self.batch_size]
@@ -96,9 +104,19 @@ class PICSFetcher:
                 time.sleep(self.request_delay)
 
             except Exception as e:
-                logger.error(f"Batch failed at offset {i}: {e}")
+                logger.error(f"Batch failed at offset {i} ({len(batch)} apps): {e}")
+                failed_batches.append(batch)
                 # Continue with next batch after delay
                 time.sleep(2)
+
+        # Log summary of failed batches
+        if failed_batches:
+            total_failed = sum(len(b) for b in failed_batches)
+            failed_ids = [appid for batch in failed_batches for appid in batch[:5]]  # First 5 from each
+            logger.error(
+                f"Sync completed with {len(failed_batches)} failed batches ({total_failed} apps). "
+                f"Sample failed IDs: {failed_ids}"
+            )
 
     def get_changes_since(self, change_number: int) -> Optional[PICSChange]:
         """
