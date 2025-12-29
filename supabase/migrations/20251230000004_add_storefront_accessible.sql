@@ -1,10 +1,12 @@
 -- Add storefront_accessible column to track apps with no public storefront data
 -- Apps where Steam returns success=false (private, removed, age-gated) will be marked FALSE
 
-ALTER TABLE sync_status ADD COLUMN storefront_accessible BOOLEAN DEFAULT TRUE;
+ALTER TABLE sync_status ADD COLUMN IF NOT EXISTS storefront_accessible BOOLEAN DEFAULT TRUE;
 
--- Update get_apps_for_sync to exclude inaccessible apps from storefront sync
-CREATE OR REPLACE FUNCTION get_apps_for_sync(
+-- Drop and recreate get_apps_for_sync to exclude inaccessible apps from storefront sync
+DROP FUNCTION IF EXISTS get_apps_for_sync(sync_source, INTEGER);
+
+CREATE FUNCTION get_apps_for_sync(
     p_source sync_source,
     p_limit INTEGER DEFAULT 100
 )
