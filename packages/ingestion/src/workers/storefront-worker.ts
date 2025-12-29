@@ -10,7 +10,7 @@
 import { getServiceClient } from '@publisheriq/database';
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
 import pLimit from 'p-limit';
-import { fetchStorefrontAppDetails } from '../apis/storefront.js';
+import { fetchStorefrontAppDetails, type StorefrontResult } from '../apis/storefront.js';
 
 const log = logger.child({ worker: 'storefront-sync' });
 
@@ -22,7 +22,8 @@ interface SyncStats {
   appsProcessed: number;
   appsCreated: number;  // First-time enrichment
   appsUpdated: number;  // Refresh of existing data
-  appsFailed: number;
+  appsSkipped: number;  // Steam returned no data (private/removed/age-gated)
+  appsFailed: number;   // Actual API errors
 }
 
 type SupabaseClient = ReturnType<typeof getServiceClient>;
@@ -40,24 +41,44 @@ async function processApp(
   stats.appsProcessed++;
 
   try {
-    const details = await fetchStorefrontAppDetails(appid);
+    const result = await fetchStorefrontAppDetails(appid);
 
-    if (!details) {
-      log.debug('No details returned for app', { appid });
+    // Steam returned no data - app is private, removed, or age-gated
+    // Mark as inaccessible so we don't retry every day
+    if (result.status === 'no_data') {
+      log.debug('No storefront data for app (private/removed)', { appid });
+      stats.appsSkipped++;
+
+      await supabase
+        .from('sync_status')
+        .update({
+          storefront_accessible: false,
+          last_storefront_sync: new Date().toISOString(),
+        })
+        .eq('appid', appid);
+
+      return;
+    }
+
+    // Actual API error - keep as retryable
+    if (result.status === 'error') {
+      log.error('API error fetching storefront data', { appid, error: result.error });
       stats.appsFailed++;
 
-      // Update sync status with error (don't update last_storefront_sync so it retries)
       await supabase
         .from('sync_status')
         .update({
           last_error_source: 'storefront',
-          last_error_message: 'No data returned',
+          last_error_message: result.error,
           last_error_at: new Date().toISOString(),
         })
         .eq('appid', appid);
 
       return;
     }
+
+    // Success - we have data
+    const details = result.data;
 
     // Update app with storefront data
     const { error: updateError } = await supabase
@@ -124,10 +145,11 @@ async function processApp(
         .eq('appid', appid);
     }
 
-    // Update sync status
+    // Update sync status - mark as accessible and synced
     await supabase
       .from('sync_status')
       .update({
+        storefront_accessible: true,
         last_storefront_sync: new Date().toISOString(),
         consecutive_errors: 0,
         last_error_source: null,
@@ -188,6 +210,7 @@ async function main(): Promise<void> {
     appsProcessed: 0,
     appsCreated: 0,
     appsUpdated: 0,
+    appsSkipped: 0,
     appsFailed: 0,
   };
 
@@ -272,6 +295,7 @@ async function main(): Promise<void> {
           completed_at: new Date().toISOString(),
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsCreated + stats.appsUpdated,
+          items_skipped: stats.appsSkipped,
           items_failed: stats.appsFailed,
           items_created: stats.appsCreated,
           items_updated: stats.appsUpdated,
@@ -293,6 +317,7 @@ async function main(): Promise<void> {
           error_message: error instanceof Error ? error.message : String(error),
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsCreated + stats.appsUpdated,
+          items_skipped: stats.appsSkipped,
           items_failed: stats.appsFailed,
           items_created: stats.appsCreated,
           items_updated: stats.appsUpdated,

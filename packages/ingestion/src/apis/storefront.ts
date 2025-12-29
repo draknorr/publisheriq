@@ -152,6 +152,15 @@ export interface ParsedStorefrontApp {
 }
 
 /**
+ * Result type for storefront fetch that distinguishes between
+ * "no data available" (Steam returned success=false) and actual errors
+ */
+export type StorefrontResult =
+  | { status: 'success'; data: ParsedStorefrontApp }
+  | { status: 'no_data' }  // Steam returned success=false (private/removed/age-gated)
+  | { status: 'error'; error: string };
+
+/**
  * Parse a date string from Steam's format
  * Handles various formats like "Mar 15, 2020", "15 Mar 2020", "Q1 2021", etc.
  */
@@ -231,11 +240,11 @@ function parseStorefrontResponse(
  * Rate limit: ~200 requests per 5 minutes
  *
  * @param appid - Steam app ID
- * @returns Parsed app details or null if not found
+ * @returns StorefrontResult with status indicating success, no_data, or error
  */
 export async function fetchStorefrontAppDetails(
   appid: number
-): Promise<ParsedStorefrontApp | null> {
+): Promise<StorefrontResult> {
   await rateLimiters.storefront.acquire();
 
   const url = `${API_URLS.STEAM_STORE}/api/appdetails/?appids=${appid}`;
@@ -252,10 +261,21 @@ export async function fetchStorefrontAppDetails(
     });
 
     const appData = response[String(appid)];
-    return parseStorefrontResponse(appid, appData);
+
+    // Steam returned success=false - app is private, removed, or age-gated
+    if (!appData || !appData.success || !appData.data) {
+      return { status: 'no_data' };
+    }
+
+    const parsed = parseStorefrontResponse(appid, appData);
+    if (!parsed) {
+      return { status: 'no_data' };
+    }
+
+    return { status: 'success', data: parsed };
   } catch (error) {
     log.error('Failed to fetch Storefront app details', { appid, error });
-    return null;
+    return { status: 'error', error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -264,17 +284,17 @@ export async function fetchStorefrontAppDetails(
  * Note: Bulk requests only work reliably with price_overview filter
  *
  * @param appids - Array of Steam app IDs
- * @returns Map of appid to parsed details
+ * @returns Map of appid to StorefrontResult
  */
 export async function fetchStorefrontAppDetailsBatch(
   appids: number[]
-): Promise<Map<number, ParsedStorefrontApp | null>> {
-  const results = new Map<number, ParsedStorefrontApp | null>();
+): Promise<Map<number, StorefrontResult>> {
+  const results = new Map<number, StorefrontResult>();
 
   // Process one at a time with rate limiting
   for (const appid of appids) {
-    const details = await fetchStorefrontAppDetails(appid);
-    results.set(appid, details);
+    const result = await fetchStorefrontAppDetails(appid);
+    results.set(appid, result);
   }
 
   return results;
