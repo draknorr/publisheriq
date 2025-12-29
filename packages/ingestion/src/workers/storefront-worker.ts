@@ -15,7 +15,8 @@ const log = logger.child({ worker: 'storefront-sync' });
 
 interface SyncStats {
   appsProcessed: number;
-  appsSucceeded: number;
+  appsCreated: number;  // First-time enrichment
+  appsUpdated: number;  // Refresh of existing data
   appsFailed: number;
 }
 
@@ -46,7 +47,8 @@ async function main(): Promise<void> {
 
   const stats: SyncStats = {
     appsProcessed: 0,
-    appsSucceeded: 0,
+    appsCreated: 0,
+    appsUpdated: 0,
     appsFailed: 0,
   };
 
@@ -83,6 +85,25 @@ async function main(): Promise<void> {
     }
 
     log.info('Found apps to sync', { count: appsToSync.length });
+
+    // Fetch sync status to determine which are first-time vs refresh
+    const appIds = appsToSync.map((a: { appid: number }) => a.appid);
+    const { data: syncStatuses } = await supabase
+      .from('sync_status')
+      .select('appid, last_storefront_sync')
+      .in('appid', appIds);
+
+    // Build set of apps that have never been synced (first-time enrichment)
+    const neverSyncedSet = new Set(
+      (syncStatuses || [])
+        .filter((s) => s.last_storefront_sync === null)
+        .map((s) => s.appid)
+    );
+
+    log.info('First-time vs refresh breakdown', {
+      firstTime: neverSyncedSet.size,
+      refresh: appsToSync.length - neverSyncedSet.size,
+    });
 
     for (const { appid } of appsToSync) {
       stats.appsProcessed++;
@@ -186,8 +207,13 @@ async function main(): Promise<void> {
           })
           .eq('appid', appid);
 
-        stats.appsSucceeded++;
-        log.debug('Synced app', { appid, name: details.name });
+        // Track as first-time enrichment or refresh
+        if (neverSyncedSet.has(appid)) {
+          stats.appsCreated++;
+        } else {
+          stats.appsUpdated++;
+        }
+        log.debug('Synced app', { appid, name: details.name, firstTime: neverSyncedSet.has(appid) });
       } catch (error) {
         log.error('Error processing app', { appid, error });
         stats.appsFailed++;
@@ -210,7 +236,6 @@ async function main(): Promise<void> {
     }
 
     // Update sync job as completed
-    // Note: storefront only updates existing apps, so items_created is always 0
     if (job) {
       await supabase
         .from('sync_jobs')
@@ -218,10 +243,10 @@ async function main(): Promise<void> {
           status: 'completed',
           completed_at: new Date().toISOString(),
           items_processed: stats.appsProcessed,
-          items_succeeded: stats.appsSucceeded,
+          items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.appsFailed,
-          items_created: 0,
-          items_updated: stats.appsSucceeded,
+          items_created: stats.appsCreated,
+          items_updated: stats.appsUpdated,
         })
         .eq('id', job.id);
     }
@@ -239,10 +264,10 @@ async function main(): Promise<void> {
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
           items_processed: stats.appsProcessed,
-          items_succeeded: stats.appsSucceeded,
+          items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.appsFailed,
-          items_created: 0,
-          items_updated: stats.appsSucceeded,
+          items_created: stats.appsCreated,
+          items_updated: stats.appsUpdated,
         })
         .eq('id', job.id);
     }

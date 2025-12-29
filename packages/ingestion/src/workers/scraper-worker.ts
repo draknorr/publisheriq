@@ -33,7 +33,8 @@ async function main(): Promise<void> {
     .single();
 
   let processed = 0;
-  let succeeded = 0;
+  let created = 0;  // First-time enrichment
+  let updated = 0;  // Refresh of existing data
   let failed = 0;
 
   try {
@@ -66,6 +67,25 @@ async function main(): Promise<void> {
 
     log.info('Found apps to scrape', { count: appsToScrape.length });
 
+    // Fetch sync status to determine which are first-time vs refresh
+    const appIds = appsToScrape.map((a: { appid: number }) => a.appid);
+    const { data: syncStatuses } = await supabase
+      .from('sync_status')
+      .select('appid, last_page_creation_scrape')
+      .in('appid', appIds);
+
+    // Build set of apps that have never been scraped (first-time enrichment)
+    const neverScrapedSet = new Set(
+      (syncStatuses || [])
+        .filter((s) => s.last_page_creation_scrape === null)
+        .map((s) => s.appid)
+    );
+
+    log.info('First-time vs refresh breakdown', {
+      firstTime: neverScrapedSet.size,
+      refresh: appsToScrape.length - neverScrapedSet.size,
+    });
+
     for (const { appid } of appsToScrape) {
       processed++;
 
@@ -90,7 +110,12 @@ async function main(): Promise<void> {
           })
           .eq('appid', appid);
 
-        succeeded++;
+        // Track first-time vs refresh
+        if (neverScrapedSet.has(appid)) {
+          created++;
+        } else {
+          updated++;
+        }
       } else if (result.success) {
         // No date found but no error - mark as scraped anyway
         await supabase
@@ -101,7 +126,12 @@ async function main(): Promise<void> {
           })
           .eq('appid', appid);
 
-        succeeded++;
+        // Track first-time vs refresh
+        if (neverScrapedSet.has(appid)) {
+          created++;
+        } else {
+          updated++;
+        }
       } else {
         // Error occurred
         await supabase
@@ -117,11 +147,10 @@ async function main(): Promise<void> {
       }
 
       if (processed % 25 === 0) {
-        log.info('Scrape progress', { processed, succeeded, failed });
+        log.info('Scrape progress', { processed, created, updated, failed });
       }
     }
 
-    // Note: scraper only updates existing apps, so items_created is always 0
     if (job) {
       await supabase
         .from('sync_jobs')
@@ -129,16 +158,16 @@ async function main(): Promise<void> {
           status: 'completed',
           completed_at: new Date().toISOString(),
           items_processed: processed,
-          items_succeeded: succeeded,
+          items_succeeded: created + updated,
           items_failed: failed,
-          items_created: 0,
-          items_updated: succeeded,
+          items_created: created,
+          items_updated: updated,
         })
         .eq('id', job.id);
     }
 
     const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-    log.info('Page Creation scraper completed', { processed, succeeded, failed, durationMinutes: duration });
+    log.info('Page Creation scraper completed', { processed, created, updated, failed, durationMinutes: duration });
   } catch (error) {
     log.error('Page Creation scraper failed', { error });
 
@@ -150,10 +179,10 @@ async function main(): Promise<void> {
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
           items_processed: processed,
-          items_succeeded: succeeded,
+          items_succeeded: created + updated,
           items_failed: failed,
-          items_created: 0,
-          items_updated: succeeded,
+          items_created: created,
+          items_updated: updated,
         })
         .eq('id', job.id);
     }

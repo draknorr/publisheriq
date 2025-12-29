@@ -33,7 +33,8 @@ async function main(): Promise<void> {
     .single();
 
   let processed = 0;
-  let succeeded = 0;
+  let created = 0;  // First-time enrichment
+  let updated = 0;  // Refresh of existing data
   let failed = 0;
 
   try {
@@ -65,6 +66,25 @@ async function main(): Promise<void> {
     }
 
     log.info('Found apps to sync', { count: appsToSync.length });
+
+    // Fetch sync status to determine which are first-time vs refresh
+    const appIds = appsToSync.map((a: { appid: number }) => a.appid);
+    const { data: syncStatuses } = await supabase
+      .from('sync_status')
+      .select('appid, last_histogram_sync')
+      .in('appid', appIds);
+
+    // Build set of apps that have never been synced (first-time enrichment)
+    const neverSyncedSet = new Set(
+      (syncStatuses || [])
+        .filter((s) => s.last_histogram_sync === null)
+        .map((s) => s.appid)
+    );
+
+    log.info('First-time vs refresh breakdown', {
+      firstTime: neverSyncedSet.size,
+      refresh: appsToSync.length - neverSyncedSet.size,
+    });
 
     for (const { appid } of appsToSync) {
       processed++;
@@ -100,18 +120,22 @@ async function main(): Promise<void> {
           })
           .eq('appid', appid);
 
-        succeeded++;
+        // Track as first-time enrichment or refresh
+        if (neverSyncedSet.has(appid)) {
+          created++;
+        } else {
+          updated++;
+        }
       } catch (error) {
         log.error('Error processing app', { appid, error });
         failed++;
       }
 
       if (processed % 100 === 0) {
-        log.info('Sync progress', { processed, succeeded, failed });
+        log.info('Sync progress', { processed, created, updated, failed });
       }
     }
 
-    // Note: histogram only updates existing apps, so items_created is always 0
     if (job) {
       await supabase
         .from('sync_jobs')
@@ -119,16 +143,16 @@ async function main(): Promise<void> {
           status: 'completed',
           completed_at: new Date().toISOString(),
           items_processed: processed,
-          items_succeeded: succeeded,
+          items_succeeded: created + updated,
           items_failed: failed,
-          items_created: 0,
-          items_updated: succeeded,
+          items_created: created,
+          items_updated: updated,
         })
         .eq('id', job.id);
     }
 
     const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-    log.info('Histogram sync completed', { processed, succeeded, failed, durationMinutes: duration });
+    log.info('Histogram sync completed', { processed, created, updated, failed, durationMinutes: duration });
   } catch (error) {
     log.error('Histogram sync failed', { error });
 
@@ -140,10 +164,10 @@ async function main(): Promise<void> {
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
           items_processed: processed,
-          items_succeeded: succeeded,
+          items_succeeded: created + updated,
           items_failed: failed,
-          items_created: 0,
-          items_updated: succeeded,
+          items_created: created,
+          items_updated: updated,
         })
         .eq('id', job.id);
     }

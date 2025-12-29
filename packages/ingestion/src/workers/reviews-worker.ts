@@ -14,7 +14,8 @@ const log = logger.child({ worker: 'reviews-sync' });
 
 interface SyncStats {
   appsProcessed: number;
-  appsSucceeded: number;
+  appsCreated: number;  // First-time enrichment
+  appsUpdated: number;  // Refresh of existing data
   appsFailed: number;
 }
 
@@ -41,7 +42,8 @@ async function main(): Promise<void> {
 
   const stats: SyncStats = {
     appsProcessed: 0,
-    appsSucceeded: 0,
+    appsCreated: 0,
+    appsUpdated: 0,
     appsFailed: 0,
   };
 
@@ -87,6 +89,24 @@ async function main(): Promise<void> {
       .select('appid, total_reviews')
       .in('appid', appIds)
       .order('metric_date', { ascending: false });
+
+    // Fetch sync status to determine which are first-time vs refresh
+    const { data: syncStatuses } = await supabase
+      .from('sync_status')
+      .select('appid, last_reviews_sync')
+      .in('appid', appIds);
+
+    // Build set of apps that have never been synced (first-time enrichment)
+    const neverSyncedSet = new Set(
+      (syncStatuses || [])
+        .filter((s) => s.last_reviews_sync === null)
+        .map((s) => s.appid)
+    );
+
+    log.info('First-time vs refresh breakdown', {
+      firstTime: neverSyncedSet.size,
+      refresh: appsToSync.length - neverSyncedSet.size,
+    });
 
     // Build a map of previous review counts (most recent per app)
     const previousReviewCounts = new Map<number, number>();
@@ -139,7 +159,12 @@ async function main(): Promise<void> {
 
         await supabase.from('sync_status').update(syncUpdate).eq('appid', appid);
 
-        stats.appsSucceeded++;
+        // Track as first-time enrichment or refresh
+        if (neverSyncedSet.has(appid)) {
+          stats.appsCreated++;
+        } else {
+          stats.appsUpdated++;
+        }
       } catch (error) {
         log.error('Error processing app', { appid, error });
         stats.appsFailed++;
@@ -150,7 +175,6 @@ async function main(): Promise<void> {
       }
     }
 
-    // Note: reviews only updates existing apps, so items_created is always 0
     if (job) {
       await supabase
         .from('sync_jobs')
@@ -158,10 +182,10 @@ async function main(): Promise<void> {
           status: 'completed',
           completed_at: new Date().toISOString(),
           items_processed: stats.appsProcessed,
-          items_succeeded: stats.appsSucceeded,
+          items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.appsFailed,
-          items_created: 0,
-          items_updated: stats.appsSucceeded,
+          items_created: stats.appsCreated,
+          items_updated: stats.appsUpdated,
         })
         .eq('id', job.id);
     }
@@ -179,10 +203,10 @@ async function main(): Promise<void> {
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
           items_processed: stats.appsProcessed,
-          items_succeeded: stats.appsSucceeded,
+          items_succeeded: stats.appsCreated + stats.appsUpdated,
           items_failed: stats.appsFailed,
-          items_created: 0,
-          items_updated: stats.appsSucceeded,
+          items_created: stats.appsCreated,
+          items_updated: stats.appsUpdated,
         })
         .eq('id', job.id);
     }
