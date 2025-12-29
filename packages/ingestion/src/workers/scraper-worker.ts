@@ -8,9 +8,93 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
+import pLimit from 'p-limit';
 import { scrapePageCreationDate } from '../scrapers/page-creation.js';
 
 const log = logger.child({ worker: 'scraper-sync' });
+
+// Process this many apps concurrently
+// Rate limiter handles API throttling, this controls DB operation parallelism
+const CONCURRENCY = 10;
+
+interface SyncStats {
+  processed: number;
+  created: number;  // First-time enrichment
+  updated: number;  // Refresh of existing data
+  failed: number;
+}
+
+type SupabaseClient = ReturnType<typeof getServiceClient>;
+
+/**
+ * Process a single app - scrape page creation date and update database
+ */
+async function processApp(
+  appid: number,
+  supabase: SupabaseClient,
+  neverScrapedSet: Set<number>,
+  stats: SyncStats
+): Promise<void> {
+  // Increment processed count synchronously (before any await) to avoid race conditions
+  stats.processed++;
+
+  const result = await scrapePageCreationDate(appid);
+
+  if (result.success && result.foundedDate) {
+    // Update app with page creation date
+    await supabase
+      .from('apps')
+      .update({
+        page_creation_date: result.foundedDate.toISOString().split('T')[0],
+        page_creation_date_raw: result.foundedDateRaw,
+      })
+      .eq('appid', appid);
+
+    // Mark as scraped
+    await supabase
+      .from('sync_status')
+      .update({
+        last_page_creation_scrape: new Date().toISOString(),
+        needs_page_creation_scrape: false,
+      })
+      .eq('appid', appid);
+
+    // Track first-time vs refresh (synchronous to avoid race)
+    if (neverScrapedSet.has(appid)) {
+      stats.created++;
+    } else {
+      stats.updated++;
+    }
+  } else if (result.success) {
+    // No date found but no error - mark as scraped anyway
+    await supabase
+      .from('sync_status')
+      .update({
+        last_page_creation_scrape: new Date().toISOString(),
+        needs_page_creation_scrape: false,
+      })
+      .eq('appid', appid);
+
+    // Track first-time vs refresh (synchronous to avoid race)
+    if (neverScrapedSet.has(appid)) {
+      stats.created++;
+    } else {
+      stats.updated++;
+    }
+  } else {
+    // Error occurred
+    await supabase
+      .from('sync_status')
+      .update({
+        last_error_source: 'scraper',
+        last_error_message: result.error,
+        last_error_at: new Date().toISOString(),
+      })
+      .eq('appid', appid);
+
+    stats.failed++;
+  }
+}
 
 async function main(): Promise<void> {
   const startTime = Date.now();
@@ -32,10 +116,12 @@ async function main(): Promise<void> {
     .select()
     .single();
 
-  let processed = 0;
-  let created = 0;  // First-time enrichment
-  let updated = 0;  // Refresh of existing data
-  let failed = 0;
+  const stats: SyncStats = {
+    processed: 0,
+    created: 0,
+    updated: 0,
+    failed: 0,
+  };
 
   try {
     // Get apps that need page creation scraping
@@ -86,69 +172,23 @@ async function main(): Promise<void> {
       refresh: appsToScrape.length - neverScrapedSet.size,
     });
 
-    for (const { appid } of appsToScrape) {
-      processed++;
+    // Process apps with controlled concurrency
+    // Rate limiter handles API throttling, p-limit controls parallelism
+    const limit = pLimit(CONCURRENCY);
 
-      const result = await scrapePageCreationDate(appid);
+    // Log progress every 10 seconds
+    const progressInterval = setInterval(() => {
+      log.info('Scrape progress', { ...stats });
+    }, 10000);
 
-      if (result.success && result.foundedDate) {
-        // Update app with page creation date
-        await supabase
-          .from('apps')
-          .update({
-            page_creation_date: result.foundedDate.toISOString().split('T')[0],
-            page_creation_date_raw: result.foundedDateRaw,
-          })
-          .eq('appid', appid);
-
-        // Mark as scraped
-        await supabase
-          .from('sync_status')
-          .update({
-            last_page_creation_scrape: new Date().toISOString(),
-            needs_page_creation_scrape: false,
-          })
-          .eq('appid', appid);
-
-        // Track first-time vs refresh
-        if (neverScrapedSet.has(appid)) {
-          created++;
-        } else {
-          updated++;
-        }
-      } else if (result.success) {
-        // No date found but no error - mark as scraped anyway
-        await supabase
-          .from('sync_status')
-          .update({
-            last_page_creation_scrape: new Date().toISOString(),
-            needs_page_creation_scrape: false,
-          })
-          .eq('appid', appid);
-
-        // Track first-time vs refresh
-        if (neverScrapedSet.has(appid)) {
-          created++;
-        } else {
-          updated++;
-        }
-      } else {
-        // Error occurred
-        await supabase
-          .from('sync_status')
-          .update({
-            last_error_source: 'scraper',
-            last_error_message: result.error,
-            last_error_at: new Date().toISOString(),
-          })
-          .eq('appid', appid);
-
-        failed++;
-      }
-
-      if (processed % 25 === 0) {
-        log.info('Scrape progress', { processed, created, updated, failed });
-      }
+    try {
+      await Promise.all(
+        appsToScrape.map(({ appid }: { appid: number }) =>
+          limit(() => processApp(appid, supabase, neverScrapedSet, stats))
+        )
+      );
+    } finally {
+      clearInterval(progressInterval);
     }
 
     if (job) {
@@ -157,17 +197,17 @@ async function main(): Promise<void> {
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
-          items_processed: processed,
-          items_succeeded: created + updated,
-          items_failed: failed,
-          items_created: created,
-          items_updated: updated,
+          items_processed: stats.processed,
+          items_succeeded: stats.created + stats.updated,
+          items_failed: stats.failed,
+          items_created: stats.created,
+          items_updated: stats.updated,
         })
         .eq('id', job.id);
     }
 
     const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-    log.info('Page Creation scraper completed', { processed, created, updated, failed, durationMinutes: duration });
+    log.info('Page Creation scraper completed', { ...stats, durationMinutes: duration });
   } catch (error) {
     log.error('Page Creation scraper failed', { error });
 
@@ -178,11 +218,11 @@ async function main(): Promise<void> {
           status: 'failed',
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
-          items_processed: processed,
-          items_succeeded: created + updated,
-          items_failed: failed,
-          items_created: created,
-          items_updated: updated,
+          items_processed: stats.processed,
+          items_succeeded: stats.created + stats.updated,
+          items_failed: stats.failed,
+          items_created: stats.created,
+          items_updated: stats.updated,
         })
         .eq('id', job.id);
     }

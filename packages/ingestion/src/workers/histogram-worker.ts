@@ -8,9 +8,78 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
+import pLimit from 'p-limit';
 import { fetchReviewHistogram } from '../apis/reviews.js';
 
 const log = logger.child({ worker: 'histogram-sync' });
+
+// Process this many apps concurrently
+// Rate limiter handles API throttling, this controls DB operation parallelism
+const CONCURRENCY = 15;
+
+interface SyncStats {
+  processed: number;
+  created: number;  // First-time enrichment
+  updated: number;  // Refresh of existing data
+  failed: number;
+}
+
+type SupabaseClient = ReturnType<typeof getServiceClient>;
+
+/**
+ * Process a single app - fetch histogram and update database
+ */
+async function processApp(
+  appid: number,
+  supabase: SupabaseClient,
+  neverSyncedSet: Set<number>,
+  stats: SyncStats
+): Promise<void> {
+  // Increment processed count synchronously (before any await) to avoid race conditions
+  stats.processed++;
+
+  try {
+    const histogram = await fetchReviewHistogram(appid);
+
+    if (!histogram || histogram.length === 0) {
+      stats.failed++;
+      return;
+    }
+
+    // Insert histogram entries
+    for (const entry of histogram) {
+      const monthStart = entry.monthStart.toISOString().split('T')[0];
+
+      await supabase.from('review_histogram').upsert(
+        {
+          appid,
+          month_start: monthStart,
+          recommendations_up: entry.recommendationsUp,
+          recommendations_down: entry.recommendationsDown,
+        },
+        { onConflict: 'appid,month_start' }
+      );
+    }
+
+    // Update sync status
+    await supabase
+      .from('sync_status')
+      .update({
+        last_histogram_sync: new Date().toISOString(),
+      })
+      .eq('appid', appid);
+
+    // Track as first-time enrichment or refresh (synchronous to avoid race)
+    if (neverSyncedSet.has(appid)) {
+      stats.created++;
+    } else {
+      stats.updated++;
+    }
+  } catch (error) {
+    log.error('Error processing app', { appid, error });
+    stats.failed++;
+  }
+}
 
 async function main(): Promise<void> {
   const startTime = Date.now();
@@ -32,10 +101,12 @@ async function main(): Promise<void> {
     .select()
     .single();
 
-  let processed = 0;
-  let created = 0;  // First-time enrichment
-  let updated = 0;  // Refresh of existing data
-  let failed = 0;
+  const stats: SyncStats = {
+    processed: 0,
+    created: 0,
+    updated: 0,
+    failed: 0,
+  };
 
   try {
     // Get apps due for histogram sync
@@ -86,54 +157,23 @@ async function main(): Promise<void> {
       refresh: appsToSync.length - neverSyncedSet.size,
     });
 
-    for (const { appid } of appsToSync) {
-      processed++;
+    // Process apps with controlled concurrency
+    // Rate limiter handles API throttling, p-limit controls parallelism
+    const limit = pLimit(CONCURRENCY);
 
-      try {
-        const histogram = await fetchReviewHistogram(appid);
+    // Log progress every 10 seconds
+    const progressInterval = setInterval(() => {
+      log.info('Sync progress', { ...stats });
+    }, 10000);
 
-        if (!histogram || histogram.length === 0) {
-          failed++;
-          continue;
-        }
-
-        // Insert histogram entries
-        for (const entry of histogram) {
-          const monthStart = entry.monthStart.toISOString().split('T')[0];
-
-          await supabase.from('review_histogram').upsert(
-            {
-              appid,
-              month_start: monthStart,
-              recommendations_up: entry.recommendationsUp,
-              recommendations_down: entry.recommendationsDown,
-            },
-            { onConflict: 'appid,month_start' }
-          );
-        }
-
-        // Update sync status
-        await supabase
-          .from('sync_status')
-          .update({
-            last_histogram_sync: new Date().toISOString(),
-          })
-          .eq('appid', appid);
-
-        // Track as first-time enrichment or refresh
-        if (neverSyncedSet.has(appid)) {
-          created++;
-        } else {
-          updated++;
-        }
-      } catch (error) {
-        log.error('Error processing app', { appid, error });
-        failed++;
-      }
-
-      if (processed % 100 === 0) {
-        log.info('Sync progress', { processed, created, updated, failed });
-      }
+    try {
+      await Promise.all(
+        appsToSync.map(({ appid }: { appid: number }) =>
+          limit(() => processApp(appid, supabase, neverSyncedSet, stats))
+        )
+      );
+    } finally {
+      clearInterval(progressInterval);
     }
 
     if (job) {
@@ -142,17 +182,17 @@ async function main(): Promise<void> {
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
-          items_processed: processed,
-          items_succeeded: created + updated,
-          items_failed: failed,
-          items_created: created,
-          items_updated: updated,
+          items_processed: stats.processed,
+          items_succeeded: stats.created + stats.updated,
+          items_failed: stats.failed,
+          items_created: stats.created,
+          items_updated: stats.updated,
         })
         .eq('id', job.id);
     }
 
     const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-    log.info('Histogram sync completed', { processed, created, updated, failed, durationMinutes: duration });
+    log.info('Histogram sync completed', { ...stats, durationMinutes: duration });
   } catch (error) {
     log.error('Histogram sync failed', { error });
 
@@ -163,11 +203,11 @@ async function main(): Promise<void> {
           status: 'failed',
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
-          items_processed: processed,
-          items_succeeded: created + updated,
-          items_failed: failed,
-          items_created: created,
-          items_updated: updated,
+          items_processed: stats.processed,
+          items_succeeded: stats.created + stats.updated,
+          items_failed: stats.failed,
+          items_created: stats.created,
+          items_updated: stats.updated,
         })
         .eq('id', job.id);
     }

@@ -8,15 +8,86 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
+import pLimit from 'p-limit';
 import { fetchReviewSummary } from '../apis/reviews.js';
 
 const log = logger.child({ worker: 'reviews-sync' });
+
+// Process this many apps concurrently
+// Rate limiter handles API throttling, this controls DB operation parallelism
+const CONCURRENCY = 8;
 
 interface SyncStats {
   appsProcessed: number;
   appsCreated: number;  // First-time enrichment
   appsUpdated: number;  // Refresh of existing data
   appsFailed: number;
+}
+
+type SupabaseClient = ReturnType<typeof getServiceClient>;
+
+/**
+ * Process a single app - fetch review summary and update database
+ */
+async function processApp(
+  appid: number,
+  supabase: SupabaseClient,
+  today: string,
+  previousReviewCounts: Map<number, number>,
+  neverSyncedSet: Set<number>,
+  stats: SyncStats
+): Promise<void> {
+  // Increment processed count synchronously (before any await) to avoid race conditions
+  stats.appsProcessed++;
+
+  try {
+    const summary = await fetchReviewSummary(appid);
+
+    if (!summary) {
+      stats.appsFailed++;
+      return;
+    }
+
+    // Check if app has new reviews (indicates activity)
+    const previousCount = previousReviewCounts.get(appid) ?? 0;
+    const hasNewReviews = summary.totalReviews > previousCount;
+
+    // Update daily metrics with review data
+    await supabase.from('daily_metrics').upsert(
+      {
+        appid,
+        metric_date: today,
+        total_reviews: summary.totalReviews,
+        positive_reviews: summary.positiveReviews,
+        negative_reviews: summary.negativeReviews,
+        review_score: summary.reviewScore,
+        review_score_desc: summary.reviewScoreDesc,
+      },
+      { onConflict: 'appid,metric_date' }
+    );
+
+    // Update sync status (include last_activity_at if new reviews detected)
+    const syncUpdate: Record<string, unknown> = {
+      last_reviews_sync: new Date().toISOString(),
+      consecutive_errors: 0,
+    };
+
+    if (hasNewReviews) {
+      syncUpdate.last_activity_at = new Date().toISOString();
+    }
+
+    await supabase.from('sync_status').update(syncUpdate).eq('appid', appid);
+
+    // Track as first-time enrichment or refresh (synchronous to avoid race)
+    if (neverSyncedSet.has(appid)) {
+      stats.appsCreated++;
+    } else {
+      stats.appsUpdated++;
+    }
+  } catch (error) {
+    log.error('Error processing app', { appid, error });
+    stats.appsFailed++;
+  }
 }
 
 async function main(): Promise<void> {
@@ -118,61 +189,23 @@ async function main(): Promise<void> {
       }
     }
 
-    for (const { appid } of appsToSync) {
-      stats.appsProcessed++;
+    // Process apps with controlled concurrency
+    // Rate limiter handles API throttling, p-limit controls parallelism
+    const limit = pLimit(CONCURRENCY);
 
-      try {
-        const summary = await fetchReviewSummary(appid);
+    // Log progress every 10 seconds
+    const progressInterval = setInterval(() => {
+      log.info('Sync progress', { ...stats });
+    }, 10000);
 
-        if (!summary) {
-          stats.appsFailed++;
-          continue;
-        }
-
-        // Check if app has new reviews (indicates activity)
-        const previousCount = previousReviewCounts.get(appid) ?? 0;
-        const hasNewReviews = summary.totalReviews > previousCount;
-
-        // Update daily metrics with review data
-        await supabase.from('daily_metrics').upsert(
-          {
-            appid,
-            metric_date: today,
-            total_reviews: summary.totalReviews,
-            positive_reviews: summary.positiveReviews,
-            negative_reviews: summary.negativeReviews,
-            review_score: summary.reviewScore,
-            review_score_desc: summary.reviewScoreDesc,
-          },
-          { onConflict: 'appid,metric_date' }
-        );
-
-        // Update sync status (include last_activity_at if new reviews detected)
-        const syncUpdate: Record<string, unknown> = {
-          last_reviews_sync: new Date().toISOString(),
-          consecutive_errors: 0,
-        };
-
-        if (hasNewReviews) {
-          syncUpdate.last_activity_at = new Date().toISOString();
-        }
-
-        await supabase.from('sync_status').update(syncUpdate).eq('appid', appid);
-
-        // Track as first-time enrichment or refresh
-        if (neverSyncedSet.has(appid)) {
-          stats.appsCreated++;
-        } else {
-          stats.appsUpdated++;
-        }
-      } catch (error) {
-        log.error('Error processing app', { appid, error });
-        stats.appsFailed++;
-      }
-
-      if (stats.appsProcessed % 50 === 0) {
-        log.info('Sync progress', { ...stats });
-      }
+    try {
+      await Promise.all(
+        appsToSync.map(({ appid }: { appid: number }) =>
+          limit(() => processApp(appid, supabase, today, previousReviewCounts, neverSyncedSet, stats))
+        )
+      );
+    } finally {
+      clearInterval(progressInterval);
     }
 
     if (job) {
