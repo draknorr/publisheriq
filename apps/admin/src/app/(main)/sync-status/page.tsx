@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { SyncHealthCards, LastSyncTimes } from '@/components/SyncHealthCards';
+import { ExpandableJobsTable, type SyncJobDetail } from '@/components/ExpandableJobsTable';
 import {
   getSyncHealthData,
   getPriorityDistribution,
@@ -10,7 +11,6 @@ import {
   getSourceCompletionStats,
   getFullyCompletedAppsCount,
   formatRelativeTime,
-  formatDuration,
   type PriorityDistribution,
   type QueueStatus,
   type AppWithError,
@@ -401,6 +401,9 @@ interface SyncJob {
   items_failed: number | null;
   started_at: string;
   completed_at: string | null;
+  error_message: string | null;
+  github_run_id: string | null;
+  batch_size: number | null;
 }
 
 function RunningJobsCard({ jobs }: { jobs: SyncJob[] }) {
@@ -437,75 +440,6 @@ function RunningJobsCard({ jobs }: { jobs: SyncJob[] }) {
   );
 }
 
-function RecentJobsTable({ jobs }: { jobs: SyncJob[] }) {
-  if (jobs.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Recent Jobs</h3>
-        <Link
-          href="/jobs"
-          className="text-sm text-blue-400 hover:text-blue-300"
-        >
-          View all jobs →
-        </Link>
-      </div>
-      <div className="overflow-hidden rounded-lg border border-gray-800">
-        <table className="w-full">
-          <thead className="bg-gray-800/50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">Type</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">Progress</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">Duration</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">Started</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800">
-            {jobs.map((job) => (
-              <tr key={job.id} className="hover:bg-gray-800/30">
-                <td className="px-4 py-3 text-sm font-medium text-white">{job.job_type}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      job.status === 'completed'
-                        ? 'bg-green-500/20 text-green-400'
-                        : job.status === 'running'
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : job.status === 'failed'
-                        ? 'bg-red-500/20 text-red-400'
-                        : 'bg-gray-500/20 text-gray-400'
-                    }`}
-                  >
-                    {job.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  <span className="text-green-400">{job.items_succeeded ?? 0}</span>
-                  <span className="text-gray-500"> / {job.items_processed ?? 0}</span>
-                  {(job.items_failed ?? 0) > 0 && (
-                    <span className="text-red-400 ml-1">({job.items_failed} failed)</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-400">
-                  {job.completed_at
-                    ? formatDuration(new Date(job.completed_at).getTime() - new Date(job.started_at).getTime())
-                    : 'Running...'}
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-500">
-                  {formatRelativeTime(job.started_at)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 export default async function SyncStatusPage() {
   const data = await getSyncStatusData();
@@ -569,7 +503,7 @@ export default async function SyncStatusPage() {
 
       {/* Recent Jobs */}
       <div className="mb-8">
-        <RecentJobsTable jobs={recentJobs} />
+        <ExpandableJobsTable jobs={recentJobs as SyncJobDetail[]} />
       </div>
 
       {/* Quick Links */}
