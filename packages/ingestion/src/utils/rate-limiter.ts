@@ -22,6 +22,7 @@ export class RateLimiter {
   private readonly maxTokens: number;
   private readonly refillRate: number;
   private readonly log = logger.child({ component: 'RateLimiter' });
+  private acquireQueue: Promise<void> = Promise.resolve();
 
   constructor(config: RateLimiterConfig) {
     this.maxTokens = config.burst;
@@ -33,25 +34,42 @@ export class RateLimiter {
   /**
    * Acquire a token, waiting if necessary
    * Returns when a token is available and consumed
+   * Uses a queue pattern to serialize concurrent acquire calls
    */
   async acquire(): Promise<void> {
-    this.refill();
+    // Chain onto the queue - this serializes all acquire calls
+    const previous = this.acquireQueue;
 
-    if (this.tokens >= 1) {
+    let resolveThis!: () => void;
+    this.acquireQueue = new Promise((resolve) => {
+      resolveThis = resolve;
+    });
+
+    // Wait for previous acquire to complete
+    await previous;
+
+    try {
+      this.refill();
+
+      if (this.tokens >= 1) {
+        this.tokens -= 1;
+        return;
+      }
+
+      // Calculate wait time for next token
+      const tokensNeeded = 1 - this.tokens;
+      const waitTimeMs = (tokensNeeded / this.refillRate) * 1000;
+
+      this.log.debug('Rate limit reached, waiting', { waitTimeMs });
+
+      await this.sleep(waitTimeMs);
+
+      this.refill();
       this.tokens -= 1;
-      return;
+    } finally {
+      // Release the next waiter
+      resolveThis();
     }
-
-    // Calculate wait time for next token
-    const tokensNeeded = 1 - this.tokens;
-    const waitTimeMs = (tokensNeeded / this.refillRate) * 1000;
-
-    this.log.debug('Rate limit reached, waiting', { waitTimeMs });
-
-    await this.sleep(waitTimeMs);
-
-    this.refill();
-    this.tokens -= 1;
   }
 
   /**

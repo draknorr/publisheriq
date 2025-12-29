@@ -28,7 +28,8 @@
   "dependencies": {
     "@publisheriq/database": "workspace:*",
     "@publisheriq/shared": "workspace:*",
-    "cheerio": "^1.0.0"
+    "cheerio": "^1.0.0",
+    "p-limit": "^6.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

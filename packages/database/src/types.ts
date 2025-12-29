@@ -95,6 +95,7 @@ export type Database = {
           page_creation_date: string | null;
           page_creation_date_raw: string | null;
           has_workshop: boolean;
+          has_developer_info: boolean;
           current_price_cents: number | null;
           current_discount_percent: number;
           is_released: boolean;
@@ -112,6 +113,7 @@ export type Database = {
           page_creation_date?: string | null;
           page_creation_date_raw?: string | null;
           has_workshop?: boolean;
+          has_developer_info?: boolean;
           current_price_cents?: number | null;
           current_discount_percent?: number;
           is_released?: boolean;
@@ -129,6 +131,7 @@ export type Database = {
           page_creation_date?: string | null;
           page_creation_date_raw?: string | null;
           has_workshop?: boolean;
+          has_developer_info?: boolean;
           current_price_cents?: number | null;
           current_discount_percent?: number;
           is_released?: boolean;

@@ -9,15 +9,154 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
+import pLimit from 'p-limit';
 import { fetchStorefrontAppDetails } from '../apis/storefront.js';
 
 const log = logger.child({ worker: 'storefront-sync' });
+
+// Process this many apps concurrently
+// Rate limiter handles API throttling, this controls DB operation parallelism
+const CONCURRENCY = 8;
 
 interface SyncStats {
   appsProcessed: number;
   appsCreated: number;  // First-time enrichment
   appsUpdated: number;  // Refresh of existing data
   appsFailed: number;
+}
+
+type SupabaseClient = ReturnType<typeof getServiceClient>;
+
+/**
+ * Process a single app - fetch details and update database
+ */
+async function processApp(
+  appid: number,
+  supabase: SupabaseClient,
+  neverSyncedSet: Set<number>,
+  stats: SyncStats
+): Promise<void> {
+  // Increment processed count synchronously (before any await) to avoid race conditions
+  stats.appsProcessed++;
+
+  try {
+    const details = await fetchStorefrontAppDetails(appid);
+
+    if (!details) {
+      log.debug('No details returned for app', { appid });
+      stats.appsFailed++;
+
+      // Update sync status with error (don't update last_storefront_sync so it retries)
+      await supabase
+        .from('sync_status')
+        .update({
+          last_error_source: 'storefront',
+          last_error_message: 'No data returned',
+          last_error_at: new Date().toISOString(),
+        })
+        .eq('appid', appid);
+
+      return;
+    }
+
+    // Update app with storefront data
+    const { error: updateError } = await supabase
+      .from('apps')
+      .update({
+        name: details.name,
+        type: details.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video' | 'hardware' | 'music',
+        is_free: details.isFree,
+        release_date: details.releaseDate,
+        release_date_raw: details.releaseDateRaw,
+        has_workshop: details.hasWorkshop,
+        current_price_cents: details.priceCents,
+        current_discount_percent: details.discountPercent,
+        is_released: !details.comingSoon,
+      })
+      .eq('appid', appid);
+
+    if (updateError) {
+      log.error('Failed to update app', { appid, error: updateError });
+      stats.appsFailed++;
+      return;
+    }
+
+    // Upsert developers
+    let hasDevOrPub = false;
+    for (const devName of details.developers) {
+      if (devName.trim()) {
+        const { data: devId } = await supabase.rpc('upsert_developer', {
+          p_name: devName.trim(),
+        });
+
+        if (devId) {
+          await supabase.from('app_developers').upsert(
+            { appid, developer_id: devId },
+            { onConflict: 'appid,developer_id' }
+          );
+          hasDevOrPub = true;
+        }
+      }
+    }
+
+    // Upsert publishers
+    for (const pubName of details.publishers) {
+      if (pubName.trim()) {
+        const { data: pubId } = await supabase.rpc('upsert_publisher', {
+          p_name: pubName.trim(),
+        });
+
+        if (pubId) {
+          await supabase.from('app_publishers').upsert(
+            { appid, publisher_id: pubId },
+            { onConflict: 'appid,publisher_id' }
+          );
+          hasDevOrPub = true;
+        }
+      }
+    }
+
+    // Mark app as having developer info if we successfully linked any
+    if (hasDevOrPub) {
+      await supabase
+        .from('apps')
+        .update({ has_developer_info: true })
+        .eq('appid', appid);
+    }
+
+    // Update sync status
+    await supabase
+      .from('sync_status')
+      .update({
+        last_storefront_sync: new Date().toISOString(),
+        consecutive_errors: 0,
+        last_error_source: null,
+        last_error_message: null,
+        last_error_at: null,
+      })
+      .eq('appid', appid);
+
+    // Track as first-time enrichment or refresh (synchronous to avoid race)
+    if (neverSyncedSet.has(appid)) {
+      stats.appsCreated++;
+    } else {
+      stats.appsUpdated++;
+    }
+    log.debug('Synced app', { appid, name: details.name, firstTime: neverSyncedSet.has(appid) });
+  } catch (error) {
+    log.error('Error processing app', { appid, error });
+    stats.appsFailed++;
+
+    // Update sync status with error
+    await supabase
+      .from('sync_status')
+      .update({
+        last_error_source: 'storefront',
+        last_error_message: error instanceof Error ? error.message : String(error),
+        last_error_at: new Date().toISOString(),
+      })
+      .eq('appid', appid);
+  }
 }
 
 async function main(): Promise<void> {
@@ -105,134 +244,23 @@ async function main(): Promise<void> {
       refresh: appsToSync.length - neverSyncedSet.size,
     });
 
-    for (const { appid } of appsToSync) {
-      stats.appsProcessed++;
+    // Process apps with controlled concurrency
+    // Rate limiter handles API throttling, p-limit controls parallelism
+    const limit = pLimit(CONCURRENCY);
 
-      try {
-        const details = await fetchStorefrontAppDetails(appid);
+    // Log progress every 10 seconds
+    const progressInterval = setInterval(() => {
+      log.info('Sync progress', { ...stats });
+    }, 10000);
 
-        if (!details) {
-          log.debug('No details returned for app', { appid });
-          stats.appsFailed++;
-
-          // Update sync status with error
-          await supabase
-            .from('sync_status')
-            .update({
-              last_storefront_sync: new Date().toISOString(),
-              consecutive_errors: supabase.rpc('increment_errors', { row_appid: appid }),
-              last_error_source: 'storefront',
-              last_error_message: 'No data returned',
-              last_error_at: new Date().toISOString(),
-            })
-            .eq('appid', appid);
-
-          continue;
-        }
-
-        // Update app with storefront data
-        const { error: updateError } = await supabase
-          .from('apps')
-          .update({
-            name: details.name,
-            type: details.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video' | 'hardware' | 'music',
-            is_free: details.isFree,
-            release_date: details.releaseDate,
-            release_date_raw: details.releaseDateRaw,
-            has_workshop: details.hasWorkshop,
-            current_price_cents: details.priceCents,
-            current_discount_percent: details.discountPercent,
-            is_released: !details.comingSoon,
-          })
-          .eq('appid', appid);
-
-        if (updateError) {
-          log.error('Failed to update app', { appid, error: updateError });
-          stats.appsFailed++;
-          continue;
-        }
-
-        // Upsert developers
-        let hasDevOrPub = false;
-        for (const devName of details.developers) {
-          if (devName.trim()) {
-            const { data: devId } = await supabase.rpc('upsert_developer', {
-              p_name: devName.trim(),
-            });
-
-            if (devId) {
-              await supabase.from('app_developers').upsert(
-                { appid, developer_id: devId },
-                { onConflict: 'appid,developer_id' }
-              );
-              hasDevOrPub = true;
-            }
-          }
-        }
-
-        // Upsert publishers
-        for (const pubName of details.publishers) {
-          if (pubName.trim()) {
-            const { data: pubId } = await supabase.rpc('upsert_publisher', {
-              p_name: pubName.trim(),
-            });
-
-            if (pubId) {
-              await supabase.from('app_publishers').upsert(
-                { appid, publisher_id: pubId },
-                { onConflict: 'appid,publisher_id' }
-              );
-              hasDevOrPub = true;
-            }
-          }
-        }
-
-        // Mark app as having developer info if we successfully linked any
-        if (hasDevOrPub) {
-          await supabase
-            .from('apps')
-            .update({ has_developer_info: true })
-            .eq('appid', appid);
-        }
-
-        // Update sync status
-        await supabase
-          .from('sync_status')
-          .update({
-            last_storefront_sync: new Date().toISOString(),
-            consecutive_errors: 0,
-            last_error_source: null,
-            last_error_message: null,
-            last_error_at: null,
-          })
-          .eq('appid', appid);
-
-        // Track as first-time enrichment or refresh
-        if (neverSyncedSet.has(appid)) {
-          stats.appsCreated++;
-        } else {
-          stats.appsUpdated++;
-        }
-        log.debug('Synced app', { appid, name: details.name, firstTime: neverSyncedSet.has(appid) });
-      } catch (error) {
-        log.error('Error processing app', { appid, error });
-        stats.appsFailed++;
-
-        // Update sync status with error
-        await supabase
-          .from('sync_status')
-          .update({
-            last_error_source: 'storefront',
-            last_error_message: error instanceof Error ? error.message : String(error),
-            last_error_at: new Date().toISOString(),
-          })
-          .eq('appid', appid);
-      }
-
-      // Log progress every 50 apps
-      if (stats.appsProcessed % 50 === 0) {
-        log.info('Sync progress', { ...stats });
-      }
+    try {
+      await Promise.all(
+        appsToSync.map(({ appid }: { appid: number }) =>
+          limit(() => processApp(appid, supabase, neverSyncedSet, stats))
+        )
+      );
+    } finally {
+      clearInterval(progressInterval);
     }
 
     // Update sync job as completed
