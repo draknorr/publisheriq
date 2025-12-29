@@ -4,19 +4,44 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import httpx
+
 from .client import SupabaseClient
 from ..extractors.common import ExtractedPICSData, Association
 
 logger = logging.getLogger(__name__)
+
+STEAM_TAGS_URL = "https://store.steampowered.com/tagdata/populartags/english"
 
 
 class PICSDatabase:
     """Database operations for PICS data."""
 
     UPSERT_BATCH_SIZE = 500
+    _tag_name_cache: Dict[int, str] = {}  # Class-level cache
 
     def __init__(self):
         self._db = SupabaseClient.get_instance()
+        self._load_tag_names()
+
+    def _load_tag_names(self):
+        """Load Steam tag names from API (cached at class level)."""
+        if PICSDatabase._tag_name_cache:
+            return  # Already loaded
+
+        try:
+            logger.info("Loading Steam tag names from API...")
+            response = httpx.get(STEAM_TAGS_URL, timeout=30.0)
+            response.raise_for_status()
+            tags = response.json()
+            PICSDatabase._tag_name_cache = {t["tagid"]: t["name"] for t in tags}
+            logger.info(f"Loaded {len(PICSDatabase._tag_name_cache)} Steam tag names")
+        except Exception as e:
+            logger.warning(f"Failed to load Steam tag names: {e}")
+
+    def _get_tag_name(self, tag_id: int) -> str:
+        """Get tag name from cache, or fallback to placeholder."""
+        return PICSDatabase._tag_name_cache.get(tag_id, f"Tag {tag_id}")
 
     def upsert_apps_batch(self, apps: List[ExtractedPICSData]) -> Dict[str, int]:
         """
@@ -189,10 +214,10 @@ class PICSDatabase:
                 for idx, tag_id in enumerate(tag_ids)
             ]
 
-            # First ensure tags exist in steam_tags table
+            # First ensure tags exist in steam_tags table with proper names
             for tag_id in tag_ids:
                 self._db.client.table("steam_tags").upsert(
-                    {"tag_id": tag_id, "name": f"Tag {tag_id}", "updated_at": datetime.utcnow().isoformat()},
+                    {"tag_id": tag_id, "name": self._get_tag_name(tag_id), "updated_at": datetime.utcnow().isoformat()},
                     on_conflict="tag_id",
                 ).execute()
 

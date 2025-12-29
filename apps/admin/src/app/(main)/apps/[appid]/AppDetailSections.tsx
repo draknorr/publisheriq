@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card } from '@/components/ui';
 import { Grid } from '@/components/layout';
 import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar } from '@/components/data-display';
-import { Calendar, Wrench, CheckCircle2, XCircle, AlertTriangle, Clock, ChevronRight } from 'lucide-react';
+import { Calendar, Wrench, CheckCircle2, XCircle, AlertTriangle, Clock, ChevronRight, ExternalLink } from 'lucide-react';
 
 interface AppDetails {
   appid: number;
@@ -457,27 +457,39 @@ function OverviewSection({
         )}
 
         {/* PICS Steam Tags (ranked) */}
-        {steamTags.length > 0 && (
-          <div>
-            <h3 className="text-subheading text-text-primary mb-4">Steam Tags</h3>
-            <div className="flex flex-wrap gap-2">
-              {steamTags.slice(0, 20).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="px-3 py-1.5 rounded-md bg-accent-blue/10 border border-accent-blue/20 text-body-sm text-accent-blue"
-                  title={`Rank #${tag.rank}`}
-                >
-                  {tag.name}
-                </span>
-              ))}
-              {steamTags.length > 20 && (
-                <span className="px-3 py-1.5 text-body-sm text-text-muted">
-                  +{steamTags.length - 20} more
-                </span>
-              )}
+        {steamTags.length > 0 && (() => {
+          // Filter out placeholder tags (ones that start with "Tag ")
+          const namedTags = steamTags.filter(t => !t.name.startsWith('Tag '));
+          const unnamedCount = steamTags.length - namedTags.length;
+          const displayTags = namedTags.slice(0, 15);
+          const remainingCount = (namedTags.length > 15 ? namedTags.length - 15 : 0) + unnamedCount;
+
+          return namedTags.length > 0 ? (
+            <div>
+              <h3 className="text-subheading text-text-primary mb-4">Steam Tags</h3>
+              <div className="flex flex-wrap gap-2">
+                {displayTags.map((tag) => (
+                  <a
+                    key={tag.id}
+                    href={`https://store.steampowered.com/search/?tags=${tag.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-blue/10 border border-accent-blue/20 text-body-sm text-accent-blue hover:bg-accent-blue/20 transition-colors"
+                    title={`Rank #${tag.rank} - View on Steam`}
+                  >
+                    {tag.name}
+                    <ExternalLink className="w-3 h-3 opacity-50" />
+                  </a>
+                ))}
+                {remainingCount > 0 && (
+                  <span className="px-3 py-1.5 text-body-sm text-text-muted">
+                    +{remainingCount} more
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          ) : null;
+        })()}
 
         {/* SteamSpy Tags (vote-based) - shown if no PICS tags or as secondary */}
         {tags.length > 0 && steamTags.length === 0 && (
