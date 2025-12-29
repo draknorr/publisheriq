@@ -62,18 +62,21 @@ async function processBatch(
     };
   });
 
-  // Execute all 3 batch upserts in parallel
-  const [appsResult, syncResult, metricsResult] = await Promise.all([
-    supabase.from('apps').upsert(appsToUpsert, { onConflict: 'appid' }),
+  // Apps must complete first (sync_status and daily_metrics have FK to apps)
+  const appsResult = await supabase.from('apps').upsert(appsToUpsert, { onConflict: 'appid' });
+  if (appsResult.error) {
+    log.error('Batch apps upsert failed', { error: appsResult.error });
+    stats.errors += apps.length;
+    return;
+  }
+
+  // Now sync_status and daily_metrics can run in parallel
+  const [syncResult, metricsResult] = await Promise.all([
     supabase.from('sync_status').upsert(syncStatusToUpsert, { onConflict: 'appid' }),
     supabase.from('daily_metrics').upsert(metricsToUpsert, { onConflict: 'appid,metric_date' }),
   ]);
 
-  // Count errors
-  if (appsResult.error) {
-    log.error('Batch apps upsert failed', { error: appsResult.error });
-    stats.errors += apps.length;
-  } else if (syncResult.error) {
+  if (syncResult.error) {
     log.error('Batch sync_status upsert failed', { error: syncResult.error });
     stats.errors += apps.length;
   } else if (metricsResult.error) {
