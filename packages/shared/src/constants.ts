@@ -40,16 +40,16 @@ export const BATCH_SIZES = {
   STEAMSPY_PAGE: 1000,
 
   /** Number of apps to fetch from Storefront API per worker run */
-  STOREFRONT_BATCH: 200,
+  STOREFRONT_BATCH: 1500,
 
   /** Number of apps to fetch reviews for per worker run */
-  REVIEWS_BATCH: 200,
+  REVIEWS_BATCH: 800,
 
   /** Number of apps to fetch histograms for per worker run */
-  HISTOGRAM_BATCH: 300,
+  HISTOGRAM_BATCH: 2000,
 
   /** Number of community pages to scrape per worker run */
-  SCRAPER_BATCH: 50,
+  SCRAPER_BATCH: 1000,
 
   /** Number of apps to calculate trends for per batch */
   TRENDS_BATCH: 500,

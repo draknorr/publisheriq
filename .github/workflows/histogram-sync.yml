@@ -2,15 +2,14 @@ name: Review Histogram Sync
 
 on:
   schedule:
-    # Run 2x daily for faster first-pass completion
-    - cron: '15 4 * * *'  # 4:15 AM UTC
-    - cron: '15 16 * * *' # 4:15 PM UTC
+    # Run every 30 minutes (offset +7) for aggressive first-pass completion
+    - cron: '7,37 * * * *'
   workflow_dispatch:
     inputs:
       batch_size:
         description: 'Number of apps to process'
         required: false
-        default: '300'
+        default: '2000'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -19,7 +18,7 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v4
@@ -41,4 +40,4 @@ jobs:
         run: pnpm --filter @publisheriq/ingestion histogram-sync
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '300' }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '2000' }}
