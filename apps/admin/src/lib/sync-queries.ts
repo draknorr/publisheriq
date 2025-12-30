@@ -336,6 +336,7 @@ export async function getSourceCompletionStats(
   // Query each source's completion and staleness in parallel
   const [
     steamspySynced,
+    steamspyTotal,
     storefrontSynced,
     reviewsSynced,
     histogramSynced,
@@ -351,6 +352,12 @@ export async function getSourceCompletionStats(
       .select('*', { count: 'exact', head: true })
       .eq('is_syncable', true)
       .not('last_steamspy_sync', 'is', null),
+    // SteamSpy total: only apps where steamspy_available is not explicitly FALSE
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .or('steamspy_available.is.null,steamspy_available.eq.true'),
     supabase
       .from('sync_status')
       .select('*', { count: 'exact', head: true })
@@ -401,14 +408,15 @@ export async function getSourceCompletionStats(
   // Get last sync times from jobs
   const lastSyncs = await getLastSyncTimes(supabase);
 
+  const steamspyTotalCount = steamspyTotal.count ?? total;
   const sources: SourceCompletionStats[] = [
     {
       source: 'steamspy',
-      totalApps: total,
+      totalApps: steamspyTotalCount,
       syncedApps: steamspySynced.count ?? 0,
-      neverSynced: total - (steamspySynced.count ?? 0),
+      neverSynced: steamspyTotalCount - (steamspySynced.count ?? 0),
       staleApps: steamspyStale.count ?? 0,
-      completionPercent: total > 0 ? ((steamspySynced.count ?? 0) / total) * 100 : 0,
+      completionPercent: steamspyTotalCount > 0 ? ((steamspySynced.count ?? 0) / steamspyTotalCount) * 100 : 0,
       lastSyncTime: lastSyncs.steamspy,
     },
     {

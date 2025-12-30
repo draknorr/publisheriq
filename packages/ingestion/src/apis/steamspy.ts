@@ -135,7 +135,19 @@ export async function fetchSteamSpyAllPage(
       throw new ApiError(`Failed to fetch SteamSpy all page ${page}`, res.status, url);
     }
 
-    return res.json() as Promise<Record<string, SteamSpyAppSummary>>;
+    // Handle empty/invalid JSON responses (end of pages)
+    const text = await res.text();
+    if (!text || text.trim() === '') {
+      log.info('SteamSpy returned empty response, treating as end of pages', { page });
+      return {} as Record<string, SteamSpyAppSummary>;
+    }
+
+    try {
+      return JSON.parse(text) as Record<string, SteamSpyAppSummary>;
+    } catch {
+      log.info('SteamSpy returned invalid JSON, treating as end of pages', { page });
+      return {} as Record<string, SteamSpyAppSummary>;
+    }
   });
 
   const count = Object.keys(response).length;

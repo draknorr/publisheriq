@@ -42,6 +42,7 @@ async function processBatch(
     appid: app.appid,
     last_steamspy_sync: now,
     is_syncable: true,
+    steamspy_available: true,
   }));
 
   const metricsToUpsert = apps.map((app) => {
@@ -127,6 +128,18 @@ async function main(): Promise<void> {
       });
     });
 
+    // Mark apps not in SteamSpy as unavailable (only if we did a full sync)
+    if (maxPages === 0) {
+      const { count } = await supabase
+        .from('sync_status')
+        .update({ steamspy_available: false })
+        .is('last_steamspy_sync', null)
+        .eq('is_syncable', true)
+        .select('*', { count: 'exact', head: true });
+
+      log.info('Marked apps as not in SteamSpy catalog', { count });
+    }
+
     // Update sync job as completed
     if (job) {
       await supabase
@@ -148,7 +161,10 @@ async function main(): Promise<void> {
       errors: stats.errors,
     });
   } catch (error) {
-    log.error('SteamSpy sync failed', { error });
+    log.error('SteamSpy sync failed', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
 
     // Update sync job as failed
     if (job) {
