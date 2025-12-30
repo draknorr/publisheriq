@@ -251,7 +251,12 @@ export async function fetchStorefrontAppDetails(
 
   try {
     const response = await withRetry(async () => {
-      const res = await fetch(url);
+      // Include age-gate cookies to access adult content
+      const res = await fetch(url, {
+        headers: {
+          Cookie: 'birthtime=0; mature_content=1',
+        },
+      });
 
       if (!res.ok) {
         throw new ApiError(`Failed to fetch Storefront details for ${appid}`, res.status, url);
@@ -315,7 +320,12 @@ export async function fetchStorefrontPrices(
 
   try {
     const response = await withRetry(async () => {
-      const res = await fetch(url);
+      // Include age-gate cookies to access adult content
+      const res = await fetch(url, {
+        headers: {
+          Cookie: 'birthtime=0; mature_content=1',
+        },
+      });
 
       if (!res.ok) {
         throw new ApiError('Failed to fetch Storefront prices', res.status, url);

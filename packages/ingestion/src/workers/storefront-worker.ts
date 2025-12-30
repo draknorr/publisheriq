@@ -80,83 +80,32 @@ async function processApp(
     // Success - we have data
     const details = result.data;
 
-    // Update app with storefront data
-    const { error: updateError } = await supabase
-      .from('apps')
-      .update({
-        name: details.name,
-        type: details.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video' | 'hardware' | 'music',
-        is_free: details.isFree,
-        release_date: details.releaseDate,
-        release_date_raw: details.releaseDateRaw,
-        has_workshop: details.hasWorkshop,
-        current_price_cents: details.priceCents,
-        current_discount_percent: details.discountPercent,
-        is_released: !details.comingSoon,
-      })
-      .eq('appid', appid);
+    // Single optimized RPC call that handles:
+    // - App update
+    // - Developer upserts + junction records
+    // - Publisher upserts + junction records
+    // - Sync status update
+    // Reduces 7-11 DB round trips to 1
+    const { error: upsertError } = await supabase.rpc('upsert_storefront_app', {
+      p_appid: appid,
+      p_name: details.name,
+      p_type: details.type,
+      p_is_free: details.isFree,
+      p_release_date: details.releaseDate,
+      p_release_date_raw: details.releaseDateRaw,
+      p_has_workshop: details.hasWorkshop,
+      p_current_price_cents: details.priceCents,
+      p_current_discount_percent: details.discountPercent,
+      p_is_released: !details.comingSoon,
+      p_developers: details.developers,
+      p_publishers: details.publishers,
+    });
 
-    if (updateError) {
-      log.error('Failed to update app', { appid, error: updateError });
+    if (upsertError) {
+      log.error('Failed to upsert app', { appid, error: upsertError });
       stats.appsFailed++;
       return;
     }
-
-    // Upsert developers
-    let hasDevOrPub = false;
-    for (const devName of details.developers) {
-      if (devName.trim()) {
-        const { data: devId } = await supabase.rpc('upsert_developer', {
-          p_name: devName.trim(),
-        });
-
-        if (devId) {
-          await supabase.from('app_developers').upsert(
-            { appid, developer_id: devId },
-            { onConflict: 'appid,developer_id' }
-          );
-          hasDevOrPub = true;
-        }
-      }
-    }
-
-    // Upsert publishers
-    for (const pubName of details.publishers) {
-      if (pubName.trim()) {
-        const { data: pubId } = await supabase.rpc('upsert_publisher', {
-          p_name: pubName.trim(),
-        });
-
-        if (pubId) {
-          await supabase.from('app_publishers').upsert(
-            { appid, publisher_id: pubId },
-            { onConflict: 'appid,publisher_id' }
-          );
-          hasDevOrPub = true;
-        }
-      }
-    }
-
-    // Mark app as having developer info if we successfully linked any
-    if (hasDevOrPub) {
-      await supabase
-        .from('apps')
-        .update({ has_developer_info: true })
-        .eq('appid', appid);
-    }
-
-    // Update sync status - mark as accessible and synced
-    await supabase
-      .from('sync_status')
-      .update({
-        storefront_accessible: true,
-        last_storefront_sync: new Date().toISOString(),
-        consecutive_errors: 0,
-        last_error_source: null,
-        last_error_message: null,
-        last_error_at: null,
-      })
-      .eq('appid', appid);
 
     // Track as first-time enrichment or refresh (synchronous to avoid race)
     if (neverSyncedSet.has(appid)) {
@@ -186,7 +135,16 @@ async function main(): Promise<void> {
   const githubRunId = process.env.GITHUB_RUN_ID;
   const batchSize = parseInt(process.env.BATCH_SIZE || String(BATCH_SIZES.STOREFRONT_BATCH), 10);
 
-  log.info('Starting Storefront sync', { githubRunId, batchSize });
+  // Partitioning support for parallel initial sync
+  const partitionCount = parseInt(process.env.PARTITION_COUNT || '1', 10);
+  const partitionId = parseInt(process.env.PARTITION_ID || '0', 10);
+  const isPartitioned = partitionCount > 1;
+
+  log.info('Starting Storefront sync', {
+    githubRunId,
+    batchSize,
+    ...(isPartitioned && { partitionCount, partitionId }),
+  });
 
   const supabase = getServiceClient();
 
@@ -216,10 +174,18 @@ async function main(): Promise<void> {
 
   try {
     // Get apps due for sync using the database function
-    const { data: appsToSync, error: fetchError } = await supabase.rpc('get_apps_for_sync', {
-      p_source: 'storefront',
-      p_limit: batchSize,
-    });
+    // Use partitioned function for parallel initial sync, regular function otherwise
+    const { data: appsToSync, error: fetchError } = isPartitioned
+      ? await supabase.rpc('get_apps_for_sync_partitioned', {
+          p_source: 'storefront',
+          p_limit: batchSize,
+          p_partition_count: partitionCount,
+          p_partition_id: partitionId,
+        })
+      : await supabase.rpc('get_apps_for_sync', {
+          p_source: 'storefront',
+          p_limit: batchSize,
+        });
 
     if (fetchError) {
       throw new Error(`Failed to get apps for sync: ${fetchError.message}`);

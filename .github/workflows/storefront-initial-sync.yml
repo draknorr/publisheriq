@@ -1,0 +1,49 @@
+name: Storefront Initial Sync (Parallel)
+
+# Manual trigger only - run once for initial bulk sync
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of apps per partition to process'
+        required: false
+        default: '5000'
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+jobs:
+  sync:
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [0, 1, 2, 3, 4]
+
+    name: Partition ${{ matrix.partition }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run Storefront sync (partition ${{ matrix.partition }}/5)
+        run: pnpm --filter @publisheriq/ingestion storefront-sync
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '5000' }}
+          PARTITION_COUNT: 5
+          PARTITION_ID: ${{ matrix.partition }}
