@@ -234,7 +234,7 @@ function PICSStatusCard({
 }) {
   const dataFields = [
     { label: 'PICS Synced', count: picsDataStats.withPicsSync, icon: '🔄', color: 'text-blue-400' },
-    { label: 'Tags', count: picsDataStats.withTags, icon: '🏷️', color: 'text-green-400' },
+    { label: 'Tags', count: picsDataStats.withTags, icon: '🏷️', color: 'text-green-400', isTotal: true },
     { label: 'Categories', count: picsDataStats.withCategories, icon: '📁', color: 'text-purple-400' },
     { label: 'Genres', count: picsDataStats.withGenres, icon: '🎯', color: 'text-orange-400' },
     { label: 'Franchises', count: picsDataStats.withFranchises, icon: '🏢', color: 'text-cyan-400' },
@@ -279,6 +279,7 @@ function PICSStatusCard({
         <p className="text-sm font-medium text-gray-300 mb-4">Data Coverage</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {dataFields.map((field) => {
+            const isTotal = 'isTotal' in field && field.isTotal;
             const percentage = picsDataStats.totalApps > 0
               ? (field.count / picsDataStats.totalApps) * 100
               : 0;
@@ -288,22 +289,33 @@ function PICSStatusCard({
                   <span>{field.icon}</span>
                   <span className="text-xs text-gray-400">{field.label}</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-700 mb-1">
-                  <div
-                    className={`h-full ${
-                      percentage >= 80 ? 'bg-green-500' :
-                      percentage >= 50 ? 'bg-blue-500' :
-                      percentage >= 20 ? 'bg-orange-500' : 'bg-gray-600'
-                    } transition-all duration-500`}
-                    style={{ width: `${Math.max(percentage, 1)}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm font-medium ${field.color}`}>
-                    {field.count.toLocaleString()}
-                  </span>
-                  <span className="text-xs text-gray-500">{percentage.toFixed(1)}%</span>
-                </div>
+                {isTotal ? (
+                  <div className="flex items-center justify-center py-1">
+                    <span className={`text-lg font-bold ${field.color}`}>
+                      {field.count.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-gray-500 ml-2">total</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-gray-700 mb-1">
+                      <div
+                        className={`h-full ${
+                          percentage >= 80 ? 'bg-green-500' :
+                          percentage >= 50 ? 'bg-blue-500' :
+                          percentage >= 20 ? 'bg-orange-500' : 'bg-gray-600'
+                        } transition-all duration-500`}
+                        style={{ width: `${Math.min(Math.max(percentage, 1), 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-medium ${field.color}`}>
+                        {field.count.toLocaleString()}
+                      </span>
+                      <span className="text-xs text-gray-500">{percentage.toFixed(1)}%</span>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
