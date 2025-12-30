@@ -77,6 +77,9 @@ class BulkSyncWorker:
 
                 # Extract structured data
                 extracted = []
+                batch_app_count = len(batch_data)
+                logger.info(f"Processing {batch_app_count} apps from PICS response")
+
                 for appid_str, raw_data in batch_data.items():
                     try:
                         appid = int(appid_str)
@@ -85,11 +88,14 @@ class BulkSyncWorker:
                         logger.error(f"Failed to extract app {appid_str}: {e}")
                         total_failed += 1
 
+                logger.info(f"Extracted {len(extracted)} apps, {batch_app_count - len(extracted)} extraction failures")
+
                 # Persist to database
                 if extracted:
                     stats = self._db.upsert_apps_batch(extracted)
                     total_processed += stats["updated"]
                     total_failed += stats["failed"]
+                    logger.info(f"Database upsert: {stats['updated']} updated, {stats['failed']} failed")
 
                 # Log progress
                 elapsed = (datetime.utcnow() - start_time).total_seconds()

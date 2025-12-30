@@ -127,10 +127,15 @@ class PICSDatabase:
 
         # Prepare app records
         app_records = []
+        build_failures = 0
         for app in apps:
             record = self._build_app_record(app)
             if record:
                 app_records.append(record)
+            else:
+                build_failures += 1
+
+        logger.info(f"Built {len(app_records)} records from {len(apps)} apps ({build_failures} build failures)")
 
         # Upsert apps in batches
         for i in range(0, len(app_records), self.UPSERT_BATCH_SIZE):
