@@ -36,36 +36,41 @@ class PICSSteamClient:
 
     def connect(self) -> bool:
         """Establish anonymous connection to Steam with heartbeat."""
-        self._client = SteamClient()
+        try:
+            self._client = SteamClient()
 
-        # Register event handlers
-        @self._client.on("disconnected")
-        def on_disconnected():
-            self._on_disconnected()
+            # Register event handlers
+            @self._client.on("disconnected")
+            def on_disconnected():
+                self._on_disconnected()
 
-        @self._client.on("error")
-        def on_error(result):
-            self._on_error(result)
+            @self._client.on("error")
+            def on_error(result):
+                self._on_error(result)
 
-        result = self._client.anonymous_login()
+            result = self._client.anonymous_login()
 
-        if result == EResult.OK:
-            self._connected = True
-            self._connection_time = datetime.utcnow()
-            self._last_activity = datetime.utcnow()
-            self._reconnect_attempts = 0
-            self._reconnecting = False
+            if result == EResult.OK:
+                self._connected = True
+                self._connection_time = datetime.utcnow()
+                self._last_activity = datetime.utcnow()
+                self._reconnect_attempts = 0
+                self._reconnecting = False
 
-            # Start heartbeat to prevent idle disconnect
-            self._start_heartbeat()
+                # Start heartbeat to prevent idle disconnect
+                self._start_heartbeat()
 
-            logger.info(
-                f"Successfully connected to Steam anonymously "
-                f"at {self._connection_time.isoformat()}"
-            )
-            return True
-        else:
-            logger.error(f"Failed to connect to Steam: {result}")
+                logger.info(
+                    f"Successfully connected to Steam anonymously "
+                    f"at {self._connection_time.isoformat()}"
+                )
+                return True
+            else:
+                logger.error(f"Failed to connect to Steam: {result}")
+                return False
+        except Exception as e:
+            logger.error(f"Exception during Steam connection: {e}")
+            self._connected = False
             return False
 
     def reconnect(self, max_attempts: int = 0) -> bool:
@@ -204,6 +209,24 @@ class PICSSteamClient:
     def _on_error(self, error):
         """Handle error events."""
         logger.error(f"Steam client error: {error}")
+
+    def wait_for_connection(self, timeout: float = 120) -> bool:
+        """
+        Wait for connection to be established (by auto-reconnect or manual).
+
+        Args:
+            timeout: Maximum seconds to wait
+
+        Returns:
+            True if connected within timeout
+        """
+        import time
+        start = time.time()
+        while time.time() - start < timeout:
+            if self._connected:
+                return True
+            gevent.sleep(1)
+        return False
 
     # Configuration methods
     def set_heartbeat_interval(self, seconds: int):
