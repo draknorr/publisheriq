@@ -50,6 +50,8 @@ class BulkSyncWorker:
             self._steam,
             batch_size=settings.bulk_batch_size,
             request_delay=settings.bulk_request_delay,
+            timeout=settings.bulk_timeout,
+            max_retries=settings.bulk_max_retries,
         )
 
         # Get app IDs if not provided (only unsynced apps for resume capability)

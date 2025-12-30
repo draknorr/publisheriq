@@ -48,7 +48,11 @@ class ChangeMonitorWorker:
         if not self._steam.connect():
             raise RuntimeError("Failed to connect to Steam")
 
-        self._fetcher = PICSFetcher(self._steam)
+        self._fetcher = PICSFetcher(
+            self._steam,
+            timeout=settings.bulk_timeout,
+            max_retries=settings.bulk_max_retries,
+        )
 
         # Get last known change number
         last_change = self._db.get_last_change_number()

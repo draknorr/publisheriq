@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     # Bulk sync options
     bulk_batch_size: int = 200
     bulk_request_delay: float = 0.5
+    bulk_timeout: int = 60  # Timeout per batch fetch (seconds)
+    bulk_max_retries: int = 5  # Retry attempts per batch
 
     # Change monitor options
     poll_interval: int = 30

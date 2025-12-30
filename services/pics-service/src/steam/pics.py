@@ -24,24 +24,34 @@ class PICSFetcher:
 
     BATCH_SIZE = 200  # Apps per request (PICS supports up to ~300)
     REQUEST_DELAY = 0.5  # Seconds between batches (conservative)
+    DEFAULT_TIMEOUT = 60  # Seconds per batch fetch
+    DEFAULT_MAX_RETRIES = 5  # Retry attempts per batch
 
-    def __init__(self, client: PICSSteamClient, batch_size: int = None, request_delay: float = None):
+    def __init__(
+        self,
+        client: PICSSteamClient,
+        batch_size: int = None,
+        request_delay: float = None,
+        timeout: int = None,
+        max_retries: int = None,
+    ):
         self._client = client
         self.batch_size = batch_size or self.BATCH_SIZE
         self.request_delay = request_delay or self.REQUEST_DELAY
+        self.timeout = timeout or self.DEFAULT_TIMEOUT
+        self.max_retries = max_retries or self.DEFAULT_MAX_RETRIES
 
-    def fetch_apps_batch(self, appids: List[int], max_retries: int = 3) -> Dict[int, Dict[str, Any]]:
+    def fetch_apps_batch(self, appids: List[int]) -> Dict[int, Dict[str, Any]]:
         """
         Fetch PICS data for a batch of apps with retry logic.
 
         Args:
             appids: List of app IDs to fetch (max ~200 recommended)
-            max_retries: Number of retry attempts on failure
 
         Returns:
             Dict mapping appid to PICS data
         """
-        for attempt in range(max_retries):
+        for attempt in range(self.max_retries):
             # Check connection before each attempt and reconnect if needed
             if not self._client.is_connected:
                 logger.warning("Not connected to Steam, attempting reconnect...")
@@ -49,7 +59,7 @@ class PICSFetcher:
                     raise RuntimeError("Failed to reconnect to Steam")
 
             try:
-                response = self._client.client.get_product_info(apps=appids, timeout=30)
+                response = self._client.client.get_product_info(apps=appids, timeout=self.timeout)
 
                 if response is None:
                     logger.warning(f"No response for batch starting at {appids[0] if appids else 'empty'}")
@@ -57,12 +67,12 @@ class PICSFetcher:
 
                 return response.get("apps", {})
             except Exception as e:
-                if attempt < max_retries - 1:
+                if attempt < self.max_retries - 1:
                     delay = 2 ** (attempt + 1)  # 2, 4, 8 seconds
-                    logger.warning(f"Batch attempt {attempt + 1}/{max_retries} failed, retrying in {delay}s: {e}")
+                    logger.warning(f"Batch attempt {attempt + 1}/{self.max_retries} failed, retrying in {delay}s: {e}")
                     time.sleep(delay)
                 else:
-                    logger.error(f"Error fetching PICS data after {max_retries} attempts: {e}")
+                    logger.error(f"Error fetching PICS data after {self.max_retries} attempts: {e}")
                     raise
 
     def fetch_all_apps(
