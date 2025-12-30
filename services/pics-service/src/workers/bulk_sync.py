@@ -42,6 +42,10 @@ class BulkSyncWorker:
         start_time = datetime.utcnow()
         logger.info("Starting PICS bulk sync")
 
+        # Configure client for long-running operation
+        self._steam.set_heartbeat_interval(settings.steam_heartbeat_interval)
+        self._steam.set_auto_reconnect(settings.steam_auto_reconnect)
+
         # Connect to Steam
         if not self._steam.connect():
             raise RuntimeError("Failed to connect to Steam")
@@ -116,6 +120,8 @@ class BulkSyncWorker:
                             "progress_pct": round(total_processed / len(app_ids) * 100, 1)
                             if app_ids
                             else 0,
+                            "connected": self._steam.is_connected,
+                            "connection_age_seconds": round(self._steam.connection_age_seconds or 0, 1),
                         }
                     )
 

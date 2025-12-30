@@ -44,6 +44,10 @@ class ChangeMonitorWorker:
         logger.info("Starting PICS change monitor")
         self._running = True
 
+        # Configure client for long-running operation
+        self._steam.set_heartbeat_interval(settings.steam_heartbeat_interval)
+        self._steam.set_auto_reconnect(settings.steam_auto_reconnect)
+
         # Connect to Steam
         if not self._steam.connect():
             raise RuntimeError("Failed to connect to Steam")
@@ -96,6 +100,8 @@ class ChangeMonitorWorker:
                             "last_change": last_change,
                             "queue_size": len(self._change_queue),
                             "processing": len(self._processing_set),
+                            "connected": self._steam.is_connected,
+                            "connection_age_seconds": round(self._steam.connection_age_seconds or 0, 1),
                         }
                     )
 
@@ -104,15 +110,9 @@ class ChangeMonitorWorker:
 
             except Exception as e:
                 logger.error(f"Error in change monitor loop: {e}")
-
-                # Attempt reconnection if needed
-                if not self._steam.is_connected:
-                    logger.info("Attempting to reconnect to Steam")
-                    if not self._steam.reconnect():
-                        logger.error("Reconnection failed, waiting before retry")
-                        time.sleep(60)
-                else:
-                    time.sleep(10)
+                # Client auto-reconnect will handle disconnection
+                # Just wait a bit before continuing the loop
+                time.sleep(10)
 
         # Cleanup
         self._steam.disconnect()

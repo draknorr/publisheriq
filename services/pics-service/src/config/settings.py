@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     process_batch_size: int = 100
     max_queue_size: int = 10000
 
+    # Steam connection settings
+    steam_heartbeat_interval: int = 300  # 5 minutes - heartbeat to prevent idle disconnect
+    steam_auto_reconnect: bool = True  # Auto-reconnect on disconnect
+
     # Logging
     log_level: str = "INFO"
     log_json: bool = True

@@ -66,13 +66,23 @@ class PICSFetcher:
                     return {}
 
                 return response.get("apps", {})
-            except Exception as e:
+            except BaseException as e:
+                # Catch BaseException to handle gevent.timeout.Timeout which doesn't extend Exception
+                age = self._client.connection_age_seconds
+                age_str = f"{age:.1f}s" if age is not None else "N/A"
+
                 if attempt < self.max_retries - 1:
                     delay = 2 ** (attempt + 1)  # 2, 4, 8 seconds
-                    logger.warning(f"Batch attempt {attempt + 1}/{self.max_retries} failed, retrying in {delay}s: {e}")
+                    logger.warning(
+                        f"Batch attempt {attempt + 1}/{self.max_retries} failed "
+                        f"(connection age: {age_str}), retrying in {delay}s: {e}"
+                    )
                     time.sleep(delay)
                 else:
-                    logger.error(f"Error fetching PICS data after {self.max_retries} attempts: {e}")
+                    logger.error(
+                        f"Error fetching PICS data after {self.max_retries} attempts "
+                        f"(connection age: {age_str}): {e}"
+                    )
                     raise
 
     def fetch_all_apps(
