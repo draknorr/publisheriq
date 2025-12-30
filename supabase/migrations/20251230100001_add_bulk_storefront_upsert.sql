@@ -41,10 +41,10 @@ BEGIN
   IF p_developers IS NOT NULL THEN
     FOREACH v_dev_name IN ARRAY p_developers LOOP
       IF v_dev_name IS NOT NULL AND TRIM(v_dev_name) != '' THEN
-        -- Upsert developer
-        INSERT INTO developers (name)
-        VALUES (TRIM(v_dev_name))
-        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        -- Upsert developer (include normalized_name)
+        INSERT INTO developers (name, normalized_name)
+        VALUES (TRIM(v_dev_name), LOWER(TRIM(v_dev_name)))
+        ON CONFLICT (name) DO UPDATE SET updated_at = NOW()
         RETURNING id INTO v_dev_id;
 
         -- Create junction record
@@ -61,10 +61,10 @@ BEGIN
   IF p_publishers IS NOT NULL THEN
     FOREACH v_pub_name IN ARRAY p_publishers LOOP
       IF v_pub_name IS NOT NULL AND TRIM(v_pub_name) != '' THEN
-        -- Upsert publisher
-        INSERT INTO publishers (name)
-        VALUES (TRIM(v_pub_name))
-        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        -- Upsert publisher (include normalized_name)
+        INSERT INTO publishers (name, normalized_name)
+        VALUES (TRIM(v_pub_name), LOWER(TRIM(v_pub_name)))
+        ON CONFLICT (name) DO UPDATE SET updated_at = NOW()
         RETURNING id INTO v_pub_id;
 
         -- Create junction record
