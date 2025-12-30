@@ -10,7 +10,7 @@
 import { getServiceClient } from '@publisheriq/database';
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
 import pLimit from 'p-limit';
-import { fetchStorefrontAppDetails, type StorefrontResult } from '../apis/storefront.js';
+import { fetchStorefrontAppDetails } from '../apis/storefront.js';
 
 const log = logger.child({ worker: 'storefront-sync' });
 
