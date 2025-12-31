@@ -64,6 +64,9 @@ export interface FindSimilarResult {
     review_percentage?: number | null;
     price_cents?: number | null;
     is_free?: boolean;
+    // Publisher/Developer fields
+    game_count?: number;
+    is_major?: boolean;
   }>;
   total_found?: number;
   error?: string;
@@ -292,7 +295,11 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     qdrantFilter = buildEntityFilter(entityFilters);
   }
 
-  // Execute search
+  // Execute search with entity-type-specific payload fields
+  const payloadFields = entity_type === 'game'
+    ? ['name', 'type', 'genres', 'tags', 'review_percentage', 'price_cents', 'is_free']
+    : ['name', 'game_count', 'top_genres', 'top_tags', 'avg_review_percentage', 'is_major'];
+
   let searchResult;
   try {
     searchResult = await client.search(collection, {
@@ -300,7 +307,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
       filter: qdrantFilter,
       limit: actualLimit,
       with_payload: {
-        include: ['name', 'type', 'genres', 'tags', 'review_percentage', 'price_cents', 'is_free', 'game_count'],
+        include: payloadFields,
       },
     });
   } catch (searchError) {
@@ -311,21 +318,35 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     };
   }
 
-  // Format results
+  // Format results based on entity type
   const results = searchResult.map((point) => {
-    const payload = point.payload as Partial<GamePayload> & { game_count?: number };
-    return {
-      id: point.id as number,
-      name: payload.name || 'Unknown',
-      score: Math.round(point.score * 100), // Convert to percentage
-      type: payload.type,
-      genres: payload.genres?.slice(0, 3),
-      tags: payload.tags?.slice(0, 5),
-      review_percentage: payload.review_percentage,
-      price_cents: payload.price_cents,
-      is_free: payload.is_free,
-      game_count: payload.game_count,
-    };
+    const payload = point.payload as Record<string, unknown>;
+
+    if (entity_type === 'game') {
+      return {
+        id: point.id as number,
+        name: (payload.name as string) || 'Unknown',
+        score: Math.round(point.score * 100), // Convert to percentage
+        type: payload.type as string | undefined,
+        genres: (payload.genres as string[] | undefined)?.slice(0, 3),
+        tags: (payload.tags as string[] | undefined)?.slice(0, 5),
+        review_percentage: payload.review_percentage as number | null | undefined,
+        price_cents: payload.price_cents as number | null | undefined,
+        is_free: payload.is_free as boolean | undefined,
+      };
+    } else {
+      // Publisher/Developer results
+      return {
+        id: point.id as number,
+        name: (payload.name as string) || 'Unknown',
+        score: Math.round(point.score * 100),
+        game_count: payload.game_count as number | undefined,
+        genres: (payload.top_genres as string[] | undefined)?.slice(0, 3),
+        tags: (payload.top_tags as string[] | undefined)?.slice(0, 5),
+        review_percentage: payload.avg_review_percentage as number | null | undefined,
+        is_major: payload.is_major as boolean | undefined,
+      };
+    }
   });
 
   return {
