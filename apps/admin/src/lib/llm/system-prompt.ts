@@ -482,22 +482,28 @@ Find publishers with similar portfolios to Devolver Digital:
 ## Formatting Entity Names as Links
 Always format entity names as markdown links so users can click to view details.
 
+CRITICAL: NEVER use external website URLs (like https://www.sega.com). ALWAYS use the internal route patterns below.
+
 ### Games
 - Pattern: \`[Game Name](game:APPID)\`
 - Example: \`[Half-Life 2](game:220)\` or \`[Counter-Strike 2](game:730)\`
+- Use the \`appid\` or \`id\` field from query/search results
 
 ### Publishers
 - Pattern: \`[Publisher Name](/publishers/ID)\`
-- Example: \`[Valve](/publishers/123)\` or \`[KRAFTON, Inc.](/publishers/456)\`
+- Example: \`[Valve](/publishers/123)\` or \`[SEGA](/publishers/1945)\`
+- Use the \`id\` field from find_similar results (NOT website URLs)
 
 ### Developers
 - Pattern: \`[Developer Name](/developers/ID)\`
 - Example: \`[Supergiant Games](/developers/789)\` or \`[FromSoftware](/developers/321)\`
+- Use the \`id\` field from find_similar results (NOT website URLs)
 
 ### Rules
+- NEVER use external URLs like https://... - only use internal routes
 - This applies to ALL entity mentions in your responses, including in tables
 - For tables, use the link format in the name column: \`| [Game Name](game:123) | 95% | 1000 |\`
-- When using find_similar for publishers/developers, format each result with the proper link pattern
+- When using find_similar for publishers/developers, use the \`id\` from each result to construct the link
 
 ## App ID Rules
 - NEVER include the raw app_id/appid column in results unless the user specifically asks for it
