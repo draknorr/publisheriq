@@ -19,8 +19,6 @@ import {
   type DeveloperPortfolioPayload,
   type DeveloperIdentityPayload,
   type PriceTier,
-  type OwnersTier,
-  type CcuTier,
   type Platform,
   type SteamDeckCategory,
 } from '@publisheriq/qdrant';
@@ -42,7 +40,6 @@ const log = logger.child({ worker: 'embedding-sync' });
 
 // Configuration
 const GAME_BATCH_SIZE = 100; // Games to fetch from DB at a time
-const EMBEDDING_BATCH_SIZE = 100; // Texts to embed in one API call
 const QDRANT_BATCH_SIZE = 100; // Points to upsert at a time
 
 interface SyncStats {
@@ -67,27 +64,6 @@ function getPriceTier(priceCents: number | null, isFree: boolean): PriceTier {
   return 'premium';
 }
 
-/**
- * Calculate owners tier from metrics (would need to be fetched separately)
- */
-function getOwnersTier(ownersMin: number | null): OwnersTier | null {
-  if (ownersMin === null) return null;
-  if (ownersMin < 10000) return 'under_10k';
-  if (ownersMin < 100000) return '10k_100k';
-  if (ownersMin < 1000000) return '100k_1m';
-  return 'over_1m';
-}
-
-/**
- * Calculate CCU tier
- */
-function getCcuTier(ccuPeak: number | null): CcuTier | null {
-  if (ccuPeak === null) return null;
-  if (ccuPeak < 100) return 'under_100';
-  if (ccuPeak < 1000) return '100_1k';
-  if (ccuPeak < 10000) return '1k_10k';
-  return 'over_10k';
-}
 
 /**
  * Parse platforms string to array
