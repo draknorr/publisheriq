@@ -403,19 +403,80 @@ class PICSDatabase:
             unsynced_only: If True, only return apps that haven't been PICS synced yet.
         """
         if unsynced_only:
-            # Get apps that don't have a sync_status record (never synced)
-            # Using RPC for efficient NOT EXISTS query
-            try:
-                result = self._db.client.rpc("get_unsynced_app_ids").execute()
-                return result.data if result.data else []
-            except Exception as e:
-                logger.warning(f"RPC get_unsynced_app_ids failed, falling back to full list: {e}")
-                # Fallback: get all apps
-                result = self._db.client.table("apps").select("appid").execute()
-                return [r["appid"] for r in result.data]
+            # Paginate through unsynced apps (Supabase limits to 1000 per request)
+            return self._get_unsynced_app_ids_paginated()
         else:
-            result = self._db.client.table("apps").select("appid").execute()
-            return [r["appid"] for r in result.data]
+            return self._get_all_app_ids_paginated()
+
+    def _get_unsynced_app_ids_paginated(self) -> List[int]:
+        """Get all unsynced app IDs with pagination."""
+        all_appids = []
+        page_size = 10000
+        offset = 0
+
+        while True:
+            try:
+                # Query sync_status where last_pics_sync is NULL
+                result = (
+                    self._db.client.table("sync_status")
+                    .select("appid")
+                    .is_("last_pics_sync", "null")
+                    .order("appid")
+                    .range(offset, offset + page_size - 1)
+                    .execute()
+                )
+
+                if not result.data:
+                    break
+
+                appids = [r["appid"] for r in result.data]
+                all_appids.extend(appids)
+                logger.info(f"Fetched {len(appids)} unsynced app IDs (total: {len(all_appids)})")
+
+                if len(appids) < page_size:
+                    break
+
+                offset += page_size
+
+            except Exception as e:
+                logger.error(f"Failed to fetch unsynced app IDs at offset {offset}: {e}")
+                break
+
+        logger.info(f"Total unsynced apps to process: {len(all_appids)}")
+        return all_appids
+
+    def _get_all_app_ids_paginated(self) -> List[int]:
+        """Get all app IDs with pagination."""
+        all_appids = []
+        page_size = 10000
+        offset = 0
+
+        while True:
+            try:
+                result = (
+                    self._db.client.table("apps")
+                    .select("appid")
+                    .order("appid")
+                    .range(offset, offset + page_size - 1)
+                    .execute()
+                )
+
+                if not result.data:
+                    break
+
+                appids = [r["appid"] for r in result.data]
+                all_appids.extend(appids)
+
+                if len(appids) < page_size:
+                    break
+
+                offset += page_size
+
+            except Exception as e:
+                logger.error(f"Failed to fetch app IDs at offset {offset}: {e}")
+                break
+
+        return all_appids
 
     def get_last_change_number(self) -> int:
         """Get the last processed PICS change number."""
