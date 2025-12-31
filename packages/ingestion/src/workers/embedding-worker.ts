@@ -172,7 +172,7 @@ async function processPublishers(
   log.info('Fetching publishers for embedding');
 
   const { data: publishers, error } = await supabase.rpc('get_publishers_for_embedding', {
-    p_limit: 200,
+    p_limit: 2000,
   });
 
   if (error) {
@@ -277,7 +277,7 @@ async function processDevelopers(
   log.info('Fetching developers for embedding');
 
   const { data: developers, error } = await supabase.rpc('get_developers_for_embedding', {
-    p_limit: 200,
+    p_limit: 2000,
   });
 
   if (error) {
