@@ -112,13 +112,18 @@ async function ensureCollection(
       },
       on_disk_payload: false, // Keep payloads in RAM for fast filtering
     });
+  }
 
-    // Create payload indexes
-    for (const { field, schema } of indexes) {
+  // Always ensure indexes exist (idempotent - won't error if already exists)
+  // This handles new indexes added after initial collection creation
+  for (const { field, schema } of indexes) {
+    try {
       await client.createPayloadIndex(name, {
         field_name: field,
         field_schema: schema as 'keyword' | 'integer' | 'bool' | 'float' | 'geo' | 'text',
       });
+    } catch {
+      // Index likely already exists, ignore
     }
   }
 }
