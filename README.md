@@ -4,99 +4,75 @@ Steam Publisher & Developer data acquisition platform for tracking games, review
 
 ## Features
 
-- **Data Ingestion** - Automated collection from Steam APIs and SteamSpy
+- **Data Ingestion** - Automated collection from Steam APIs, SteamSpy, and PICS
 - **Historical Tracking** - Daily snapshots of reviews, CCU, and pricing
 - **Trend Analysis** - 30/90-day trend calculations with review velocity
-- **Chat Interface** - Natural language queries powered by Claude AI ([Guide](docs/CHAT_INTERFACE.md))
+- **Chat Interface** - Natural language queries powered by Claude AI
 - **Admin Dashboard** - Browse publishers, developers, games, and sync status
 
-## Architecture
+## Quick Start
 
-- **Database:** Supabase (PostgreSQL)
-- **Workers:** GitHub Actions (scheduled data ingestion)
-- **Dashboard:** Next.js 15 on Vercel
-- **AI:** Anthropic Claude 3.5 Haiku / OpenAI GPT-4o-mini
-- **Language:** TypeScript throughout
+```bash
+# Clone and install
+git clone https://github.com/yourusername/publisheriq.git
+cd publisheriq
+pnpm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your Supabase and Steam API credentials
+
+# Build and run
+pnpm build
+pnpm --filter admin dev
+```
+
+Visit [http://localhost:3001](http://localhost:3001) to see the dashboard.
+
+## Documentation
+
+Full documentation is available in the [docs/](docs/) directory:
+
+| Section | Description |
+|---------|-------------|
+| [Getting Started](docs/getting-started/) | Installation, setup, first run |
+| [Architecture](docs/architecture/) | System design, data sources, database |
+| [Deployment](docs/deployment/) | Vercel, Railway, GitHub Actions, Supabase |
+| [Guides](docs/guides/) | Chat interface, workers, troubleshooting |
+| [Reference](docs/reference/) | API specs, rate limits, SQL examples |
 
 ## Project Structure
 
 ```
 publisheriq/
-├── .github/workflows/     # GitHub Actions for data ingestion
-├── apps/
-│   └── admin/             # Next.js admin dashboard
+├── apps/admin/              # Next.js 15 dashboard
 ├── packages/
-│   ├── database/          # Supabase client + generated types
-│   ├── ingestion/         # API clients, scrapers, workers
-│   └── shared/            # Constants, utilities, logger
-├── supabase/
-│   └── migrations/        # Database schema
-└── docs/                  # Documentation
+│   ├── database/            # Supabase client + types
+│   ├── ingestion/           # API clients, workers
+│   └── shared/              # Utilities, logger
+├── services/pics-service/   # Python PICS microservice
+├── supabase/migrations/     # Database schema
+├── .github/workflows/       # Scheduled sync jobs
+└── docs/                    # Documentation
 ```
 
-## Getting Started
+## Tech Stack
 
-### Prerequisites
-
-- Node.js 20+
-- pnpm 9+
-- Supabase account
-- Steam API key
-
-### Setup
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   pnpm install
-   ```
-
-3. Create a Supabase project at https://supabase.com
-
-4. Get a Steam API key at https://steamcommunity.com/dev/apikey
-
-5. Create `.env` file with:
-   ```
-   SUPABASE_URL=https://xxx.supabase.co
-   SUPABASE_SERVICE_KEY=eyJ...
-   STEAM_API_KEY=xxx
-
-   # For chat interface (choose one)
-   ANTHROPIC_API_KEY=sk-ant-...
-   # or
-   OPENAI_API_KEY=sk-...
-   LLM_PROVIDER=anthropic  # or 'openai'
-   ```
-
-6. Apply database migrations in Supabase SQL Editor
-
-7. Build packages:
-   ```bash
-   pnpm build
-   ```
+| Component | Technology |
+|-----------|------------|
+| Dashboard | Next.js 15, React 19, TailwindCSS |
+| Database | Supabase (PostgreSQL) |
+| Workers | GitHub Actions, TypeScript |
+| PICS Service | Python, SteamKit2, Railway |
+| AI | Claude 3.5 Haiku / GPT-4o-mini |
 
 ## Development
 
 ```bash
-# Build all packages
-pnpm build
-
-# Run type checking
-pnpm check-types
-
-# Format code
-pnpm format
+pnpm build        # Build all packages
+pnpm check-types  # Type checking
+pnpm format       # Format code
 ```
-
-## Data Sources
-
-| API | Rate Limit | Data |
-|-----|------------|------|
-| Steam App List | 100K/day | All appids |
-| SteamSpy | 1/sec | Developer, publisher, owners, CCU |
-| Storefront | ~200/5min | Game metadata, release dates |
-| Reviews | ~20/min | Review summary and scores |
-| Histogram | ~60/min | Monthly review trends |
 
 ## License
 
