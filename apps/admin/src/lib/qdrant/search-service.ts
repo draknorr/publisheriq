@@ -10,12 +10,10 @@ import {
   getCollectionName,
   buildGameFilter,
   type GameFilters,
-  type EntityFilters,
   type GamePayload,
   type EntityType,
   type PopularityComparison,
   type ReviewComparison,
-  buildEntityFilter,
 } from '@publisheriq/qdrant';
 import { getSupabase } from '@/lib/supabase';
 
