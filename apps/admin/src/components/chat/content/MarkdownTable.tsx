@@ -95,8 +95,8 @@ function formatCellContent(content: string): React.ReactNode {
     );
   }
 
-  // Check for publisher link pattern: [Publisher Name](/publishers/123)
-  const publisherLinkMatch = content.match(/^\[([^\]]+)\]\(\/publishers\/(\d+)\)$/);
+  // Check for publisher link pattern: [Publisher Name](/publishers/123) or [Publisher Name](publishers/123)
+  const publisherLinkMatch = content.match(/^\[([^\]]+)\]\(\/?publishers\/(\d+)\)$/);
   if (publisherLinkMatch) {
     return (
       <Link
@@ -110,8 +110,8 @@ function formatCellContent(content: string): React.ReactNode {
     );
   }
 
-  // Check for developer link pattern: [Developer Name](/developers/123)
-  const developerLinkMatch = content.match(/^\[([^\]]+)\]\(\/developers\/(\d+)\)$/);
+  // Check for developer link pattern: [Developer Name](/developers/123) or [Developer Name](developers/123)
+  const developerLinkMatch = content.match(/^\[([^\]]+)\]\(\/?developers\/(\d+)\)$/);
   if (developerLinkMatch) {
     return (
       <Link

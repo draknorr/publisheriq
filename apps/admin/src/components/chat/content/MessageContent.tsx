@@ -96,7 +96,8 @@ function formatTextContent(text: string): React.ReactNode {
   let lastIndex = 0;
 
   // Pattern matches: [Name](game:ID), [Name](/publishers/ID), [Name](/developers/ID), **bold**, `code`
-  const combinedPattern = /(\[([^\]]+)\]\(game:(\d+)\)|\[([^\]]+)\]\(\/publishers\/(\d+)\)|\[([^\]]+)\]\(\/developers\/(\d+)\)|\*\*(.+?)\*\*|`([^`]+)`)/g;
+  // Note: Also handles missing leading slash (publishers/ID, developers/ID)
+  const combinedPattern = /(\[([^\]]+)\]\(game:(\d+)\)|\[([^\]]+)\]\(\/?publishers\/(\d+)\)|\[([^\]]+)\]\(\/?developers\/(\d+)\)|\*\*(.+?)\*\*|`([^`]+)`)/g;
   let match;
 
   while ((match = combinedPattern.exec(text)) !== null) {
@@ -109,11 +110,11 @@ function formatTextContent(text: string): React.ReactNode {
     if (match[0].startsWith('[') && match[0].includes('](game:')) {
       // Game link: [Name](game:ID)
       segments.push({ type: 'gameLink', name: match[2], appId: match[3] });
-    } else if (match[0].startsWith('[') && match[0].includes('](/publishers/')) {
-      // Publisher link: [Name](/publishers/ID)
+    } else if (match[0].startsWith('[') && match[0].includes('publishers/')) {
+      // Publisher link: [Name](/publishers/ID) or [Name](publishers/ID)
       segments.push({ type: 'publisherLink', name: match[4], id: match[5] });
-    } else if (match[0].startsWith('[') && match[0].includes('](/developers/')) {
-      // Developer link: [Name](/developers/ID)
+    } else if (match[0].startsWith('[') && match[0].includes('developers/')) {
+      // Developer link: [Name](/developers/ID) or [Name](developers/ID)
       segments.push({ type: 'developerLink', name: match[6], id: match[7] });
     } else if (match[0].startsWith('**')) {
       // Bold text
