@@ -77,7 +77,7 @@ export function MarkdownTable({ headers, rows, alignments }: MarkdownTableProps)
 }
 
 /**
- * Format cell content - handle game links, numbers, percentages, etc.
+ * Format cell content - handle entity links, numbers, percentages, etc.
  */
 function formatCellContent(content: string): React.ReactNode {
   // Check for game link pattern: [Game Name](game:12345)
@@ -86,9 +86,41 @@ function formatCellContent(content: string): React.ReactNode {
     return (
       <Link
         href={`/apps/${gameLinkMatch[2]}`}
+        target="_blank"
+        rel="noopener noreferrer"
         className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
       >
         {gameLinkMatch[1]}
+      </Link>
+    );
+  }
+
+  // Check for publisher link pattern: [Publisher Name](/publishers/123)
+  const publisherLinkMatch = content.match(/^\[([^\]]+)\]\(\/publishers\/(\d+)\)$/);
+  if (publisherLinkMatch) {
+    return (
+      <Link
+        href={`/publishers/${publisherLinkMatch[2]}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+      >
+        {publisherLinkMatch[1]}
+      </Link>
+    );
+  }
+
+  // Check for developer link pattern: [Developer Name](/developers/123)
+  const developerLinkMatch = content.match(/^\[([^\]]+)\]\(\/developers\/(\d+)\)$/);
+  if (developerLinkMatch) {
+    return (
+      <Link
+        href={`/developers/${developerLinkMatch[2]}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+      >
+        {developerLinkMatch[1]}
       </Link>
     );
   }

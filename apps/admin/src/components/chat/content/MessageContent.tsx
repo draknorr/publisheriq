@@ -80,21 +80,23 @@ function TextBlock({ content }: TextBlockProps) {
 }
 
 /**
- * Format inline text elements (bold, inline code, game links, etc.)
+ * Format inline text elements (bold, inline code, game links, publisher/developer links, etc.)
  */
 function formatTextContent(text: string): React.ReactNode {
-  // Combined pattern for: game links [Name](game:ID), bold **text**, inline code `code`
+  // Combined pattern for: entity links, bold **text**, inline code `code`
   type Segment =
     | { type: 'text'; content: string }
     | { type: 'bold'; content: string }
     | { type: 'code'; content: string }
-    | { type: 'gameLink'; name: string; appId: string };
+    | { type: 'gameLink'; name: string; appId: string }
+    | { type: 'publisherLink'; name: string; id: string }
+    | { type: 'developerLink'; name: string; id: string };
 
   const segments: Segment[] = [];
   let lastIndex = 0;
 
-  // Pattern matches: [Game Name](game:12345) OR **bold** OR `code`
-  const combinedPattern = /(\[([^\]]+)\]\(game:(\d+)\)|\*\*(.+?)\*\*|`([^`]+)`)/g;
+  // Pattern matches: [Name](game:ID), [Name](/publishers/ID), [Name](/developers/ID), **bold**, `code`
+  const combinedPattern = /(\[([^\]]+)\]\(game:(\d+)\)|\[([^\]]+)\]\(\/publishers\/(\d+)\)|\[([^\]]+)\]\(\/developers\/(\d+)\)|\*\*(.+?)\*\*|`([^`]+)`)/g;
   let match;
 
   while ((match = combinedPattern.exec(text)) !== null) {
@@ -107,12 +109,18 @@ function formatTextContent(text: string): React.ReactNode {
     if (match[0].startsWith('[') && match[0].includes('](game:')) {
       // Game link: [Name](game:ID)
       segments.push({ type: 'gameLink', name: match[2], appId: match[3] });
+    } else if (match[0].startsWith('[') && match[0].includes('](/publishers/')) {
+      // Publisher link: [Name](/publishers/ID)
+      segments.push({ type: 'publisherLink', name: match[4], id: match[5] });
+    } else if (match[0].startsWith('[') && match[0].includes('](/developers/')) {
+      // Developer link: [Name](/developers/ID)
+      segments.push({ type: 'developerLink', name: match[6], id: match[7] });
     } else if (match[0].startsWith('**')) {
       // Bold text
-      segments.push({ type: 'bold', content: match[4] });
+      segments.push({ type: 'bold', content: match[8] });
     } else if (match[0].startsWith('`')) {
       // Inline code
-      segments.push({ type: 'code', content: match[5] });
+      segments.push({ type: 'code', content: match[9] });
     }
 
     lastIndex = match.index + match[0].length;
@@ -135,6 +143,32 @@ function formatTextContent(text: string): React.ReactNode {
           <Link
             key={idx}
             href={`/apps/${segment.appId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+          >
+            {segment.name}
+          </Link>
+        );
+      case 'publisherLink':
+        return (
+          <Link
+            key={idx}
+            href={`/publishers/${segment.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+          >
+            {segment.name}
+          </Link>
+        );
+      case 'developerLink':
+        return (
+          <Link
+            key={idx}
+            href={`/developers/${segment.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
           >
             {segment.name}
