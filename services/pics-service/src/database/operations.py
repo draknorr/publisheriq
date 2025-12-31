@@ -194,6 +194,8 @@ class PICSDatabase:
 
     def _sync_relationships(self, apps: List[ExtractedPICSData]):
         """Sync developer/publisher/tag/genre/category/franchise relationships."""
+        processed_appids = []
+
         for app in apps:
             try:
                 # Steam Deck compatibility
@@ -217,11 +219,15 @@ class PICSDatabase:
                 for franchise in franchises:
                     self._upsert_franchise_link(app.appid, franchise.name)
 
-                # Sync status
-                self._update_sync_status(app.appid)
+                # Mark as successfully processed
+                processed_appids.append(app.appid)
 
             except Exception as e:
                 logger.error(f"Failed to sync relationships for app {app.appid}: {e}")
+
+        # Batch update sync status for all processed apps
+        if processed_appids:
+            self._batch_update_sync_status(processed_appids)
 
     def _upsert_steam_deck(self, appid: int, deck: "SteamDeckCompatibility"):
         """Upsert Steam Deck compatibility data."""
@@ -348,6 +354,30 @@ class PICSDatabase:
             ).execute()
         except Exception as e:
             logger.error(f"Failed to update sync status for {appid}: {e}")
+
+    def _batch_update_sync_status(self, appids: List[int]):
+        """Batch update sync status for multiple apps."""
+        if not appids:
+            return
+
+        now = datetime.utcnow().isoformat()
+        batch_size = 500  # Supabase batch limit
+
+        for i in range(0, len(appids), batch_size):
+            batch = appids[i : i + batch_size]
+            records = [{"appid": appid, "last_pics_sync": now} for appid in batch]
+
+            try:
+                self._db.client.table("sync_status").upsert(
+                    records,
+                    on_conflict="appid",
+                ).execute()
+                logger.debug(f"Updated sync status for {len(batch)} apps")
+            except Exception as e:
+                logger.error(f"Failed to batch update sync status ({len(batch)} apps): {e}")
+                # Fallback to individual updates for this batch
+                for appid in batch:
+                    self._update_sync_status(appid)
 
     def _map_app_type(self, pics_type: Optional[str]) -> str:
         """Map PICS type to database enum."""
