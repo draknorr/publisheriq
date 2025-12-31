@@ -162,31 +162,13 @@ async function processGameBatch(
 }
 
 /**
- * Process publishers
+ * Process a batch of publishers
  */
-async function processPublishers(
-  supabase: ReturnType<typeof getServiceClient>,
+async function processPublisherBatch(
+  publishers: PublisherEmbeddingData[],
   qdrant: ReturnType<typeof getQdrantClient>,
   stats: SyncStats
 ): Promise<void> {
-  log.info('Fetching publishers for embedding');
-
-  const { data: publishers, error } = await supabase.rpc('get_publishers_for_embedding', {
-    p_limit: 2000,
-  });
-
-  if (error) {
-    log.error('Failed to fetch publishers', { error });
-    return;
-  }
-
-  if (!publishers || publishers.length === 0) {
-    log.info('No publishers to embed');
-    return;
-  }
-
-  log.info('Embedding publishers', { count: publishers.length });
-
   // Build portfolio texts
   const portfolioTexts = publishers.map(buildPublisherPortfolioText);
   const portfolioHashes = portfolioTexts.map(hashEmbeddingText);
@@ -262,36 +244,65 @@ async function processPublishers(
     });
   }
 
-  stats.publishersEmbedded = publishers.length;
-  log.info('Publishers embedded', { count: publishers.length });
+  stats.publishersEmbedded += publishers.length;
 }
 
+const PUBLISHER_BATCH_SIZE = 200;
+
 /**
- * Process developers
+ * Process publishers with pagination
  */
-async function processDevelopers(
+async function processPublishers(
   supabase: ReturnType<typeof getServiceClient>,
   qdrant: ReturnType<typeof getQdrantClient>,
   stats: SyncStats
 ): Promise<void> {
-  log.info('Fetching developers for embedding');
+  log.info('Processing publishers for embedding');
 
-  const { data: developers, error } = await supabase.rpc('get_developers_for_embedding', {
-    p_limit: 2000,
-  });
+  let offset = 0;
+  let hasMore = true;
 
-  if (error) {
-    log.error('Failed to fetch developers', { error });
-    return;
+  while (hasMore) {
+    const { data: publishers, error } = await supabase.rpc('get_publishers_for_embedding', {
+      p_limit: PUBLISHER_BATCH_SIZE,
+      p_offset: offset,
+    });
+
+    if (error) {
+      log.error('Failed to fetch publishers', { error, offset });
+      break;
+    }
+
+    if (!publishers || publishers.length === 0) {
+      log.info('No more publishers to embed');
+      hasMore = false;
+      break;
+    }
+
+    log.info('Processing publisher batch', {
+      count: publishers.length,
+      offset,
+      totalEmbedded: stats.publishersEmbedded,
+    });
+
+    await processPublisherBatch(publishers as PublisherEmbeddingData[], qdrant, stats);
+
+    // Check if we got a full batch (more might be available)
+    hasMore = publishers.length === PUBLISHER_BATCH_SIZE;
+    offset += publishers.length;
   }
 
-  if (!developers || developers.length === 0) {
-    log.info('No developers to embed');
-    return;
-  }
+  log.info('Publishers embedding complete', { total: stats.publishersEmbedded });
+}
 
-  log.info('Embedding developers', { count: developers.length });
-
+/**
+ * Process a batch of developers
+ */
+async function processDeveloperBatch(
+  developers: DeveloperEmbeddingData[],
+  qdrant: ReturnType<typeof getQdrantClient>,
+  stats: SyncStats
+): Promise<void> {
   // Build portfolio texts
   const portfolioTexts = developers.map(buildDeveloperPortfolioText);
   const portfolioHashes = portfolioTexts.map(hashEmbeddingText);
@@ -366,8 +377,55 @@ async function processDevelopers(
     });
   }
 
-  stats.developersEmbedded = developers.length;
-  log.info('Developers embedded', { count: developers.length });
+  stats.developersEmbedded += developers.length;
+}
+
+const DEVELOPER_BATCH_SIZE = 200;
+
+/**
+ * Process developers with pagination
+ */
+async function processDevelopers(
+  supabase: ReturnType<typeof getServiceClient>,
+  qdrant: ReturnType<typeof getQdrantClient>,
+  stats: SyncStats
+): Promise<void> {
+  log.info('Processing developers for embedding');
+
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data: developers, error } = await supabase.rpc('get_developers_for_embedding', {
+      p_limit: DEVELOPER_BATCH_SIZE,
+      p_offset: offset,
+    });
+
+    if (error) {
+      log.error('Failed to fetch developers', { error, offset });
+      break;
+    }
+
+    if (!developers || developers.length === 0) {
+      log.info('No more developers to embed');
+      hasMore = false;
+      break;
+    }
+
+    log.info('Processing developer batch', {
+      count: developers.length,
+      offset,
+      totalEmbedded: stats.developersEmbedded,
+    });
+
+    await processDeveloperBatch(developers as DeveloperEmbeddingData[], qdrant, stats);
+
+    // Check if we got a full batch (more might be available)
+    hasMore = developers.length === DEVELOPER_BATCH_SIZE;
+    offset += developers.length;
+  }
+
+  log.info('Developers embedding complete', { total: stats.developersEmbedded });
 }
 
 /**
