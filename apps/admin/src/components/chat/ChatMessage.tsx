@@ -77,37 +77,74 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 )}
                 <Database className="w-4 h-4" />
                 <span>
-                  {message.toolCalls.length} database{' '}
-                  {message.toolCalls.length === 1 ? 'query' : 'queries'}
+                  {message.toolCalls.length} tool{' '}
+                  {message.toolCalls.length === 1 ? 'call' : 'calls'}
                 </span>
               </button>
 
               {showQueries && (
                 <div className="mt-3 space-y-4">
                   {message.toolCalls.map((tc, idx) => {
-                    const args = tc.arguments as { reasoning?: string; sql?: string };
-                    return (
-                      <div key={idx} className="space-y-2">
-                        {args.reasoning && (
-                          <p className="text-body-sm text-text-secondary italic">
-                            {args.reasoning}
-                          </p>
-                        )}
-                        {args.sql && <CodeBlock code={args.sql} language="sql" />}
-                        <div className="flex items-center gap-2">
-                          {tc.result.success ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
-                              <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
-                              {tc.result.rowCount} rows returned
-                              {tc.result.truncated && ' (truncated)'}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
-                              <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
-                              Error: {tc.result.error}
-                            </span>
+                    // Handle database query results
+                    if (tc.name === 'query_database') {
+                      const args = tc.arguments as { reasoning?: string; sql?: string };
+                      const result = tc.result as { success: boolean; rowCount?: number; truncated?: boolean; error?: string };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          {args.reasoning && (
+                            <p className="text-body-sm text-text-secondary italic">
+                              {args.reasoning}
+                            </p>
                           )}
+                          {args.sql && <CodeBlock code={args.sql} language="sql" />}
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.rowCount} rows returned
+                                {result.truncated && ' (truncated)'}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                      );
+                    }
+
+                    // Handle similarity search results
+                    if (tc.name === 'find_similar') {
+                      const args = tc.arguments as { reference_name?: string; entity_type?: string };
+                      const result = tc.result as { success: boolean; total_found?: number; error?: string };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Finding {args.entity_type}s similar to &quot;{args.reference_name}&quot;
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.total_found} similar results found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Unknown tool
+                    return (
+                      <div key={idx} className="text-body-sm text-text-muted">
+                        Unknown tool: {tc.name}
                       </div>
                     );
                   })}

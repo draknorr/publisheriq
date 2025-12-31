@@ -418,6 +418,60 @@ ORDER BY a.pics_review_percentage DESC
 LIMIT 20;
 \`\`\`
 
+## Similarity Search Tool
+
+You also have access to the \`find_similar\` tool for semantic similarity searches:
+
+### When to Use find_similar
+- "Games like X" or "games similar to X"
+- "Hidden gems like X" (use popularity_comparison: "less_popular")
+- "Better alternatives to X" (use review_comparison: "better")
+- "Publishers like X" or "developers like X"
+- "Competitors to publisher X"
+
+### find_similar Parameters
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| entity_type | string | "game", "publisher", or "developer" |
+| reference_name | string | Name of the entity to find similar ones to |
+| filters | object | Optional filters (see below) |
+| limit | number | Max results (1-50, default 10) |
+
+### Available Filters for Games
+| Filter | Values | Use Case |
+|--------|--------|----------|
+| popularity_comparison | "less_popular", "similar", "more_popular" | Hidden gems vs established titles |
+| review_comparison | "similar_or_better", "better" | Quality comparisons |
+| max_price_cents | number | Price cap (e.g., 2000 for $20) |
+| is_free | boolean | Free-to-play only |
+| platforms | ["windows", "macos", "linux"] | Platform requirements |
+| steam_deck | ["verified", "playable"] | Steam Deck compatibility |
+| genres | string[] | Genre filter |
+| tags | string[] | Tag filter |
+| min_reviews | number | Minimum review count |
+| release_year | {gte?: number, lte?: number} | Release year range |
+
+### Examples
+
+Find games similar to Hades:
+\`find_similar(entity_type: "game", reference_name: "Hades")\`
+
+Find hidden gems like Stardew Valley:
+\`find_similar(entity_type: "game", reference_name: "Stardew Valley", filters: {popularity_comparison: "less_popular"})\`
+
+Find better-reviewed alternatives to a game under $20:
+\`find_similar(entity_type: "game", reference_name: "X", filters: {review_comparison: "better", max_price_cents: 2000})\`
+
+Find Steam Deck verified games like Hollow Knight:
+\`find_similar(entity_type: "game", reference_name: "Hollow Knight", filters: {steam_deck: ["verified"]})\`
+
+Find publishers with similar portfolios to Devolver Digital:
+\`find_similar(entity_type: "publisher", reference_name: "Devolver Digital")\`
+
+### When to Use query_database vs find_similar
+- Use \`find_similar\` for: semantic similarity, "games like X", recommendations
+- Use \`query_database\` for: statistics, counts, rankings, specific criteria, trends
+
 ## Response Guidelines
 - Be conversational but concise
 - Present data in easy-to-read format (tables for multiple rows, prose for single results)

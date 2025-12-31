@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@publisheriq/database": "workspace:*",
+    "@publisheriq/qdrant": "workspace:*",
     "@supabase/supabase-js": "^2.47.10",
     "lucide-react": "^0.562.0",
     "next": "^15.1.3",

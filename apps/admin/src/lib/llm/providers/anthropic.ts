@@ -16,12 +16,21 @@ interface AnthropicContent {
   content?: string;
 }
 
+interface AnthropicToolPropertySchema {
+  type: string;
+  description?: string;
+  enum?: string[];
+  items?: AnthropicToolPropertySchema;
+  properties?: Record<string, AnthropicToolPropertySchema>;
+  required?: string[];
+}
+
 interface AnthropicTool {
   name: string;
   description: string;
   input_schema: {
     type: 'object';
-    properties: Record<string, { type: string; description: string }>;
+    properties: Record<string, AnthropicToolPropertySchema>;
     required: string[];
   };
 }

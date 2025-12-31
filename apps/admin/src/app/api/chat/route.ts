@@ -3,6 +3,7 @@ import { createProvider } from '@/lib/llm/providers';
 import { buildSystemPrompt } from '@/lib/llm/system-prompt';
 import { TOOLS } from '@/lib/llm/tools';
 import { executeQuery } from '@/lib/query-executor';
+import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse } from '@/lib/llm/types';
 
 // Maximum tool call iterations to prevent infinite loops
@@ -70,6 +71,32 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             role: 'tool',
             toolCallId: toolCall.id,
             content: JSON.stringify(queryResult),
+          });
+        } else if (toolCall.name === 'find_similar') {
+          const args = toolCall.arguments as unknown as FindSimilarArgs;
+
+          // Execute the similarity search
+          const similarityResult = await findSimilar(args);
+
+          // Track the tool call
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: similarityResult,
+          });
+
+          // Add assistant message with tool calls
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          // Add tool result message
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: JSON.stringify(similarityResult),
           });
         } else {
           // Unknown tool - add error result

@@ -1,0 +1,45 @@
+name: Embedding Sync
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # 3:00 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Batch size for processing (default 1000)'
+        required: false
+        default: '1000'
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  QDRANT_URL: ${{ secrets.QDRANT_URL }}
+  QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run embedding sync
+        run: pnpm --filter @publisheriq/ingestion embedding-sync
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '1000' }}

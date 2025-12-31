@@ -1,0 +1,98 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
+import type { PopularityComparison, ReviewComparison } from '@publisheriq/qdrant';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+
+    const entityType = searchParams.get('entity_type') as 'game' | 'publisher' | 'developer' | null;
+    const referenceName = searchParams.get('reference_name');
+    const limitStr = searchParams.get('limit');
+    const popularityComparison = searchParams.get('popularity_comparison') as PopularityComparison | null;
+    const reviewComparison = searchParams.get('review_comparison') as ReviewComparison | null;
+    const maxPriceCents = searchParams.get('max_price_cents');
+    const isFree = searchParams.get('is_free');
+    const platforms = searchParams.getAll('platforms');
+    const steamDeck = searchParams.getAll('steam_deck');
+    const genres = searchParams.getAll('genres');
+    const tags = searchParams.getAll('tags');
+    const minReviews = searchParams.get('min_reviews');
+
+    if (!entityType || !referenceName) {
+      return NextResponse.json(
+        { success: false, error: 'entity_type and reference_name are required' },
+        { status: 400 }
+      );
+    }
+
+    if (!['game', 'publisher', 'developer'].includes(entityType)) {
+      return NextResponse.json(
+        { success: false, error: 'entity_type must be game, publisher, or developer' },
+        { status: 400 }
+      );
+    }
+
+    const limit = limitStr ? parseInt(limitStr, 10) : 10;
+    if (isNaN(limit) || limit < 1 || limit > 50) {
+      return NextResponse.json(
+        { success: false, error: 'limit must be between 1 and 50' },
+        { status: 400 }
+      );
+    }
+
+    // Build filters
+    const filters: FindSimilarArgs['filters'] = {};
+
+    if (popularityComparison) {
+      filters.popularity_comparison = popularityComparison;
+    }
+    if (reviewComparison) {
+      filters.review_comparison = reviewComparison;
+    }
+    if (maxPriceCents) {
+      const cents = parseInt(maxPriceCents, 10);
+      if (!isNaN(cents)) {
+        filters.max_price_cents = cents;
+      }
+    }
+    if (isFree === 'true') {
+      filters.is_free = true;
+    }
+    if (platforms.length > 0) {
+      filters.platforms = platforms as ('windows' | 'macos' | 'linux')[];
+    }
+    if (steamDeck.length > 0) {
+      filters.steam_deck = steamDeck as ('verified' | 'playable')[];
+    }
+    if (genres.length > 0) {
+      filters.genres = genres;
+    }
+    if (tags.length > 0) {
+      filters.tags = tags;
+    }
+    if (minReviews) {
+      const reviews = parseInt(minReviews, 10);
+      if (!isNaN(reviews)) {
+        filters.min_reviews = reviews;
+      }
+    }
+
+    const result = await findSimilar({
+      entity_type: entityType,
+      reference_name: referenceName,
+      filters: Object.keys(filters).length > 0 ? filters : undefined,
+      limit,
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Similarity API error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

@@ -15,6 +15,16 @@ export interface ToolCall {
 }
 
 // OpenAI function calling format
+// Using a more flexible type to support nested objects, enums, and arrays
+export interface ToolPropertySchema {
+  type: string;
+  description?: string;
+  enum?: string[];
+  items?: ToolPropertySchema;
+  properties?: Record<string, ToolPropertySchema>;
+  required?: string[];
+}
+
 export interface Tool {
   type: 'function';
   function: {
@@ -22,13 +32,7 @@ export interface Tool {
     description: string;
     parameters: {
       type: 'object';
-      properties: Record<
-        string,
-        {
-          type: string;
-          description: string;
-        }
-      >;
+      properties: Record<string, ToolPropertySchema>;
       required: string[];
     };
   };
@@ -61,7 +65,30 @@ export interface ChatRequest {
 export interface ChatToolCall {
   name: string;
   arguments: Record<string, unknown>;
-  result: QueryResult;
+  result: QueryResult | SimilarityResult;
+}
+
+// Similarity search result
+export interface SimilarityResult {
+  success: boolean;
+  reference?: {
+    id: number;
+    name: string;
+    type: string;
+  };
+  results?: Array<{
+    id: number;
+    name: string;
+    score: number;
+    type?: string;
+    genres?: string[];
+    tags?: string[];
+    review_percentage?: number | null;
+    price_cents?: number | null;
+    is_free?: boolean;
+  }>;
+  total_found?: number;
+  error?: string;
 }
 
 export interface ChatResponse {

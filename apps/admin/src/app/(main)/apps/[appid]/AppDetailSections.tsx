@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card } from '@/components/ui';
 import { Grid } from '@/components/layout';
 import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar } from '@/components/data-display';
+import { SimilaritySection } from '@/components/similarity';
 import { Calendar, Wrench, CheckCircle2, XCircle, AlertTriangle, Clock, ChevronRight, ExternalLink } from 'lucide-react';
 
 interface AppDetails {
@@ -143,6 +144,7 @@ interface AppDetailSectionsProps {
 
 const sections = [
   { id: 'overview', label: 'Overview' },
+  { id: 'similar', label: 'Similar' },
   { id: 'pics', label: 'PICS Data' },
   { id: 'metrics', label: 'Metrics' },
   { id: 'reviews', label: 'Reviews' },
@@ -296,6 +298,19 @@ export function AppDetailSections({
           genres={genres}
           franchises={franchises}
         />
+        {/* Similar Games Section */}
+        {app.type === 'game' && !app.is_delisted && (
+          <section id="similar">
+            <SectionHeader title="Similar Games" id="similar-header" />
+            <SimilaritySection
+              entityId={app.appid}
+              entityName={app.name}
+              entityType="game"
+              limit={8}
+              showFilters={true}
+            />
+          </section>
+        )}
         <PICSSection
           id="pics"
           app={app}
