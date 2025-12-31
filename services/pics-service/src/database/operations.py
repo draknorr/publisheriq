@@ -409,20 +409,22 @@ class PICSDatabase:
             return self._get_all_app_ids_paginated()
 
     def _get_unsynced_app_ids_paginated(self) -> List[int]:
-        """Get all unsynced app IDs with pagination."""
+        """Get all unsynced app IDs with cursor-based pagination."""
         all_appids = []
-        page_size = 10000
-        offset = 0
+        page_size = 1000  # Supabase hard limit
+        last_appid = 0
 
         while True:
             try:
-                # Query sync_status where last_pics_sync is NULL
+                # Use cursor-based pagination (gt) instead of offset/range
+                # Supabase caps range() at 1000 rows regardless of what you specify
                 result = (
                     self._db.client.table("sync_status")
                     .select("appid")
                     .is_("last_pics_sync", "null")
+                    .gt("appid", last_appid)
                     .order("appid")
-                    .range(offset, offset + page_size - 1)
+                    .limit(page_size)
                     .execute()
                 )
 
@@ -431,33 +433,33 @@ class PICSDatabase:
 
                 appids = [r["appid"] for r in result.data]
                 all_appids.extend(appids)
+                last_appid = appids[-1]  # Cursor for next page
                 logger.info(f"Fetched {len(appids)} unsynced app IDs (total: {len(all_appids)})")
 
                 if len(appids) < page_size:
                     break
 
-                offset += page_size
-
             except Exception as e:
-                logger.error(f"Failed to fetch unsynced app IDs at offset {offset}: {e}")
+                logger.error(f"Failed to fetch unsynced app IDs after appid {last_appid}: {e}")
                 break
 
         logger.info(f"Total unsynced apps to process: {len(all_appids)}")
         return all_appids
 
     def _get_all_app_ids_paginated(self) -> List[int]:
-        """Get all app IDs with pagination."""
+        """Get all app IDs with cursor-based pagination."""
         all_appids = []
-        page_size = 10000
-        offset = 0
+        page_size = 1000  # Supabase hard limit
+        last_appid = 0
 
         while True:
             try:
                 result = (
                     self._db.client.table("apps")
                     .select("appid")
+                    .gt("appid", last_appid)
                     .order("appid")
-                    .range(offset, offset + page_size - 1)
+                    .limit(page_size)
                     .execute()
                 )
 
@@ -466,14 +468,13 @@ class PICSDatabase:
 
                 appids = [r["appid"] for r in result.data]
                 all_appids.extend(appids)
+                last_appid = appids[-1]
 
                 if len(appids) < page_size:
                     break
 
-                offset += page_size
-
             except Exception as e:
-                logger.error(f"Failed to fetch app IDs at offset {offset}: {e}")
+                logger.error(f"Failed to fetch app IDs after appid {last_appid}: {e}")
                 break
 
         return all_appids
