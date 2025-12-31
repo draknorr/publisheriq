@@ -8,7 +8,6 @@ import type {
   GameFilters,
   EntityFilters,
   RangeFilter,
-  OwnersTier,
   PopularityComparison,
   ReviewComparison,
 } from './types.js';
@@ -32,7 +31,7 @@ export interface QdrantFilter {
 export function buildGameFilter(
   filters: GameFilters,
   sourceMetrics?: {
-    owners_tier?: OwnersTier;
+    total_reviews?: number | null;
     review_percentage?: number;
     price_cents?: number;
     publisher_ids?: number[];
@@ -219,11 +218,11 @@ export function buildGameFilter(
       }
     }
 
-    // Popularity comparison
-    if (filters.popularity_comparison && sourceMetrics.owners_tier) {
+    // Popularity comparison (uses total_reviews as popularity proxy)
+    if (filters.popularity_comparison) {
       const popularityFilter = buildPopularityFilter(
         filters.popularity_comparison,
-        sourceMetrics.owners_tier
+        sourceMetrics.total_reviews
       );
       if (popularityFilter) {
         must.push(popularityFilter);
@@ -338,42 +337,47 @@ function buildRange(
 }
 
 /**
- * Build popularity comparison filter
+ * Build popularity comparison filter using total_reviews
+ * Uses ratio-based filtering since actual review counts are available
  */
 function buildPopularityFilter(
   comparison: PopularityComparison,
-  sourceTier: OwnersTier
+  sourceTotalReviews: number | null | undefined
 ): QdrantCondition | undefined {
-  const tierOrder: OwnersTier[] = ['under_10k', '10k_100k', '100k_1m', 'over_1m'];
-  const sourceIndex = tierOrder.indexOf(sourceTier);
+  // If source has no review data, can't do relative comparison
+  if (sourceTotalReviews === null || sourceTotalReviews === undefined) {
+    return undefined;
+  }
+
+  // Define thresholds for popularity comparison
+  // less_popular: < 50% of source reviews
+  // similar: 50% - 200% of source reviews
+  // more_popular: > 200% of source reviews
 
   switch (comparison) {
     case 'less_popular':
-      // Only lower tiers
-      if (sourceIndex > 0) {
-        return {
-          key: 'owners_tier',
-          match: { any: tierOrder.slice(0, sourceIndex) },
-        };
-      }
-      return undefined;
+      // Games with fewer reviews than half the source
+      return {
+        key: 'total_reviews',
+        range: { lt: Math.floor(sourceTotalReviews * 0.5) },
+      };
 
     case 'similar':
-      // Same tier only
+      // Games with similar review counts (50% to 200%)
       return {
-        key: 'owners_tier',
-        match: { value: sourceTier },
+        key: 'total_reviews',
+        range: {
+          gte: Math.floor(sourceTotalReviews * 0.5),
+          lte: Math.ceil(sourceTotalReviews * 2),
+        },
       };
 
     case 'more_popular':
-      // Only higher tiers
-      if (sourceIndex < tierOrder.length - 1) {
-        return {
-          key: 'owners_tier',
-          match: { any: tierOrder.slice(sourceIndex + 1) },
-        };
-      }
-      return undefined;
+      // Games with more than double the reviews
+      return {
+        key: 'total_reviews',
+        range: { gt: Math.ceil(sourceTotalReviews * 2) },
+      };
 
     case 'any':
     default:

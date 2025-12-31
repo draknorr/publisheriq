@@ -49,6 +49,7 @@ export interface GameEmbeddingData {
   developer_ids: number[];
   publisher_ids: number[];
   updated_at: string;
+  total_reviews: number | null;  // From daily_metrics, for popularity comparison
 }
 
 /**

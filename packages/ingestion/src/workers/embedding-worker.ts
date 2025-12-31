@@ -97,9 +97,9 @@ function buildGamePayload(game: GameEmbeddingData, embeddingHash: string): GameP
     price_cents: game.current_price_cents,
     review_score: game.pics_review_score,
     review_percentage: game.pics_review_percentage,
-    total_reviews: null, // Would need to fetch from daily_metrics
-    owners_tier: null, // Would need to fetch from daily_metrics
-    ccu_tier: null, // Would need to fetch from daily_metrics
+    total_reviews: game.total_reviews, // From daily_metrics via get_apps_for_embedding
+    owners_tier: null, // Not currently used, popularity uses total_reviews instead
+    ccu_tier: null, // Not currently used
     release_year: game.release_date ? new Date(game.release_date).getFullYear() : null,
     developer_ids: game.developer_ids,
     publisher_ids: game.publisher_ids,

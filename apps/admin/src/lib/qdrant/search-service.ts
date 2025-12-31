@@ -15,7 +15,6 @@ import {
   type EntityType,
   type PopularityComparison,
   type ReviewComparison,
-  type OwnersTier,
   buildEntityFilter,
 } from '@publisheriq/qdrant';
 import { getSupabase } from '@/lib/supabase';
@@ -174,12 +173,12 @@ async function lookupEntityByName(
 }
 
 /**
- * Get vector for an entity from Qdrant
+ * Get vector and payload for an entity from Qdrant
  */
-async function getEntityVector(
+async function getEntityVectorAndPayload(
   entityType: EntityType,
   id: number
-): Promise<number[] | null> {
+): Promise<{ vector: number[]; payload: Partial<GamePayload> } | null> {
   const client = getQdrantClient();
   const collection = getCollectionName(entityType);
 
@@ -187,10 +186,14 @@ async function getEntityVector(
     const result = await client.retrieve(collection, {
       ids: [id],
       with_vector: true,
+      with_payload: true,
     });
 
     if (result.length > 0 && result[0].vector) {
-      return result[0].vector as number[];
+      return {
+        vector: result[0].vector as number[],
+        payload: (result[0].payload || {}) as Partial<GamePayload>,
+      };
     }
   } catch {
     // Entity not in Qdrant yet
@@ -224,15 +227,17 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     };
   }
 
-  // Get vector for the entity
-  const vector = await getEntityVector(entity_type, entity.id);
+  // Get vector and payload for the entity from Qdrant
+  const qdrantData = await getEntityVectorAndPayload(entity_type, entity.id);
 
-  if (!vector) {
+  if (!qdrantData) {
     return {
       success: false,
       error: `${entity.name} hasn't been indexed for similarity search yet. Try another ${entity_type}.`,
     };
   }
+
+  const { vector, payload: sourcePayload } = qdrantData;
 
   // Build filter
   const client = getQdrantClient();
@@ -259,13 +264,15 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     if (filters.review_comparison) gameFilters.review_comparison = filters.review_comparison;
 
     // Get source metrics for relative comparisons
-    const sourceMetrics = entity.metrics as {
-      owners_tier?: OwnersTier;
-      review_percentage?: number;
-      price_cents?: number;
-      publisher_ids?: number[];
-      developer_ids?: number[];
-    } | undefined;
+    // Use Qdrant payload for total_reviews (used for popularity comparison)
+    // Use Supabase data for other metrics
+    const sourceMetrics = {
+      total_reviews: sourcePayload.total_reviews,
+      review_percentage: sourcePayload.review_percentage ?? (entity.metrics as { review_percentage?: number })?.review_percentage,
+      price_cents: sourcePayload.price_cents ?? (entity.metrics as { price_cents?: number })?.price_cents,
+      publisher_ids: sourcePayload.publisher_ids ?? (entity.metrics as { publisher_ids?: number[] })?.publisher_ids,
+      developer_ids: sourcePayload.developer_ids ?? (entity.metrics as { developer_ids?: number[] })?.developer_ids,
+    };
 
     qdrantFilter = buildGameFilter(gameFilters, sourceMetrics);
   } else if (entity_type !== 'game') {

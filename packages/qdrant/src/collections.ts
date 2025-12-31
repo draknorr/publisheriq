@@ -59,6 +59,7 @@ const GAME_INDEXES = [
   { field: 'is_delisted', schema: 'bool' },
   { field: 'review_score', schema: 'integer' },
   { field: 'review_percentage', schema: 'integer' },
+  { field: 'total_reviews', schema: 'integer' },  // For popularity comparison
   { field: 'release_year', schema: 'integer' },
   { field: 'publisher_ids', schema: 'integer' },
   { field: 'developer_ids', schema: 'integer' },
