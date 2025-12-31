@@ -263,7 +263,7 @@ async function processPublishers(
   let hasMore = true;
 
   while (hasMore) {
-    const { data: publishers, error } = await supabase.rpc('get_publishers_for_embedding', {
+    const { data: publishers, error } = await supabase.rpc('get_publishers_for_embedding_v2', {
       p_limit: PUBLISHER_BATCH_SIZE,
       p_offset: offset,
     });
@@ -396,7 +396,7 @@ async function processDevelopers(
   let hasMore = true;
 
   while (hasMore) {
-    const { data: developers, error } = await supabase.rpc('get_developers_for_embedding', {
+    const { data: developers, error } = await supabase.rpc('get_developers_for_embedding_v2', {
       p_limit: DEVELOPER_BATCH_SIZE,
       p_offset: offset,
     });
