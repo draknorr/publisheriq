@@ -260,7 +260,6 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     if (filters.tags) gameFilters.tags = filters.tags;
     if (filters.min_reviews) gameFilters.min_reviews = filters.min_reviews;
     if (filters.release_year) gameFilters.release_year = filters.release_year;
-    if (filters.popularity_comparison) gameFilters.popularity_comparison = filters.popularity_comparison;
     if (filters.review_comparison) gameFilters.review_comparison = filters.review_comparison;
 
     // Get source metrics for relative comparisons
@@ -274,6 +273,17 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
       developer_ids: sourcePayload.developer_ids ?? (entity.metrics as { developer_ids?: number[] })?.developer_ids,
     };
 
+    // Handle popularity comparison - requires total_reviews data
+    if (filters.popularity_comparison && filters.popularity_comparison !== 'any') {
+      if (sourceMetrics.total_reviews === null || sourceMetrics.total_reviews === undefined) {
+        return {
+          success: false,
+          error: `Popularity filtering is not available for "${entity.name}" - review data hasn't been synced yet. The embedding sync workflow needs to run to populate this data.`,
+        };
+      }
+      gameFilters.popularity_comparison = filters.popularity_comparison;
+    }
+
     qdrantFilter = buildGameFilter(gameFilters, sourceMetrics);
   } else if (entity_type !== 'game') {
     const entityFilters: EntityFilters = {
@@ -283,14 +293,23 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
   }
 
   // Execute search
-  const searchResult = await client.search(collection, {
-    vector,
-    filter: qdrantFilter,
-    limit: actualLimit,
-    with_payload: {
-      include: ['name', 'type', 'genres', 'tags', 'review_percentage', 'price_cents', 'is_free', 'game_count'],
-    },
-  });
+  let searchResult;
+  try {
+    searchResult = await client.search(collection, {
+      vector,
+      filter: qdrantFilter,
+      limit: actualLimit,
+      with_payload: {
+        include: ['name', 'type', 'genres', 'tags', 'review_percentage', 'price_cents', 'is_free', 'game_count'],
+      },
+    });
+  } catch (searchError) {
+    console.error('Qdrant search error:', searchError);
+    return {
+      success: false,
+      error: `Search failed: ${searchError instanceof Error ? searchError.message : 'Unknown error'}`,
+    };
+  }
 
   // Format results
   const results = searchResult.map((point) => {
