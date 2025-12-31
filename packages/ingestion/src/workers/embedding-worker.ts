@@ -41,6 +41,8 @@ const log = logger.child({ worker: 'embedding-sync' });
 // Configuration
 const GAME_BATCH_SIZE = 100; // Games to fetch from DB at a time
 const QDRANT_BATCH_SIZE = 100; // Points to upsert at a time
+const PUBLISHER_BATCH_SIZE = 200; // Publishers to fetch from DB at a time
+const DEVELOPER_BATCH_SIZE = 200; // Developers to fetch from DB at a time
 
 interface SyncStats {
   gamesProcessed: number;
@@ -248,31 +250,56 @@ async function processPublisherBatch(
 }
 
 /**
- * Process publishers (top by game count)
+ * Process publishers with state-based pagination
+ * Loops until no more publishers need embedding
  */
 async function processPublishers(
   supabase: ReturnType<typeof getServiceClient>,
   qdrant: ReturnType<typeof getQdrantClient>,
   stats: SyncStats
 ): Promise<void> {
-  log.info('Fetching publishers for embedding');
+  log.info('Processing publishers for embedding');
 
-  const { data: publishers, error } = await supabase.rpc('get_publishers_for_embedding', {
-    p_limit: 500,
-  });
+  let hasMore = true;
+  while (hasMore) {
+    // Use NEW function that filters by embedding status
+    const { data: publishers, error } = await supabase.rpc('get_publishers_needing_embedding', {
+      p_limit: PUBLISHER_BATCH_SIZE,
+    });
 
-  if (error) {
-    log.error('Failed to fetch publishers', { error });
-    return;
+    if (error) {
+      log.error('Failed to fetch publishers', { error });
+      break;
+    }
+
+    if (!publishers || publishers.length === 0) {
+      log.info('No more publishers to embed');
+      hasMore = false;
+      break;
+    }
+
+    log.info('Processing publisher batch', {
+      count: publishers.length,
+      totalEmbedded: stats.publishersEmbedded,
+    });
+
+    // Process batch and generate embeddings
+    await processPublisherBatch(publishers as PublisherEmbeddingData[], qdrant, stats);
+
+    // Mark as embedded so they don't appear in next call
+    const ids = (publishers as PublisherEmbeddingData[]).map((p) => p.id);
+    const hashes = (publishers as PublisherEmbeddingData[]).map((p) =>
+      hashEmbeddingText(buildPublisherPortfolioText(p))
+    );
+    await supabase.rpc('mark_publishers_embedded', {
+      p_ids: ids,
+      p_hashes: hashes,
+    });
+
+    // Continue if we got a full batch (more might be available)
+    hasMore = publishers.length === PUBLISHER_BATCH_SIZE;
   }
 
-  if (!publishers || publishers.length === 0) {
-    log.info('No publishers to embed');
-    return;
-  }
-
-  log.info('Embedding publishers', { count: publishers.length });
-  await processPublisherBatch(publishers as PublisherEmbeddingData[], qdrant, stats);
   log.info('Publishers embedding complete', { total: stats.publishersEmbedded });
 }
 
@@ -362,31 +389,56 @@ async function processDeveloperBatch(
 }
 
 /**
- * Process developers (top by game count)
+ * Process developers with state-based pagination
+ * Loops until no more developers need embedding
  */
 async function processDevelopers(
   supabase: ReturnType<typeof getServiceClient>,
   qdrant: ReturnType<typeof getQdrantClient>,
   stats: SyncStats
 ): Promise<void> {
-  log.info('Fetching developers for embedding');
+  log.info('Processing developers for embedding');
 
-  const { data: developers, error } = await supabase.rpc('get_developers_for_embedding', {
-    p_limit: 500,
-  });
+  let hasMore = true;
+  while (hasMore) {
+    // Use NEW function that filters by embedding status
+    const { data: developers, error } = await supabase.rpc('get_developers_needing_embedding', {
+      p_limit: DEVELOPER_BATCH_SIZE,
+    });
 
-  if (error) {
-    log.error('Failed to fetch developers', { error });
-    return;
+    if (error) {
+      log.error('Failed to fetch developers', { error });
+      break;
+    }
+
+    if (!developers || developers.length === 0) {
+      log.info('No more developers to embed');
+      hasMore = false;
+      break;
+    }
+
+    log.info('Processing developer batch', {
+      count: developers.length,
+      totalEmbedded: stats.developersEmbedded,
+    });
+
+    // Process batch and generate embeddings
+    await processDeveloperBatch(developers as DeveloperEmbeddingData[], qdrant, stats);
+
+    // Mark as embedded so they don't appear in next call
+    const ids = (developers as DeveloperEmbeddingData[]).map((d) => d.id);
+    const hashes = (developers as DeveloperEmbeddingData[]).map((d) =>
+      hashEmbeddingText(buildDeveloperPortfolioText(d))
+    );
+    await supabase.rpc('mark_developers_embedded', {
+      p_ids: ids,
+      p_hashes: hashes,
+    });
+
+    // Continue if we got a full batch (more might be available)
+    hasMore = developers.length === DEVELOPER_BATCH_SIZE;
   }
 
-  if (!developers || developers.length === 0) {
-    log.info('No developers to embed');
-    return;
-  }
-
-  log.info('Embedding developers', { count: developers.length });
-  await processDeveloperBatch(developers as DeveloperEmbeddingData[], qdrant, stats);
   log.info('Developers embedding complete', { total: stats.developersEmbedded });
 }
 
