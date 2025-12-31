@@ -218,7 +218,9 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
   }
 
   const { entity_type, reference_name, filters, limit = DEFAULT_RESULTS } = args;
-  const actualLimit = Math.min(limit, MAX_RESULTS);
+  // Request one extra for publishers/developers since we filter client-side
+  const extraForFilter = entity_type !== 'game' ? 1 : 0;
+  const actualLimit = Math.min(limit + extraForFilter, MAX_RESULTS);
 
   // Look up the reference entity
   const entity = await lookupEntityByName(entity_type, reference_name);
@@ -289,10 +291,10 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
 
     qdrantFilter = buildGameFilter(gameFilters, sourceMetrics);
   } else if (entity_type !== 'game') {
-    const entityFilters: EntityFilters = {
-      exclude_ids: [entity.id],
-    };
-    qdrantFilter = buildEntityFilter(entityFilters);
+    // For publishers/developers, don't apply exclusion filter for now
+    // The source entity will be filtered out client-side if it appears in results
+    // TODO: Investigate why entity filter causes "Bad Request" from Qdrant
+    qdrantFilter = undefined;
   }
 
   // Execute search with entity-type-specific payload fields
@@ -318,36 +320,39 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     };
   }
 
-  // Format results based on entity type
-  const results = searchResult.map((point) => {
-    const payload = point.payload as Record<string, unknown>;
+  // Format results based on entity type, filtering out the source entity
+  const results = searchResult
+    .filter((point) => point.id !== entity.id) // Exclude source entity
+    .slice(0, limit) // Ensure we return the requested limit
+    .map((point) => {
+      const payload = point.payload as Record<string, unknown>;
 
-    if (entity_type === 'game') {
-      return {
-        id: point.id as number,
-        name: (payload.name as string) || 'Unknown',
-        score: Math.round(point.score * 100), // Convert to percentage
-        type: payload.type as string | undefined,
-        genres: (payload.genres as string[] | undefined)?.slice(0, 3),
-        tags: (payload.tags as string[] | undefined)?.slice(0, 5),
-        review_percentage: payload.review_percentage as number | null | undefined,
-        price_cents: payload.price_cents as number | null | undefined,
-        is_free: payload.is_free as boolean | undefined,
-      };
-    } else {
-      // Publisher/Developer results
-      return {
-        id: point.id as number,
-        name: (payload.name as string) || 'Unknown',
-        score: Math.round(point.score * 100),
-        game_count: payload.game_count as number | undefined,
-        genres: (payload.top_genres as string[] | undefined)?.slice(0, 3),
-        tags: (payload.top_tags as string[] | undefined)?.slice(0, 5),
-        review_percentage: payload.avg_review_percentage as number | null | undefined,
-        is_major: payload.is_major as boolean | undefined,
-      };
-    }
-  });
+      if (entity_type === 'game') {
+        return {
+          id: point.id as number,
+          name: (payload.name as string) || 'Unknown',
+          score: Math.round(point.score * 100), // Convert to percentage
+          type: payload.type as string | undefined,
+          genres: (payload.genres as string[] | undefined)?.slice(0, 3),
+          tags: (payload.tags as string[] | undefined)?.slice(0, 5),
+          review_percentage: payload.review_percentage as number | null | undefined,
+          price_cents: payload.price_cents as number | null | undefined,
+          is_free: payload.is_free as boolean | undefined,
+        };
+      } else {
+        // Publisher/Developer results
+        return {
+          id: point.id as number,
+          name: (payload.name as string) || 'Unknown',
+          score: Math.round(point.score * 100),
+          game_count: payload.game_count as number | undefined,
+          genres: (payload.top_genres as string[] | undefined)?.slice(0, 3),
+          tags: (payload.top_tags as string[] | undefined)?.slice(0, 5),
+          review_percentage: payload.avg_review_percentage as number | null | undefined,
+          is_major: payload.is_major as boolean | undefined,
+        };
+      }
+    });
 
   return {
     success: true,
