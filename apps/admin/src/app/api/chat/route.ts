@@ -7,7 +7,7 @@ import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
 import { executeQuery } from '@/lib/query-executor';
 import { executeCubeQuery } from '@/lib/cube-executor';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
-import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse, Tool, QueryResult, SimilarityResult } from '@/lib/llm/types';
+import type { Message, ChatRequest, ChatResponse, ChatToolCall, ChatTiming, LLMResponse, Tool, QueryResult, SimilarityResult } from '@/lib/llm/types';
 
 // Set to true to use Cube.dev semantic layer, false for legacy SQL
 const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
@@ -26,6 +26,8 @@ interface QueryAnalyticsArgs {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<ChatResponse>> {
+  const requestStart = performance.now();
+
   try {
     const body = (await request.json()) as ChatRequest;
 
@@ -47,10 +49,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
 
     let iterations = 0;
     let response: LLMResponse | undefined;
+    let totalLlmMs = 0;
+    let totalToolsMs = 0;
 
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
+
+      // Time the LLM call
+      const llmStart = performance.now();
       response = await provider.chat(messages, tools);
+      totalLlmMs += performance.now() - llmStart;
 
       if (!response.toolCalls || response.toolCalls.length === 0) {
         break;
@@ -58,6 +66,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
 
       for (const toolCall of response.toolCalls) {
         let result: QueryResult | SimilarityResult;
+
+        // Time each tool execution
+        const toolStart = performance.now();
 
         if (toolCall.name === 'query_database') {
           // Legacy SQL mode
@@ -82,10 +93,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
           result = { success: false, error: `Unknown tool: ${toolCall.name}` };
         }
 
+        const toolExecutionMs = performance.now() - toolStart;
+        totalToolsMs += toolExecutionMs;
+
         executedToolCalls.push({
           name: toolCall.name,
           arguments: toolCall.arguments as Record<string, unknown>,
           result,
+          timing: {
+            executionMs: Math.round(toolExecutionMs),
+          },
         });
 
         messages.push({
@@ -102,9 +119,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
       }
     }
 
+    const timing: ChatTiming = {
+      llmMs: Math.round(totalLlmMs),
+      toolsMs: Math.round(totalToolsMs),
+      totalMs: Math.round(performance.now() - requestStart),
+    };
+
     return NextResponse.json({
       response: response?.content || 'I was unable to generate a response.',
       toolCalls: executedToolCalls.length > 0 ? executedToolCalls : undefined,
+      timing,
     });
   } catch (error) {
     console.error('Chat API error:', error);

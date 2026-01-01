@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { ChevronDown, ChevronRight, Database, User, Bot } from 'lucide-react';
-import type { ChatToolCall } from '@/lib/llm/types';
+import type { ChatToolCall, ChatTiming } from '@/lib/llm/types';
+import { Clock } from 'lucide-react';
 import { MessageContent, CopyButton, CodeBlock } from './content';
 
 interface DisplayMessage {
@@ -11,7 +12,13 @@ interface DisplayMessage {
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ChatToolCall[];
+  timing?: ChatTiming;
   timestamp: Date;
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 interface ChatMessageProps {
@@ -80,6 +87,15 @@ export function ChatMessage({ message }: ChatMessageProps) {
                   {message.toolCalls.length} tool{' '}
                   {message.toolCalls.length === 1 ? 'call' : 'calls'}
                 </span>
+                {message.timing && (
+                  <span className="flex items-center gap-1 text-text-muted">
+                    <Clock className="w-3 h-3" />
+                    {formatMs(message.timing.totalMs)}
+                    <span className="text-caption">
+                      (LLM: {formatMs(message.timing.llmMs)} | Tools: {formatMs(message.timing.toolsMs)})
+                    </span>
+                  </span>
+                )}
               </button>
 
               {showQueries && (
@@ -157,7 +173,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                               Querying: {args.cube}
                             </p>
                           )}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {result.success ? (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
                                 <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
@@ -168,6 +184,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
                                 <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
                                 Error: {result.error}
+                              </span>
+                            )}
+                            {tc.timing && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-caption bg-surface-elevated text-text-muted">
+                                <Clock className="w-3 h-3" />
+                                {formatMs(tc.timing.executionMs)}
                               </span>
                             )}
                           </div>

@@ -67,6 +67,15 @@ export interface ChatToolCall {
   name: string;
   arguments: Record<string, unknown>;
   result: QueryResult | SimilarityResult;
+  timing?: {
+    executionMs: number;  // Time to execute the tool
+  };
+}
+
+export interface ChatTiming {
+  llmMs: number;       // Total LLM inference time
+  toolsMs: number;     // Total tool execution time
+  totalMs: number;     // Total request time
 }
 
 // Similarity search result
@@ -95,5 +104,6 @@ export interface SimilarityResult {
 export interface ChatResponse {
   response: string;
   toolCalls?: ChatToolCall[];
+  timing?: ChatTiming;
   error?: string;
 }

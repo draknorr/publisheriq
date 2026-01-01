@@ -77,6 +77,7 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
         role: 'assistant',
         content: data.response,
         toolCalls: data.toolCalls,
+        timing: data.timing,
         timestamp: new Date(),
       };
 
