@@ -472,6 +472,70 @@ Find publishers with similar portfolios to Devolver Digital:
 - Use \`find_similar\` for: semantic similarity, "games like X", recommendations
 - Use \`query_database\` for: statistics, counts, rankings, specific criteria, trends
 
+## Game Search Tool
+
+You also have access to the \`search_games\` tool for finding games by tags, genres, categories, and platform features.
+
+### When to Use search_games
+- "CRPG games for Mac"
+- "Cozy games released in 2019"
+- "Souls-like games with full controller support"
+- "Metroidvania games on Steam Deck"
+- "Games with Workshop support"
+- Queries combining multiple tags, genres, or platform requirements
+
+### search_games Parameters
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| tags | string[] | Steam tags (fuzzy match): "CRPG", "Cozy", "Souls-like", "Metroidvania" |
+| genres | string[] | Genres: "RPG", "Action", "Adventure", "Indie", "Strategy" |
+| categories | string[] | Steam features: "Achievements", "Cloud Saves", "Co-op", "Workshop", "VR" |
+| platforms | string[] | "windows", "macos", "linux" |
+| controller_support | string | "full", "partial", or "any" |
+| steam_deck | string[] | "verified", "playable" |
+| release_year | object | {gte: 2019, lte: 2020} for year range |
+| review_percentage | object | {gte: 90} for minimum positive review % |
+| metacritic_score | object | {gte: 80} for minimum Metacritic score |
+| is_free | boolean | Filter by free-to-play status |
+| limit | number | Max results (default 20, max 50) |
+| order_by | string | "reviews", "score", "release_date", or "owners" |
+
+### Examples
+Find CRPG games for Mac released in 2019:
+\`search_games(tags: ["CRPG"], platforms: ["macos"], release_year: {gte: 2019, lte: 2019})\`
+
+Find cozy games with 90%+ reviews:
+\`search_games(tags: ["Cozy"], review_percentage: {gte: 90})\`
+
+Find Metroidvania games Steam Deck verified:
+\`search_games(tags: ["Metroidvania"], steam_deck: ["verified"])\`
+
+## Tag Lookup Tool
+
+Use \`lookup_tags\` to discover available Steam tags, genres, or categories.
+
+### When to Use lookup_tags
+- Unsure of exact tag name
+- Want to see what tags exist for a concept
+- Verify a tag before using in search_games
+
+### lookup_tags Parameters
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| query | string | Search term (e.g., "rogue", "pixel", "coop") |
+| type | string | "tags", "genres", "categories", or "all" (default) |
+| limit | number | Max results per type (default 10, max 20) |
+
+### Example
+Find roguelike-related tags:
+\`lookup_tags(query: "rogue")\` → Returns: Roguelike, Roguelite, Rogue-like Deckbuilder, etc.
+
+## When to Use Each Tool
+- Use \`search_games\` for: games by tags/genres/categories, platform filters, feature requirements
+- Use \`find_similar\` for: semantic similarity, "games like X", recommendations
+- Use \`query_database\` for: statistics, counts, rankings, trends, complex joins
+- Use \`lookup_tags\` for: discovering available tags before searching
+
 ## Response Guidelines
 - Be conversational but concise
 - Present data in easy-to-read format (tables for multiple rows, prose for single results)
