@@ -8,8 +8,18 @@ module.exports = {
   // Database connection
   dbType: 'postgres',
 
-  // Use environment variables for connection
-  // CUBEJS_DB_HOST, CUBEJS_DB_PORT, CUBEJS_DB_NAME, CUBEJS_DB_USER, CUBEJS_DB_PASS
+  // SSL required for Supabase
+  driverFactory: () => {
+    const PostgresDriver = require('@cubejs-backend/postgres-driver');
+    return new PostgresDriver({
+      host: process.env.CUBEJS_DB_HOST,
+      port: process.env.CUBEJS_DB_PORT,
+      database: process.env.CUBEJS_DB_NAME,
+      user: process.env.CUBEJS_DB_USER,
+      password: process.env.CUBEJS_DB_PASS,
+      ssl: { rejectUnauthorized: false },
+    });
+  },
 
   // In-memory caching (no Redis needed for low volume)
   cacheAndQueueDriver: 'memory',
