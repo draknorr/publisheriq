@@ -14,6 +14,7 @@ cube('Discovery', {
       a.is_free,
       a.current_price_cents,
       a.release_date,
+      a.last_content_update,
       a.platforms,
       a.controller_support,
       a.pics_review_score,
@@ -69,6 +70,14 @@ cube('Discovery', {
     },
     releaseDate: {
       sql: `release_date`,
+      type: 'time',
+    },
+    releaseYear: {
+      sql: `EXTRACT(YEAR FROM ${CUBE}.release_date)::INTEGER`,
+      type: 'number',
+    },
+    lastContentUpdate: {
+      sql: `last_content_update`,
       type: 'time',
     },
     platforms: {
@@ -220,6 +229,9 @@ cube('Discovery', {
     },
     recentlyReleased: {
       sql: `${CUBE}.release_date >= CURRENT_DATE - INTERVAL '30 days'`,
+    },
+    recentlyUpdated: {
+      sql: `${CUBE}.last_content_update >= CURRENT_DATE - INTERVAL '30 days'`,
     },
     // Tag-based segments
     vrGame: {

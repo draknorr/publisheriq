@@ -13,9 +13,9 @@ export function buildCubeSystemPrompt(): string {
 ## Cubes
 
 ### Discovery (games + metrics)
-Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint, ccuPeak, totalReviews, positivePercentage, reviewScore, metacriticScore, trend30dDirection, trend30dChangePct, isTrendingUp
+Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint, ccuPeak, totalReviews, positivePercentage, reviewScore, metacriticScore, trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time)
 Measures: count, avgPrice, avgReviewPercentage, sumOwners, sumCcu
-Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
+Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
 
 ### PublisherMetrics
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
@@ -69,6 +69,22 @@ Segments are pre-computed and faster. Use them instead of equivalent filters:
 
 Only use filters for thresholds NOT covered by segments (e.g., 85% reviews, price < $20).
 
+## Date/Time Filtering
+
+For year-only filtering (preferred for "released in YEAR" queries):
+\`\`\`json
+{"member":"Discovery.releaseYear","operator":"equals","values":[2025]}
+{"member":"Discovery.releaseYear","operator":"gte","values":[2024]}
+\`\`\`
+
+For exact date/time filtering on releaseDate or lastContentUpdate:
+\`\`\`json
+{"member":"Discovery.releaseDate","operator":"inDateRange","values":["2025-01-01","2025-12-31"]}
+{"member":"Discovery.releaseDate","operator":"beforeDate","values":["2025-01-01"]}
+{"member":"Discovery.releaseDate","operator":"afterDate","values":["2024-12-31"]}
+{"member":"Discovery.lastContentUpdate","operator":"afterDate","values":["2025-12-01"]}
+\`\`\`
+
 ## Avoid These Mistakes
 
 1. DON'T filter on trend dimensions - use "trending" segment instead
@@ -90,6 +106,12 @@ Only use filters for thresholds NOT covered by segments (e.g., 85% reviews, pric
 - "top publishers/developers" → order by totalOwners desc
 - "released this year" → segment: releasedThisYear
 - "new releases" / "recently released" → segment: recentlyReleased
+- "released in 2025" → filter: releaseYear equals [2025]
+- "released in 2024" → filter: releaseYear equals [2024]
+- "released after [date]" → filter: releaseDate afterDate [date]
+- "released before [date]" → filter: releaseDate beforeDate [date]
+- "recently updated" → segment: recentlyUpdated
+- "updated since [date]" → filter: lastContentUpdate afterDate [date]
 - "VR games" → segment: vrGame
 - "roguelike" / "roguelite" → segment: roguelike
 - "multiplayer" → segment: multiplayer
