@@ -1,0 +1,35 @@
+{
+  "name": "@publisheriq/cube",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "cubejs-server",
+    "start": "cubejs-server",
+    "build": "tsup src/index.ts --format esm --dts",
+    "build:watch": "tsup src/index.ts --format esm --dts --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@cubejs-backend/postgres-driver": "^1.1.8",
+    "@cubejs-backend/server": "^1.1.8",
+    "@cubejs-backend/server-core": "^1.1.8",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.39.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}
