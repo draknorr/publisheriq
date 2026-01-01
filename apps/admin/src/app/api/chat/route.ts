@@ -76,6 +76,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         } else if (toolCall.name === 'query_analytics') {
           // Cube.dev mode
           const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
+          console.log('[Chat Debug] Calling executeCubeQuery with:', { cube: args.cube, dimensions: args.dimensions, measures: args.measures });
           result = await executeCubeQuery({
             cube: args.cube,
             dimensions: args.dimensions,
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             order: args.order,
             limit: args.limit,
           });
+          console.log('[Chat Debug] executeCubeQuery result:', { success: result.success, rowCount: 'rowCount' in result ? result.rowCount : undefined, error: result.error });
         } else if (toolCall.name === 'find_similar') {
           const args = toolCall.arguments as unknown as FindSimilarArgs;
           result = await findSimilar(args);
