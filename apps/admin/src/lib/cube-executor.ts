@@ -38,8 +38,17 @@ function normalizeFilters(filters: CubeFilter[]): CubeFilter[] {
   console.log('[Cube] Raw filters received:', JSON.stringify(filters));
 
   return filters.map(filter => {
-    let operator = filter.operator?.trim() || '';
+    // Strip quotes and whitespace from operator
+    let operator = (filter.operator || '')
+      .trim()
+      .replace(/^["']+|["']+$/g, '')  // Remove leading/trailing quotes
+      .replace(/\\"/g, '"')           // Unescape escaped quotes
+      .replace(/["']/g, '')           // Remove any remaining quotes
+      .trim();
+
     let values = filter.values || [];
+
+    console.log(`[Cube] Processing filter: original="${filter.operator}", cleaned="${operator}"`);
 
     // Check if operator contains a value (e.g., ">=90")
     const match = operator.match(SQL_OP_WITH_VALUE);
@@ -60,6 +69,8 @@ function normalizeFilters(filters: CubeFilter[]): CubeFilter[] {
     if (!VALID_OPERATORS.includes(normalizedOp)) {
       console.warn(`[Cube] Unknown filter operator: ${filter.operator} -> ${normalizedOp}`);
     }
+
+    console.log(`[Cube] Normalized: "${filter.operator}" -> "${normalizedOp}"`);
 
     return {
       ...filter,
