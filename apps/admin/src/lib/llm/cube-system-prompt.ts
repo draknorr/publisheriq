@@ -15,7 +15,7 @@ export function buildCubeSystemPrompt(): string {
 ### Discovery (games + metrics)
 Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint, ccuPeak, totalReviews, positivePercentage, reviewScore, metacriticScore, trend30dDirection, trend30dChangePct, isTrendingUp
 Measures: count, avgPrice, avgReviewPercentage, sumOwners, sumCcu
-Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days)
+Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
 
 ### PublisherMetrics
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
@@ -90,6 +90,12 @@ Only use filters for thresholds NOT covered by segments (e.g., 85% reviews, pric
 - "top publishers/developers" → order by totalOwners desc
 - "released this year" → segment: releasedThisYear
 - "new releases" / "recently released" → segment: recentlyReleased
+- "VR games" → segment: vrGame
+- "roguelike" / "roguelite" → segment: roguelike
+- "multiplayer" → segment: multiplayer
+- "single player" → segment: singleplayer
+- "co-op" / "coop" → segment: coop
+- "open world" → segment: openWorld
 
 ## Response Rules
 1. Always use tools to fetch data - never invent

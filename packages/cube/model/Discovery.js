@@ -221,6 +221,25 @@ cube('Discovery', {
     recentlyReleased: {
       sql: `${CUBE}.release_date >= CURRENT_DATE - INTERVAL '30 days'`,
     },
+    // Tag-based segments
+    vrGame: {
+      sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND st.name ILIKE '%VR%')`,
+    },
+    roguelike: {
+      sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND st.name ILIKE '%rogue%')`,
+    },
+    multiplayer: {
+      sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND st.name ILIKE '%multiplayer%')`,
+    },
+    singleplayer: {
+      sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND st.name ILIKE '%single%player%')`,
+    },
+    coop: {
+      sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND (st.name ILIKE '%co-op%' OR st.name ILIKE '%coop%'))`,
+    },
+    openWorld: {
+      sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND st.name ILIKE '%open world%')`,
+    },
   },
 
   preAggregations: {
