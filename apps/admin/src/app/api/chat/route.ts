@@ -7,7 +7,7 @@ import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
 import { executeQuery } from '@/lib/query-executor';
 import { executeCubeQuery } from '@/lib/cube-executor';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
-import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse, Tool } from '@/lib/llm/types';
+import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse, Tool, QueryResult, SimilarityResult } from '@/lib/llm/types';
 
 // Set to true to use Cube.dev semantic layer, false for legacy SQL
 const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
       }
 
       for (const toolCall of response.toolCalls) {
-        let result: unknown;
+        let result: QueryResult | SimilarityResult;
 
         if (toolCall.name === 'query_database') {
           // Legacy SQL mode
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
           const args = toolCall.arguments as unknown as FindSimilarArgs;
           result = await findSimilar(args);
         } else {
-          result = { error: `Unknown tool: ${toolCall.name}` };
+          result = { success: false, error: `Unknown tool: ${toolCall.name}` };
         }
 
         executedToolCalls.push({
