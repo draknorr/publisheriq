@@ -24,6 +24,7 @@ interface CubeQuery {
 }
 
 interface CubeResult {
+  success: boolean;
   data: Record<string, unknown>[];
   rowCount: number;
   cached?: boolean;
@@ -105,6 +106,7 @@ export async function executeCubeQuery(query: CubeQuery): Promise<CubeResult> {
     if (!response.ok) {
       const errorText = await response.text();
       return {
+        success: false,
         data: [],
         rowCount: 0,
         error: `Cube.dev query failed: ${response.status} - ${errorText}`,
@@ -128,6 +130,7 @@ export async function executeCubeQuery(query: CubeQuery): Promise<CubeResult> {
     });
 
     return {
+      success: true,
       data: simplifiedData,
       rowCount: simplifiedData.length,
       cached: result.query?.hitPreAggregations || false,
@@ -135,6 +138,7 @@ export async function executeCubeQuery(query: CubeQuery): Promise<CubeResult> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return {
+      success: false,
       data: [],
       rowCount: 0,
       error: `Cube.dev query error: ${message}`,
