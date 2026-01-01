@@ -59,7 +59,8 @@ ALWAYS include Discovery.appid and Discovery.name in dimensions for game lists.`
               },
               values: {
                 type: 'array',
-                items: { type: 'string' },
+                items: { oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+                description: 'Filter values (strings for text, numbers for numeric comparisons, booleans for flags)',
               },
             },
             required: ['member', 'operator'],

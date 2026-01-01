@@ -106,7 +106,19 @@ function normalizeFilters(filters: CubeFilter[]): CubeFilter[] {
       console.warn(`[Cube] Unknown filter operator: ${filter.operator} -> ${normalizedOp}`);
     }
 
-    console.log(`[Cube] Normalized: "${filter.operator}" -> "${normalizedOp}"`);
+    // Convert string values to numbers where appropriate (for numeric operators)
+    const numericOperators = ['gt', 'gte', 'lt', 'lte'];
+    if (numericOperators.includes(normalizedOp) || filter.member?.includes('Year') || filter.member?.includes('Reviews') || filter.member?.includes('Price') || filter.member?.includes('Score')) {
+      values = values.map(v => {
+        if (typeof v === 'string') {
+          const num = Number(v);
+          return isNaN(num) ? v : num;
+        }
+        return v;
+      });
+    }
+
+    console.log(`[Cube] Normalized: "${filter.operator}" -> "${normalizedOp}", values:`, values);
 
     return {
       ...filter,
