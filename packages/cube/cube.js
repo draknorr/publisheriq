@@ -34,27 +34,16 @@ module.exports = {
     }
 
     try {
-      const decoded = jwt.verify(auth, process.env.CUBEJS_API_SECRET);
-      req.securityContext = decoded;
+      jwt.verify(auth, process.env.CUBEJS_API_SECRET);
     } catch (err) {
       throw new Error('Invalid authorization token');
     }
   },
 
-  // Security context for multi-tenancy (single tenant for now)
-  contextToAppId: ({ securityContext }) => 'publisheriq',
+  // Disable scheduled refresh for now (simpler setup)
+  scheduledRefreshTimer: false,
 
-  // Scheduled refresh configuration
-  scheduledRefreshContexts: () => [
-    {
-      securityContext: { internal: true },
-    }
-  ],
-
-  // Refresh every 6 hours
-  scheduledRefreshTimer: 60 * 60 * 6, // 6 hours in seconds
-
-  // Allow Playground in development, disable in production via env
+  // Allow Playground in development
   devServer: process.env.CUBEJS_DEV_MODE === 'true',
 
   // API configuration
