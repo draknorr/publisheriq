@@ -75,10 +75,11 @@ Only use filters for thresholds NOT covered by segments (e.g., 85% reviews, pric
 2. DON'T combine a segment with a filter that does the same thing
 3. DON'T use dimensions that aren't listed above
 4. DO include Discovery.appid and Discovery.name in dimensions for game lists
+5. DON'T use SQL operators (>=, >, <=, <, =, !=) - use Cube operators: gte, gt, lte, lt, equals, notEquals
 
 ## Natural Language Mappings
 - "indie" → segment: indie
-- "well reviewed" → filter: positivePercentage >= 70
+- "well reviewed" → filter: positivePercentage gte 70
 - "highly rated" → segment: highlyRated
 - "trending" → segment: trending
 - "free" → segment: free

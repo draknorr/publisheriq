@@ -128,7 +128,7 @@ export class CubeClient {
       throw new Error(`Cube.dev query failed: ${response.status} ${error}`);
     }
 
-    return response.json();
+    return response.json() as Promise<CubeResultSet<T>>;
   }
 
   /**
@@ -151,7 +151,7 @@ export class CubeClient {
       throw new Error(`Cube.dev SQL request failed: ${response.status} ${error}`);
     }
 
-    return response.json();
+    return response.json() as Promise<{ sql: { sql: string[]; params: unknown[] } }>;
   }
 
   /**
@@ -180,7 +180,15 @@ export class CubeClient {
       throw new Error(`Cube.dev meta request failed: ${response.status} ${error}`);
     }
 
-    return response.json();
+    return response.json() as Promise<{
+      cubes: Array<{
+        name: string;
+        title: string;
+        measures: Array<{ name: string; title: string; type: string }>;
+        dimensions: Array<{ name: string; title: string; type: string }>;
+        segments: Array<{ name: string; title: string }>;
+      }>;
+    }>;
   }
 
   /**
@@ -210,5 +218,3 @@ export function createCubeClient(): CubeClient {
   return new CubeClient({ apiUrl, apiSecret });
 }
 
-// Re-export types
-export type { CubeQuery, CubeFilter, CubeTimeDimension, CubeResultSet, CubeClientConfig };

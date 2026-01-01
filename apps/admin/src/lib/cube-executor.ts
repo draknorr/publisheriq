@@ -13,6 +13,36 @@ interface CubeFilter {
   values?: (string | number | boolean)[];
 }
 
+// Map SQL operators to Cube.dev operators
+const OPERATOR_MAP: Record<string, string> = {
+  '>=': 'gte',
+  '>': 'gt',
+  '<=': 'lte',
+  '<': 'lt',
+  '=': 'equals',
+  '==': 'equals',
+  '!=': 'notEquals',
+  '<>': 'notEquals',
+};
+
+const VALID_OPERATORS = ['equals', 'notEquals', 'contains', 'notContains', 'gt', 'gte', 'lt', 'lte', 'set', 'notSet'];
+
+/**
+ * Normalize filters by converting SQL operators to Cube.dev operators
+ */
+function normalizeFilters(filters: CubeFilter[]): CubeFilter[] {
+  return filters.map(filter => {
+    const normalizedOp = OPERATOR_MAP[filter.operator] || filter.operator;
+    if (!VALID_OPERATORS.includes(normalizedOp)) {
+      console.warn(`[Cube] Unknown filter operator: ${filter.operator}`);
+    }
+    return {
+      ...filter,
+      operator: normalizedOp,
+    };
+  });
+}
+
 interface CubeQuery {
   cube: string;
   dimensions?: string[];
@@ -74,7 +104,7 @@ export async function executeCubeQuery(query: CubeQuery): Promise<CubeResult> {
   }
 
   if (query.filters && query.filters.length > 0) {
-    cubeQuery.filters = query.filters;
+    cubeQuery.filters = normalizeFilters(query.filters);
   }
 
   if (query.segments && query.segments.length > 0) {
