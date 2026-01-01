@@ -56,7 +56,7 @@ Use this tool for questions about game statistics, publisher portfolios, trendin
               },
               values: {
                 type: 'array',
-                items: { type: ['string', 'number', 'boolean'] },
+                items: { type: 'string' },
               },
             },
             required: ['member', 'operator'],
