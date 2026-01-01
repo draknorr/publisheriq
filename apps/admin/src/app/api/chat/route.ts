@@ -59,6 +59,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
       for (const toolCall of response.toolCalls) {
         let result: QueryResult | SimilarityResult;
 
+        // Debug logging
+        console.log('[Chat Debug] Tool call received:', {
+          name: toolCall.name,
+          nameType: typeof toolCall.name,
+          nameLength: toolCall.name?.length,
+          nameChars: toolCall.name ? [...toolCall.name].map(c => c.charCodeAt(0)) : [],
+          isQueryAnalytics: toolCall.name === 'query_analytics',
+          USE_CUBE,
+        });
+
         if (toolCall.name === 'query_database') {
           // Legacy SQL mode
           const args = toolCall.arguments as { sql: string; reasoning: string };
