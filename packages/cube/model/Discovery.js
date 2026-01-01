@@ -194,6 +194,9 @@ cube('Discovery', {
     veryPositive: {
       sql: `${CUBE}.positive_percentage >= 90`,
     },
+    overwhelminglyPositive: {
+      sql: `${CUBE}.positive_percentage >= 95`,
+    },
     steamDeckVerified: {
       sql: `${CUBE}.steam_deck_category = 'verified'`,
     },
@@ -211,6 +214,12 @@ cube('Discovery', {
     },
     mainstream: {
       sql: `${CUBE}.owners_midpoint >= 100000`,
+    },
+    releasedThisYear: {
+      sql: `EXTRACT(YEAR FROM ${CUBE}.release_date) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+    },
+    recentlyReleased: {
+      sql: `${CUBE}.release_date >= CURRENT_DATE - INTERVAL '30 days'`,
     },
   },
 

@@ -31,6 +31,42 @@ const VALID_OPERATORS = ['equals', 'notEquals', 'contains', 'notContains', 'gt',
 const SQL_OP_WITH_VALUE = /^(>=|<=|!=|<>|>|<|={1,2})(.+)$/;
 
 /**
+ * Check if an error is caused by SQL operator syntax errors
+ */
+function isOperatorError(error?: string): boolean {
+  if (!error) return false;
+  return (
+    error.includes('>=') ||
+    error.includes('<=') ||
+    error.includes('syntax error') ||
+    error.includes('operator') ||
+    error.includes('">') ||
+    error.includes('"<')
+  );
+}
+
+/**
+ * Rewrite the entire query JSON to fix SQL operators
+ * This is a fallback when the normalization didn't catch the issue
+ */
+function rewriteOperatorsInQuery(query: CubeQuery): CubeQuery {
+  const json = JSON.stringify(query);
+  const fixed = json
+    .replace(/"operator"\s*:\s*">=?"/g, '"operator":"gte"')
+    .replace(/"operator"\s*:\s*"<=?"/g, '"operator":"lte"')
+    .replace(/"operator"\s*:\s*">"/g, '"operator":"gt"')
+    .replace(/"operator"\s*:\s*"<"/g, '"operator":"lt"')
+    .replace(/"operator"\s*:\s*"={1,2}"/g, '"operator":"equals"')
+    .replace(/"operator"\s*:\s*"(!=|<>)"/g, '"operator":"notEquals"')
+    // Also handle escaped quotes
+    .replace(/"operator"\s*:\s*"\\?">=?\\"?"/g, '"operator":"gte"')
+    .replace(/"operator"\s*:\s*"\\?"<=?\\"?"/g, '"operator":"lte"');
+
+  console.log('[Cube] Rewrote query operators:', json, '->', fixed);
+  return JSON.parse(fixed);
+}
+
+/**
  * Normalize filters by converting SQL operators to Cube.dev operators
  * Handles various malformed inputs from LLMs
  */
@@ -120,9 +156,9 @@ function generateToken(): string {
 }
 
 /**
- * Execute a Cube.dev query
+ * Internal function to execute a Cube.dev query
  */
-export async function executeCubeQuery(query: CubeQuery): Promise<CubeResult> {
+async function executeCubeQueryInternal(query: CubeQuery): Promise<CubeResult> {
   const apiUrl = process.env.CUBE_API_URL;
 
   if (!apiUrl) {
@@ -211,6 +247,32 @@ export async function executeCubeQuery(query: CubeQuery): Promise<CubeResult> {
       error: `Cube.dev query error: ${message}`,
     };
   }
+}
+
+/**
+ * Execute a Cube.dev query with auto-retry for operator errors
+ *
+ * If the first attempt fails due to SQL operator syntax errors (e.g., >= instead of gte),
+ * this will silently rewrite the query and retry once. The user only sees the successful result.
+ */
+export async function executeCubeQuery(query: CubeQuery): Promise<CubeResult> {
+  // First attempt
+  let result = await executeCubeQueryInternal(query);
+
+  // If failed with operator error, fix and retry silently
+  if (!result.success && isOperatorError(result.error)) {
+    console.log('[Cube] Detected operator error, attempting auto-fix and retry');
+    const fixedQuery = rewriteOperatorsInQuery(query);
+    result = await executeCubeQueryInternal(fixedQuery);
+
+    if (result.success) {
+      console.log('[Cube] Auto-retry succeeded');
+    } else {
+      console.log('[Cube] Auto-retry also failed:', result.error);
+    }
+  }
+
+  return result;
 }
 
 /**
