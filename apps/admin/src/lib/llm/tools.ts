@@ -125,4 +125,127 @@ Returns semantically similar entities based on genres, tags, features, and other
   },
 };
 
-export const TOOLS: Tool[] = [QUERY_DATABASE_TOOL, FIND_SIMILAR_TOOL];
+export const SEARCH_GAMES_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'search_games',
+    description: `Search for games by tags, genres, categories, platforms, and other criteria.
+
+Use this tool when users ask for games with specific characteristics like:
+- "CRPG games for Mac"
+- "Cozy games released in 2019"
+- "Souls-like games with full controller support"
+- "Metroidvania games on Steam Deck"
+- "Games with Workshop support"
+
+Supports fuzzy tag matching - you don't need exact tag names.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Steam tags to filter by (fuzzy match). Examples: "CRPG", "Cozy", "Souls-like", "Metroidvania", "Pixel Graphics"',
+        },
+        genres: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Genres to filter by (fuzzy match). Examples: "RPG", "Action", "Adventure", "Indie", "Strategy"',
+        },
+        categories: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Steam feature categories (fuzzy match). Examples: "Achievements", "Cloud Saves", "Co-op", "Workshop", "VR"',
+        },
+        platforms: {
+          type: 'array',
+          items: { type: 'string', enum: ['windows', 'macos', 'linux'] },
+          description: 'Required platform support',
+        },
+        controller_support: {
+          type: 'string',
+          enum: ['full', 'partial', 'any'],
+          description: 'Controller support level required',
+        },
+        steam_deck: {
+          type: 'array',
+          items: { type: 'string', enum: ['verified', 'playable'] },
+          description: 'Steam Deck compatibility requirement',
+        },
+        release_year: {
+          type: 'object',
+          properties: {
+            gte: { type: 'number', description: 'Released in or after this year' },
+            lte: { type: 'number', description: 'Released in or before this year' },
+          },
+          description: 'Release year range filter',
+        },
+        review_percentage: {
+          type: 'object',
+          properties: {
+            gte: { type: 'number', description: 'Minimum positive review percentage (0-100)' },
+          },
+          description: 'Review score filter',
+        },
+        metacritic_score: {
+          type: 'object',
+          properties: {
+            gte: { type: 'number', description: 'Minimum Metacritic score (0-100)' },
+          },
+          description: 'Metacritic score filter',
+        },
+        is_free: {
+          type: 'boolean',
+          description: 'Filter by free-to-play status',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results to return (default 20, max 50)',
+        },
+        order_by: {
+          type: 'string',
+          enum: ['reviews', 'score', 'release_date', 'owners'],
+          description: 'Sort order: reviews (default), score, release_date, or owners',
+        },
+      },
+      required: [],
+    },
+  },
+};
+
+export const LOOKUP_TAGS_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'lookup_tags',
+    description: `Search for available Steam tags, genres, or categories.
+
+Use this tool when you need to:
+- Find the correct tag name for a concept (e.g., "rogue" → "Roguelike", "Roguelite")
+- Discover what tags/genres/categories exist
+- Verify a tag exists before using it in search_games`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query to find matching tags/genres/categories',
+        },
+        type: {
+          type: 'string',
+          enum: ['tags', 'genres', 'categories', 'all'],
+          description: 'Type to search: tags, genres, categories, or all (default)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results per type (default 10, max 20)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+};
+
+export const TOOLS: Tool[] = [QUERY_DATABASE_TOOL, FIND_SIMILAR_TOOL, SEARCH_GAMES_TOOL, LOOKUP_TAGS_TOOL];
