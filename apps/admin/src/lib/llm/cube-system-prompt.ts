@@ -3,7 +3,13 @@
  */
 
 export function buildCubeSystemPrompt(): string {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const lastYear = currentYear - 1;
+
   return `You answer questions about Steam game data using the query_analytics and find_similar tools.
+
+**Current date: ${now.toISOString().split('T')[0]} (${currentYear})**
 
 ## Tools
 
@@ -104,10 +110,10 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "Steam Deck" → segment: steamDeckVerified or steamDeckPlayable
 - "Mac/Linux games" → filter: hasMac/hasLinux = true
 - "top publishers/developers" → order by totalOwners desc
-- "released this year" → segment: releasedThisYear
+- "released this year" / "this year" → filter: releaseYear equals [${currentYear}]
+- "released last year" / "last year" → filter: releaseYear equals [${lastYear}]
 - "new releases" / "recently released" → segment: recentlyReleased
-- "released in 2025" → filter: releaseYear equals [2025]
-- "released in 2024" → filter: releaseYear equals [2024]
+- "released in [YEAR]" → filter: releaseYear equals [YEAR]
 - "released after [date]" → filter: releaseDate afterDate [date]
 - "released before [date]" → filter: releaseDate beforeDate [date]
 - "recently updated" → segment: recentlyUpdated
