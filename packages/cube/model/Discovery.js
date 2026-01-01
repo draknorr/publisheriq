@@ -137,6 +137,11 @@ cube('Discovery', {
       sql: `pics_review_percentage`,
       type: 'number',
     },
+    // Combined review percentage - falls back to PICS data when daily_metrics is missing
+    reviewPercentage: {
+      sql: `COALESCE(positive_percentage, pics_review_percentage)`,
+      type: 'number',
+    },
     metacriticScore: {
       sql: `metacritic_score`,
       type: 'number',
@@ -198,13 +203,19 @@ cube('Discovery', {
       sql: `${CUBE}.is_free = false`,
     },
     highlyRated: {
-      sql: `${CUBE}.positive_percentage >= 80`,
+      sql: `COALESCE(${CUBE}.positive_percentage, ${CUBE}.pics_review_percentage) >= 80`,
     },
     veryPositive: {
-      sql: `${CUBE}.positive_percentage >= 90`,
+      sql: `COALESCE(${CUBE}.positive_percentage, ${CUBE}.pics_review_percentage) >= 90`,
     },
     overwhelminglyPositive: {
-      sql: `${CUBE}.positive_percentage >= 95`,
+      sql: `COALESCE(${CUBE}.positive_percentage, ${CUBE}.pics_review_percentage) >= 95`,
+    },
+    hasMetacritic: {
+      sql: `${CUBE}.metacritic_score IS NOT NULL`,
+    },
+    highMetacritic: {
+      sql: `${CUBE}.metacritic_score >= 75`,
     },
     steamDeckVerified: {
       sql: `${CUBE}.steam_deck_category = 'verified'`,

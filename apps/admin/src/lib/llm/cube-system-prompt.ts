@@ -19,9 +19,9 @@ export function buildCubeSystemPrompt(): string {
 ## Cubes
 
 ### Discovery (games + metrics)
-Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint, ccuPeak, totalReviews, positivePercentage, reviewScore, metacriticScore, trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time)
+Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint, ccuPeak, totalReviews, reviewPercentage (best available Steam %), positivePercentage, metacriticScore (0-100), trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time)
 Measures: count, avgPrice, avgReviewPercentage, sumOwners, sumCcu
-Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
+Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
 
 ### PublisherMetrics
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
@@ -39,7 +39,7 @@ Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
 
 ## Query Format
 \`\`\`json
-{"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name","Discovery.positivePercentage"],"segments":["Discovery.veryPositive"],"order":{"Discovery.totalReviews":"desc"},"limit":20}
+{"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name","Discovery.reviewPercentage"],"segments":["Discovery.veryPositive"],"order":{"Discovery.totalReviews":"desc"},"limit":20}
 \`\`\`
 
 ## Filter Syntax (when segments don't cover your need)
@@ -53,9 +53,10 @@ Boolean filters:
 
 Numeric comparisons:
 \`\`\`json
-{"member":"Discovery.positivePercentage","operator":"gte","values":[85]}
+{"member":"Discovery.reviewPercentage","operator":"gte","values":[85]}
 {"member":"Discovery.totalReviews","operator":"gte","values":[500]}
 {"member":"Discovery.priceDollars","operator":"lte","values":[20]}
+{"member":"Discovery.metacriticScore","operator":"gte","values":[80]}
 \`\`\`
 
 String matching:
@@ -72,8 +73,9 @@ Segments are pre-computed and faster. Use them instead of equivalent filters:
 - Popular games → segment "popular" (1000+ reviews)
 - Free games → segment "free"
 - Steam Deck → segment "steamDeckVerified" or "steamDeckPlayable"
+- Metacritic games → segment "hasMetacritic" or "highMetacritic" (75+)
 
-Only use filters for thresholds NOT covered by segments (e.g., 85% reviews, price < $20).
+Only use filters for thresholds NOT covered by segments (e.g., 85% reviews, price < $20, metacritic >= 80).
 
 ## Date/Time Filtering
 
@@ -101,10 +103,13 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 
 ## Natural Language Mappings
 - "indie" → segment: indie
-- "well reviewed" → filter: positivePercentage gte 70
+- "well reviewed" / "good reviews" → filter: reviewPercentage gte 70
 - "highly rated" → segment: highlyRated
 - "very positive" → segment: veryPositive
 - "overwhelmingly positive" → segment: overwhelminglyPositive
+- "metacritic" / "critic score" → filter: metacriticScore gte [value]
+- "high metacritic" / "good metacritic" → segment: highMetacritic (75+)
+- "has metacritic" → segment: hasMetacritic
 - "trending" → segment: trending
 - "free" → segment: free
 - "Steam Deck" → segment: steamDeckVerified or steamDeckPlayable
