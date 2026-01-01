@@ -33,8 +33,48 @@ Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
 
 ## Query Format
 \`\`\`json
-{"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name"],"filters":[{"member":"Discovery.positivePercentage","operator":"gte","values":[90]}],"segments":["Discovery.highlyRated"],"order":{"Discovery.totalReviews":"desc"},"limit":20}
+{"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name","Discovery.positivePercentage"],"segments":["Discovery.veryPositive"],"order":{"Discovery.totalReviews":"desc"},"limit":20}
 \`\`\`
+
+## Filter Syntax (when segments don't cover your need)
+
+Boolean filters:
+\`\`\`json
+{"member":"Discovery.isFree","operator":"equals","values":[true]}
+{"member":"Discovery.isSteamDeckVerified","operator":"equals","values":[true]}
+{"member":"Discovery.hasLinux","operator":"equals","values":[true]}
+\`\`\`
+
+Numeric comparisons:
+\`\`\`json
+{"member":"Discovery.positivePercentage","operator":"gte","values":[85]}
+{"member":"Discovery.totalReviews","operator":"gte","values":[500]}
+{"member":"Discovery.priceDollars","operator":"lte","values":[20]}
+\`\`\`
+
+String matching:
+\`\`\`json
+{"member":"Discovery.platforms","operator":"contains","values":["linux"]}
+{"member":"Discovery.steamDeckCategory","operator":"equals","values":["verified"]}
+\`\`\`
+
+## IMPORTANT: Prefer Segments Over Filters
+
+Segments are pre-computed and faster. Use them instead of equivalent filters:
+- Good reviews → segment "highlyRated" (80%+) or "veryPositive" (90%+)
+- Trending games → segment "trending" (NOT filter on isTrendingUp)
+- Popular games → segment "popular" (1000+ reviews)
+- Free games → segment "free"
+- Steam Deck → segment "steamDeckVerified" or "steamDeckPlayable"
+
+Only use filters for thresholds NOT covered by segments (e.g., 85% reviews, price < $20).
+
+## Avoid These Mistakes
+
+1. DON'T filter on trend dimensions - use "trending" segment instead
+2. DON'T combine a segment with a filter that does the same thing
+3. DON'T use dimensions that aren't listed above
+4. DO include Discovery.appid and Discovery.name in dimensions for game lists
 
 ## Natural Language Mappings
 - "indie" → segment: indie

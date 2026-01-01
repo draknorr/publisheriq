@@ -13,26 +13,29 @@ export const QUERY_ANALYTICS_TOOL: Tool = {
     name: 'query_analytics',
     description: `Query game, publisher, and developer analytics using pre-defined semantic models.
 
-AVAILABLE CUBES:
-- Discovery: Games with latest metrics, trends, and filters (use for game queries)
+CUBES:
+- Discovery: Games with metrics (use for most game queries)
 - PublisherMetrics: Publisher portfolio analytics
 - DeveloperMetrics: Developer portfolio analytics
 - DailyMetrics: Historical time-series data
-- SyncJobs: Sync job monitoring (admin only)
-- SyncStatus: Sync health stats (admin only)
 
-DIMENSION/MEASURE FORMAT:
-- Format: CubeName.fieldName
-- Example: Discovery.name, PublisherMetrics.totalOwners
+IMPORTANT - USE SEGMENTS FOR COMMON FILTERS:
+- Trending games → segment "Discovery.trending" (NOT filter on isTrendingUp)
+- Good reviews → segment "Discovery.highlyRated" (80%+) or "Discovery.veryPositive" (90%+)
+- Popular games → segment "Discovery.popular" (1000+ reviews)
+- Steam Deck → segment "Discovery.steamDeckVerified" or "Discovery.steamDeckPlayable"
+- Free games → segment "Discovery.free"
 
-Use this tool for questions about game statistics, publisher portfolios, trending games, and analytics.`,
+Only use filters for custom thresholds not covered by segments.
+
+ALWAYS include Discovery.appid and Discovery.name in dimensions for game lists.`,
     parameters: {
       type: 'object',
       properties: {
         cube: {
           type: 'string',
-          enum: ['Discovery', 'PublisherMetrics', 'DeveloperMetrics', 'DailyMetrics', 'Apps', 'LatestMetrics'],
-          description: 'The cube to query',
+          enum: ['Discovery', 'PublisherMetrics', 'DeveloperMetrics', 'DailyMetrics'],
+          description: 'The cube to query. Use Discovery for game queries.',
         },
         dimensions: {
           type: 'array',
