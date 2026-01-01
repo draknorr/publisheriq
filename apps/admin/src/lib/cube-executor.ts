@@ -27,18 +27,44 @@ const OPERATOR_MAP: Record<string, string> = {
 
 const VALID_OPERATORS = ['equals', 'notEquals', 'contains', 'notContains', 'gt', 'gte', 'lt', 'lte', 'set', 'notSet'];
 
+// Regex to extract SQL operators that might be combined with values (e.g., ">=90")
+const SQL_OP_WITH_VALUE = /^(>=|<=|!=|<>|>|<|={1,2})(.+)$/;
+
 /**
  * Normalize filters by converting SQL operators to Cube.dev operators
+ * Handles various malformed inputs from LLMs
  */
 function normalizeFilters(filters: CubeFilter[]): CubeFilter[] {
+  console.log('[Cube] Raw filters received:', JSON.stringify(filters));
+
   return filters.map(filter => {
-    const normalizedOp = OPERATOR_MAP[filter.operator] || filter.operator;
-    if (!VALID_OPERATORS.includes(normalizedOp)) {
-      console.warn(`[Cube] Unknown filter operator: ${filter.operator}`);
+    let operator = filter.operator?.trim() || '';
+    let values = filter.values || [];
+
+    // Check if operator contains a value (e.g., ">=90")
+    const match = operator.match(SQL_OP_WITH_VALUE);
+    if (match) {
+      const [, op, val] = match;
+      operator = op;
+      // Add extracted value if values array is empty
+      if (values.length === 0 && val) {
+        const numVal = Number(val);
+        values = [isNaN(numVal) ? val : numVal];
+      }
+      console.log(`[Cube] Extracted operator "${op}" and value "${val}" from "${filter.operator}"`);
     }
+
+    // Map SQL operator to Cube operator
+    const normalizedOp = OPERATOR_MAP[operator] || operator;
+
+    if (!VALID_OPERATORS.includes(normalizedOp)) {
+      console.warn(`[Cube] Unknown filter operator: ${filter.operator} -> ${normalizedOp}`);
+    }
+
     return {
       ...filter,
       operator: normalizedOp,
+      values,
     };
   });
 }
