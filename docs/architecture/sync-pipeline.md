@@ -22,6 +22,7 @@ All scheduled sync jobs run via GitHub Actions on UTC time:
 |-----|----------------|--------|------------|---------|
 | applist-sync | 00:15 daily | `applist-worker.ts` | Full | Master app list |
 | steamspy-sync | 02:15 daily | `steamspy-worker.ts` | 1000/page | CCU, owners, tags |
+| embedding-sync | 03:00 daily | `embedding-worker.ts` | 100/200 | Vector embeddings |
 | histogram-sync | 04:15 daily | `histogram-worker.ts` | 300 | Monthly reviews |
 | storefront-sync | 06,10,14,18,22:00 | `storefront-worker.ts` | 200 | Game metadata |
 | reviews-sync | 06:30,10:30,14:30,18:30,22:30 | `reviews-worker.ts` | 200 | Review counts |
@@ -191,8 +192,9 @@ The PICS service runs continuously on Railway:
 
 ```
 Steam PICS → All apps (70k in ~3 minutes)
-          → app_tags, app_genres, app_categories
+          → app_steam_tags, app_genres, app_categories
           → app_steam_deck, app_franchises
+          → steam_tags, steam_genres, steam_categories (reference tables)
 ```
 
 ### Change Monitor Mode
@@ -201,7 +203,120 @@ Steam PICS → All apps (70k in ~3 minutes)
 Steam PICS Changes → Queue
                   → Process batch
                   → Update affected apps
+                  → Update sync_status.last_pics_sync
 ```
+
+### PICS Data Populated
+
+| Table | Data |
+|-------|------|
+| `steam_tags` | Tag ID → name mapping |
+| `steam_genres` | Genre ID → name mapping |
+| `steam_categories` | Category ID → name (features like achievements, multiplayer) |
+| `franchises` | Game series/franchise groupings |
+| `app_steam_tags` | App to tag with rank |
+| `app_genres` | App to genre with is_primary flag |
+| `app_categories` | App to feature categories |
+| `app_franchises` | App to franchise |
+| `app_steam_deck` | Steam Deck compatibility category |
+| `apps` columns | controller_support, platforms, pics_review_*, metacritic_score |
+
+---
+
+## Embedding Sync Pipeline
+
+The embedding worker generates vector embeddings for semantic similarity search:
+
+### State-Based Pagination
+
+Instead of OFFSET pagination (which is inefficient for large datasets), the worker uses database state tracking:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Fetch batch via RPC                                          │
+│     get_apps_for_embedding(limit=100)                           │
+│     - Returns apps where: last_embedding_sync IS NULL           │
+│       OR updated_at > last_embedding_sync                        │
+│     - Ordered by: unembedded-first, then priority_score DESC    │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  2. Build embedding text for each entity                         │
+│     - Game: name, type, genres, tags, platforms, price, reviews │
+│     - Publisher: portfolio genres, tags, top games, review %    │
+│     - Developer: portfolio + is_indie flag                       │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  3. Hash-based change detection                                  │
+│     - SHA256 hash of embedding text (16-char truncated)         │
+│     - Skip if hash matches stored embedding_hash                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  4. Generate embeddings via OpenAI API                           │
+│     - Model: text-embedding-3-small (1536 dimensions)           │
+│     - Batched requests for efficiency                            │
+│     - Track token usage for cost monitoring                      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  5. Upsert to Qdrant Cloud                                       │
+│     - 5 collections: games, publishers (×2), developers (×2)    │
+│     - Payload includes all metadata for filtering                │
+│     - Batch size: 100 points per upsert                          │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  6. Mark as synced in Supabase                                   │
+│     - mark_apps_embedded(appids[], hashes[])                    │
+│     - Updates last_embedding_sync and embedding_hash             │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  7. Loop until batch < limit                                     │
+│     - Indicates all entities have been processed                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Three-Phase Sync
+
+1. **Games** (batch size: 100)
+   - Syncs all games that need embedding
+   - Uses `get_apps_for_embedding()` RPC function
+   - Marks complete with `mark_apps_embedded()`
+
+2. **Publishers** (batch size: 200)
+   - Two embeddings per publisher: portfolio + identity
+   - Uses `get_publishers_needing_embedding()` RPC function
+   - Marks complete with `mark_publishers_embedded()`
+
+3. **Developers** (batch size: 200)
+   - Two embeddings per developer: portfolio + identity
+   - Uses `get_developers_needing_embedding()` RPC function
+   - Marks complete with `mark_developers_embedded()`
+
+### Qdrant Collections
+
+| Collection | Entity | Purpose |
+|------------|--------|---------|
+| `publisheriq_games` | Games | Find similar games |
+| `publisheriq_publishers_portfolio` | Publishers | Match by entire catalog |
+| `publisheriq_publishers_identity` | Publishers | Match by top games |
+| `publisheriq_developers_portfolio` | Developers | Match by entire catalog |
+| `publisheriq_developers_identity` | Developers | Match by top games |
+
+### Cost Tracking
+
+- **Model**: text-embedding-3-small (~$0.02 per 1M tokens)
+- **Typical usage**: ~500k tokens per full sync
+- Worker logs total tokens used and estimated cost
 
 ## Error Handling
 

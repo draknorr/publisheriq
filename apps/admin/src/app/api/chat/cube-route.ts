@@ -1,0 +1,174 @@
+/**
+ * Chat API Route using Cube.dev Semantic Layer
+ *
+ * This is an alternative to route.ts that uses Cube.dev for queries
+ * instead of raw SQL. Enable by renaming to route.ts when Cube.dev is deployed.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createProvider } from '@/lib/llm/providers';
+import { buildCubeSystemPrompt } from '@/lib/llm/cube-system-prompt';
+import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
+import { executeCubeQuery } from '@/lib/cube-executor';
+import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
+import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse } from '@/lib/llm/types';
+
+// Maximum tool call iterations to prevent infinite loops
+const MAX_TOOL_ITERATIONS = 5;
+
+interface QueryAnalyticsArgs {
+  cube: string;
+  dimensions?: string[];
+  measures?: string[];
+  filters?: Array<{
+    member: string;
+    operator: string;
+    values?: (string | number | boolean)[];
+  }>;
+  segments?: string[];
+  order?: Record<string, 'asc' | 'desc'>;
+  limit?: number;
+  reasoning: string;
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse<ChatResponse>> {
+  try {
+    const body = (await request.json()) as ChatRequest;
+
+    if (!body.messages || !Array.isArray(body.messages)) {
+      return NextResponse.json(
+        { response: '', error: 'Invalid request: messages array required' },
+        { status: 400 }
+      );
+    }
+
+    // Initialize LLM provider
+    const provider = createProvider();
+
+    // Build messages with Cube.dev system prompt
+    const messages: Message[] = [{ role: 'system', content: buildCubeSystemPrompt() }, ...body.messages];
+
+    // Track tool calls for response
+    const executedToolCalls: ChatToolCall[] = [];
+
+    // Tool calling loop
+    let iterations = 0;
+    let response: LLMResponse | undefined;
+
+    while (iterations < MAX_TOOL_ITERATIONS) {
+      iterations++;
+
+      // Call LLM with Cube.dev tools
+      response = await provider.chat(messages, CUBE_TOOLS);
+
+      // If no tool calls, we're done
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        break;
+      }
+
+      // Process each tool call
+      for (const toolCall of response.toolCalls) {
+        if (toolCall.name === 'query_analytics') {
+          const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
+
+          // Execute the Cube.dev query
+          const queryResult = await executeCubeQuery({
+            cube: args.cube,
+            dimensions: args.dimensions,
+            measures: args.measures,
+            filters: args.filters,
+            segments: args.segments,
+            order: args.order,
+            limit: args.limit,
+          });
+
+          // Track the tool call
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: queryResult,
+          });
+
+          // Add assistant message with tool calls
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          // Add tool result message
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: JSON.stringify(queryResult),
+          });
+        } else if (toolCall.name === 'find_similar') {
+          const args = toolCall.arguments as unknown as FindSimilarArgs;
+
+          // Execute the similarity search (unchanged - uses Qdrant)
+          const similarityResult = await findSimilar(args);
+
+          // Track the tool call
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: similarityResult,
+          });
+
+          // Add assistant message with tool calls
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          // Add tool result message
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: JSON.stringify(similarityResult),
+          });
+        } else {
+          // Unknown tool - add error result
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: JSON.stringify({ error: `Unknown tool: ${toolCall.name}` }),
+          });
+        }
+      }
+    }
+
+    // Return the final response
+    return NextResponse.json({
+      response: response?.content || 'I was unable to generate a response.',
+      toolCalls: executedToolCalls.length > 0 ? executedToolCalls : undefined,
+    });
+  } catch (error) {
+    console.error('Chat API error:', error);
+
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+
+    // Check for specific error types
+    if (errorMessage.includes('API key')) {
+      return NextResponse.json(
+        { response: '', error: 'LLM API not configured. Please set the OPENAI_API_KEY.' },
+        { status: 503 }
+      );
+    }
+
+    if (errorMessage.includes('CUBE_API')) {
+      return NextResponse.json(
+        { response: '', error: 'Cube.dev not configured. Please set CUBE_API_URL and CUBE_API_SECRET.' },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json({ response: '', error: errorMessage }, { status: 500 });
+  }
+}

@@ -76,7 +76,8 @@ publisheriq/
 ├── apps/admin/           # Next.js admin dashboard
 ├── packages/
 │   ├── database/         # Supabase client + types
-│   ├── ingestion/        # Data collection workers
+│   ├── ingestion/        # Data collection workers + embedding sync
+│   ├── qdrant/           # Vector database client for similarity search
 │   └── shared/           # Utilities and constants
 ├── services/pics-service/# Python PICS microservice
 ├── supabase/migrations/  # Database schema
@@ -87,6 +88,7 @@ See individual package READMEs for more details:
 - [apps/admin/README.md](../apps/admin/README.md)
 - [packages/database/README.md](../packages/database/README.md)
 - [packages/ingestion/README.md](../packages/ingestion/README.md)
+- [packages/qdrant/README.md](../packages/qdrant/README.md)
 - [packages/shared/README.md](../packages/shared/README.md)
 - [services/pics-service/README.md](../services/pics-service/README.md)
 

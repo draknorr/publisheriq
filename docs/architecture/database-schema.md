@@ -13,13 +13,16 @@
 CREATE TYPE app_type AS ENUM ('game', 'dlc', 'demo', 'mod', 'video', 'hardware', 'music');
 
 -- Data sync source
-CREATE TYPE sync_source AS ENUM ('steamspy', 'storefront', 'reviews', 'histogram', 'scraper');
+CREATE TYPE sync_source AS ENUM ('steamspy', 'storefront', 'reviews', 'histogram', 'scraper', 'pics');
 
 -- Review sentiment trend
 CREATE TYPE trend_direction AS ENUM ('up', 'down', 'stable');
 
 -- Sync frequency tier
 CREATE TYPE refresh_tier AS ENUM ('active', 'moderate', 'dormant', 'dead');
+
+-- Steam Deck compatibility category
+CREATE TYPE steam_deck_category AS ENUM ('unknown', 'unsupported', 'playable', 'verified');
 ```
 
 ---
@@ -39,10 +42,14 @@ Steam game publishers.
 | first_game_release_date | DATE | YES | NULL | Earliest game release date |
 | first_page_creation_date | DATE | YES | NULL | Earliest Steam page creation date |
 | game_count | INTEGER | NO | 0 | Number of games published |
+| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
+| embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
 | created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
 | updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
 
-**Indexes**: `idx_publishers_normalized` on `normalized_name`
+**Indexes**:
+- `idx_publishers_normalized` on `normalized_name`
+- `idx_publishers_embedding_needed` on `(game_count DESC, last_embedding_sync)` WHERE `game_count > 0`
 
 ---
 
@@ -59,10 +66,14 @@ Steam game developers.
 | first_game_release_date | DATE | YES | NULL | Earliest game release date |
 | first_page_creation_date | DATE | YES | NULL | Earliest Steam page creation date |
 | game_count | INTEGER | NO | 0 | Number of games developed |
+| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
+| embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
 | created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
 | updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
 
-**Indexes**: `idx_developers_normalized` on `normalized_name`
+**Indexes**:
+- `idx_developers_normalized` on `normalized_name`
+- `idx_developers_embedding_needed` on `(game_count DESC, last_embedding_sync)` WHERE `game_count > 0`
 
 ---
 
@@ -86,6 +97,16 @@ Steam apps (games, DLC, demos, etc).
 | is_released | BOOLEAN | NO | TRUE | Whether app is released |
 | is_delisted | BOOLEAN | NO | FALSE | Whether app is removed from store |
 | has_developer_info | BOOLEAN | NO | FALSE | Developer/publisher data fetched |
+| controller_support | TEXT | YES | NULL | Controller support: "full", "partial", or NULL |
+| pics_review_score | SMALLINT | YES | NULL | Steam review score (1-9) from PICS |
+| pics_review_percentage | SMALLINT | YES | NULL | Positive review percentage (0-100) from PICS |
+| metacritic_score | SMALLINT | YES | NULL | Metacritic score |
+| platforms | TEXT | YES | NULL | Supported platforms: "windows,macos,linux" |
+| release_state | TEXT | YES | NULL | PICS release state: released, prerelease, etc. |
+| parent_appid | INTEGER | YES | NULL | Parent app ID for DLC, demos, mods |
+| homepage_url | TEXT | YES | NULL | Publisher/developer homepage |
+| languages | JSONB | YES | NULL | Supported languages |
+| content_descriptors | JSONB | YES | NULL | Mature content descriptors |
 | created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
 | updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
 
@@ -93,6 +114,8 @@ Steam apps (games, DLC, demos, etc).
 - `idx_apps_name` on `name`
 - `idx_apps_type` on `type` WHERE `type = 'game'`
 - `idx_apps_released` on `(is_released, is_delisted)`
+- `idx_apps_parent_appid` on `parent_appid` WHERE `parent_appid IS NOT NULL`
+- `idx_apps_platforms` on `platforms` WHERE `platforms IS NOT NULL`
 
 ---
 
@@ -134,6 +157,139 @@ User-voted tags from SteamSpy.
 
 **Primary Key**: `(appid, tag)`
 **Indexes**: `idx_app_tags_tag` on `tag`
+
+---
+
+### steam_tags
+
+Official Steam tag definitions from PICS (different from user-voted SteamSpy tags).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| tag_id | INTEGER | NO | - | Primary key (Steam tag ID) |
+| name | TEXT | NO | - | Tag name |
+| created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
+| updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
+
+**Indexes**: `idx_steam_tags_name` on `name`
+
+---
+
+### steam_genres
+
+Official Steam genre definitions.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| genre_id | INTEGER | NO | - | Primary key (Steam genre ID) |
+| name | TEXT | NO | - | Genre name (e.g., "Action", "RPG") |
+| created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
+
+---
+
+### steam_categories
+
+Steam feature categories (achievements, multiplayer, etc.).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| category_id | INTEGER | NO | - | Primary key (Steam category ID) |
+| name | TEXT | NO | - | Category name (e.g., "Steam Achievements") |
+| description | TEXT | YES | NULL | Category description |
+| created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
+
+---
+
+### franchises
+
+Game franchises/series from PICS.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | SERIAL | NO | auto | Primary key |
+| name | TEXT | NO | - | Franchise name (unique) |
+| normalized_name | TEXT | NO | - | Lowercase, trimmed name for lookups |
+| created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
+| updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
+
+**Indexes**: `idx_franchises_normalized` on `normalized_name`
+
+---
+
+### app_steam_tags
+
+Junction table linking apps to Steam tags (from PICS).
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| appid | INTEGER | NO | FK to apps.appid |
+| tag_id | INTEGER | NO | FK to steam_tags.tag_id |
+| rank | INTEGER | YES | Tag rank/priority (lower = more relevant) |
+
+**Primary Key**: `(appid, tag_id)`
+**Indexes**: `idx_app_steam_tags_tag_id` on `tag_id`
+
+---
+
+### app_genres
+
+Junction table linking apps to genres.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| appid | INTEGER | NO | FK to apps.appid |
+| genre_id | INTEGER | NO | FK to steam_genres.genre_id |
+| is_primary | BOOLEAN | NO | Whether this is the primary genre |
+
+**Primary Key**: `(appid, genre_id)`
+**Indexes**:
+- `idx_app_genres_genre_id` on `genre_id`
+- `idx_app_genres_primary` on `appid` WHERE `is_primary = TRUE`
+
+---
+
+### app_categories
+
+Junction table linking apps to feature categories.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| appid | INTEGER | NO | FK to apps.appid |
+| category_id | INTEGER | NO | FK to steam_categories.category_id |
+
+**Primary Key**: `(appid, category_id)`
+**Indexes**: `idx_app_categories_category_id` on `category_id`
+
+---
+
+### app_franchises
+
+Junction table linking apps to franchises.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| appid | INTEGER | NO | FK to apps.appid |
+| franchise_id | INTEGER | NO | FK to franchises.id |
+
+**Primary Key**: `(appid, franchise_id)`
+**Indexes**: `idx_app_franchises_franchise` on `franchise_id`
+
+---
+
+### app_steam_deck
+
+Steam Deck compatibility data.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| appid | INTEGER | NO | - | Primary key, FK to apps.appid |
+| category | steam_deck_category | NO | 'unknown' | Compatibility category |
+| test_timestamp | TIMESTAMPTZ | YES | NULL | When compatibility was tested |
+| tested_build_id | TEXT | YES | NULL | Build ID that was tested |
+| tests | JSONB | YES | NULL | Detailed test results |
+| updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
+
+**Indexes**: `idx_app_steam_deck_category` on `category`
 
 ---
 
@@ -222,6 +378,10 @@ Per-app sync tracking and scheduling.
 | last_reviews_sync | TIMESTAMPTZ | YES | NULL | Last Reviews sync time |
 | last_histogram_sync | TIMESTAMPTZ | YES | NULL | Last Histogram sync time |
 | last_page_creation_scrape | TIMESTAMPTZ | YES | NULL | Last page scrape time |
+| last_pics_sync | TIMESTAMPTZ | YES | NULL | Last PICS data sync time |
+| pics_change_number | BIGINT | YES | NULL | Last processed PICS change number |
+| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
+| embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
 | priority_score | INTEGER | NO | 0 | Sync priority (higher = more frequent) |
 | priority_calculated_at | TIMESTAMPTZ | YES | NULL | When priority was calculated |
 | next_sync_after | TIMESTAMPTZ | NO | NOW() | When app is due for sync |
@@ -234,6 +394,10 @@ Per-app sync tracking and scheduling.
 | is_syncable | BOOLEAN | NO | TRUE | Whether to sync this app |
 | refresh_tier | refresh_tier | YES | 'moderate' | Sync frequency tier |
 | last_activity_at | TIMESTAMPTZ | YES | NULL | Last detected activity |
+
+**Indexes**:
+- `idx_sync_status_embedding_needed` on `(priority_score DESC, last_embedding_sync)` WHERE `is_syncable = TRUE`
+- `idx_sync_status_pics` on `last_pics_sync` WHERE `is_syncable = TRUE`
 
 ---
 
@@ -263,17 +427,25 @@ Job execution history.
 ```
 publishers 1──M app_publishers M──1 apps 1──M app_developers M──1 developers
                                     │
-                                    ├──1 daily_metrics (M)
-                                    ├──1 review_histogram (M)
-                                    ├──1 app_trends (1)
-                                    ├──1 sync_status (1)
-                                    └──1 app_tags (M)
+                                    ├──M daily_metrics
+                                    ├──M review_histogram
+                                    ├──1 app_trends
+                                    ├──1 sync_status
+                                    ├──M app_tags (SteamSpy)
+                                    ├──M app_steam_tags ──M steam_tags (PICS)
+                                    ├──M app_genres ──M steam_genres
+                                    ├──M app_categories ──M steam_categories
+                                    ├──M app_franchises ──M franchises
+                                    └──1 app_steam_deck
 ```
 
 **Key joins**:
 - `apps` to `developers`: `apps JOIN app_developers ON apps.appid = app_developers.appid JOIN developers ON app_developers.developer_id = developers.id`
 - `apps` to `publishers`: `apps JOIN app_publishers ON apps.appid = app_publishers.appid JOIN publishers ON app_publishers.publisher_id = publishers.id`
 - `apps` to metrics: `apps JOIN daily_metrics ON apps.appid = daily_metrics.appid`
+- `apps` to genres: `apps JOIN app_genres ON apps.appid = app_genres.appid JOIN steam_genres ON app_genres.genre_id = steam_genres.genre_id`
+- `apps` to Steam tags: `apps JOIN app_steam_tags ON apps.appid = app_steam_tags.appid JOIN steam_tags ON app_steam_tags.tag_id = steam_tags.tag_id`
+- `apps` to Steam Deck: `apps LEFT JOIN app_steam_deck ON apps.appid = app_steam_deck.appid`
 
 ---
 
@@ -299,6 +471,19 @@ Use these SQL translations for natural language concepts:
 | "has workshop" | `a.has_workshop = TRUE` |
 | "delisted" | `a.is_delisted = TRUE` |
 | "unreleased" / "upcoming" | `a.is_released = FALSE` |
+| "Steam Deck verified" | `asd.category = 'verified'` |
+| "Steam Deck playable" | `asd.category IN ('verified', 'playable')` |
+| "Steam Deck compatible" | `asd.category IN ('verified', 'playable')` |
+| "Steam Deck unsupported" | `asd.category = 'unsupported'` |
+| "has controller support" | `a.controller_support IS NOT NULL` |
+| "full controller support" | `a.controller_support = 'full'` |
+| "partial controller support" | `a.controller_support = 'partial'` |
+| "supports Windows" | `a.platforms LIKE '%windows%'` |
+| "supports Mac" / "macOS" | `a.platforms LIKE '%macos%'` |
+| "supports Linux" | `a.platforms LIKE '%linux%'` |
+| "in genre X" | `EXISTS (SELECT 1 FROM app_genres ag JOIN steam_genres sg ON ag.genre_id = sg.genre_id WHERE ag.appid = a.appid AND sg.name = 'X')` |
+| "has tag X" | `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = a.appid AND st.name = 'X')` |
+| "has feature X" | `EXISTS (SELECT 1 FROM app_categories ac JOIN steam_categories sc ON ac.category_id = sc.category_id WHERE ac.appid = a.appid AND sc.name = 'X')` |
 
 ---
 
@@ -465,6 +650,82 @@ ORDER BY dm.ccu_peak DESC
 LIMIT 20;
 ```
 
+### 11. Steam Deck verified games
+**Q**: "Show me Steam Deck verified games with good reviews"
+```sql
+SELECT a.appid, a.name, a.pics_review_percentage,
+       asd.category as steam_deck_status
+FROM apps a
+JOIN app_steam_deck asd ON a.appid = asd.appid
+WHERE a.type = 'game'
+  AND a.is_released = TRUE
+  AND asd.category = 'verified'
+  AND a.pics_review_percentage >= 80
+ORDER BY a.pics_review_percentage DESC
+LIMIT 20;
+```
+
+### 12. Games by genre
+**Q**: "Find Action RPG games"
+```sql
+SELECT a.appid, a.name, a.release_date
+FROM apps a
+WHERE a.type = 'game'
+  AND a.is_released = TRUE
+  AND EXISTS (
+    SELECT 1 FROM app_genres ag
+    JOIN steam_genres sg ON ag.genre_id = sg.genre_id
+    WHERE ag.appid = a.appid AND sg.name = 'Action'
+  )
+  AND EXISTS (
+    SELECT 1 FROM app_genres ag
+    JOIN steam_genres sg ON ag.genre_id = sg.genre_id
+    WHERE ag.appid = a.appid AND sg.name = 'RPG'
+  )
+ORDER BY a.release_date DESC
+LIMIT 20;
+```
+
+### 13. Games with specific tag
+**Q**: "Find roguelike games"
+```sql
+SELECT a.appid, a.name, ast.rank as tag_rank
+FROM apps a
+JOIN app_steam_tags ast ON a.appid = ast.appid
+JOIN steam_tags st ON ast.tag_id = st.tag_id
+WHERE a.type = 'game'
+  AND a.is_released = TRUE
+  AND st.name ILIKE '%roguelike%'
+ORDER BY ast.rank ASC
+LIMIT 20;
+```
+
+### 14. Games with controller support
+**Q**: "Games with full controller support on Steam Deck"
+```sql
+SELECT a.appid, a.name, a.controller_support,
+       asd.category as steam_deck_status
+FROM apps a
+JOIN app_steam_deck asd ON a.appid = asd.appid
+WHERE a.type = 'game'
+  AND a.controller_support = 'full'
+  AND asd.category IN ('verified', 'playable')
+ORDER BY a.name
+LIMIT 20;
+```
+
+### 15. Games by platform
+**Q**: "Linux-native games"
+```sql
+SELECT a.appid, a.name, a.platforms
+FROM apps a
+WHERE a.type = 'game'
+  AND a.is_released = TRUE
+  AND a.platforms LIKE '%linux%'
+ORDER BY a.release_date DESC
+LIMIT 20;
+```
+
 ---
 
 ## Query Tips
@@ -482,7 +743,32 @@ LIMIT 20;
 
 5. **Case-insensitive search**: Use `ILIKE` for name searches
 
-6. **Tag filtering**: Join through `app_tags`:
+6. **SteamSpy tag filtering**: Join through `app_tags` (user-voted):
    ```sql
    JOIN app_tags t ON a.appid = t.appid WHERE t.tag = 'RPG'
    ```
+
+7. **PICS tag filtering**: Join through `app_steam_tags` (official Steam tags):
+   ```sql
+   JOIN app_steam_tags ast ON a.appid = ast.appid
+   JOIN steam_tags st ON ast.tag_id = st.tag_id
+   WHERE st.name = 'Roguelike'
+   ```
+
+8. **Genre filtering**: Join through `app_genres`:
+   ```sql
+   JOIN app_genres ag ON a.appid = ag.appid
+   JOIN steam_genres sg ON ag.genre_id = sg.genre_id
+   WHERE sg.name = 'Action'
+   ```
+
+9. **Steam Deck compatibility**: Join through `app_steam_deck`:
+   ```sql
+   LEFT JOIN app_steam_deck asd ON a.appid = asd.appid
+   WHERE asd.category IN ('verified', 'playable')
+   ```
+
+10. **Platform filtering**: Use LIKE on the platforms column:
+    ```sql
+    WHERE a.platforms LIKE '%linux%'
+    ```

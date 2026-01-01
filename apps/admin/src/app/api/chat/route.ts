@@ -59,16 +59,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
       for (const toolCall of response.toolCalls) {
         let result: QueryResult | SimilarityResult;
 
-        // Debug logging
-        console.log('[Chat Debug] Tool call received:', {
-          name: toolCall.name,
-          nameType: typeof toolCall.name,
-          nameLength: toolCall.name?.length,
-          nameChars: toolCall.name ? [...toolCall.name].map(c => c.charCodeAt(0)) : [],
-          isQueryAnalytics: toolCall.name === 'query_analytics',
-          USE_CUBE,
-        });
-
         if (toolCall.name === 'query_database') {
           // Legacy SQL mode
           const args = toolCall.arguments as { sql: string; reasoning: string };
@@ -76,7 +66,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         } else if (toolCall.name === 'query_analytics') {
           // Cube.dev mode
           const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
-          console.log('[Chat Debug] Calling executeCubeQuery with:', { cube: args.cube, dimensions: args.dimensions, measures: args.measures });
           result = await executeCubeQuery({
             cube: args.cube,
             dimensions: args.dimensions,
@@ -86,7 +75,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             order: args.order,
             limit: args.limit,
           });
-          console.log('[Chat Debug] executeCubeQuery result:', { success: result.success, rowCount: 'rowCount' in result ? result.rowCount : undefined, error: result.error });
         } else if (toolCall.name === 'find_similar') {
           const args = toolCall.arguments as unknown as FindSimilarArgs;
           result = await findSimilar(args);

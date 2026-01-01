@@ -18,12 +18,24 @@ A natural language interface for querying the Steam database. Ask questions in p
 - Playtime statistics
 - Workshop support
 - Pricing and discounts
+- Steam tags and genres
+- Steam Deck compatibility
+- Controller support
+- Platform availability (Windows, Mac, Linux)
 
 ### Publisher & Developer Data
 - Game counts per publisher/developer
 - Portfolio analysis
 - First release dates
 - Company comparisons
+- Similar publishers/developers
+
+### Similarity Search
+- Find games similar to a reference game
+- Find publishers with similar portfolios
+- Find developers with similar catalogs
+- Filter by popularity (less popular, similar, more popular)
+- Filter by review quality, price, platforms
 
 ### Trending & Analysis
 - Games trending up or down
@@ -58,10 +70,25 @@ A natural language interface for querying the Steam database. Ask questions in p
 - "What's the review score for Elden Ring?"
 - "Does Stardew Valley have workshop support?"
 
+**Similarity Search:**
+- "Find games similar to Hades"
+- "Show me roguelikes similar to Dead Cells but with fewer reviews"
+- "What publishers are similar to Devolver Digital?"
+- "Find indie games like Stardew Valley"
+- "Games similar to Hollow Knight with better reviews"
+
+**PICS Data (Tags, Genres, Steam Deck):**
+- "Show me Steam Deck verified games"
+- "Which games have full controller support?"
+- "Find Action RPGs released in 2024"
+- "Linux-native games with Overwhelmingly Positive reviews"
+- "Games tagged as 'roguelike' and 'pixel graphics'"
+
 **Complex Queries:**
 - "Find indie games with workshop support and over 1000 reviews"
 - "Show me games released in 2024 with Very Positive reviews"
 - "Which developers have multiple games with Overwhelmingly Positive ratings?"
+- "Steam Deck verified games similar to Celeste"
 
 ## Understanding Responses
 
@@ -73,8 +100,16 @@ When your query returns multiple results, they're displayed in a formatted table
 | Half-Life 2 | 250,000 | Overwhelmingly Positive |
 | Portal 2 | 400,000 | Overwhelmingly Positive |
 
-### Clickable Game Links
-Game names appear as blue links. Click them to view the game's detail page with full metrics and history.
+### Clickable Links
+- **Game names** appear as blue links. Click them to view the game's detail page.
+- **Publisher names** are clickable and link to the publisher's detail page.
+- **Developer names** are clickable and link to the developer's detail page.
+
+### Similarity Results
+When you ask for similar games/publishers/developers, results include:
+- **Match percentage** - How similar the entity is (e.g., 92% match)
+- **Key attributes** - Genres, tags, review score, platform support
+- **Comparison filters applied** - Shows what filters were used (popularity, reviews, etc.)
 
 ### Code Blocks
 SQL queries and code snippets are displayed with syntax highlighting. Use the copy button in the top-right corner to copy them.
@@ -116,6 +151,50 @@ The system understands terms like:
 - **CCU** - Concurrent users (current players)
 - **Review velocity** - Reviews per day
 - **Trending** - Positive ratio change over time
+- **Similar** - Semantically related based on tags, genres, description
+- **Steam Deck Verified** - Fully compatible with Steam Deck
+- **Steam Deck Playable** - Works on Steam Deck with minor issues
+- **Controller support** - Full, partial, or none
+- **Less popular** - Fewer reviews than reference game
+- **More popular** - More reviews than reference game
+
+## Similarity Search
+
+The chat interface includes a powerful semantic similarity search feature powered by vector embeddings.
+
+### How It Works
+
+1. Each game, publisher, and developer has a vector embedding generated from their metadata (name, genres, tags, platforms, reviews, etc.)
+2. When you ask for similar entities, the system finds the closest vectors in the embedding space
+3. Results are filtered and ranked by similarity score
+
+### Similarity Filters
+
+You can refine similarity searches with these filters:
+
+| Filter | Description | Example |
+|--------|-------------|---------|
+| Popularity | Compare by review count | "similar to Hades but less popular" |
+| Reviews | Compare by review quality | "similar games with better reviews" |
+| Price | Filter by price range | "similar free games" |
+| Platforms | Filter by platform support | "similar Linux games" |
+| Steam Deck | Filter by compatibility | "similar Steam Deck verified games" |
+| Genres/Tags | Filter by specific attributes | "similar roguelikes" |
+
+### Entity Types
+
+- **Games**: Find games with similar themes, mechanics, and style
+- **Publishers (Portfolio)**: Find publishers with similar overall catalogs
+- **Publishers (Identity)**: Find publishers known for similar flagship games
+- **Developers (Portfolio)**: Find developers with similar game catalogs
+- **Developers (Identity)**: Find developers known for similar top games
+
+### Popularity Comparison
+
+When comparing popularity:
+- **Less popular**: < 50% of the reference game's reviews
+- **Similar popularity**: 50%-200% of reference reviews
+- **More popular**: > 200% of reference reviews
 
 ## Limitations
 
