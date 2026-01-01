@@ -15,6 +15,8 @@ export function buildCubeSystemPrompt(): string {
 
 **query_analytics** - Query structured data (stats, rankings, lists, trends)
 **find_similar** - Semantic similarity search ("games like X", recommendations)
+**search_games** - Find games by tags, genres, categories, platforms, PICS data (use for tag-based discovery)
+**lookup_tags** - Search available tags, genres, or categories (use when unsure of tag names)
 
 ## Cubes
 
@@ -129,6 +131,36 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "single player" → segment: singleplayer
 - "co-op" / "coop" → segment: coop
 - "open world" → segment: openWorld
+
+## search_games Tool
+
+Use this tool for tag-based game discovery. Supports fuzzy matching - you don't need exact tag names.
+
+Filters:
+- **tags**: Steam tags like "CRPG", "Cozy", "Souls-like", "Metroidvania", "Pixel Graphics", "Atmospheric"
+- **genres**: "RPG", "Action", "Adventure", "Indie", "Strategy", "Simulation"
+- **categories**: Steam features - "Achievements", "Cloud Saves", "Co-op", "Workshop", "VR", "Controller"
+- **platforms**: "windows", "macos", "linux"
+- **controller_support**: "full", "partial", "any"
+- **steam_deck**: ["verified"], ["playable"], or ["verified", "playable"]
+- **release_year**: {gte: 2019, lte: 2020} or {gte: 2020}
+- **review_percentage**: {gte: 90} for 90%+ positive reviews
+- **order_by**: "reviews" (default), "score", "release_date", "owners"
+
+Examples:
+- "CRPG released in 2019 for Mac" → search_games with tags: ["CRPG"], platforms: ["macos"], release_year: {gte: 2019, lte: 2019}
+- "Cozy games with 90%+ reviews" → search_games with tags: ["Cozy"], review_percentage: {gte: 90}
+- "Souls-like games on Steam Deck" → search_games with tags: ["Souls-like"], steam_deck: ["verified", "playable"]
+- "Games with Workshop support" → search_games with categories: ["Workshop"]
+
+## lookup_tags Tool
+
+Use this tool to find available tags before using search_games. Returns matching tags, genres, and categories.
+
+Examples:
+- lookup_tags("rogue") → tags: ["Roguelike", "Roguelite", "Rogue-like Deckbuilder"]
+- lookup_tags("souls") → tags: ["Souls-like", "Dark Souls"]
+- lookup_tags("co-op", type: "categories") → categories: ["Co-op", "Online Co-Op", "Local Co-Op"]
 
 ## Response Rules
 1. Always use tools to fetch data - never invent
