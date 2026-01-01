@@ -195,19 +195,11 @@ cube('DailyMetrics', {
 /**
  * LatestMetrics View - Most recent metrics per app
  *
- * Uses window function to get only the latest row per app,
- * avoiding expensive subqueries.
+ * Uses the latest_daily_metrics materialized view for fast queries.
+ * The materialized view is pre-computed and indexed.
  */
 cube('LatestMetrics', {
-  sql: `
-    SELECT DISTINCT ON (appid)
-      id, appid, metric_date, owners_min, owners_max, ccu_peak,
-      average_playtime_forever, average_playtime_2weeks,
-      total_reviews, positive_reviews, negative_reviews,
-      review_score, review_score_desc, price_cents, discount_percent
-    FROM daily_metrics
-    ORDER BY appid, metric_date DESC
-  `,
+  sql: `SELECT * FROM latest_daily_metrics`,
 
   dimensions: {
     appid: {

@@ -23,18 +23,15 @@ cube('Discovery', {
       a.metacritic_score,
       -- Steam Deck
       asd.category as steam_deck_category,
-      -- Latest metrics (using subquery for latest date)
-      dm.owners_min,
-      dm.owners_max,
-      (dm.owners_min + dm.owners_max) / 2 as owners_midpoint,
-      dm.ccu_peak,
-      dm.total_reviews,
-      dm.positive_reviews,
-      dm.review_score,
-      CASE WHEN dm.total_reviews > 0
-        THEN ROUND(dm.positive_reviews * 100.0 / dm.total_reviews, 1)
-        ELSE NULL
-      END as positive_percentage,
+      -- Latest metrics (from materialized view - much faster than LATERAL join)
+      ldm.owners_min,
+      ldm.owners_max,
+      ldm.owners_midpoint,
+      ldm.ccu_peak,
+      ldm.total_reviews,
+      ldm.positive_reviews,
+      ldm.review_score,
+      ldm.positive_percentage,
       -- Trends
       at.trend_30d_direction,
       at.trend_30d_change_pct,
@@ -43,12 +40,7 @@ cube('Discovery', {
     FROM apps a
     LEFT JOIN app_steam_deck asd ON a.appid = asd.appid
     LEFT JOIN app_trends at ON a.appid = at.appid
-    LEFT JOIN LATERAL (
-      SELECT * FROM daily_metrics dm2
-      WHERE dm2.appid = a.appid
-      ORDER BY dm2.metric_date DESC
-      LIMIT 1
-    ) dm ON true
+    LEFT JOIN latest_daily_metrics ldm ON a.appid = ldm.appid
     WHERE a.type = 'game'
       AND a.is_delisted = false
   `,
