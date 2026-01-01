@@ -23,6 +23,7 @@ export interface ToolPropertySchema {
   items?: ToolPropertySchema;
   properties?: Record<string, ToolPropertySchema>;
   required?: string[];
+  additionalProperties?: ToolPropertySchema;
 }
 
 export interface Tool {
