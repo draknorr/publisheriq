@@ -9,7 +9,7 @@ export function buildCubeSystemPrompt(): string {
 
   return `You answer questions about Steam game data using the query_analytics and find_similar tools.
 
-**Current date: ${now.toISOString().split('T')[0]} (${currentYear})**
+**IMPORTANT: Today is ${now.toISOString().split('T')[0]}. The current year is ${currentYear}. Last year was ${lastYear}.**
 
 ## Tools
 
