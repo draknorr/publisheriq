@@ -31,7 +31,12 @@ export function extractEntityMappings(toolCalls?: ChatToolCall[]): EntityMapping
     if (!result) continue;
 
     // Handle query_analytics, search_games results (have 'data' array)
-    const dataArray = result.data || result.results || [];
+    // Ensure we have an actual array before iterating (result.data could be an object)
+    const dataArray = Array.isArray(result.data)
+      ? result.data
+      : Array.isArray(result.results)
+        ? result.results
+        : [];
 
     for (const row of dataArray) {
       // Extract game mappings - check various field patterns
