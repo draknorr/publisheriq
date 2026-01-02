@@ -16,6 +16,7 @@ import {
   type LookupDevelopersArgs,
 } from '@/lib/search/publisher-lookup';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
+import { logChatQuery } from '@/lib/chat-query-logger';
 import type { Message, ChatRequest, Tool, QueryResult, SimilarityResult, ToolCall } from '@/lib/llm/types';
 import type { StreamEvent, TextDeltaEvent, ToolStartEvent, ToolResultEvent, MessageEndEvent, ErrorEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
 
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         let iterations = 0;
         let totalLlmMs = 0;
         let totalToolsMs = 0;
+        const allToolNames: string[] = []; // Track all tool names for logging
 
         // Debug stats - zero additional cost, just counters
         const debugStats: StreamDebugInfo = {
@@ -169,6 +171,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           // Execute all tool calls and collect results
           const toolResults: Array<{ toolCall: ToolCall; result: QueryResult | SimilarityResult }> = [];
           for (const toolCall of completedToolCalls) {
+            allToolNames.push(toolCall.name);
             const toolStart = performance.now();
             const result = await executeTool(toolCall);
             const toolExecutionMs = performance.now() - toolStart;
@@ -227,6 +230,21 @@ export async function POST(request: NextRequest): Promise<Response> {
           debug: debugStats,
         };
         controller.enqueue(encoder.encode(formatSSE(endEvent)));
+
+        // Log the chat query (non-blocking, buffered)
+        const lastUserMessage = body.messages.filter((m) => m.role === 'user').pop();
+        if (lastUserMessage) {
+          logChatQuery({
+            query_text: lastUserMessage.content.slice(0, 2000),
+            tool_names: [...new Set(allToolNames)],
+            tool_count: debugStats.toolCallCount,
+            iteration_count: debugStats.iterations,
+            response_length: debugStats.totalChars,
+            timing_llm_ms: Math.round(totalLlmMs),
+            timing_tools_ms: Math.round(totalToolsMs),
+            timing_total_ms: Math.round(performance.now() - requestStart),
+          });
+        }
 
       } catch (error) {
         console.error('Streaming chat error:', error);
