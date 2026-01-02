@@ -1,58 +1,11 @@
 /**
  * Publisher/Developer Lookup Service
  *
- * Provides fast in-memory cached lookups for publisher and developer names.
- * Cache is loaded on first request and refreshed every hour.
+ * Provides efficient database lookups for publisher and developer names.
+ * Uses direct ilike queries instead of caching all entities.
  */
 
 import { getSupabase } from '@/lib/supabase';
-
-// Cache structure
-interface EntityCache {
-  publishers: Array<{ id: number; name: string }>;
-  developers: Array<{ id: number; name: string }>;
-  loadedAt: number;
-}
-
-let entityCache: EntityCache | null = null;
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-/**
- * Load or return cached publisher/developer data
- */
-async function getEntityCache(): Promise<EntityCache> {
-  // Return cached data if still valid
-  if (entityCache && Date.now() - entityCache.loadedAt < CACHE_TTL_MS) {
-    return entityCache;
-  }
-
-  const supabase = getSupabase();
-
-  // Load all in parallel - use high limit to get all entities (Supabase default is 1000)
-  const [publishersResult, developersResult] = await Promise.all([
-    supabase.from('publishers').select('id, name').order('name').limit(50000),
-    supabase.from('developers').select('id, name').order('name').limit(50000),
-  ]);
-
-  // Log errors if queries failed
-  if (publishersResult.error) {
-    console.error('Publisher lookup cache error:', publishersResult.error);
-  }
-  if (developersResult.error) {
-    console.error('Developer lookup cache error:', developersResult.error);
-  }
-
-  // Log cache stats for debugging
-  console.log(`Lookup cache loaded: ${publishersResult.data?.length ?? 0} publishers, ${developersResult.data?.length ?? 0} developers`);
-
-  entityCache = {
-    publishers: (publishersResult.data || []).map((p) => ({ id: p.id, name: p.name })),
-    developers: (developersResult.data || []).map((d) => ({ id: d.id, name: d.name })),
-    loadedAt: Date.now(),
-  };
-
-  return entityCache;
-}
 
 /**
  * Arguments for lookup_publishers tool
@@ -73,7 +26,7 @@ export interface LookupPublishersResult {
 }
 
 /**
- * Search for matching publisher names
+ * Search for matching publisher names using direct database query
  */
 export async function lookupPublishers(args: LookupPublishersArgs): Promise<LookupPublishersResult> {
   const { query, limit = 10 } = args;
@@ -88,19 +41,31 @@ export async function lookupPublishers(args: LookupPublishersArgs): Promise<Look
   }
 
   try {
-    const cache = await getEntityCache();
-    const queryLower = query.toLowerCase().trim();
+    const supabase = getSupabase();
     const maxResults = Math.min(limit, 20); // Hard cap at 20
 
-    // Filter function - case-insensitive contains
-    const results = cache.publishers
-      .filter((p) => p.name.toLowerCase().includes(queryLower))
-      .slice(0, maxResults);
+    // Direct ilike query - efficient with database index
+    const { data, error } = await supabase
+      .from('publishers')
+      .select('id, name')
+      .ilike('name', `%${query.trim()}%`)
+      .order('name')
+      .limit(maxResults);
+
+    if (error) {
+      console.error('Publisher lookup error:', error);
+      return {
+        success: false,
+        query,
+        results: [],
+        error: error.message,
+      };
+    }
 
     return {
       success: true,
       query,
-      results,
+      results: data?.map((p) => ({ id: p.id, name: p.name })) || [],
     };
   } catch (error) {
     return {
@@ -131,7 +96,7 @@ export interface LookupDevelopersResult {
 }
 
 /**
- * Search for matching developer names
+ * Search for matching developer names using direct database query
  */
 export async function lookupDevelopers(args: LookupDevelopersArgs): Promise<LookupDevelopersResult> {
   const { query, limit = 10 } = args;
@@ -146,19 +111,31 @@ export async function lookupDevelopers(args: LookupDevelopersArgs): Promise<Look
   }
 
   try {
-    const cache = await getEntityCache();
-    const queryLower = query.toLowerCase().trim();
+    const supabase = getSupabase();
     const maxResults = Math.min(limit, 20); // Hard cap at 20
 
-    // Filter function - case-insensitive contains
-    const results = cache.developers
-      .filter((d) => d.name.toLowerCase().includes(queryLower))
-      .slice(0, maxResults);
+    // Direct ilike query - efficient with database index
+    const { data, error } = await supabase
+      .from('developers')
+      .select('id, name')
+      .ilike('name', `%${query.trim()}%`)
+      .order('name')
+      .limit(maxResults);
+
+    if (error) {
+      console.error('Developer lookup error:', error);
+      return {
+        success: false,
+        query,
+        results: [],
+        error: error.message,
+      };
+    }
 
     return {
       success: true,
       query,
-      results,
+      results: data?.map((d) => ({ id: d.id, name: d.name })) || [],
     };
   } catch (error) {
     return {
