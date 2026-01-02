@@ -244,6 +244,16 @@ cube('Discovery', {
     recentlyUpdated: {
       sql: `${CUBE}.last_content_update >= CURRENT_DATE - INTERVAL '30 days'`,
     },
+    // Rolling period segments
+    lastYear: {
+      sql: `${CUBE}.release_date >= CURRENT_DATE - INTERVAL '1 year'`,
+    },
+    last6Months: {
+      sql: `${CUBE}.release_date >= CURRENT_DATE - INTERVAL '6 months'`,
+    },
+    last3Months: {
+      sql: `${CUBE}.release_date >= CURRENT_DATE - INTERVAL '3 months'`,
+    },
     // Tag-based segments
     vrGame: {
       sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND st.name ILIKE '%VR%')`,
