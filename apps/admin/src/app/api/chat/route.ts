@@ -9,6 +9,12 @@ import { executeCubeQuery } from '@/lib/cube-executor';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
+import {
+  lookupPublishers,
+  lookupDevelopers,
+  type LookupPublishersArgs,
+  type LookupDevelopersArgs,
+} from '@/lib/search/publisher-lookup';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, ChatTiming, LLMResponse, Tool, QueryResult, SimilarityResult } from '@/lib/llm/types';
 
 // Set to true to use Cube.dev semantic layer, false for legacy SQL
@@ -97,6 +103,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         } else if (toolCall.name === 'lookup_tags') {
           const args = toolCall.arguments as unknown as LookupTagsArgs;
           result = await lookupTags(args);
+        } else if (toolCall.name === 'lookup_publishers') {
+          const args = toolCall.arguments as unknown as LookupPublishersArgs;
+          result = await lookupPublishers(args);
+        } else if (toolCall.name === 'lookup_developers') {
+          const args = toolCall.arguments as unknown as LookupDevelopersArgs;
+          result = await lookupDevelopers(args);
         } else {
           result = { success: false, error: `Unknown tool: ${toolCall.name}` };
         }
