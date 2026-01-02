@@ -247,7 +247,21 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                         controller_support?: string;
                         is_free?: boolean;
                       };
-                      const result = tc.result as { success: boolean; count?: number; error?: string; debug?: Record<string, unknown> };
+                      const result = tc.result as {
+                        success: boolean;
+                        total_found?: number;
+                        error?: string;
+                        debug?: {
+                          input_args?: Record<string, unknown>;
+                          steps?: string[];
+                          tag_candidates?: number;
+                          steam_deck_candidates?: number;
+                          final_candidates?: number | null;
+                          query_rows_returned?: number;
+                          after_review_filter?: number;
+                          final_count?: number;
+                        };
+                      };
 
                       // Build filter summary
                       const filters: string[] = [];
@@ -277,7 +291,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                             {result.success ? (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
                                 <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
-                                {result.count} games found
+                                {result.total_found ?? 0} games found
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
@@ -286,7 +300,16 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                               </span>
                             )}
                           </div>
-                          {result.debug && (
+                          {/* Always show debug steps for search_games to help diagnose issues */}
+                          {result.debug?.steps && result.debug.steps.length > 0 && (
+                            <div className="mt-2 p-2 bg-surface-base rounded text-xs border border-border-subtle">
+                              <div className="font-medium text-text-secondary mb-1">Search trace:</div>
+                              {result.debug.steps.map((step, i) => (
+                                <div key={i} className="text-text-muted pl-2">{step}</div>
+                              ))}
+                            </div>
+                          )}
+                          {result.debug && !result.debug.steps && (
                             <details className="mt-2">
                               <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
                                 Debug Info

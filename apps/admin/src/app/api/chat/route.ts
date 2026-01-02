@@ -15,7 +15,7 @@ import {
   type LookupPublishersArgs,
   type LookupDevelopersArgs,
 } from '@/lib/search/publisher-lookup';
-import type { Message, ChatRequest, ChatResponse, ChatToolCall, ChatTiming, LLMResponse, Tool, QueryResult, SimilarityResult } from '@/lib/llm/types';
+import type { Message, ChatRequest, ChatResponse, ChatToolCall, ChatTiming, LLMResponse, Tool } from '@/lib/llm/types';
 
 // Set to true to use Cube.dev semantic layer, false for legacy SQL
 const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
@@ -73,7 +73,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
       }
 
       for (const toolCall of response.toolCalls) {
-        let result: QueryResult | SimilarityResult;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let result: { success: boolean; error?: string; [key: string]: any };
 
         // Time each tool execution
         const toolStart = performance.now();

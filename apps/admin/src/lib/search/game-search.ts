@@ -42,6 +42,23 @@ export interface GameSearchResult {
 }
 
 /**
+ * Debug info for search tracing
+ */
+export interface SearchDebugInfo {
+  input_args: SearchGamesArgs;
+  steps: string[];
+  tag_candidates?: number;
+  genre_candidates?: number;
+  category_candidates?: number;
+  steam_deck_candidates?: number;
+  final_candidates?: number | null;
+  query_rows_returned?: number;
+  after_release_filter?: number;
+  after_review_filter?: number;
+  final_count?: number;
+}
+
+/**
  * Result from search_games
  */
 export interface SearchGamesResult {
@@ -49,6 +66,7 @@ export interface SearchGamesResult {
   results?: GameSearchResult[];
   total_found?: number;
   filters_applied?: string[];
+  debug?: SearchDebugInfo;
   error?: string;
 }
 
@@ -75,8 +93,15 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     order_by = 'reviews',
   } = args;
 
+  // Debug logging
+  const debug: SearchDebugInfo = {
+    input_args: args,
+    steps: [],
+  };
+
   const filtersApplied: string[] = [];
   const actualLimit = Math.min(limit, MAX_RESULTS);
+  debug.steps.push(`Starting search with limit=${actualLimit}`);
 
   try {
     const supabase = getSupabase();
@@ -125,23 +150,36 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
     if (tags && tags.length > 0) {
       // Get appids matching ALL specified tags
+      debug.steps.push(`Filtering by ${tags.length} tags: ${tags.join(', ')}`);
       const tagAppids = await getAppidsMatchingTags(supabase, tags);
+      debug.tag_candidates = tagAppids.length;
+      debug.steps.push(`Tags filter returned ${tagAppids.length} candidate appids`);
       candidateAppids = tagAppids;
     }
 
     if (genres && genres.length > 0) {
+      debug.steps.push(`Filtering by ${genres.length} genres: ${genres.join(', ')}`);
       const genreAppids = await getAppidsMatchingGenres(supabase, genres);
+      debug.genre_candidates = genreAppids.length;
+      debug.steps.push(`Genres filter returned ${genreAppids.length} candidate appids`);
       if (candidateAppids) {
+        const before = candidateAppids.length;
         candidateAppids = candidateAppids.filter((id) => genreAppids.includes(id));
+        debug.steps.push(`After genre intersection: ${candidateAppids.length} (was ${before})`);
       } else {
         candidateAppids = genreAppids;
       }
     }
 
     if (categories && categories.length > 0) {
+      debug.steps.push(`Filtering by ${categories.length} categories: ${categories.join(', ')}`);
       const categoryAppids = await getAppidsMatchingCategories(supabase, categories);
+      debug.category_candidates = categoryAppids.length;
+      debug.steps.push(`Categories filter returned ${categoryAppids.length} candidate appids`);
       if (candidateAppids) {
+        const before = candidateAppids.length;
         candidateAppids = candidateAppids.filter((id) => categoryAppids.includes(id));
+        debug.steps.push(`After category intersection: ${candidateAppids.length} (was ${before})`);
       } else {
         candidateAppids = categoryAppids;
       }
@@ -149,29 +187,38 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
     // Steam Deck filtering - do this at database level, not post-process
     if (steam_deck && steam_deck.length > 0) {
+      debug.steps.push(`Filtering by Steam Deck: ${steam_deck.join(', ')}`);
       const { data: deckApps } = await supabase
         .from('app_steam_deck')
         .select('appid')
         .in('category', steam_deck);
 
       const deckAppids = deckApps?.map((a) => a.appid) || [];
+      debug.steam_deck_candidates = deckAppids.length;
+      debug.steps.push(`Steam Deck filter returned ${deckAppids.length} candidate appids`);
 
       if (candidateAppids) {
+        const before = candidateAppids.length;
         candidateAppids = candidateAppids.filter((id) => deckAppids.includes(id));
+        debug.steps.push(`After Steam Deck intersection: ${candidateAppids.length} (was ${before})`);
       } else {
         candidateAppids = deckAppids;
       }
     }
 
     // If we have candidate appids from tag/genre/category/steam_deck filtering but none match, return early
+    debug.final_candidates = candidateAppids?.length ?? null;
     if (candidateAppids !== null && candidateAppids.length === 0) {
+      debug.steps.push('No candidates remain after filtering, returning empty');
       return {
         success: true,
         results: [],
         total_found: 0,
         filters_applied: filtersApplied,
+        debug,
       };
     }
+    debug.steps.push(`Final candidate count before main query: ${candidateAppids?.length ?? 'unlimited'}`);
 
     // Step 2: Build main query with remaining filters
     let queryBuilder = supabase
@@ -231,11 +278,16 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     const { data, error } = await queryBuilder.limit(actualLimit * 2); // Get extra for filtering
 
     if (error) {
+      debug.steps.push(`Query error: ${error.message}`);
       return {
         success: false,
         error: error.message,
+        debug,
       };
     }
+
+    debug.query_rows_returned = data?.length ?? 0;
+    debug.steps.push(`Main query returned ${data?.length ?? 0} rows`);
 
     // Define the row type for proper typing
     interface QueryRow {
@@ -255,8 +307,8 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       }[] | null;
     }
 
-    // Post-process results
-    const results = ((data || []) as QueryRow[])
+    // Post-process results - map first
+    const mappedResults = ((data || []) as QueryRow[])
       .map((row) => {
         const steamDeck = row.app_steam_deck;
         const metrics = row.latest_daily_metrics;
@@ -277,25 +329,39 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
           is_free: row.is_free,
           _owners_midpoint: metrics?.[0]?.owners_midpoint ?? null,
         };
-      })
-      // Filter by release year (can't do complex date extraction in Supabase)
-      .filter((r) => {
-        if (release_year?.gte !== undefined && (r.release_year === null || r.release_year < release_year.gte)) {
-          return false;
-        }
-        if (release_year?.lte !== undefined && (r.release_year === null || r.release_year > release_year.lte)) {
-          return false;
-        }
-        return true;
-      })
-      // Filter by review percentage
-      .filter((r) => {
-        if (review_percentage?.gte !== undefined) {
-          return r.review_percentage !== null && r.review_percentage >= review_percentage.gte;
-        }
-        return true;
       });
-      // Steam Deck filtering is now done at database level (candidate appids)
+
+    debug.steps.push(`Mapped ${mappedResults.length} results`);
+
+    // Filter by release year (can't do complex date extraction in Supabase)
+    const afterReleaseFilter = mappedResults.filter((r) => {
+      if (release_year?.gte !== undefined && (r.release_year === null || r.release_year < release_year.gte)) {
+        return false;
+      }
+      if (release_year?.lte !== undefined && (r.release_year === null || r.release_year > release_year.lte)) {
+        return false;
+      }
+      return true;
+    });
+
+    debug.after_release_filter = afterReleaseFilter.length;
+    if (release_year?.gte !== undefined || release_year?.lte !== undefined) {
+      debug.steps.push(`After release year filter: ${afterReleaseFilter.length} (from ${mappedResults.length})`);
+    }
+
+    // Filter by review percentage
+    const results = afterReleaseFilter.filter((r) => {
+      if (review_percentage?.gte !== undefined) {
+        return r.review_percentage !== null && r.review_percentage >= review_percentage.gte;
+      }
+      return true;
+    });
+
+    debug.after_review_filter = results.length;
+    if (review_percentage?.gte !== undefined) {
+      debug.steps.push(`After review % filter (>=${review_percentage.gte}): ${results.length} (from ${afterReleaseFilter.length})`);
+    }
+    // Steam Deck filtering is now done at database level (candidate appids)
 
     // Sort results
     results.sort((a, b) => {
@@ -320,16 +386,22 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       return rest as GameSearchResult;
     });
 
+    debug.final_count = finalResults.length;
+    debug.steps.push(`Final result count: ${finalResults.length}`);
+
     return {
       success: true,
       results: finalResults,
       total_found: finalResults.length,
       filters_applied: filtersApplied,
+      debug,
     };
   } catch (error) {
+    debug.steps.push(`Exception: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Search failed',
+      debug,
     };
   }
 }

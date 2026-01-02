@@ -74,6 +74,19 @@ export interface DebugInfo {
   // For similarity search (find_similar)
   searchParams?: Record<string, unknown>;
   vectorFilter?: Record<string, unknown>;
+  // For search_games
+  searchSteps?: string[];
+  searchCounts?: {
+    tag_candidates?: number;
+    genre_candidates?: number;
+    category_candidates?: number;
+    steam_deck_candidates?: number;
+    final_candidates?: number | null;
+    query_rows?: number;
+    after_release_filter?: number;
+    after_review_filter?: number;
+    final_count?: number;
+  };
 }
 
 // Query execution
@@ -94,7 +107,8 @@ export interface ChatRequest {
 export interface ChatToolCall {
   name: string;
   arguments: Record<string, unknown>;
-  result: QueryResult | SimilarityResult;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  result: { success: boolean; error?: string; [key: string]: any };
   timing?: {
     executionMs: number;  // Time to execute the tool
   };

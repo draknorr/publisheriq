@@ -33,7 +33,8 @@ interface QueryAnalyticsArgs {
   reasoning: string;
 }
 
-async function executeTool(toolCall: ToolCall): Promise<QueryResult | SimilarityResult> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; error?: string; [key: string]: any }> {
   if (toolCall.name === 'query_database') {
     const args = toolCall.arguments as { sql: string; reasoning: string };
     return executeQuery(args.sql);

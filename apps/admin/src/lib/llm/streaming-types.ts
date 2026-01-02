@@ -1,4 +1,4 @@
-import type { ChatTiming, QueryResult, SimilarityResult } from './types';
+import type { ChatTiming } from './types';
 
 // Streaming event types for Server-Sent Events format
 export type StreamEventType =
@@ -29,7 +29,8 @@ export interface ToolResultEvent extends BaseStreamEvent {
   toolCallId: string;
   name: string;
   arguments: Record<string, unknown>;
-  result: QueryResult | SimilarityResult;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  result: { success: boolean; error?: string; [key: string]: any };
   timing: { executionMs: number };
 }
 
