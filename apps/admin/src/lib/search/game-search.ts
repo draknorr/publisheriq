@@ -280,7 +280,16 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       queryBuilder = queryBuilder.eq('is_free', is_free);
     }
 
-    // Release year filtering (needs to be done post-query for complex operators)
+    // Release year filtering - filter at database level for efficiency
+    if (release_year?.gte !== undefined) {
+      queryBuilder = queryBuilder.gte('release_date', `${release_year.gte}-01-01`);
+      debug.steps.push(`Adding release year >= ${release_year.gte} filter`);
+    }
+    if (release_year?.lte !== undefined) {
+      queryBuilder = queryBuilder.lte('release_date', `${release_year.lte}-12-31`);
+      debug.steps.push(`Adding release year <= ${release_year.lte} filter`);
+    }
+
     // Metacritic score
     if (metacritic_score?.gte !== undefined) {
       queryBuilder = queryBuilder.gte('metacritic_score', metacritic_score.gte);
