@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { ChevronDown, ChevronRight, Database, User, Bot } from 'lucide-react';
 import type { ChatToolCall, ChatTiming } from '@/lib/llm/types';
+import type { StreamDebugInfo } from '@/lib/llm/streaming-types';
 import { Clock } from 'lucide-react';
 import { StreamingContent, CopyButton, CodeBlock } from './content';
 
@@ -13,6 +14,7 @@ interface DisplayMessage {
   content: string;
   toolCalls?: ChatToolCall[];
   timing?: ChatTiming;
+  debug?: StreamDebugInfo;
   timestamp: Date;
 }
 
@@ -238,6 +240,18 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                 </div>
               )}
             </div>
+          )}
+
+          {/* Stream debug info (collapsed by default) */}
+          {!isUser && message.debug && (
+            <details className="mt-3 pt-3 border-t border-border-subtle">
+              <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
+                Stream Debug Info
+              </summary>
+              <pre className="mt-2 p-2 bg-surface-base rounded text-xs overflow-x-auto">
+                {JSON.stringify(message.debug, null, 2)}
+              </pre>
+            </details>
           )}
         </Card>
 

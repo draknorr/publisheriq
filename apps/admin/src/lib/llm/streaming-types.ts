@@ -32,9 +32,18 @@ export interface ToolResultEvent extends BaseStreamEvent {
   timing: { executionMs: number };
 }
 
+export interface StreamDebugInfo {
+  iterations: number;          // How many LLM calls happened
+  textDeltaCount: number;      // Number of text_delta events received
+  totalChars: number;          // Total characters streamed
+  toolCallCount: number;       // Number of tool calls made
+  lastIterationHadText: boolean; // Whether the final iteration produced text
+}
+
 export interface MessageEndEvent extends BaseStreamEvent {
   type: 'message_end';
   timing: ChatTiming;
+  debug?: StreamDebugInfo;
 }
 
 export interface ErrorEvent extends BaseStreamEvent {

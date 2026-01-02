@@ -10,7 +10,7 @@ import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
 import type { Message, ChatRequest, Tool, QueryResult, SimilarityResult, ToolCall } from '@/lib/llm/types';
-import type { StreamEvent, TextDeltaEvent, ToolStartEvent, ToolResultEvent, MessageEndEvent, ErrorEvent } from '@/lib/llm/streaming-types';
+import type { StreamEvent, TextDeltaEvent, ToolStartEvent, ToolResultEvent, MessageEndEvent, ErrorEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
 
 const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
 const MAX_TOOL_ITERATIONS = 5;
@@ -93,8 +93,19 @@ export async function POST(request: NextRequest): Promise<Response> {
         let totalLlmMs = 0;
         let totalToolsMs = 0;
 
+        // Debug stats - zero additional cost, just counters
+        const debugStats: StreamDebugInfo = {
+          iterations: 0,
+          textDeltaCount: 0,
+          totalChars: 0,
+          toolCallCount: 0,
+          lastIterationHadText: false,
+        };
+
         while (iterations < MAX_TOOL_ITERATIONS) {
           iterations++;
+          debugStats.iterations = iterations;
+          let iterationTextCount = 0;
 
           const llmStart = performance.now();
           const llmStream = provider.chatStream(messages, tools);
@@ -106,6 +117,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           for await (const chunk of llmStream) {
             if (chunk.type === 'text' && chunk.text) {
               accumulatedText += chunk.text;
+              debugStats.textDeltaCount++;
+              debugStats.totalChars += chunk.text.length;
+              iterationTextCount++;
               const textEvent: TextDeltaEvent = { type: 'text_delta', delta: chunk.text };
               controller.enqueue(encoder.encode(formatSSE(textEvent)));
             }
@@ -130,6 +144,8 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
 
           totalLlmMs += performance.now() - llmStart;
+          debugStats.lastIterationHadText = iterationTextCount > 0;
+          debugStats.toolCallCount += completedToolCalls.length;
 
           // If no tool calls, we're done
           if (completedToolCalls.length === 0) {
@@ -176,7 +192,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           accumulatedText = '';
         }
 
-        // Send completion event
+        // Send completion event with debug info
         const endEvent: MessageEndEvent = {
           type: 'message_end',
           timing: {
@@ -184,6 +200,7 @@ export async function POST(request: NextRequest): Promise<Response> {
             toolsMs: Math.round(totalToolsMs),
             totalMs: Math.round(performance.now() - requestStart),
           },
+          debug: debugStats,
         };
         controller.enqueue(encoder.encode(formatSSE(endEvent)));
 

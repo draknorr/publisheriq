@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { Message, ChatToolCall, ChatTiming } from '@/lib/llm/types';
-import type { StreamEvent } from '@/lib/llm/streaming-types';
+import type { StreamEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
 
 export interface DisplayMessage {
   id: string;
@@ -10,6 +10,7 @@ export interface DisplayMessage {
   content: string;
   toolCalls?: ChatToolCall[];
   timing?: ChatTiming;
+  debug?: StreamDebugInfo;
   timestamp: Date;
 }
 
@@ -139,6 +140,7 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
                         content: accumulatedContent,
                         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
                         timing: event.timing,
+                        debug: event.debug,
                       }
                     : m
                 ));
