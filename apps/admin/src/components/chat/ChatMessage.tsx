@@ -230,6 +230,78 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                       );
                     }
 
+                    // Handle search_games results
+                    if (tc.name === 'search_games') {
+                      const args = tc.arguments as { query?: string };
+                      const result = tc.result as { success: boolean; count?: number; error?: string; debug?: Record<string, unknown> };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Searching games for &quot;{args.query}&quot;
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.count} games found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                          {result.debug && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
+                                Debug Info
+                              </summary>
+                              <pre className="mt-1 p-2 bg-surface-base rounded text-xs overflow-x-auto max-h-48">
+                                {JSON.stringify(result.debug, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // Handle lookup_tags results
+                    if (tc.name === 'lookup_tags') {
+                      const args = tc.arguments as { tag_names?: string[] };
+                      const result = tc.result as { success: boolean; found?: number; error?: string; debug?: Record<string, unknown> };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Looking up tags: {args.tag_names?.join(', ') || 'unknown'}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.found} tags found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                          {result.debug && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
+                                Debug Info
+                              </summary>
+                              <pre className="mt-1 p-2 bg-surface-base rounded text-xs overflow-x-auto max-h-48">
+                                {JSON.stringify(result.debug, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      );
+                    }
+
                     // Unknown tool
                     return (
                       <div key={idx} className="text-body-sm text-text-muted">

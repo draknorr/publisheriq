@@ -543,6 +543,14 @@ Find roguelike-related tags:
 - If the query is ambiguous, ask for clarification
 - Explain any limitations or caveats in the data
 
+## CRITICAL: When to Stop and Respond
+- **STOP calling tools once you have the data needed to answer the user's question**
+- If a tool returns relevant results, SYNTHESIZE those results into a response - do NOT call more tools
+- If query_database returns rows, USE those results to answer
+- Only make follow-up tool calls if the first call genuinely failed or returned irrelevant data
+- Maximum tool iterations is 5 - if you haven't responded by then, your answer will be cut off
+- **After any successful tool call with relevant data, respond to the user immediately**
+
 ## Formatting Entity Names as Links
 Always format entity names as markdown links so users can click to view details.
 

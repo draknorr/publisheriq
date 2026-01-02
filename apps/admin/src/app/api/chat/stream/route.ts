@@ -192,6 +192,15 @@ export async function POST(request: NextRequest): Promise<Response> {
           accumulatedText = '';
         }
 
+        // If we hit max iterations with no text response, send a fallback message
+        if (debugStats.totalChars === 0 && debugStats.toolCallCount > 0) {
+          const fallbackText = `I executed ${debugStats.toolCallCount} tool calls but wasn't able to generate a response. This may be due to hitting the maximum iteration limit (${MAX_TOOL_ITERATIONS}). Please try rephrasing your question or being more specific.`;
+          const fallbackEvent: TextDeltaEvent = { type: 'text_delta', delta: fallbackText };
+          controller.enqueue(encoder.encode(formatSSE(fallbackEvent)));
+          debugStats.textDeltaCount = 1;
+          debugStats.totalChars = fallbackText.length;
+        }
+
         // Send completion event with debug info
         const endEvent: MessageEndEvent = {
           type: 'message_end',
