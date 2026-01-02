@@ -147,7 +147,23 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       }
     }
 
-    // If we have candidate appids from tag/genre/category filtering but none match, return early
+    // Steam Deck filtering - do this at database level, not post-process
+    if (steam_deck && steam_deck.length > 0) {
+      const { data: deckApps } = await supabase
+        .from('app_steam_deck')
+        .select('appid')
+        .in('category', steam_deck);
+
+      const deckAppids = deckApps?.map((a) => a.appid) || [];
+
+      if (candidateAppids) {
+        candidateAppids = candidateAppids.filter((id) => deckAppids.includes(id));
+      } else {
+        candidateAppids = deckAppids;
+      }
+    }
+
+    // If we have candidate appids from tag/genre/category/steam_deck filtering but none match, return early
     if (candidateAppids !== null && candidateAppids.length === 0) {
       return {
         success: true,
@@ -278,14 +294,8 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
           return r.review_percentage !== null && r.review_percentage >= review_percentage.gte;
         }
         return true;
-      })
-      // Filter by Steam Deck
-      .filter((r) => {
-        if (steam_deck && steam_deck.length > 0) {
-          return r.steam_deck_category !== null && steam_deck.includes(r.steam_deck_category as 'verified' | 'playable');
-        }
-        return true;
       });
+      // Steam Deck filtering is now done at database level (candidate appids)
 
     // Sort results
     results.sort((a, b) => {
