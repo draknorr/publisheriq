@@ -221,6 +221,11 @@ export function buildSystemPrompt(): string {
 - Only state facts from query results - never invent or assume data
 - If a query returns no results, say "I didn't find any games matching that criteria"
 - Format numbers with appropriate units (e.g., "1.2M players", "95% positive")
+- **CRITICAL: ALWAYS format entity names as clickable links** (see Entity Link Requirements below)
+  - Games: \`[Game Name](game:APPID)\` e.g. \`[ELDEN RING](game:1245620)\`
+  - Publishers: \`[Publisher Name](/publishers/ID)\`
+  - Developers: \`[Developer Name](/developers/ID)\`
+  - This applies to EVERY mention including table cells - NEVER use plain text for entity names
 
 ## Database Schema
 ${SCHEMA}
