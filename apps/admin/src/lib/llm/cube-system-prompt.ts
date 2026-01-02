@@ -108,6 +108,14 @@ String matching:
 {"member":"Discovery.steamDeckCategory","operator":"equals","values":["verified"]}
 \`\`\`
 
+**CRITICAL - Developer/Publisher Name Searches:**
+Names often include suffixes like "Inc", "LLC", "Studios". Use \`contains\` operator, NOT \`equals\`:
+\`\`\`json
+{"member":"DeveloperMetrics.developerName","operator":"contains","values":["FromSoftware"]}
+{"member":"PublisherMetrics.publisherName","operator":"contains","values":["Devolver"]}
+\`\`\`
+Example: "FromSoftware" is stored as "FromSoftware, Inc." - using \`equals\` will find nothing!
+
 ## IMPORTANT: Prefer Segments Over Filters
 
 Segments are pre-computed and faster. Use them instead of equivalent filters:
@@ -151,6 +159,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
    - DeveloperGameMetrics/PublisherGameMetrics for "past 12 months", "past 3 months"
 10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
+12. **Developer/Publisher name searches MUST use "contains" operator**: "FromSoftware" → "FromSoftware, Inc." so use \`{"operator":"contains","values":["FromSoftware"]}\` NOT \`{"operator":"equals",...}\`
 
 ## Natural Language Mappings
 
