@@ -305,6 +305,58 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                       );
                     }
 
+                    // Handle lookup_publishers results
+                    if (tc.name === 'lookup_publishers') {
+                      const args = tc.arguments as { query?: string };
+                      const result = tc.result as { success: boolean; results?: Array<{ id: number; name: string }>; error?: string };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Looking up publishers: &ldquo;{args.query || 'unknown'}&rdquo;
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.results?.length || 0} publishers found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Handle lookup_developers results
+                    if (tc.name === 'lookup_developers') {
+                      const args = tc.arguments as { query?: string };
+                      const result = tc.result as { success: boolean; results?: Array<{ id: number; name: string }>; error?: string };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Looking up developers: &ldquo;{args.query || 'unknown'}&rdquo;
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.results?.length || 0} developers found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     // Unknown tool
                     return (
                       <div key={idx} className="text-body-sm text-text-muted">

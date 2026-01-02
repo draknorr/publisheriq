@@ -34,6 +34,17 @@ async function getEntityCache(): Promise<EntityCache> {
     supabase.from('developers').select('id, name').order('name'),
   ]);
 
+  // Log errors if queries failed
+  if (publishersResult.error) {
+    console.error('Publisher lookup cache error:', publishersResult.error);
+  }
+  if (developersResult.error) {
+    console.error('Developer lookup cache error:', developersResult.error);
+  }
+
+  // Log cache stats for debugging
+  console.log(`Lookup cache loaded: ${publishersResult.data?.length ?? 0} publishers, ${developersResult.data?.length ?? 0} developers`);
+
   entityCache = {
     publishers: (publishersResult.data || []).map((p) => ({ id: p.id, name: p.name })),
     developers: (developersResult.data || []).map((d) => ({ id: d.id, name: d.name })),
