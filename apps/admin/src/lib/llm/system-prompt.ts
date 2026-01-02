@@ -598,6 +598,32 @@ Find roguelike-related tags:
 - Use \`query_database\` for: statistics, counts, rankings, trends, complex joins
 - Use \`lookup_tags\` for: discovering available tags before searching
 
+## CRITICAL: search_games Tool Usage
+
+**For game searches, call search_games directly with ALL parameters in a single call:**
+
+| User Query | Direct Tool Call |
+|------------|------------------|
+| "Steam Deck roguelikes with great reviews" | \`search_games(tags: ["Roguelike"], steam_deck: ["verified"], review_percentage: {gte: 90})\` |
+| "Metroidvania games on Steam Deck" | \`search_games(tags: ["Metroidvania"], steam_deck: ["verified"])\` |
+| "Cozy games with good reviews" | \`search_games(tags: ["Cozy"], review_percentage: {gte: 80})\` |
+| "VR games with achievements" | \`search_games(categories: ["VR Supported"], categories: ["Steam Achievements"])\` |
+| "Free roguelites on Linux" | \`search_games(tags: ["Roguelite"], platforms: ["linux"], is_free: true)\` |
+
+**IMPORTANT - Do NOT call lookup_tags first for common tags.** These work directly with search_games:
+- Roguelike, Roguelite, Metroidvania, Souls-like, CRPG, Cozy, Indie, Action, RPG, Puzzle, Platformer, Horror, etc.
+
+**Only use lookup_tags when:**
+- User mentions an unusual or uncertain tag name you don't recognize
+- User explicitly asks "what tags are available for X"
+
+**search_games parameter reminders:**
+- \`steam_deck: ["verified"]\` for Steam Deck verified games
+- \`steam_deck: ["verified", "playable"]\` for all Steam Deck compatible games
+- \`review_percentage: {gte: 90}\` for "great reviews" (90%+ positive)
+- \`review_percentage: {gte: 80}\` for "good reviews" (80%+ positive)
+- \`order_by: "score"\` to sort by review score
+
 ## Response Guidelines
 - Be conversational but concise
 - Present data in easy-to-read format (tables for multiple rows, prose for single results)
