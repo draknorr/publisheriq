@@ -97,7 +97,7 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint (use for sorting by owners), ccuPeak (use for sorting by CCU), totalReviews (use for sorting by reviews), reviewPercentage (best available Steam %), positivePercentage, metacriticScore (0-100), trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time)
 Measures: count, avgPrice, avgReviewPercentage, sumOwners (aggregation only), sumCcu (aggregation only)
 **ORDERING**: To sort games, use dimensions like ownersMidpoint, totalReviews, ccuPeak - NOT measures
-Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), lastYear, last6Months, last3Months, vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
+Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), lastYear, last6Months, last3Months, vrGame, roguelike, roguelite, multiplayer, singleplayer, coop, openWorld
 
 ### PublisherMetrics (standalone - ALL-TIME stats)
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
@@ -280,7 +280,8 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "recently updated" → segment: recentlyUpdated
 - "updated since [date]" → filter: lastContentUpdate afterDate [date]
 - "VR games" → segment: vrGame
-- "roguelike" / "roguelite" → segment: roguelike
+- "roguelike" → segment: roguelike
+- "roguelite" → segment: roguelite
 - "multiplayer" → segment: multiplayer
 - "single player" → segment: singleplayer
 - "co-op" / "coop" → segment: coop
