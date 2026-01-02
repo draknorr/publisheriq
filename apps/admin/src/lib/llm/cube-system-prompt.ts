@@ -25,17 +25,41 @@ Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows
 Measures: count, avgPrice, avgReviewPercentage, sumOwners, sumCcu
 Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
 
-### PublisherMetrics (standalone - cannot join with other cubes)
+### PublisherMetrics (standalone - ALL-TIME stats)
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
 Measures: count, sumOwners, sumCcu, sumRevenue, avgScore, trendingCount
 Segments: trending, highRevenue (>$1M), highOwners (>100K)
 **IMPORTANT**: Always include publisherId in dimensions to enable linking
+**NOTE**: Use PublisherYearMetrics or PublisherGameMetrics for year/date-filtered queries
 
-### DeveloperMetrics (standalone - cannot join with other cubes)
+### PublisherYearMetrics (filter by specific year)
+Dimensions: publisherId, publisherName, releaseYear, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars
+Measures: count, sumGameCount, sumOwners, sumCcu, sumRevenue, avgScore
+**USE THIS** for "publishers in 2025", "publishers with 2024 releases" - filter by releaseYear
+
+### PublisherGameMetrics (filter by date range - rolling periods)
+Dimensions: publisherId, publisherName, appid, gameName, releaseDate (time), releaseYear, owners, ccu, totalReviews, reviewScore
+Measures: gameCount, sumOwners, sumCcu, sumReviews, sumRevenue, avgReviewScore, publisherCount
+Segments: lastYear, last6Months, last3Months, last30Days
+**USE THIS** for "past 12 months", "past 3 months", "since [date]" - filter by releaseDate or use segments
+
+### DeveloperMetrics (standalone - ALL-TIME stats)
 Dimensions: developerId, developerName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending
 Measures: count, sumOwners, sumCcu, sumRevenue, avgScore, trendingCount
 Segments: trending, highRevenue (>$100K), highOwners (>50K)
 **IMPORTANT**: Always include developerId in dimensions to enable linking
+**NOTE**: Use DeveloperYearMetrics or DeveloperGameMetrics for year/date-filtered queries
+
+### DeveloperYearMetrics (filter by specific year)
+Dimensions: developerId, developerName, releaseYear, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars
+Measures: count, sumGameCount, sumOwners, sumCcu, sumRevenue, avgScore
+**USE THIS** for "developers in 2025", "developers with 2024 releases" - filter by releaseYear
+
+### DeveloperGameMetrics (filter by date range - rolling periods)
+Dimensions: developerId, developerName, appid, gameName, releaseDate (time), releaseYear, owners, ccu, totalReviews, reviewScore
+Measures: gameCount, sumOwners, sumCcu, sumReviews, sumRevenue, avgReviewScore, developerCount
+Segments: lastYear, last6Months, last3Months, last30Days
+**USE THIS** for "past 12 months", "past 3 months", "since [date]" - filter by releaseDate or use segments
 
 ### DailyMetrics (time-series)
 Dimensions: appid, metricDate, ownersMin, ownersMax, ownersMidpoint, ccuPeak, totalReviews, positiveReviews, reviewScore, priceCents
@@ -111,9 +135,12 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 3. DON'T use dimensions that aren't listed above
 4. DO include Discovery.appid and Discovery.name in dimensions for game lists
 5. DON'T use SQL operators (>=, >, <=, <, =, !=) - use Cube operators: gte, gt, lte, lt, equals, notEquals
-6. DON'T try to join PublisherMetrics or DeveloperMetrics with other cubes - they are standalone
-7. DON'T use Discovery segments (like "indie") on PublisherMetrics/DeveloperMetrics - each cube has its own segments
+6. DON'T try to join metrics cubes with other cubes - they are standalone
+7. DON'T use Discovery segments (like "indie") on metrics cubes - each cube has its own segments
 8. DO include publisherId/developerId in dimensions for publisher/developer queries (needed for links)
+9. **DON'T use DeveloperMetrics/PublisherMetrics for year-filtered queries** - these show ALL-TIME totals. Use:
+   - DeveloperYearMetrics/PublisherYearMetrics for "games released in 2025"
+   - DeveloperGameMetrics/PublisherGameMetrics for "past 12 months", "past 3 months"
 
 ## Natural Language Mappings
 
@@ -125,22 +152,36 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "overwhelmingly positive" → segment: overwhelminglyPositive
 - "metacritic" / "critic score" → filter: metacriticScore gte [value]
 
-**For DeveloperMetrics/PublisherMetrics:**
+**For DeveloperMetrics/PublisherMetrics (ALL-TIME):**
 - "indie developers/publishers" → filter: totalOwners lte 100000 (small studios)
 - "successful developers" → filter: totalOwners gte 500000
 - "prolific developers" → filter: gameCount gte 5
 - "trending" → segment: trending
+- "top publishers/developers" → order by totalOwners desc
+
+**For DeveloperYearMetrics/PublisherYearMetrics (YEAR-FILTERED):**
+- "developers in 2025" / "developers with 2025 releases" → DeveloperYearMetrics with filter: releaseYear equals [2025]
+- "publishers in 2024" → PublisherYearMetrics with filter: releaseYear equals [2024]
+- "released this year" / "this year" → filter: releaseYear equals [${currentYear}]
+- "released last year" / "last year" → filter: releaseYear equals [${lastYear}]
+- "released in [YEAR]" → filter: releaseYear equals [YEAR]
+
+**For DeveloperGameMetrics/PublisherGameMetrics (ROLLING PERIODS):**
+- "past 12 months" / "last year" (rolling) → segment: lastYear
+- "past 6 months" → segment: last6Months
+- "past 3 months" → segment: last3Months
+- "past 30 days" / "past month" → segment: last30Days
+- "since [date]" / "after [date]" → filter: releaseDate afterDate [date]
+- "before [date]" → filter: releaseDate beforeDate [date]
+
+**For Discovery (games):**
 - "high metacritic" / "good metacritic" → segment: highMetacritic (75+)
 - "has metacritic" → segment: hasMetacritic
 - "trending" → segment: trending
 - "free" → segment: free
 - "Steam Deck" → segment: steamDeckVerified or steamDeckPlayable
 - "Mac/Linux games" → filter: hasMac/hasLinux = true
-- "top publishers/developers" → order by totalOwners desc
-- "released this year" / "this year" → filter: releaseYear equals [${currentYear}]
-- "released last year" / "last year" → filter: releaseYear equals [${lastYear}]
 - "new releases" / "recently released" → segment: recentlyReleased
-- "released in [YEAR]" → filter: releaseYear equals [YEAR]
 - "released after [date]" → filter: releaseDate afterDate [date]
 - "released before [date]" → filter: releaseDate beforeDate [date]
 - "recently updated" → segment: recentlyUpdated
