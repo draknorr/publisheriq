@@ -149,6 +149,8 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 9. **DON'T use DeveloperMetrics/PublisherMetrics for year-filtered queries** - these show ALL-TIME totals. Use:
    - DeveloperYearMetrics/PublisherYearMetrics for "games released in 2025"
    - DeveloperGameMetrics/PublisherGameMetrics for "past 12 months", "past 3 months"
+10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
+11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
 
 ## Natural Language Mappings
 
