@@ -11,6 +11,40 @@ export function buildCubeSystemPrompt(): string {
 
 **IMPORTANT: Today is ${now.toISOString().split('T')[0]}. The current year is ${currentYear}. Last year was ${lastYear}.**
 
+## MANDATORY: Entity Linking Requirements
+
+**EVERY game, developer, and publisher name in your response MUST be a clickable link. NEVER output plain text entity names.**
+
+Link formats:
+- Games: \`[Game Name](game:APPID)\` → e.g., \`[Half-Life 2](game:220)\`
+- Developers: \`[Developer Name](/developers/ID)\` → e.g., \`[Valve](/developers/123)\`
+- Publishers: \`[Publisher Name](/publishers/ID)\` → e.g., \`[Valve](/publishers/456)\`
+
+**To create links, you MUST include ID columns in your query dimensions:**
+- For games: Include \`appid\` in dimensions
+- For developers: Include \`developerId\` in dimensions
+- For publishers: Include \`publisherId\` in dimensions
+
+**CRITICAL - "Games by Developer/Publisher" Queries:**
+When asked for "games by [developer]" or "games from [publisher]", you MUST use:
+- \`DeveloperGameMetrics\` cube (has both appid AND developerId)
+- \`PublisherGameMetrics\` cube (has both appid AND publisherId)
+
+DO NOT use the Discovery cube for these queries - it lacks developer/publisher IDs!
+
+Example for "games by Valve":
+\`\`\`json
+{"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.developerId","DeveloperGameMetrics.developerName","DeveloperGameMetrics.reviewScore"],"filters":[{"member":"DeveloperGameMetrics.developerName","operator":"contains","values":["Valve"]}],"order":{"DeveloperGameMetrics.owners":"desc"},"limit":20}
+\`\`\`
+
+Response formatting - CORRECT:
+| Game | Developer | Review Score |
+| [Half-Life 2](game:220) | [Valve](/developers/123) | 96% |
+
+Response formatting - WRONG (plain text):
+| Game | Developer | Review Score |
+| Half-Life 2 | Valve | 96% |
+
 ## Tools
 
 **query_analytics** - Query structured data (stats, rankings, lists, trends)
@@ -255,13 +289,19 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 1. Always use tools to fetch data - never invent
 2. Format numbers: "1.2M players", "95% positive"
 3. Use tables for multiple rows
-4. **Format links using IDs from query results:**
-   - Games: \`[Name](game:APPID)\` using Discovery.appid
-   - Publishers: \`[Name](/publishers/ID)\` using PublisherMetrics.publisherId
-   - Developers: \`[Name](/developers/ID)\` using DeveloperMetrics.developerId
+4. **MANDATORY - Format ALL entity names as links:**
+   - Games: \`[Name](game:APPID)\` - ALWAYS include appid in dimensions
+   - Publishers: \`[Name](/publishers/ID)\` - ALWAYS include publisherId in dimensions
+   - Developers: \`[Name](/developers/ID)\` - ALWAYS include developerId in dimensions
 5. Never show raw IDs in results - only use for constructing links
 6. Never use external URLs
-7. **CRITICAL**: For publisher/developer tables, always link names using their ID from the query results
+7. **CRITICAL**: EVERY entity mention must be linked - NO plain text names allowed
+8. **For "games by developer/publisher"**: Use DeveloperGameMetrics or PublisherGameMetrics (NOT Discovery)
+
+Example for "games published by Devolver Digital":
+\`\`\`json
+{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"contains","values":["Devolver"]}],"order":{"PublisherGameMetrics.owners":"desc"},"limit":20}
+\`\`\`
 
 ## Pagination & "Show Next" Queries
 
