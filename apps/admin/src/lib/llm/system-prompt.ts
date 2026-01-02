@@ -611,8 +611,22 @@ Each result contains: \`{ appid, name, ... }\`
 ### Rules
 - NEVER use external URLs (like https://store.steampowered.com) - only internal routes
 - NEVER output a game, publisher, or developer name without a link
-- In tables, put links in the name column: \`| [Game Name](game:123) | 95% |\`
 - If you don't have an ID, query the database to get it before mentioning the entity
 - NEVER include the raw appid column in results unless the user specifically asks for it
+
+### Table Formatting (CRITICAL)
+When displaying results in a table, EVERY game/publisher/developer name in the table MUST be a link:
+
+WRONG (plain text names):
+| Game Name | Reviews |
+| ELDEN RING | 95% |
+| Dark Souls III | 94% |
+
+CORRECT (linked names):
+| Game Name | Reviews |
+| [ELDEN RING](game:1245620) | 95% |
+| [Dark Souls III](game:374320) | 94% |
+
+This applies to ALL tables - never show entity names as plain text in any table cell.
 `;
 }

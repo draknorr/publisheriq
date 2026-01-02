@@ -47,7 +47,8 @@ Use this tool for questions like:
 - "Better reviewed alternatives to [game]"
 - "Cheaper games similar to [game]"
 
-Returns semantically similar entities based on genres, tags, features, and other characteristics.`,
+Returns results with fields: id (entity ID for links), name, type ("game"/"publisher"/"developer"), and optional score/genres/tags.
+Use the 'type' field to determine link format: [name](game:{id}), [name](/publishers/{id}), or [name](/developers/{id}).`,
     parameters: {
       type: 'object',
       properties: {
@@ -138,7 +139,10 @@ Use this tool when users ask for games with specific characteristics like:
 - "Metroidvania games on Steam Deck"
 - "Games with Workshop support"
 
-Supports fuzzy tag matching - you don't need exact tag names.`,
+Supports fuzzy tag matching - you don't need exact tag names.
+
+Returns results with fields: appid (for game: links), name, platforms, review data, etc.
+Always format game names as: [name](game:{appid})`,
     parameters: {
       type: 'object',
       properties: {
