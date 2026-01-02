@@ -25,23 +25,32 @@ Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows
 Measures: count, avgPrice, avgReviewPercentage, sumOwners, sumCcu
 Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
 
-### PublisherMetrics
+### PublisherMetrics (standalone - cannot join with other cubes)
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
 Measures: count, sumOwners, sumCcu, sumRevenue, avgScore, trendingCount
 Segments: trending, highRevenue (>$1M), highOwners (>100K)
+**IMPORTANT**: Always include publisherId in dimensions to enable linking
 
-### DeveloperMetrics
+### DeveloperMetrics (standalone - cannot join with other cubes)
 Dimensions: developerId, developerName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending
 Measures: count, sumOwners, sumCcu, sumRevenue, avgScore, trendingCount
 Segments: trending, highRevenue (>$100K), highOwners (>50K)
+**IMPORTANT**: Always include developerId in dimensions to enable linking
 
 ### DailyMetrics (time-series)
 Dimensions: appid, metricDate, ownersMin, ownersMax, ownersMidpoint, ccuPeak, totalReviews, positiveReviews, reviewScore, priceCents
 Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
 
 ## Query Format
+
+**Game queries (Discovery):**
 \`\`\`json
 {"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name","Discovery.reviewPercentage"],"segments":["Discovery.veryPositive"],"order":{"Discovery.totalReviews":"desc"},"limit":20}
+\`\`\`
+
+**Developer/Publisher queries (use developerId/publisherId for links):**
+\`\`\`json
+{"cube":"DeveloperMetrics","dimensions":["DeveloperMetrics.developerId","DeveloperMetrics.developerName","DeveloperMetrics.gameCount","DeveloperMetrics.totalOwners","DeveloperMetrics.avgReviewScore"],"filters":[{"member":"DeveloperMetrics.totalReviews","operator":"gte","values":[100]}],"order":{"DeveloperMetrics.totalOwners":"desc"},"limit":20}
 \`\`\`
 
 ## Filter Syntax (when segments don't cover your need)
@@ -102,14 +111,25 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 3. DON'T use dimensions that aren't listed above
 4. DO include Discovery.appid and Discovery.name in dimensions for game lists
 5. DON'T use SQL operators (>=, >, <=, <, =, !=) - use Cube operators: gte, gt, lte, lt, equals, notEquals
+6. DON'T try to join PublisherMetrics or DeveloperMetrics with other cubes - they are standalone
+7. DON'T use Discovery segments (like "indie") on PublisherMetrics/DeveloperMetrics - each cube has its own segments
+8. DO include publisherId/developerId in dimensions for publisher/developer queries (needed for links)
 
 ## Natural Language Mappings
+
+**For Discovery (games):**
 - "indie" → segment: indie
 - "well reviewed" / "good reviews" → filter: reviewPercentage gte 70
 - "highly rated" → segment: highlyRated
 - "very positive" → segment: veryPositive
 - "overwhelmingly positive" → segment: overwhelminglyPositive
 - "metacritic" / "critic score" → filter: metacriticScore gte [value]
+
+**For DeveloperMetrics/PublisherMetrics:**
+- "indie developers/publishers" → filter: totalOwners lte 100000 (small studios)
+- "successful developers" → filter: totalOwners gte 500000
+- "prolific developers" → filter: gameCount gte 5
+- "trending" → segment: trending
 - "high metacritic" / "good metacritic" → segment: highMetacritic (75+)
 - "has metacritic" → segment: hasMetacritic
 - "trending" → segment: trending
@@ -166,8 +186,12 @@ Examples:
 1. Always use tools to fetch data - never invent
 2. Format numbers: "1.2M players", "95% positive"
 3. Use tables for multiple rows
-4. Format links: Games \`[Name](game:APPID)\`, Publishers \`[Name](/publishers/ID)\`, Developers \`[Name](/developers/ID)\`
-5. Never show raw appid in results - only use for links
+4. **Format links using IDs from query results:**
+   - Games: \`[Name](game:APPID)\` using Discovery.appid
+   - Publishers: \`[Name](/publishers/ID)\` using PublisherMetrics.publisherId
+   - Developers: \`[Name](/developers/ID)\` using DeveloperMetrics.developerId
+5. Never show raw IDs in results - only use for constructing links
 6. Never use external URLs
+7. **CRITICAL**: For publisher/developer tables, always link names using their ID from the query results
 `;
 }
