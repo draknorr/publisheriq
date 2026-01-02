@@ -3,6 +3,14 @@
 -- This migration fixes timeouts in get_apps_for_embedding, get_publishers_needing_embedding, get_developers_needing_embedding
 
 -- =============================================
+-- DROP existing functions (return type changed)
+-- =============================================
+DROP FUNCTION IF EXISTS get_apps_for_embedding(INT);
+DROP FUNCTION IF EXISTS get_apps_for_embedding_by_ids(INT[]);
+DROP FUNCTION IF EXISTS get_publishers_needing_embedding(INT);
+DROP FUNCTION IF EXISTS get_developers_needing_embedding(INT);
+
+-- =============================================
 -- INDEXES: Add indexes to speed up filtering
 -- =============================================
 
@@ -262,8 +270,8 @@ BEGIN
     -- Step 6: Pre-aggregate top games for all filtered publishers
     pub_games AS (
         SELECT ap.publisher_id,
-               array_agg(a.name ORDER BY a.appid LIMIT 10) as game_names,
-               array_agg(a.appid ORDER BY a.appid LIMIT 10) as game_appids
+               array_agg(a.name ORDER BY a.appid) as game_names,
+               array_agg(a.appid ORDER BY a.appid) as game_appids
         FROM app_publishers ap
         JOIN apps a ON a.appid = ap.appid AND a.type = 'game'
         WHERE ap.publisher_id IN (SELECT id FROM filtered_pubs)
@@ -280,8 +288,8 @@ BEGIN
         COALESCE((SELECT array_agg(trim(x)) FROM (SELECT unnest(pp.platforms) LIMIT 3) t(x)), '{}') as platforms_supported,
         0::BIGINT as total_reviews,  -- Simplified to avoid timeout
         pr.avg_review as avg_review_percentage,
-        COALESCE(pga.game_names, '{}') as top_game_names,
-        COALESCE(pga.game_appids, '{}') as top_game_appids
+        COALESCE(pga.game_names[1:10], '{}') as top_game_names,
+        COALESCE(pga.game_appids[1:10], '{}') as top_game_appids
     FROM publishers p
     JOIN filtered_pubs fp ON fp.id = p.id
     LEFT JOIN pub_genres pg ON pg.publisher_id = p.id
@@ -371,8 +379,8 @@ BEGIN
     -- Step 6: Pre-aggregate top games for all filtered developers
     dev_games AS (
         SELECT ad.developer_id,
-               array_agg(a.name ORDER BY a.appid LIMIT 10) as game_names,
-               array_agg(a.appid ORDER BY a.appid LIMIT 10) as game_appids
+               array_agg(a.name ORDER BY a.appid) as game_names,
+               array_agg(a.appid ORDER BY a.appid) as game_appids
         FROM app_developers ad
         JOIN apps a ON a.appid = ad.appid AND a.type = 'game'
         WHERE ad.developer_id IN (SELECT id FROM filtered_devs)
@@ -404,8 +412,8 @@ BEGIN
         COALESCE((SELECT array_agg(trim(x)) FROM (SELECT unnest(dp.platforms) LIMIT 3) t(x)), '{}') as platforms_supported,
         0::BIGINT as total_reviews,  -- Simplified to avoid timeout
         dr.avg_review as avg_review_percentage,
-        COALESCE(dga.game_names, '{}') as top_game_names,
-        COALESCE(dga.game_appids, '{}') as top_game_appids
+        COALESCE(dga.game_names[1:10], '{}') as top_game_names,
+        COALESCE(dga.game_appids[1:10], '{}') as top_game_appids
     FROM developers d
     JOIN filtered_devs fd ON fd.id = d.id
     LEFT JOIN dev_genres dg ON dg.developer_id = d.id
