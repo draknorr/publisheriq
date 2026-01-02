@@ -302,7 +302,14 @@ Filters:
 - **review_percentage**: {gte: 90} for 90%+ positive reviews
 - **order_by**: "reviews" (default), "score", "release_date", "owners"
 
+**IMPORTANT - Tag Behavior:**
+- Multiple tags are ANDed (game must have ALL specified tags)
+- Use ONE specific tag per search, NOT all variations from lookup_tags
+- WRONG: tags: ["Roguelike", "Action Roguelike", "Roguelike Deckbuilder"] → returns 0 results
+- CORRECT: tags: ["Roguelike"] → returns thousands of results
+
 Examples:
+- "Roguelike games with good reviews" → search_games with tags: ["Roguelike"], review_percentage: {gte: 80}
 - "Action RPG games from 2025" → search_games with tags: ["Action RPG"], release_year: {gte: 2025, lte: 2025}
 - "JRPG games with good reviews" → search_games with tags: ["JRPG"], review_percentage: {gte: 80}
 - "Survival horror games" → search_games with tags: ["Survival Horror"]
