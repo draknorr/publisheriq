@@ -8,6 +8,7 @@ export const QUERY_DATABASE_TOOL: Tool = {
 
 RULES:
 - Only SELECT queries are allowed
+- MUST include ORDER BY for list queries (default: release_date DESC)
 - Always include LIMIT (max 50 rows)
 - Use explicit JOINs (no implicit joins)
 - Use ILIKE for case-insensitive text searches

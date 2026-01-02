@@ -300,23 +300,33 @@ Use these SQL translations for natural language concepts:
 | "souls-like" | JOIN app_steam_tags + steam_tags WHERE \`st.name ILIKE '%souls%'\` |
 | "metroidvania" | JOIN app_steam_tags + steam_tags WHERE \`st.name ILIKE '%metroidvania%'\` |
 
+## MANDATORY: Result Ordering
+
+**Every query returning game lists MUST include ORDER BY. Results without ORDER BY appear in random/arbitrary order.**
+
+Default ordering (use unless user specifies otherwise):
+- Game listings: \`ORDER BY a.release_date DESC NULLS LAST\`
+- By popularity: \`ORDER BY dm.total_reviews DESC\`
+- By quality: \`ORDER BY a.pics_review_percentage DESC\`
+
 ## SQL Rules
 1. Only SELECT queries - never modify data
-2. Always include LIMIT (max 50 rows)
-3. Use explicit JOINs, not comma-separated tables
-4. For latest metrics: \`metric_date = (SELECT MAX(metric_date) FROM daily_metrics WHERE appid = a.appid)\`
-5. Use ILIKE with wildcards for text searches: \`ILIKE '%search_term%'\` (NOT exact matches)
-6. Use NULLIF(total_reviews, 0) when calculating ratios
-7. Filter \`type = 'game'\` unless user asks for DLC/demos
-8. Filter \`is_released = TRUE AND is_delisted = FALSE\` for active games
-9. IMPORTANT: When using SELECT DISTINCT, all ORDER BY columns MUST appear in the SELECT list
-10. For genres/tags/categories: ALWAYS join through the reference table to get names (e.g., \`JOIN steam_tags st ON ast.tag_id = st.tag_id\`)
-11. Use ILIKE for tag, genre, and category name matching to handle case variations
-12. For Steam Deck queries: Use LEFT JOIN - NULL means not tested, 'unknown' means tested but inconclusive
-13. For platform queries: The \`platforms\` column is comma-separated (e.g., "windows,macos,linux")
-14. For franchise queries: Use normalized_name for consistent matching
-15. For DLC queries: \`parent_appid IS NOT NULL\` identifies DLC, join back to apps to find the parent game
-16. **CRITICAL: Developer/Publisher name searches MUST use wildcards**: \`d.name ILIKE '%FromSoftware%'\` NOT \`d.name = 'FromSoftware'\`
+2. ALWAYS include ORDER BY for list queries (default: \`release_date DESC NULLS LAST\`)
+3. Always include LIMIT (max 50 rows)
+4. Use explicit JOINs, not comma-separated tables
+5. For latest metrics: \`metric_date = (SELECT MAX(metric_date) FROM daily_metrics WHERE appid = a.appid)\`
+6. Use ILIKE with wildcards for text searches: \`ILIKE '%search_term%'\` (NOT exact matches)
+7. Use NULLIF(total_reviews, 0) when calculating ratios
+8. Filter \`type = 'game'\` unless user asks for DLC/demos
+9. Filter \`is_released = TRUE AND is_delisted = FALSE\` for active games
+10. IMPORTANT: When using SELECT DISTINCT, all ORDER BY columns MUST appear in the SELECT list
+11. For genres/tags/categories: ALWAYS join through the reference table to get names (e.g., \`JOIN steam_tags st ON ast.tag_id = st.tag_id\`)
+12. Use ILIKE for tag, genre, and category name matching to handle case variations
+13. For Steam Deck queries: Use LEFT JOIN - NULL means not tested, 'unknown' means tested but inconclusive
+14. For platform queries: The \`platforms\` column is comma-separated (e.g., "windows,macos,linux")
+15. For franchise queries: Use normalized_name for consistent matching
+16. For DLC queries: \`parent_appid IS NOT NULL\` identifies DLC, join back to apps to find the parent game
+17. **CRITICAL: Developer/Publisher name searches MUST use wildcards**: \`d.name ILIKE '%FromSoftware%'\` NOT \`d.name = 'FromSoftware'\`
     - Names often include suffixes like "Inc", "LLC", "Studios", etc.
     - Example: "FromSoftware" is stored as "FromSoftware, Inc."
 

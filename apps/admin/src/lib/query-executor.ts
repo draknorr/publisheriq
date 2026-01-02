@@ -101,6 +101,18 @@ export function validateQuery(sql: string): ValidationResult {
     }
   }
 
+  // Add default ORDER BY for game queries if missing
+  if (!/\bORDER\s+BY\b/i.test(sanitizedSql)) {
+    // Only add if query involves the apps table
+    if (/\bFROM\s+apps\b/i.test(sanitizedSql) || /\ba\.appid\b/i.test(sanitizedSql)) {
+      // Insert before LIMIT clause
+      sanitizedSql = sanitizedSql.replace(
+        /(\s+LIMIT\s+\d+)/i,
+        ' ORDER BY a.release_date DESC NULLS LAST$1'
+      );
+    }
+  }
+
   return { valid: true, sanitizedSql };
 }
 
