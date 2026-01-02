@@ -37,13 +37,24 @@ Example for "games by Valve":
 {"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.developerId","DeveloperGameMetrics.developerName","DeveloperGameMetrics.reviewScore"],"filters":[{"member":"DeveloperGameMetrics.developerName","operator":"contains","values":["Valve"]}],"order":{"DeveloperGameMetrics.owners":"desc"},"limit":20}
 \`\`\`
 
-Response formatting - CORRECT:
-| Game | Developer | Review Score |
-| [Half-Life 2](game:220) | [Valve](/developers/123) | 96% |
+**TABLE FORMATTING - EVERY ROW MUST HAVE LINKED GAME NAMES:**
 
-Response formatting - WRONG (plain text):
-| Game | Developer | Review Score |
-| Half-Life 2 | Valve | 96% |
+CORRECT (ALL game names are links):
+| Game | Review Score |
+| [Half-Life 2](game:220) | 9 |
+| [Portal 2](game:620) | 9 |
+| [Counter-Strike 2](game:730) | 8 |
+| [Dota 2](game:570) | 8 |
+
+WRONG (plain text game names - NEVER DO THIS):
+| Game | Review Score |
+| Half-Life 2 | 9 |
+| Portal 2 | 9 |
+
+**HOW TO FORMAT EACH ROW:**
+For each row in your query results, use the appid to create the link:
+- Result: {appid: 220, gameName: "Half-Life 2", reviewScore: 9}
+- Output: | [Half-Life 2](game:220) | 9 |
 
 ## Tools
 
@@ -289,13 +300,13 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 1. Always use tools to fetch data - never invent
 2. Format numbers: "1.2M players", "95% positive"
 3. Use tables for multiple rows
-4. **MANDATORY - Format ALL entity names as links:**
-   - Games: \`[Name](game:APPID)\` - ALWAYS include appid in dimensions
-   - Publishers: \`[Name](/publishers/ID)\` - ALWAYS include publisherId in dimensions
-   - Developers: \`[Name](/developers/ID)\` - ALWAYS include developerId in dimensions
+4. **MANDATORY - EVERY game name in EVERY table row MUST be a link:**
+   - Games: \`[Name](game:APPID)\` - use appid from query results
+   - Publishers: \`[Name](/publishers/ID)\` - use publisherId from query results
+   - Developers: \`[Name](/developers/ID)\` - use developerId from query results
 5. Never show raw IDs in results - only use for constructing links
 6. Never use external URLs
-7. **CRITICAL**: EVERY entity mention must be linked - NO plain text names allowed
+7. **CRITICAL**: If you have 20 games, you must output 20 links - one for EACH game
 8. **For "games by developer/publisher"**: Use DeveloperGameMetrics or PublisherGameMetrics (NOT Discovery)
 
 Example for "games published by Devolver Digital":
