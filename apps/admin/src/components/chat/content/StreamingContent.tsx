@@ -1,16 +1,73 @@
 'use client';
 
-import { useMemo, memo, type ComponentPropsWithoutRef } from 'react';
+import { useMemo, memo, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Link from 'next/link';
 import { EntityLinkRenderer } from './EntityLinkRenderer';
 import { MermaidBlock } from './MermaidBlock';
 import { CopyButton } from './CopyButton';
 import { detectSql } from './parsers';
+import { useEntityMappings, tryAutoLink } from './EntityLinkContext';
 
 interface StreamingContentProps {
   content: string;
   isStreaming?: boolean;
+}
+
+/**
+ * Table cell component that auto-links entity names using entity mappings from context
+ */
+function AutoLinkTableCell({ children }: { children?: ReactNode }) {
+  const mappings = useEntityMappings();
+
+  // Extract text content from children
+  const textContent = extractTextContent(children);
+
+  // Try to auto-link the text
+  const linked = tryAutoLink(textContent, mappings);
+
+  if (linked) {
+    const href = linked.type === 'game'
+      ? `/apps/${linked.id}`
+      : linked.type === 'developer'
+        ? `/developers/${linked.id}`
+        : `/publishers/${linked.id}`;
+
+    return (
+      <td className="px-4 py-2.5 text-text-primary">
+        <Link
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+        >
+          {linked.name}
+        </Link>
+      </td>
+    );
+  }
+
+  return <td className="px-4 py-2.5 text-text-primary">{children}</td>;
+}
+
+/**
+ * Recursively extract text content from React children
+ */
+function extractTextContent(children: ReactNode): string {
+  if (typeof children === 'string') {
+    return children;
+  }
+  if (typeof children === 'number') {
+    return String(children);
+  }
+  if (Array.isArray(children)) {
+    return children.map(extractTextContent).join('');
+  }
+  if (children && typeof children === 'object' && 'props' in children) {
+    return extractTextContent((children as { props: { children?: ReactNode } }).props.children);
+  }
+  return '';
 }
 
 // Memoized code block with syntax highlighting
@@ -83,7 +140,7 @@ const components: Components = {
       {children}
     </th>
   ),
-  td: ({ children }) => <td className="px-4 py-2.5 text-text-primary">{children}</td>,
+  td: AutoLinkTableCell as Components['td'],
 
   // Headers
   h1: ({ children }) => (

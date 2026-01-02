@@ -7,6 +7,7 @@ import type { ChatToolCall, ChatTiming } from '@/lib/llm/types';
 import type { StreamDebugInfo } from '@/lib/llm/streaming-types';
 import { Clock } from 'lucide-react';
 import { StreamingContent, CopyButton, CodeBlock } from './content';
+import { EntityLinkProvider } from './content/EntityLinkContext';
 
 interface DisplayMessage {
   id: string;
@@ -69,7 +70,9 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
             </div>
           ) : (
             <div className="pr-8">
-              <StreamingContent content={message.content} isStreaming={isStreaming} />
+              <EntityLinkProvider toolCalls={message.toolCalls}>
+                <StreamingContent content={message.content} isStreaming={isStreaming} />
+              </EntityLinkProvider>
             </div>
           )}
 

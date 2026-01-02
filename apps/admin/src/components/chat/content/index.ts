@@ -6,4 +6,5 @@ export { CollapsibleSection } from './CollapsibleSection';
 export { CopyButton } from './CopyButton';
 export { EntityLinkRenderer } from './EntityLinkRenderer';
 export { MermaidBlock } from './MermaidBlock';
+export { EntityLinkProvider, useEntityMappings, extractEntityMappings, tryAutoLink } from './EntityLinkContext';
 export * from './parsers';
