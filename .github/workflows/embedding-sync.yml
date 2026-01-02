@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Batch size for processing (default 1000)'
+        description: 'Batch size for processing (default 100)'
         required: false
-        default: '1000'
+        default: '100'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -42,4 +42,4 @@ jobs:
         run: pnpm --filter @publisheriq/ingestion embedding-sync
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '1000' }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '100' }}
