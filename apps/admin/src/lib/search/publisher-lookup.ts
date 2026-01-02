@@ -28,10 +28,10 @@ async function getEntityCache(): Promise<EntityCache> {
 
   const supabase = getSupabase();
 
-  // Load all in parallel
+  // Load all in parallel - use high limit to get all entities (Supabase default is 1000)
   const [publishersResult, developersResult] = await Promise.all([
-    supabase.from('publishers').select('id, name').order('name'),
-    supabase.from('developers').select('id, name').order('name'),
+    supabase.from('publishers').select('id, name').order('name').limit(50000),
+    supabase.from('developers').select('id, name').order('name').limit(50000),
   ]);
 
   // Log errors if queries failed
