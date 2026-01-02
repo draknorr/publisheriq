@@ -32,9 +32,13 @@ When asked for "games by [developer]" or "games from [publisher]", you MUST use:
 
 DO NOT use the Discovery cube for these queries - it lacks developer/publisher IDs!
 
+**IMPORTANT: Use "equals" operator for developer/publisher names to avoid false positives.**
+- "contains" matches substrings: "Valve" would match "Antonio Valverde" (WRONG)
+- "equals" matches exact names: "Valve" only matches "Valve" (CORRECT)
+
 Example for "games by Valve":
 \`\`\`json
-{"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.developerId","DeveloperGameMetrics.developerName","DeveloperGameMetrics.reviewScore"],"filters":[{"member":"DeveloperGameMetrics.developerName","operator":"contains","values":["Valve"]}],"order":{"DeveloperGameMetrics.releaseDate":"desc"},"limit":20}
+{"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.developerId","DeveloperGameMetrics.developerName","DeveloperGameMetrics.reviewScore"],"filters":[{"member":"DeveloperGameMetrics.developerName","operator":"equals","values":["Valve"]}],"order":{"DeveloperGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
 **TABLE FORMATTING - EVERY ROW MUST HAVE LINKED GAME NAMES:**
@@ -173,12 +177,12 @@ String matching:
 \`\`\`
 
 **CRITICAL - Developer/Publisher Name Searches:**
-Names often include suffixes like "Inc", "LLC", "Studios". Use \`contains\` operator, NOT \`equals\`:
+Use \`equals\` operator to avoid false positives (e.g., "Valve" matching "Valverde"):
 \`\`\`json
-{"member":"DeveloperMetrics.developerName","operator":"contains","values":["FromSoftware"]}
-{"member":"PublisherMetrics.publisherName","operator":"contains","values":["Devolver"]}
+{"member":"DeveloperMetrics.developerName","operator":"equals","values":["Valve"]}
+{"member":"PublisherMetrics.publisherName","operator":"equals","values":["Devolver Digital"]}
 \`\`\`
-Example: "FromSoftware" is stored as "FromSoftware, Inc." - using \`equals\` will find nothing!
+Only use \`contains\` if user explicitly wants partial/fuzzy matching.
 
 ## IMPORTANT: Prefer Segments Over Filters
 
@@ -223,7 +227,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
    - DeveloperGameMetrics/PublisherGameMetrics for "past 12 months", "past 3 months"
 10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
-12. **Developer/Publisher name searches MUST use "contains" operator**: "FromSoftware" → "FromSoftware, Inc." so use \`{"operator":"contains","values":["FromSoftware"]}\` NOT \`{"operator":"equals",...}\`
+12. **Developer/Publisher name searches MUST use "equals" operator**: Avoids false positives like "Valve" matching "Valverde". Use exact names from the database.
 
 ## Natural Language Mappings
 
@@ -331,7 +335,7 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 
 Example for "games published by Devolver Digital":
 \`\`\`json
-{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"contains","values":["Devolver"]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
+{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"equals","values":["Devolver Digital"]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
 ## Pagination & "Show Next" Queries
