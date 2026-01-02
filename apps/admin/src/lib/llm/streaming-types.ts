@@ -28,6 +28,7 @@ export interface ToolResultEvent extends BaseStreamEvent {
   type: 'tool_result';
   toolCallId: string;
   name: string;
+  arguments: Record<string, unknown>;
   result: QueryResult | SimilarityResult;
   timing: { executionMs: number };
 }

@@ -117,15 +117,14 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
                 break;
 
               case 'tool_result': {
-                // Find arguments from pending tool call
-                const pendingTc = pendingToolCalls.find(tc => tc.id === event.toolCallId);
-                // Remove from pending and add to completed
+                // Remove from pending
                 setPendingToolCalls(prev =>
                   prev.filter(tc => tc.id !== event.toolCallId)
                 );
+                // Use arguments directly from the event (not pendingToolCalls - stale closure issue)
                 toolCalls.push({
                   name: event.name,
-                  arguments: pendingTc?.arguments || {},
+                  arguments: event.arguments || {},
                   result: event.result,
                   timing: event.timing,
                 });

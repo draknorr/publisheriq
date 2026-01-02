@@ -177,6 +177,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               type: 'tool_result',
               toolCallId: toolCall.id,
               name: toolCall.name,
+              arguments: toolCall.arguments,
               result,
               timing: { executionMs: Math.round(toolExecutionMs) },
             };
