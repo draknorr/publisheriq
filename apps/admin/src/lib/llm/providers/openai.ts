@@ -1,5 +1,5 @@
 import { BaseLLMProvider } from './base';
-import type { Message, Tool, LLMResponse, ToolCall } from '../types';
+import type { Message, Tool, LLMResponse, ToolCall, StreamChunk } from '../types';
 
 interface OpenAIMessage {
   role: string;
@@ -69,6 +69,143 @@ export class OpenAIProvider extends BaseLLMProvider {
 
     const data = (await response.json()) as OpenAIResponse;
     return this.parseResponse(data);
+  }
+
+  async *chatStream(messages: Message[], tools?: Tool[]): AsyncGenerator<StreamChunk, void, unknown> {
+    const openaiMessages = this.formatMessages(messages);
+
+    const body: Record<string, unknown> = {
+      model: this.model,
+      messages: openaiMessages,
+      temperature: 0.1,
+      stream: true,
+    };
+
+    if (tools && tools.length > 0) {
+      body.tools = tools;
+      body.tool_choice = 'auto';
+    }
+
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // Track tool calls being accumulated
+    const toolCallsInProgress: Map<number, { id: string; name: string; arguments: string }> = new Map();
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') {
+            // Emit any completed tool calls
+            for (const [, toolCall] of toolCallsInProgress) {
+              try {
+                yield {
+                  type: 'tool_use_end',
+                  toolCall: {
+                    id: toolCall.id,
+                    name: toolCall.name,
+                    arguments: JSON.parse(toolCall.arguments || '{}'),
+                  },
+                };
+              } catch {
+                // Handle JSON parse error for tool arguments
+                yield {
+                  type: 'tool_use_end',
+                  toolCall: {
+                    id: toolCall.id,
+                    name: toolCall.name,
+                    arguments: {},
+                  },
+                };
+              }
+            }
+            yield { type: 'done' };
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta;
+
+            if (!delta) continue;
+
+            // Handle text content
+            if (delta.content) {
+              yield { type: 'text', text: delta.content };
+            }
+
+            // Handle tool calls
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const index = tc.index ?? 0;
+
+                if (tc.id) {
+                  // New tool call starting
+                  toolCallsInProgress.set(index, {
+                    id: tc.id,
+                    name: tc.function?.name || '',
+                    arguments: tc.function?.arguments || '',
+                  });
+                  yield {
+                    type: 'tool_use_start',
+                    toolCall: {
+                      id: tc.id,
+                      name: tc.function?.name || '',
+                      arguments: {},
+                    },
+                  };
+                } else {
+                  // Continuing to accumulate tool call
+                  const existing = toolCallsInProgress.get(index);
+                  if (existing) {
+                    if (tc.function?.name) {
+                      existing.name += tc.function.name;
+                    }
+                    if (tc.function?.arguments) {
+                      existing.arguments += tc.function.arguments;
+                    }
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   private formatMessages(messages: Message[]): OpenAIMessage[] {

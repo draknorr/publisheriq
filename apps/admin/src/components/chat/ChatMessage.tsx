@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { ChevronDown, ChevronRight, Database, User, Bot } from 'lucide-react';
 import type { ChatToolCall, ChatTiming } from '@/lib/llm/types';
 import { Clock } from 'lucide-react';
-import { MessageContent, CopyButton, CodeBlock } from './content';
+import { StreamingContent, CopyButton, CodeBlock } from './content';
 
 interface DisplayMessage {
   id: string;
@@ -23,9 +23,10 @@ function formatMs(ms: number): string {
 
 interface ChatMessageProps {
   message: DisplayMessage;
+  isStreaming?: boolean;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) {
   const [showQueries, setShowQueries] = useState(false);
   const isUser = message.role === 'user';
 
@@ -66,7 +67,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             </div>
           ) : (
             <div className="pr-8">
-              <MessageContent content={message.content} />
+              <StreamingContent content={message.content} isStreaming={isStreaming} />
             </div>
           )}
 

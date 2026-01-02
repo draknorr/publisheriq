@@ -115,3 +115,44 @@
   .animation-delay-400 { animation-delay: 400ms; }
   .animation-delay-500 { animation-delay: 500ms; }
 }
+
+@layer components {
+  /* Chat prose styling for rich markdown */
+  .prose-chat {
+    @apply text-text-primary;
+  }
+
+  .prose-chat > *:first-child {
+    @apply mt-0;
+  }
+
+  .prose-chat > *:last-child {
+    @apply mb-0;
+  }
+
+  /* Smooth fade-in for new messages */
+  .message-fade-in {
+    animation: messageFadeIn 0.2s ease-out;
+  }
+
+  @keyframes messageFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Streaming cursor blink */
+  .streaming-cursor {
+    animation: cursorBlink 1s ease-in-out infinite;
+  }
+
+  @keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+}
