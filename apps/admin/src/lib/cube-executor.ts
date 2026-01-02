@@ -188,7 +188,7 @@ async function executeCubeQueryInternal(query: CubeQuery): Promise<CubeResult> {
   const cubeQuery: Record<string, unknown> = {};
 
   // Start with requested dimensions
-  let dimensions = query.dimensions ? [...query.dimensions] : [];
+  const dimensions = query.dimensions ? [...query.dimensions] : [];
 
   // Auto-add order field to dimensions if not present (Cube.dev requires it)
   if (query.order) {
