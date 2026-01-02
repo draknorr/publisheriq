@@ -13,6 +13,7 @@ import { executeCubeQuery } from '@/lib/cube-executor';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
+import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse } from '@/lib/llm/types';
 
 // Maximum tool call iterations to prevent infinite loops
@@ -98,11 +99,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             toolCalls: [toolCall],
           });
 
-          // Add tool result message
+          // Add tool result message (pre-formatted with entity links)
           messages.push({
             role: 'tool',
             toolCallId: toolCall.id,
-            content: JSON.stringify(queryResult),
+            content: formatResultWithEntityLinks(queryResult),
           });
         } else if (toolCall.name === 'find_similar') {
           const args = toolCall.arguments as unknown as FindSimilarArgs;
@@ -124,11 +125,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             toolCalls: [toolCall],
           });
 
-          // Add tool result message
+          // Add tool result message (pre-formatted with entity links)
           messages.push({
             role: 'tool',
             toolCallId: toolCall.id,
-            content: JSON.stringify(similarityResult),
+            content: formatResultWithEntityLinks(similarityResult),
           });
         } else if (toolCall.name === 'search_games') {
           const args = toolCall.arguments as unknown as SearchGamesArgs;
@@ -150,11 +151,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             toolCalls: [toolCall],
           });
 
-          // Add tool result message
+          // Add tool result message (pre-formatted with entity links)
           messages.push({
             role: 'tool',
             toolCallId: toolCall.id,
-            content: JSON.stringify(searchResult),
+            content: formatResultWithEntityLinks(searchResult),
           });
         } else if (toolCall.name === 'lookup_tags') {
           const args = toolCall.arguments as unknown as LookupTagsArgs;
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
           messages.push({
             role: 'tool',
             toolCallId: toolCall.id,
-            content: JSON.stringify(lookupResult),
+            content: JSON.stringify(lookupResult), // lookup_tags doesn't have entity links
           });
         } else {
           // Unknown tool - add error result

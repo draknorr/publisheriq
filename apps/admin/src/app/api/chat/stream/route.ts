@@ -9,6 +9,7 @@ import { executeCubeQuery } from '@/lib/cube-executor';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
+import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import type { Message, ChatRequest, Tool, QueryResult, SimilarityResult, ToolCall } from '@/lib/llm/types';
 import type { StreamEvent, TextDeltaEvent, ToolStartEvent, ToolResultEvent, MessageEndEvent, ErrorEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
 
@@ -179,12 +180,12 @@ export async function POST(request: NextRequest): Promise<Response> {
             toolCalls: completedToolCalls,
           });
 
-          // Add each tool result to message history
+          // Add each tool result to message history (pre-formatted with entity links)
           for (const { toolCall, result } of toolResults) {
             messages.push({
               role: 'tool',
               toolCallId: toolCall.id,
-              content: JSON.stringify(result),
+              content: formatResultWithEntityLinks(result),
             });
           }
 
