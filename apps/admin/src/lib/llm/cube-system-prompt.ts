@@ -98,9 +98,6 @@ Dimensions: appid, name, isFree, priceCents, priceDollars, platforms, hasWindows
 Measures: count, avgPrice, avgReviewPercentage, sumOwners (aggregation only), sumCcu (aggregation only)
 **ORDERING**: To sort games, use dimensions like ownersMidpoint, totalReviews, ccuPeak - NOT measures
 Segments: released, free, paid, highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), lastYear, last6Months, last3Months, vrGame, roguelike, multiplayer, singleplayer, coop, openWorld
-**IMPORTANT - Tags are NOT dimensions**: The Discovery cube has NO \`tags\` dimension. Do NOT try to filter by \`Discovery.tags\` - it does not exist.
-- For common tag categories, use the pre-defined SEGMENTS: roguelike, multiplayer, singleplayer, coop, openWorld, vrGame
-- For other specific tags (Souls-like, Cozy, CRPG, etc.), use the **search_games** tool instead
 
 ### PublisherMetrics (standalone - ALL-TIME stats)
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
@@ -237,8 +234,6 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
 12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers to find exact name, THEN use "equals" operator. This ensures "Krafton" finds "Krafton Inc."
-13. **DON'T use Discovery.tags** - there is no tags dimension. Use search_games tool for tag-based filtering.
-14. **DON'T create roguelite segment** - only roguelike exists. Use Discovery.roguelike for both roguelike AND roguelite queries.
 
 ## Natural Language Mappings
 
@@ -285,7 +280,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "recently updated" → segment: recentlyUpdated
 - "updated since [date]" → filter: lastContentUpdate afterDate [date]
 - "VR games" → segment: vrGame
-- "roguelike" / "roguelite" / "rogue-like" → segment: Discovery.roguelike (NOTE: only "roguelike" segment exists - there is NO separate "roguelite" segment)
+- "roguelike" / "roguelite" → segment: roguelike
 - "multiplayer" → segment: multiplayer
 - "single player" → segment: singleplayer
 - "co-op" / "coop" → segment: coop
