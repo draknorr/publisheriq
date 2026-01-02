@@ -187,8 +187,20 @@ async function executeCubeQueryInternal(query: CubeQuery): Promise<CubeResult> {
   // Build the Cube.dev query format
   const cubeQuery: Record<string, unknown> = {};
 
-  if (query.dimensions && query.dimensions.length > 0) {
-    cubeQuery.dimensions = query.dimensions;
+  // Start with requested dimensions
+  let dimensions = query.dimensions ? [...query.dimensions] : [];
+
+  // Auto-add order field to dimensions if not present (Cube.dev requires it)
+  if (query.order) {
+    for (const orderField of Object.keys(query.order)) {
+      if (!dimensions.includes(orderField)) {
+        dimensions.push(orderField);
+      }
+    }
+  }
+
+  if (dimensions.length > 0) {
+    cubeQuery.dimensions = dimensions;
   }
 
   if (query.measures && query.measures.length > 0) {
@@ -251,9 +263,43 @@ async function executeCubeQueryInternal(query: CubeQuery): Promise<CubeResult> {
       return simplified;
     });
 
+    // Apply sorting at application layer (Cube.dev doesn't always respect ORDER BY for time dimensions)
+    let sortedData = simplifiedData;
+    if (query.order) {
+      const orderEntries = Object.entries(query.order);
+      if (orderEntries.length > 0) {
+        const [orderField, orderDir] = orderEntries[0];
+        // Extract field name without cube prefix
+        const fieldName = orderField.includes('.') ? orderField.split('.').pop()! : orderField;
+
+        sortedData = [...simplifiedData].sort((a, b) => {
+          const aVal = a[fieldName];
+          const bVal = b[fieldName];
+
+          // Handle null/undefined values - push to end
+          if (aVal == null && bVal == null) return 0;
+          if (aVal == null) return 1;
+          if (bVal == null) return -1;
+
+          // Compare values
+          let comparison = 0;
+          if (typeof aVal === 'string' && typeof bVal === 'string') {
+            // Date strings or regular strings
+            comparison = aVal.localeCompare(bVal);
+          } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+            comparison = aVal - bVal;
+          } else {
+            comparison = String(aVal).localeCompare(String(bVal));
+          }
+
+          return orderDir === 'desc' ? -comparison : comparison;
+        });
+      }
+    }
+
     return {
       success: true,
-      data: simplifiedData,
+      data: sortedData,
       rowCount: simplifiedData.length,
       cached: result.query?.hitPreAggregations || false,
       debug: {
