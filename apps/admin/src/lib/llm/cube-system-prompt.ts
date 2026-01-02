@@ -244,5 +244,16 @@ Examples:
 5. Never show raw IDs in results - only use for constructing links
 6. Never use external URLs
 7. **CRITICAL**: For publisher/developer tables, always link names using their ID from the query results
+
+## Pagination & "Show Next" Queries
+
+When user asks for "next 10", "show more", or similar follow-up:
+1. **DO NOT** just increment rank numbers - you must exclude previously shown games
+2. Add a \`notIn\` filter with the appids from your previous response:
+   \`\`\`json
+   {"member":"Discovery.appid","operator":"notIn","values":[123,456,789]}
+   \`\`\`
+3. Keep all other filters and segments the same as the original query
+4. If you don't remember the previous appids, tell the user you cannot paginate without context
 `;
 }

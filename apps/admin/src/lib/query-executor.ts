@@ -158,6 +158,9 @@ export async function executeQuery(sql: string): Promise<QueryResult> {
       data: rows.slice(0, MAX_ROWS) as Record<string, unknown>[],
       rowCount: rows.length,
       truncated,
+      debug: {
+        executedSql: sanitizedSql,
+      },
     };
   } catch (error) {
     console.error('Query execution error:', error);

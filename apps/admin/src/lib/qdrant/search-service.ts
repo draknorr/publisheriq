@@ -68,6 +68,10 @@ export interface FindSimilarResult {
   }>;
   total_found?: number;
   error?: string;
+  debug?: {
+    searchParams?: Record<string, unknown>;
+    vectorFilter?: Record<string, unknown>;
+  };
 }
 
 /**
@@ -361,5 +365,15 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     },
     results,
     total_found: searchResult.length,
+    debug: {
+      searchParams: {
+        collection,
+        entity_type,
+        reference_id: entity.id,
+        filters: args.filters,
+        limit: actualLimit,
+      },
+      vectorFilter: qdrantFilter as Record<string, unknown> | undefined,
+    },
   };
 }

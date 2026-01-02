@@ -144,6 +144,13 @@ interface CubeResult {
   rowCount: number;
   cached?: boolean;
   error?: string;
+  debug?: {
+    cubeQuery?: Record<string, unknown>;
+    filters?: unknown[];
+    segments?: string[];
+    order?: Record<string, string>;
+    limit?: number;
+  };
 }
 
 /**
@@ -249,6 +256,13 @@ async function executeCubeQueryInternal(query: CubeQuery): Promise<CubeResult> {
       data: simplifiedData,
       rowCount: simplifiedData.length,
       cached: result.query?.hitPreAggregations || false,
+      debug: {
+        cubeQuery: cubeQuery,
+        filters: cubeQuery.filters as unknown[],
+        segments: cubeQuery.segments as string[],
+        order: cubeQuery.order as Record<string, string>,
+        limit: cubeQuery.limit as number,
+      },
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

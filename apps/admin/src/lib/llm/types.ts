@@ -61,6 +61,21 @@ export interface StreamChunk {
   };
 }
 
+// Debug information for tool calls
+export interface DebugInfo {
+  // For Cube queries (query_analytics)
+  cubeQuery?: Record<string, unknown>;
+  filters?: unknown[];
+  segments?: string[];
+  order?: Record<string, string>;
+  limit?: number;
+  // For SQL queries (query_database)
+  executedSql?: string;
+  // For similarity search (find_similar)
+  searchParams?: Record<string, unknown>;
+  vectorFilter?: Record<string, unknown>;
+}
+
 // Query execution
 export interface QueryResult {
   success: boolean;
@@ -68,6 +83,7 @@ export interface QueryResult {
   rowCount?: number;
   error?: string;
   truncated?: boolean;
+  debug?: DebugInfo;
 }
 
 // Chat API
@@ -111,6 +127,7 @@ export interface SimilarityResult {
   }>;
   total_found?: number;
   error?: string;
+  debug?: DebugInfo;
 }
 
 export interface ChatResponse {

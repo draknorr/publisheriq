@@ -105,7 +105,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                     // Handle database query results
                     if (tc.name === 'query_database') {
                       const args = tc.arguments as { reasoning?: string; sql?: string };
-                      const result = tc.result as { success: boolean; rowCount?: number; truncated?: boolean; error?: string };
+                      const result = tc.result as { success: boolean; rowCount?: number; truncated?: boolean; error?: string; debug?: Record<string, unknown> };
                       return (
                         <div key={idx} className="space-y-2">
                           {args.reasoning && (
@@ -128,6 +128,16 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                               </span>
                             )}
                           </div>
+                          {result.debug && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
+                                Debug Info
+                              </summary>
+                              <pre className="mt-1 p-2 bg-surface-base rounded text-xs overflow-x-auto max-h-48">
+                                {JSON.stringify(result.debug, null, 2)}
+                              </pre>
+                            </details>
+                          )}
                         </div>
                       );
                     }
@@ -135,7 +145,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                     // Handle similarity search results
                     if (tc.name === 'find_similar') {
                       const args = tc.arguments as { reference_name?: string; entity_type?: string };
-                      const result = tc.result as { success: boolean; total_found?: number; error?: string };
+                      const result = tc.result as { success: boolean; total_found?: number; error?: string; debug?: Record<string, unknown> };
                       return (
                         <div key={idx} className="space-y-2">
                           <p className="text-body-sm text-text-secondary italic">
@@ -154,6 +164,16 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                               </span>
                             )}
                           </div>
+                          {result.debug && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
+                                Debug Info
+                              </summary>
+                              <pre className="mt-1 p-2 bg-surface-base rounded text-xs overflow-x-auto max-h-48">
+                                {JSON.stringify(result.debug, null, 2)}
+                              </pre>
+                            </details>
+                          )}
                         </div>
                       );
                     }
@@ -161,7 +181,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                     // Handle Cube.dev analytics queries
                     if (tc.name === 'query_analytics') {
                       const args = tc.arguments as { reasoning?: string; cube?: string };
-                      const result = tc.result as { success: boolean; rowCount?: number; cached?: boolean; error?: string };
+                      const result = tc.result as { success: boolean; rowCount?: number; cached?: boolean; error?: string; debug?: Record<string, unknown> };
                       return (
                         <div key={idx} className="space-y-2">
                           {args.reasoning && (
@@ -194,6 +214,16 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                               </span>
                             )}
                           </div>
+                          {result.debug && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
+                                Debug Info
+                              </summary>
+                              <pre className="mt-1 p-2 bg-surface-base rounded text-xs overflow-x-auto max-h-48">
+                                {JSON.stringify(result.debug, null, 2)}
+                              </pre>
+                            </details>
+                          )}
                         </div>
                       );
                     }
