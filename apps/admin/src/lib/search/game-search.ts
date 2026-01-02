@@ -159,9 +159,21 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
     if (genres && genres.length > 0) {
       debug.steps.push(`Filtering by ${genres.length} genres: ${genres.join(', ')}`);
-      const genreAppids = await getAppidsMatchingGenres(supabase, genres);
+      let genreAppids = await getAppidsMatchingGenres(supabase, genres);
       debug.genre_candidates = genreAppids.length;
       debug.steps.push(`Genres filter returned ${genreAppids.length} candidate appids`);
+
+      // Fallback: if genres returned nothing, try the same terms as tags
+      if (genreAppids.length === 0) {
+        debug.steps.push('Genres returned 0, trying as tags fallback');
+        const tagFallback = await getAppidsMatchingTags(supabase, genres);
+        if (tagFallback.length > 0) {
+          debug.steps.push(`Tag fallback found ${tagFallback.length} results`);
+          genreAppids = tagFallback;
+          debug.genre_candidates = tagFallback.length;
+        }
+      }
+
       if (candidateAppids) {
         const before = candidateAppids.length;
         candidateAppids = candidateAppids.filter((id) => genreAppids.includes(id));

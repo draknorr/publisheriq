@@ -136,11 +136,14 @@ export const SEARCH_GAMES_TOOL: Tool = {
 IMPORTANT: Call this tool DIRECTLY with all parameters. Do NOT call lookup_tags first.
 
 Examples - call search_games directly like this:
+- "Action RPG games from 2025" → tags: ["Action RPG"], release_year: {gte: 2025, lte: 2025}
+- "JRPG games with good reviews" → tags: ["JRPG"], review_percentage: {gte: 80}
 - "Steam Deck roguelikes with great reviews" → tags: ["Roguelike"], steam_deck: ["verified"], review_percentage: {gte: 90}
 - "Metroidvania games on Steam Deck" → tags: ["Metroidvania"], steam_deck: ["verified"]
 - "Cozy games with good reviews" → tags: ["Cozy"], review_percentage: {gte: 80}
 
-Supports fuzzy tag matching - common tags like Roguelike, Metroidvania, Souls-like, CRPG work directly.
+Tags are the PRIMARY filter - use for game types like Action RPG, JRPG, Roguelike, Souls-like, etc.
+Genres are SECONDARY - only use for broad categories like Indie, Free to Play, Early Access.
 
 Returns results with fields: appid (for game: links), name, platforms, review data, etc.
 Always format game names as: [name](game:{appid})`,
@@ -151,13 +154,13 @@ Always format game names as: [name](game:{appid})`,
           type: 'array',
           items: { type: 'string' },
           description:
-            'Steam tags to filter by (fuzzy match). Examples: "CRPG", "Cozy", "Souls-like", "Metroidvania", "Pixel Graphics"',
+            'PRIMARY filter - Steam tags (fuzzy match). Use for game types: "Action RPG", "JRPG", "CRPG", "Roguelike", "Souls-like", "Metroidvania", "Survival Horror", "Cozy"',
         },
         genres: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Genres to filter by (fuzzy match). Examples: "RPG", "Action", "Adventure", "Indie", "Strategy"',
+            'SECONDARY filter - broad Steam categories only (fuzzy match): "Indie", "Free to Play", "Early Access", "Simulation". For specific game types, use tags instead.',
         },
         categories: {
           type: 'array',

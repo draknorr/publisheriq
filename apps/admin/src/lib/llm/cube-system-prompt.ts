@@ -289,11 +289,11 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 
 ## search_games Tool
 
-Use this tool for tag-based game discovery. Supports fuzzy matching - you don't need exact tag names.
+Use this tool for tag-based game discovery. **Tags are the most complete data source - prefer tags over genres for game types.**
 
 Filters:
-- **tags**: Steam tags like "CRPG", "Cozy", "Souls-like", "Metroidvania", "Pixel Graphics", "Atmospheric"
-- **genres**: "RPG", "Action", "Adventure", "Indie", "Strategy", "Simulation"
+- **tags** (PRIMARY): Use for game types/styles - "Action RPG", "CRPG", "Souls-like", "Roguelike", "Metroidvania", "JRPG", "Survival Horror", "Cozy", "Pixel Graphics", "Atmospheric"
+- **genres** (SECONDARY): Only for broad official categories - "Indie", "Free to Play", "Early Access", "Simulation". For specific game types, use tags instead.
 - **categories**: Steam features - "Achievements", "Cloud Saves", "Co-op", "Workshop", "VR", "Controller"
 - **platforms**: "windows", "macos", "linux"
 - **controller_support**: "full", "partial", "any"
@@ -303,6 +303,9 @@ Filters:
 - **order_by**: "reviews" (default), "score", "release_date", "owners"
 
 Examples:
+- "Action RPG games from 2025" → search_games with tags: ["Action RPG"], release_year: {gte: 2025, lte: 2025}
+- "JRPG games with good reviews" → search_games with tags: ["JRPG"], review_percentage: {gte: 80}
+- "Survival horror games" → search_games with tags: ["Survival Horror"]
 - "CRPG released in 2019 for Mac" → search_games with tags: ["CRPG"], platforms: ["macos"], release_year: {gte: 2019, lte: 2019}
 - "Cozy games with 90%+ reviews" → search_games with tags: ["Cozy"], review_percentage: {gte: 90}
 - "Souls-like games on Steam Deck" → search_games with tags: ["Souls-like"], steam_deck: ["verified", "playable"]
