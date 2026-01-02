@@ -32,13 +32,16 @@ When asked for "games by [developer]" or "games from [publisher]", you MUST use:
 
 DO NOT use the Discovery cube for these queries - it lacks developer/publisher IDs!
 
-**IMPORTANT: Use "equals" operator for developer/publisher names to avoid false positives.**
-- "contains" matches substrings: "Valve" would match "Antonio Valverde" (WRONG)
-- "equals" matches exact names: "Valve" only matches "Valve" (CORRECT)
+**IMPORTANT: Use lookup_publishers/lookup_developers FIRST, then use "equals" operator.**
+- Database names may differ from user input (e.g., "Krafton" is stored as "Krafton Inc.")
+- Call lookup_publishers("Krafton") to find the exact name, then use it in your query
+- Use "equals" operator (not "contains") to avoid false positives like "Valve" matching "Antonio Valverde"
 
-Example for "games by Valve":
+Example for "games by Krafton":
+1. First call: lookup_publishers("Krafton") → returns [{id: 1788, name: "Krafton Inc."}]
+2. Then query with exact name:
 \`\`\`json
-{"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.developerId","DeveloperGameMetrics.developerName","DeveloperGameMetrics.reviewScore"],"filters":[{"member":"DeveloperGameMetrics.developerName","operator":"equals","values":["Valve"]}],"order":{"DeveloperGameMetrics.releaseDate":"desc"},"limit":20}
+{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"equals","values":["Krafton Inc."]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
 **TABLE FORMATTING - EVERY ROW MUST HAVE LINKED GAME NAMES:**
@@ -75,6 +78,8 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 **find_similar** - Semantic similarity search ("games like X", recommendations)
 **search_games** - Find games by tags, genres, categories, platforms, PICS data (use for tag-based discovery)
 **lookup_tags** - Search available tags, genres, or categories (use when unsure of tag names)
+**lookup_publishers** - Search publisher names (use BEFORE querying by publisher)
+**lookup_developers** - Search developer names (use BEFORE querying by developer)
 
 ## MANDATORY: Default Ordering
 
@@ -177,12 +182,13 @@ String matching:
 \`\`\`
 
 **CRITICAL - Developer/Publisher Name Searches:**
-Use \`equals\` operator to avoid false positives (e.g., "Valve" matching "Valverde"):
+1. FIRST call lookup_developers or lookup_publishers to find the exact database name
+2. THEN use \`equals\` operator with the exact name from lookup results
 \`\`\`json
 {"member":"DeveloperMetrics.developerName","operator":"equals","values":["Valve"]}
 {"member":"PublisherMetrics.publisherName","operator":"equals","values":["Devolver Digital"]}
 \`\`\`
-Only use \`contains\` if user explicitly wants partial/fuzzy matching.
+This ensures you match names like "Krafton Inc." when user says "Krafton".
 
 ## IMPORTANT: Prefer Segments Over Filters
 
@@ -227,7 +233,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
    - DeveloperGameMetrics/PublisherGameMetrics for "past 12 months", "past 3 months"
 10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
-12. **Developer/Publisher name searches MUST use "equals" operator**: Avoids false positives like "Valve" matching "Valverde". Use exact names from the database.
+12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers to find exact name, THEN use "equals" operator. This ensures "Krafton" finds "Krafton Inc."
 
 ## Natural Language Mappings
 
@@ -333,7 +339,9 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 7. **If a field contains \`[...](game:...)\` format, use it EXACTLY - do not strip the markdown**
 8. **For "games by developer/publisher"**: Use DeveloperGameMetrics or PublisherGameMetrics (NOT Discovery)
 
-Example for "games published by Devolver Digital":
+Example for "games published by Devolver":
+1. First: lookup_publishers("Devolver") → returns [{id: 123, name: "Devolver Digital"}]
+2. Then query with exact name from lookup:
 \`\`\`json
 {"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"equals","values":["Devolver Digital"]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`

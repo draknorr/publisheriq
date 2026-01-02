@@ -13,6 +13,12 @@ import { executeCubeQuery } from '@/lib/cube-executor';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
+import {
+  lookupPublishers,
+  lookupDevelopers,
+  type LookupPublishersArgs,
+  type LookupDevelopersArgs,
+} from '@/lib/search/publisher-lookup';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse } from '@/lib/llm/types';
 
@@ -182,6 +188,58 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             role: 'tool',
             toolCallId: toolCall.id,
             content: JSON.stringify(lookupResult), // lookup_tags doesn't have entity links
+          });
+        } else if (toolCall.name === 'lookup_publishers') {
+          const args = toolCall.arguments as unknown as LookupPublishersArgs;
+
+          // Execute the publisher lookup
+          const lookupResult = await lookupPublishers(args);
+
+          // Track the tool call
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: lookupResult,
+          });
+
+          // Add assistant message with tool calls
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          // Add tool result message
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: JSON.stringify(lookupResult),
+          });
+        } else if (toolCall.name === 'lookup_developers') {
+          const args = toolCall.arguments as unknown as LookupDevelopersArgs;
+
+          // Execute the developer lookup
+          const lookupResult = await lookupDevelopers(args);
+
+          // Track the tool call
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: lookupResult,
+          });
+
+          // Add assistant message with tool calls
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          // Add tool result message
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: JSON.stringify(lookupResult),
           });
         } else {
           // Unknown tool - add error result

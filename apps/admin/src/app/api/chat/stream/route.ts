@@ -9,6 +9,12 @@ import { executeCubeQuery } from '@/lib/cube-executor';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
+import {
+  lookupPublishers,
+  lookupDevelopers,
+  type LookupPublishersArgs,
+  type LookupDevelopersArgs,
+} from '@/lib/search/publisher-lookup';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import type { Message, ChatRequest, Tool, QueryResult, SimilarityResult, ToolCall } from '@/lib/llm/types';
 import type { StreamEvent, TextDeltaEvent, ToolStartEvent, ToolResultEvent, MessageEndEvent, ErrorEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
@@ -51,6 +57,12 @@ async function executeTool(toolCall: ToolCall): Promise<QueryResult | Similarity
   } else if (toolCall.name === 'lookup_tags') {
     const args = toolCall.arguments as unknown as LookupTagsArgs;
     return lookupTags(args);
+  } else if (toolCall.name === 'lookup_publishers') {
+    const args = toolCall.arguments as unknown as LookupPublishersArgs;
+    return lookupPublishers(args);
+  } else if (toolCall.name === 'lookup_developers') {
+    const args = toolCall.arguments as unknown as LookupDevelopersArgs;
+    return lookupDevelopers(args);
   }
   return { success: false, error: `Unknown tool: ${toolCall.name}` };
 }

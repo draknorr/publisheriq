@@ -302,10 +302,68 @@ Use this tool when you need to:
   },
 };
 
+export const LOOKUP_PUBLISHERS_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'lookup_publishers',
+    description: `Search for available publisher names in the database.
+
+Use this tool BEFORE querying for games by publisher to find the exact name:
+- User says "Krafton" → lookup finds "Krafton Inc." → use exact name in query
+- User says "Devolver" → lookup finds "Devolver Digital" → use exact name in query
+
+Returns matching publisher names with their IDs for use in filters.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Publisher name to search for (partial match)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results (default 10, max 20)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+};
+
+export const LOOKUP_DEVELOPERS_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'lookup_developers',
+    description: `Search for available developer names in the database.
+
+Use this tool BEFORE querying for games by developer to find the exact name:
+- User says "FromSoftware" → lookup finds "FromSoftware, Inc." → use exact name in query
+- User says "Respawn" → lookup finds "Respawn Entertainment" → use exact name in query
+
+Returns matching developer names with their IDs for use in filters.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Developer name to search for (partial match)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results (default 10, max 20)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+};
+
 // Export all tools for the chat interface
 export const CUBE_TOOLS: Tool[] = [
   QUERY_ANALYTICS_TOOL,
   FIND_SIMILAR_TOOL,
   SEARCH_GAMES_TOOL,
   LOOKUP_TAGS_TOOL,
+  LOOKUP_PUBLISHERS_TOOL,
+  LOOKUP_DEVELOPERS_TOOL,
 ];
