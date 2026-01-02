@@ -39,10 +39,11 @@ Measures: count, sumGameCount, sumOwners, sumCcu, sumRevenue, avgScore
 **USE THIS** for "publishers in 2025", "publishers with 2024 releases" - filter by releaseYear
 
 ### PublisherGameMetrics (filter by date range - rolling periods)
-Dimensions: publisherId, publisherName, appid, gameName, releaseDate (time), releaseYear, owners, ccu, totalReviews, reviewScore
+Dimensions: publisherId, publisherName, appid, gameName, releaseDate (time), releaseYear, owners (use for sorting), ccu, totalReviews, reviewScore
 Measures: gameCount, sumOwners, sumCcu, sumReviews, sumRevenue, avgReviewScore, publisherCount
 Segments: lastYear, last6Months, last3Months, last30Days
 **USE THIS** for "past 12 months", "past 3 months", "since [date]" - filter by releaseDate or use segments
+**ORDERING**: Sort by dimensions (owners, totalReviews) - NOT measures (sumOwners, avgReviewScore)
 
 ### DeveloperMetrics (standalone - ALL-TIME stats)
 Dimensions: developerId, developerName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending
@@ -57,10 +58,11 @@ Measures: count, sumGameCount, sumOwners, sumCcu, sumRevenue, avgScore
 **USE THIS** for "developers in 2025", "developers with 2024 releases" - filter by releaseYear
 
 ### DeveloperGameMetrics (filter by date range - rolling periods)
-Dimensions: developerId, developerName, appid, gameName, releaseDate (time), releaseYear, owners, ccu, totalReviews, reviewScore
+Dimensions: developerId, developerName, appid, gameName, releaseDate (time), releaseYear, owners (use for sorting), ccu, totalReviews, reviewScore
 Measures: gameCount, sumOwners, sumCcu, sumReviews, sumRevenue, avgReviewScore, developerCount
 Segments: lastYear, last6Months, last3Months, last30Days
 **USE THIS** for "past 12 months", "past 3 months", "since [date]" - filter by releaseDate or use segments
+**ORDERING**: Sort by dimensions (owners, totalReviews) - NOT measures (sumOwners, avgReviewScore)
 
 ### DailyMetrics (time-series)
 Dimensions: appid, metricDate, ownersMin, ownersMax, ownersMidpoint, ccuPeak, totalReviews, positiveReviews, reviewScore, priceCents
@@ -76,6 +78,11 @@ Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
 **Developer/Publisher queries (use developerId/publisherId for links):**
 \`\`\`json
 {"cube":"DeveloperMetrics","dimensions":["DeveloperMetrics.developerId","DeveloperMetrics.developerName","DeveloperMetrics.gameCount","DeveloperMetrics.totalOwners","DeveloperMetrics.avgReviewScore"],"filters":[{"member":"DeveloperMetrics.totalReviews","operator":"gte","values":[100]}],"order":{"DeveloperMetrics.totalOwners":"desc"},"limit":20}
+\`\`\`
+
+**Rolling period queries (games in past year - use fully-qualified segment names):**
+\`\`\`json
+{"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.owners","DeveloperGameMetrics.totalReviews"],"segments":["DeveloperGameMetrics.lastYear"],"order":{"DeveloperGameMetrics.owners":"desc"},"limit":10}
 \`\`\`
 
 ## Filter Syntax (when segments don't cover your need)

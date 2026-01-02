@@ -68,8 +68,9 @@ BEGIN
     WITH
     -- Step 1: Filter to qualifying apps first (with LIMIT)
     -- This is the key optimization - we only aggregate for apps we'll return
+    -- Use 'aid' alias to avoid conflict with RETURNS TABLE 'appid' column
     filtered_apps AS (
-        SELECT a.appid
+        SELECT a.appid as aid
         FROM apps a
         JOIN sync_status s ON a.appid = s.appid
         WHERE s.is_syncable = TRUE
@@ -91,35 +92,35 @@ BEGIN
     ),
     -- Step 2: Pre-aggregate developers for all filtered apps
     app_devs AS (
-        SELECT ad.appid, array_agg(d.name ORDER BY d.name) as dev_names
+        SELECT ad.appid as aid, array_agg(d.name ORDER BY d.name) as dev_names
         FROM app_developers ad
         JOIN developers d ON d.id = ad.developer_id
-        WHERE ad.appid IN (SELECT appid FROM filtered_apps)
+        WHERE ad.appid IN (SELECT fa.aid FROM filtered_apps fa)
         GROUP BY ad.appid
     ),
     -- Step 3: Pre-aggregate publishers for all filtered apps
     app_pubs AS (
-        SELECT ap.appid, array_agg(p.name ORDER BY p.name) as pub_names
+        SELECT ap.appid as aid, array_agg(p.name ORDER BY p.name) as pub_names
         FROM app_publishers ap
         JOIN publishers p ON p.id = ap.publisher_id
-        WHERE ap.appid IN (SELECT appid FROM filtered_apps)
+        WHERE ap.appid IN (SELECT fa.aid FROM filtered_apps fa)
         GROUP BY ap.appid
     ),
     -- Step 4: Pre-aggregate genres for all filtered apps
     app_genres_agg AS (
-        SELECT ag.appid, array_agg(sg.name ORDER BY ag.is_primary DESC, sg.name) as genre_names
+        SELECT ag.appid as aid, array_agg(sg.name ORDER BY ag.is_primary DESC, sg.name) as genre_names
         FROM app_genres ag
         JOIN steam_genres sg ON sg.genre_id = ag.genre_id
-        WHERE ag.appid IN (SELECT appid FROM filtered_apps)
+        WHERE ag.appid IN (SELECT fa.aid FROM filtered_apps fa)
         GROUP BY ag.appid
     ),
     -- Step 5: Pre-aggregate tags for all filtered apps (top 15)
     app_tags_agg AS (
-        SELECT ast.appid, array_agg(st.name ORDER BY ast.rank) as tag_names
+        SELECT ast.appid as aid, array_agg(st.name ORDER BY ast.rank) as tag_names
         FROM (
             SELECT ast_inner.appid, ast_inner.tag_id, ast_inner.rank
             FROM app_steam_tags ast_inner
-            WHERE ast_inner.appid IN (SELECT appid FROM filtered_apps)
+            WHERE ast_inner.appid IN (SELECT fa.aid FROM filtered_apps fa)
               AND ast_inner.rank <= 15
         ) ast
         JOIN steam_tags st ON st.tag_id = ast.tag_id
@@ -127,31 +128,31 @@ BEGIN
     ),
     -- Step 6: Pre-aggregate categories for all filtered apps
     app_cats AS (
-        SELECT ac.appid, array_agg(sc.name ORDER BY sc.name) as cat_names
+        SELECT ac.appid as aid, array_agg(sc.name ORDER BY sc.name) as cat_names
         FROM app_categories ac
         JOIN steam_categories sc ON sc.category_id = ac.category_id
-        WHERE ac.appid IN (SELECT appid FROM filtered_apps)
+        WHERE ac.appid IN (SELECT fa.aid FROM filtered_apps fa)
         GROUP BY ac.appid
     ),
     -- Step 7: Pre-aggregate franchise_ids
-    app_franchises AS (
-        SELECT af.appid, array_agg(af.franchise_id) as fran_ids
+    app_franchises_cte AS (
+        SELECT af.appid as aid, array_agg(af.franchise_id) as fran_ids
         FROM app_franchises af
-        WHERE af.appid IN (SELECT appid FROM filtered_apps)
+        WHERE af.appid IN (SELECT fa.aid FROM filtered_apps fa)
         GROUP BY af.appid
     ),
     -- Step 8: Pre-aggregate developer_ids
     app_dev_ids AS (
-        SELECT ad.appid, array_agg(ad.developer_id) as dev_ids
+        SELECT ad.appid as aid, array_agg(ad.developer_id) as dev_ids
         FROM app_developers ad
-        WHERE ad.appid IN (SELECT appid FROM filtered_apps)
+        WHERE ad.appid IN (SELECT fa.aid FROM filtered_apps fa)
         GROUP BY ad.appid
     ),
     -- Step 9: Pre-aggregate publisher_ids
     app_pub_ids AS (
-        SELECT ap.appid, array_agg(ap.publisher_id) as pub_ids
+        SELECT ap.appid as aid, array_agg(ap.publisher_id) as pub_ids
         FROM app_publishers ap
-        WHERE ap.appid IN (SELECT appid FROM filtered_apps)
+        WHERE ap.appid IN (SELECT fa.aid FROM filtered_apps fa)
         GROUP BY ap.appid
     )
     -- Final SELECT: Join all pre-aggregated data
@@ -170,25 +171,25 @@ BEGIN
         a.is_released,
         a.is_delisted,
         COALESCE(ad.dev_names, '{}') as developers,
-        COALESCE(ap.pub_names, '{}') as publishers,
+        COALESCE(apub.pub_names, '{}') as publishers,
         COALESCE(ag.genre_names, '{}') as genres,
-        COALESCE(at.tag_names, '{}') as tags,
+        COALESCE(atag.tag_names, '{}') as tags,
         COALESCE(ac.cat_names, '{}') as categories,
-        COALESCE(af.fran_ids, '{}') as franchise_ids,
+        COALESCE(afr.fran_ids, '{}') as franchise_ids,
         COALESCE(adi.dev_ids, '{}') as developer_ids,
         COALESCE(api.pub_ids, '{}') as publisher_ids,
         a.updated_at
     FROM apps a
-    JOIN filtered_apps fa ON fa.appid = a.appid
+    JOIN filtered_apps fa ON fa.aid = a.appid
     LEFT JOIN app_steam_deck asd ON a.appid = asd.appid
-    LEFT JOIN app_devs ad ON ad.appid = a.appid
-    LEFT JOIN app_pubs ap ON ap.appid = a.appid
-    LEFT JOIN app_genres_agg ag ON ag.appid = a.appid
-    LEFT JOIN app_tags_agg at ON at.appid = a.appid
-    LEFT JOIN app_cats ac ON ac.appid = a.appid
-    LEFT JOIN app_franchises af ON af.appid = a.appid
-    LEFT JOIN app_dev_ids adi ON adi.appid = a.appid
-    LEFT JOIN app_pub_ids api ON api.appid = a.appid;
+    LEFT JOIN app_devs ad ON ad.aid = a.appid
+    LEFT JOIN app_pubs apub ON apub.aid = a.appid
+    LEFT JOIN app_genres_agg ag ON ag.aid = a.appid
+    LEFT JOIN app_tags_agg atag ON atag.aid = a.appid
+    LEFT JOIN app_cats ac ON ac.aid = a.appid
+    LEFT JOIN app_franchises_cte afr ON afr.aid = a.appid
+    LEFT JOIN app_dev_ids adi ON adi.aid = a.appid
+    LEFT JOIN app_pub_ids api ON api.aid = a.appid;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -216,8 +217,9 @@ BEGIN
     RETURN QUERY
     WITH
     -- Step 1: Filter to qualifying publishers first (with LIMIT)
+    -- Use 'pid' alias to avoid conflict with RETURNS TABLE 'id' column
     filtered_pubs AS (
-        SELECT p.id
+        SELECT p.id as pid
         FROM publishers p
         WHERE p.game_count > 0
           AND (
@@ -231,50 +233,50 @@ BEGIN
     ),
     -- Step 2: Pre-aggregate top genres for all filtered publishers
     pub_genres AS (
-        SELECT ap.publisher_id, array_agg(DISTINCT sg.name) as genre_names
+        SELECT ap.publisher_id as pid, array_agg(DISTINCT sg.name) as genre_names
         FROM app_publishers ap
         JOIN app_genres ag ON ag.appid = ap.appid
         JOIN steam_genres sg ON sg.genre_id = ag.genre_id
-        WHERE ap.publisher_id IN (SELECT id FROM filtered_pubs)
+        WHERE ap.publisher_id IN (SELECT fp.pid FROM filtered_pubs fp)
         GROUP BY ap.publisher_id
     ),
     -- Step 3: Pre-aggregate top tags for all filtered publishers
     pub_tags AS (
-        SELECT ap.publisher_id, array_agg(DISTINCT st.name) as tag_names
+        SELECT ap.publisher_id as pid, array_agg(DISTINCT st.name) as tag_names
         FROM app_publishers ap
         JOIN app_steam_tags ast ON ast.appid = ap.appid AND ast.rank <= 10
         JOIN steam_tags st ON st.tag_id = ast.tag_id
-        WHERE ap.publisher_id IN (SELECT id FROM filtered_pubs)
+        WHERE ap.publisher_id IN (SELECT fp.pid FROM filtered_pubs fp)
         GROUP BY ap.publisher_id
     ),
     -- Step 4: Pre-aggregate platforms for all filtered publishers
     pub_platforms AS (
-        SELECT ap.publisher_id, array_agg(DISTINCT plat.platform) as platforms
+        SELECT ap.publisher_id as pid, array_agg(DISTINCT plat.platform) as platforms
         FROM app_publishers ap
         JOIN apps a ON a.appid = ap.appid
         CROSS JOIN LATERAL unnest(string_to_array(a.platforms, ',')) as plat(platform)
-        WHERE ap.publisher_id IN (SELECT id FROM filtered_pubs)
+        WHERE ap.publisher_id IN (SELECT fp.pid FROM filtered_pubs fp)
           AND a.platforms IS NOT NULL
         GROUP BY ap.publisher_id
     ),
     -- Step 5: Pre-aggregate review stats for all filtered publishers
     pub_reviews AS (
-        SELECT ap.publisher_id,
+        SELECT ap.publisher_id as pid,
                AVG(a.pics_review_percentage) as avg_review
         FROM app_publishers ap
         JOIN apps a ON a.appid = ap.appid
-        WHERE ap.publisher_id IN (SELECT id FROM filtered_pubs)
+        WHERE ap.publisher_id IN (SELECT fp.pid FROM filtered_pubs fp)
           AND a.pics_review_percentage IS NOT NULL
         GROUP BY ap.publisher_id
     ),
     -- Step 6: Pre-aggregate top games for all filtered publishers
     pub_games AS (
-        SELECT ap.publisher_id,
+        SELECT ap.publisher_id as pid,
                array_agg(a.name ORDER BY a.appid) as game_names,
                array_agg(a.appid ORDER BY a.appid) as game_appids
         FROM app_publishers ap
         JOIN apps a ON a.appid = ap.appid AND a.type = 'game'
-        WHERE ap.publisher_id IN (SELECT id FROM filtered_pubs)
+        WHERE ap.publisher_id IN (SELECT fp.pid FROM filtered_pubs fp)
         GROUP BY ap.publisher_id
     )
     -- Final SELECT: Join all pre-aggregated data
@@ -291,12 +293,12 @@ BEGIN
         COALESCE(pga.game_names[1:10], '{}') as top_game_names,
         COALESCE(pga.game_appids[1:10], '{}') as top_game_appids
     FROM publishers p
-    JOIN filtered_pubs fp ON fp.id = p.id
-    LEFT JOIN pub_genres pg ON pg.publisher_id = p.id
-    LEFT JOIN pub_tags pt ON pt.publisher_id = p.id
-    LEFT JOIN pub_platforms pp ON pp.publisher_id = p.id
-    LEFT JOIN pub_reviews pr ON pr.publisher_id = p.id
-    LEFT JOIN pub_games pga ON pga.publisher_id = p.id;
+    JOIN filtered_pubs fp ON fp.pid = p.id
+    LEFT JOIN pub_genres pg ON pg.pid = p.id
+    LEFT JOIN pub_tags pt ON pt.pid = p.id
+    LEFT JOIN pub_platforms pp ON pp.pid = p.id
+    LEFT JOIN pub_reviews pr ON pr.pid = p.id
+    LEFT JOIN pub_games pga ON pga.pid = p.id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -325,8 +327,9 @@ BEGIN
     RETURN QUERY
     WITH
     -- Step 1: Filter to qualifying developers first (with LIMIT)
+    -- Use 'did' alias to avoid conflict with RETURNS TABLE 'id' column
     filtered_devs AS (
-        SELECT d.id
+        SELECT d.id as did
         FROM developers d
         WHERE d.game_count > 0
           AND (
@@ -340,55 +343,55 @@ BEGIN
     ),
     -- Step 2: Pre-aggregate top genres for all filtered developers
     dev_genres AS (
-        SELECT ad.developer_id, array_agg(DISTINCT sg.name) as genre_names
+        SELECT ad.developer_id as did, array_agg(DISTINCT sg.name) as genre_names
         FROM app_developers ad
         JOIN app_genres ag ON ag.appid = ad.appid
         JOIN steam_genres sg ON sg.genre_id = ag.genre_id
-        WHERE ad.developer_id IN (SELECT id FROM filtered_devs)
+        WHERE ad.developer_id IN (SELECT fd.did FROM filtered_devs fd)
         GROUP BY ad.developer_id
     ),
     -- Step 3: Pre-aggregate top tags for all filtered developers
     dev_tags AS (
-        SELECT ad.developer_id, array_agg(DISTINCT st.name) as tag_names
+        SELECT ad.developer_id as did, array_agg(DISTINCT st.name) as tag_names
         FROM app_developers ad
         JOIN app_steam_tags ast ON ast.appid = ad.appid AND ast.rank <= 10
         JOIN steam_tags st ON st.tag_id = ast.tag_id
-        WHERE ad.developer_id IN (SELECT id FROM filtered_devs)
+        WHERE ad.developer_id IN (SELECT fd.did FROM filtered_devs fd)
         GROUP BY ad.developer_id
     ),
     -- Step 4: Pre-aggregate platforms for all filtered developers
     dev_platforms AS (
-        SELECT ad.developer_id, array_agg(DISTINCT plat.platform) as platforms
+        SELECT ad.developer_id as did, array_agg(DISTINCT plat.platform) as platforms
         FROM app_developers ad
         JOIN apps a ON a.appid = ad.appid
         CROSS JOIN LATERAL unnest(string_to_array(a.platforms, ',')) as plat(platform)
-        WHERE ad.developer_id IN (SELECT id FROM filtered_devs)
+        WHERE ad.developer_id IN (SELECT fd.did FROM filtered_devs fd)
           AND a.platforms IS NOT NULL
         GROUP BY ad.developer_id
     ),
     -- Step 5: Pre-aggregate review stats for all filtered developers
     dev_reviews AS (
-        SELECT ad.developer_id,
+        SELECT ad.developer_id as did,
                AVG(a.pics_review_percentage) as avg_review
         FROM app_developers ad
         JOIN apps a ON a.appid = ad.appid
-        WHERE ad.developer_id IN (SELECT id FROM filtered_devs)
+        WHERE ad.developer_id IN (SELECT fd.did FROM filtered_devs fd)
           AND a.pics_review_percentage IS NOT NULL
         GROUP BY ad.developer_id
     ),
     -- Step 6: Pre-aggregate top games for all filtered developers
     dev_games AS (
-        SELECT ad.developer_id,
+        SELECT ad.developer_id as did,
                array_agg(a.name ORDER BY a.appid) as game_names,
                array_agg(a.appid ORDER BY a.appid) as game_appids
         FROM app_developers ad
         JOIN apps a ON a.appid = ad.appid AND a.type = 'game'
-        WHERE ad.developer_id IN (SELECT id FROM filtered_devs)
+        WHERE ad.developer_id IN (SELECT fd.did FROM filtered_devs fd)
         GROUP BY ad.developer_id
     ),
     -- Step 7: Check if developer is indie (self-published)
     dev_indie AS (
-        SELECT d.id as developer_id,
+        SELECT d.id as did,
                EXISTS (
                  SELECT 1
                  FROM app_developers ad
@@ -398,7 +401,7 @@ BEGIN
                  LIMIT 1
                ) as is_indie_flag
         FROM developers d
-        WHERE d.id IN (SELECT id FROM filtered_devs)
+        WHERE d.id IN (SELECT fd.did FROM filtered_devs fd)
     )
     -- Final SELECT: Join all pre-aggregated data
     SELECT
@@ -415,13 +418,13 @@ BEGIN
         COALESCE(dga.game_names[1:10], '{}') as top_game_names,
         COALESCE(dga.game_appids[1:10], '{}') as top_game_appids
     FROM developers d
-    JOIN filtered_devs fd ON fd.id = d.id
-    LEFT JOIN dev_genres dg ON dg.developer_id = d.id
-    LEFT JOIN dev_tags dt ON dt.developer_id = d.id
-    LEFT JOIN dev_platforms dp ON dp.developer_id = d.id
-    LEFT JOIN dev_reviews dr ON dr.developer_id = d.id
-    LEFT JOIN dev_games dga ON dga.developer_id = d.id
-    LEFT JOIN dev_indie di ON di.developer_id = d.id;
+    JOIN filtered_devs fd ON fd.did = d.id
+    LEFT JOIN dev_genres dg ON dg.did = d.id
+    LEFT JOIN dev_tags dt ON dt.did = d.id
+    LEFT JOIN dev_platforms dp ON dp.did = d.id
+    LEFT JOIN dev_reviews dr ON dr.did = d.id
+    LEFT JOIN dev_games dga ON dga.did = d.id
+    LEFT JOIN dev_indie di ON di.did = d.id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -458,58 +461,59 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     WITH
+    -- Use 'aid' alias to avoid conflict with RETURNS TABLE 'appid' column
     target_apps AS (
         SELECT unnest(p_appids) as aid
     ),
     app_devs AS (
-        SELECT ad.appid, array_agg(d.name ORDER BY d.name) as dev_names
+        SELECT ad.appid as aid, array_agg(d.name ORDER BY d.name) as dev_names
         FROM app_developers ad
         JOIN developers d ON d.id = ad.developer_id
         WHERE ad.appid = ANY(p_appids)
         GROUP BY ad.appid
     ),
     app_pubs AS (
-        SELECT ap.appid, array_agg(p.name ORDER BY p.name) as pub_names
+        SELECT ap.appid as aid, array_agg(p.name ORDER BY p.name) as pub_names
         FROM app_publishers ap
         JOIN publishers p ON p.id = ap.publisher_id
         WHERE ap.appid = ANY(p_appids)
         GROUP BY ap.appid
     ),
     app_genres_agg AS (
-        SELECT ag.appid, array_agg(sg.name ORDER BY ag.is_primary DESC, sg.name) as genre_names
+        SELECT ag.appid as aid, array_agg(sg.name ORDER BY ag.is_primary DESC, sg.name) as genre_names
         FROM app_genres ag
         JOIN steam_genres sg ON sg.genre_id = ag.genre_id
         WHERE ag.appid = ANY(p_appids)
         GROUP BY ag.appid
     ),
     app_tags_agg AS (
-        SELECT ast.appid, array_agg(st.name ORDER BY ast.rank) as tag_names
+        SELECT ast.appid as aid, array_agg(st.name ORDER BY ast.rank) as tag_names
         FROM app_steam_tags ast
         JOIN steam_tags st ON st.tag_id = ast.tag_id
         WHERE ast.appid = ANY(p_appids) AND ast.rank <= 15
         GROUP BY ast.appid
     ),
     app_cats AS (
-        SELECT ac.appid, array_agg(sc.name ORDER BY sc.name) as cat_names
+        SELECT ac.appid as aid, array_agg(sc.name ORDER BY sc.name) as cat_names
         FROM app_categories ac
         JOIN steam_categories sc ON sc.category_id = ac.category_id
         WHERE ac.appid = ANY(p_appids)
         GROUP BY ac.appid
     ),
-    app_franchises AS (
-        SELECT af.appid, array_agg(af.franchise_id) as fran_ids
+    app_franchises_cte AS (
+        SELECT af.appid as aid, array_agg(af.franchise_id) as fran_ids
         FROM app_franchises af
         WHERE af.appid = ANY(p_appids)
         GROUP BY af.appid
     ),
     app_dev_ids AS (
-        SELECT ad.appid, array_agg(ad.developer_id) as dev_ids
+        SELECT ad.appid as aid, array_agg(ad.developer_id) as dev_ids
         FROM app_developers ad
         WHERE ad.appid = ANY(p_appids)
         GROUP BY ad.appid
     ),
     app_pub_ids AS (
-        SELECT ap.appid, array_agg(ap.publisher_id) as pub_ids
+        SELECT ap.appid as aid, array_agg(ap.publisher_id) as pub_ids
         FROM app_publishers ap
         WHERE ap.appid = ANY(p_appids)
         GROUP BY ap.appid
@@ -529,24 +533,24 @@ BEGIN
         a.is_released,
         a.is_delisted,
         COALESCE(ad.dev_names, '{}') as developers,
-        COALESCE(ap.pub_names, '{}') as publishers,
+        COALESCE(apub.pub_names, '{}') as publishers,
         COALESCE(ag.genre_names, '{}') as genres,
-        COALESCE(at.tag_names, '{}') as tags,
+        COALESCE(atag.tag_names, '{}') as tags,
         COALESCE(ac.cat_names, '{}') as categories,
-        COALESCE(af.fran_ids, '{}') as franchise_ids,
+        COALESCE(afr.fran_ids, '{}') as franchise_ids,
         COALESCE(adi.dev_ids, '{}') as developer_ids,
         COALESCE(api.pub_ids, '{}') as publisher_ids,
         a.updated_at
     FROM apps a
     LEFT JOIN app_steam_deck asd ON a.appid = asd.appid
-    LEFT JOIN app_devs ad ON ad.appid = a.appid
-    LEFT JOIN app_pubs ap ON ap.appid = a.appid
-    LEFT JOIN app_genres_agg ag ON ag.appid = a.appid
-    LEFT JOIN app_tags_agg at ON at.appid = a.appid
-    LEFT JOIN app_cats ac ON ac.appid = a.appid
-    LEFT JOIN app_franchises af ON af.appid = a.appid
-    LEFT JOIN app_dev_ids adi ON adi.appid = a.appid
-    LEFT JOIN app_pub_ids api ON api.appid = a.appid
+    LEFT JOIN app_devs ad ON ad.aid = a.appid
+    LEFT JOIN app_pubs apub ON apub.aid = a.appid
+    LEFT JOIN app_genres_agg ag ON ag.aid = a.appid
+    LEFT JOIN app_tags_agg atag ON atag.aid = a.appid
+    LEFT JOIN app_cats ac ON ac.aid = a.appid
+    LEFT JOIN app_franchises_cte afr ON afr.aid = a.appid
+    LEFT JOIN app_dev_ids adi ON adi.aid = a.appid
+    LEFT JOIN app_pub_ids api ON api.aid = a.appid
     WHERE a.appid = ANY(p_appids);
 END;
 $$ LANGUAGE plpgsql;
