@@ -235,12 +235,43 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
 
                     // Handle search_games results
                     if (tc.name === 'search_games') {
-                      const args = tc.arguments as { query?: string };
+                      const args = tc.arguments as {
+                        tags?: string[];
+                        genres?: string[];
+                        categories?: string[];
+                        platforms?: string[];
+                        steam_deck?: string[];
+                        review_percentage?: { gte?: number };
+                        metacritic_score?: { gte?: number };
+                        release_year?: { gte?: number; lte?: number };
+                        controller_support?: string;
+                        is_free?: boolean;
+                      };
                       const result = tc.result as { success: boolean; count?: number; error?: string; debug?: Record<string, unknown> };
+
+                      // Build filter summary
+                      const filters: string[] = [];
+                      if (args.tags?.length) filters.push(args.tags.join(', '));
+                      if (args.genres?.length) filters.push(args.genres.join(', '));
+                      if (args.categories?.length) filters.push(args.categories.join(', '));
+                      if (args.steam_deck?.length) filters.push(`Steam Deck ${args.steam_deck.join('/')}`);
+                      if (args.platforms?.length) filters.push(args.platforms.join(', '));
+                      if (args.review_percentage?.gte) filters.push(`${args.review_percentage.gte}%+ reviews`);
+                      if (args.metacritic_score?.gte) filters.push(`${args.metacritic_score.gte}+ metacritic`);
+                      if (args.controller_support) filters.push(`${args.controller_support} controller`);
+                      if (args.is_free !== undefined) filters.push(args.is_free ? 'free' : 'paid');
+                      if (args.release_year?.gte || args.release_year?.lte) {
+                        const yearParts = [];
+                        if (args.release_year.gte) yearParts.push(`from ${args.release_year.gte}`);
+                        if (args.release_year.lte) yearParts.push(`to ${args.release_year.lte}`);
+                        filters.push(yearParts.join(' '));
+                      }
+                      const filterText = filters.length > 0 ? filters.join(', ') : 'all games';
+
                       return (
                         <div key={idx} className="space-y-2">
                           <p className="text-body-sm text-text-secondary italic">
-                            Searching games for &quot;{args.query}&quot;
+                            Searching games for &quot;{filterText}&quot;
                           </p>
                           <div className="flex items-center gap-2">
                             {result.success ? (
@@ -271,12 +302,12 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
 
                     // Handle lookup_tags results
                     if (tc.name === 'lookup_tags') {
-                      const args = tc.arguments as { tag_names?: string[] };
+                      const args = tc.arguments as { query?: string; type?: string };
                       const result = tc.result as { success: boolean; found?: number; error?: string; debug?: Record<string, unknown> };
                       return (
                         <div key={idx} className="space-y-2">
                           <p className="text-body-sm text-text-secondary italic">
-                            Looking up tags: {args.tag_names?.join(', ') || 'unknown'}
+                            Looking up tags: {args.query || 'unknown'}
                           </p>
                           <div className="flex items-center gap-2">
                             {result.success ? (
