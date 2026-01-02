@@ -133,14 +133,14 @@ export const SEARCH_GAMES_TOOL: Tool = {
     name: 'search_games',
     description: `Search for games by tags, genres, categories, platforms, and other criteria.
 
-Use this tool when users ask for games with specific characteristics like:
-- "CRPG games for Mac"
-- "Cozy games released in 2019"
-- "Souls-like games with full controller support"
-- "Metroidvania games on Steam Deck"
-- "Games with Workshop support"
+IMPORTANT: Call this tool DIRECTLY with all parameters. Do NOT call lookup_tags first.
 
-Supports fuzzy tag matching - you don't need exact tag names.
+Examples - call search_games directly like this:
+- "Steam Deck roguelikes with great reviews" → tags: ["Roguelike"], steam_deck: ["verified"], review_percentage: {gte: 90}
+- "Metroidvania games on Steam Deck" → tags: ["Metroidvania"], steam_deck: ["verified"]
+- "Cozy games with good reviews" → tags: ["Cozy"], review_percentage: {gte: 80}
+
+Supports fuzzy tag matching - common tags like Roguelike, Metroidvania, Souls-like, CRPG work directly.
 
 Returns results with fields: appid (for game: links), name, platforms, review data, etc.
 Always format game names as: [name](game:{appid})`,
@@ -227,10 +227,11 @@ export const LOOKUP_TAGS_TOOL: Tool = {
     name: 'lookup_tags',
     description: `Search for available Steam tags, genres, or categories.
 
-Use this tool when you need to:
-- Find the correct tag name for a concept (e.g., "rogue" → "Roguelike", "Roguelite")
-- Discover what tags/genres/categories exist
-- Verify a tag exists before using it in search_games`,
+IMPORTANT: Do NOT use this tool for common tags like Roguelike, Metroidvania, Souls-like, CRPG, Cozy, RPG, Action, etc. - these work directly with search_games.
+
+Only use this tool when:
+- User asks "what tags exist for X" or "show me available tags"
+- You encounter an unusual tag name you don't recognize`,
     parameters: {
       type: 'object',
       properties: {
