@@ -98,6 +98,12 @@ export function formatResultWithEntityLinks(result: unknown): string {
     const formattedData = typedResult.data.map((row) =>
       formatRowWithLinks(row as Record<string, unknown>)
     );
+
+    // Log first row to verify formatting
+    if (formattedData.length > 0) {
+      console.log('[EntityLinks] First formatted row:', JSON.stringify(formattedData[0]));
+    }
+
     return JSON.stringify({ ...typedResult, data: formattedData });
   }
 

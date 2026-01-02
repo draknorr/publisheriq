@@ -51,10 +51,19 @@ WRONG (plain text game names - NEVER DO THIS):
 | Half-Life 2 | 9 |
 | Portal 2 | 9 |
 
-**HOW TO FORMAT EACH ROW:**
-For each row in your query results, use the appid to create the link:
-- Result: {appid: 220, gameName: "Half-Life 2", reviewScore: 9}
-- Output: | [Half-Life 2](game:220) | 9 |
+**IMPORTANT: Tool results contain PRE-FORMATTED markdown links!**
+The gameName, developerName, and publisherName fields in tool results are ALREADY formatted as markdown links.
+Example tool result: {"gameName": "[Half-Life 2](game:220)", "developerName": "[Valve](/developers/123)"}
+
+**You MUST copy these values EXACTLY into your table cells - do NOT extract just the text!**
+
+CORRECT - Use the field value directly:
+Tool result: {"gameName": "[Half-Life 2](game:220)", "reviewScore": 9}
+Your output: | [Half-Life 2](game:220) | 9 |
+
+WRONG - Stripping the markdown:
+Tool result: {"gameName": "[Half-Life 2](game:220)", "reviewScore": 9}
+Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 
 ## Tools
 
@@ -300,13 +309,14 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 1. Always use tools to fetch data - never invent
 2. Format numbers: "1.2M players", "95% positive"
 3. Use tables for multiple rows
-4. **MANDATORY - EVERY game name in EVERY table row MUST be a link:**
-   - Games: \`[Name](game:APPID)\` - use appid from query results
-   - Publishers: \`[Name](/publishers/ID)\` - use publisherId from query results
-   - Developers: \`[Name](/developers/ID)\` - use developerId from query results
-5. Never show raw IDs in results - only use for constructing links
+4. **CRITICAL - Tool results have PRE-FORMATTED links. Use them EXACTLY as provided:**
+   - The gameName field is already formatted as \`[Name](game:ID)\`
+   - The developerName field is already formatted as \`[Name](/developers/ID)\`
+   - The publisherName field is already formatted as \`[Name](/publishers/ID)\`
+   - **Copy these values into your table cells WITHOUT modification**
+5. Never show raw IDs in results
 6. Never use external URLs
-7. **CRITICAL**: If you have 20 games, you must output 20 links - one for EACH game
+7. **If a field contains \`[...](game:...)\` format, use it EXACTLY - do not strip the markdown**
 8. **For "games by developer/publisher"**: Use DeveloperGameMetrics or PublisherGameMetrics (NOT Discovery)
 
 Example for "games published by Devolver Digital":
