@@ -136,7 +136,8 @@ export async function POST(request: NextRequest): Promise<Response> {
             break;
           }
 
-          // Execute tool calls
+          // Execute all tool calls and collect results
+          const toolResults: Array<{ toolCall: ToolCall; result: QueryResult | SimilarityResult }> = [];
           for (const toolCall of completedToolCalls) {
             const toolStart = performance.now();
             const result = await executeTool(toolCall);
@@ -152,13 +153,18 @@ export async function POST(request: NextRequest): Promise<Response> {
             };
             controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
 
-            // Add to message history for next iteration
-            messages.push({
-              role: 'assistant',
-              content: accumulatedText,
-              toolCalls: [toolCall],
-            });
+            toolResults.push({ toolCall, result });
+          }
 
+          // Add assistant message ONCE with ALL tool calls
+          messages.push({
+            role: 'assistant',
+            content: accumulatedText,
+            toolCalls: completedToolCalls,
+          });
+
+          // Add each tool result to message history
+          for (const { toolCall, result } of toolResults) {
             messages.push({
               role: 'tool',
               toolCallId: toolCall.id,
