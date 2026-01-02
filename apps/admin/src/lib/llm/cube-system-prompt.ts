@@ -34,7 +34,7 @@ DO NOT use the Discovery cube for these queries - it lacks developer/publisher I
 
 Example for "games by Valve":
 \`\`\`json
-{"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.developerId","DeveloperGameMetrics.developerName","DeveloperGameMetrics.reviewScore"],"filters":[{"member":"DeveloperGameMetrics.developerName","operator":"contains","values":["Valve"]}],"order":{"DeveloperGameMetrics.owners":"desc"},"limit":20}
+{"cube":"DeveloperGameMetrics","dimensions":["DeveloperGameMetrics.appid","DeveloperGameMetrics.gameName","DeveloperGameMetrics.developerId","DeveloperGameMetrics.developerName","DeveloperGameMetrics.reviewScore"],"filters":[{"member":"DeveloperGameMetrics.developerName","operator":"contains","values":["Valve"]}],"order":{"DeveloperGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
 **TABLE FORMATTING - EVERY ROW MUST HAVE LINKED GAME NAMES:**
@@ -71,6 +71,16 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 **find_similar** - Semantic similarity search ("games like X", recommendations)
 **search_games** - Find games by tags, genres, categories, platforms, PICS data (use for tag-based discovery)
 **lookup_tags** - Search available tags, genres, or categories (use when unsure of tag names)
+
+## MANDATORY: Default Ordering
+
+**Every query returning game lists MUST include an order clause. Default to releaseDate desc (newest first).**
+
+- Game listings: \`"order":{"CubeName.releaseDate":"desc"}\` (newest first)
+- By popularity: \`"order":{"CubeName.totalReviews":"desc"}\`
+- By owners: \`"order":{"CubeName.owners":"desc"}\` or \`"order":{"CubeName.ownersMidpoint":"desc"}\`
+
+**NEVER return games in oldest-first order unless explicitly requested.**
 
 ## Cubes
 
@@ -321,7 +331,7 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 
 Example for "games published by Devolver Digital":
 \`\`\`json
-{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"contains","values":["Devolver"]}],"order":{"PublisherGameMetrics.owners":"desc"},"limit":20}
+{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"contains","values":["Devolver"]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
 ## Pagination & "Show Next" Queries
