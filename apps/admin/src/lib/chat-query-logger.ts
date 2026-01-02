@@ -12,71 +12,23 @@ export interface ChatQueryLogEntry {
   timing_total_ms: number | null;
 }
 
-// Configuration
-const FLUSH_COUNT_THRESHOLD = 10;
-const FLUSH_TIME_INTERVAL_MS = 30_000; // 30 seconds
-
-// Module-level singleton state
-let buffer: ChatQueryLogEntry[] = [];
-let flushIntervalId: ReturnType<typeof setInterval> | null = null;
-let lastFlushTime = Date.now();
-
 /**
- * Add a chat query log entry to the buffer.
- * Automatically flushes when count threshold is reached.
+ * Log a chat query directly to the database.
+ * For serverless environments, we insert immediately since
+ * buffering doesn't work reliably (function terminates after response).
  */
-export function logChatQuery(entry: ChatQueryLogEntry): void {
-  buffer.push(entry);
-
-  // Start interval timer on first log (lazy initialization)
-  if (!flushIntervalId) {
-    flushIntervalId = setInterval(() => {
-      if (buffer.length > 0 && Date.now() - lastFlushTime >= FLUSH_TIME_INTERVAL_MS) {
-        flushBuffer().catch(console.error);
-      }
-    }, FLUSH_TIME_INTERVAL_MS);
-  }
-
-  // Flush if count threshold reached
-  if (buffer.length >= FLUSH_COUNT_THRESHOLD) {
-    flushBuffer().catch(console.error);
-  }
-}
-
-/**
- * Flush the buffer to the database.
- * Called automatically by count/time triggers, or manually.
- */
-export async function flushBuffer(): Promise<void> {
-  if (buffer.length === 0) return;
-
-  // Swap buffer to avoid race conditions
-  const toFlush = buffer;
-  buffer = [];
-  lastFlushTime = Date.now();
-
+export async function logChatQuery(entry: ChatQueryLogEntry): Promise<void> {
   try {
     const supabase = getServiceClient();
 
     // Type assertion needed until database types are regenerated after migration
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from('chat_query_logs') as any).insert(toFlush);
+    const { error } = await (supabase.from('chat_query_logs') as any).insert(entry);
 
     if (error) {
-      console.error('Failed to flush chat query logs:', error);
-      // Re-add to buffer on failure (with limit to prevent memory issues)
-      if (buffer.length + toFlush.length <= FLUSH_COUNT_THRESHOLD * 3) {
-        buffer = [...toFlush, ...buffer];
-      }
+      console.error('Failed to log chat query:', error);
     }
   } catch (err) {
-    console.error('Error flushing chat query logs:', err);
+    console.error('Error logging chat query:', err);
   }
-}
-
-/**
- * Get current buffer size (for monitoring/debugging).
- */
-export function getBufferSize(): number {
-  return buffer.length;
 }

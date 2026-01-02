@@ -231,10 +231,10 @@ export async function POST(request: NextRequest): Promise<Response> {
         };
         controller.enqueue(encoder.encode(formatSSE(endEvent)));
 
-        // Log the chat query (non-blocking, buffered)
+        // Log the chat query to database
         const lastUserMessage = body.messages.filter((m) => m.role === 'user').pop();
         if (lastUserMessage) {
-          logChatQuery({
+          await logChatQuery({
             query_text: lastUserMessage.content.slice(0, 2000),
             tool_names: [...new Set(allToolNames)],
             tool_count: debugStats.toolCallCount,
