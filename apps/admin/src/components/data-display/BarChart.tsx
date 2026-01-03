@@ -155,6 +155,49 @@ export function BarChartComponent({
   );
 }
 
+// Custom tooltip for stacked bar chart - shows Positive before Negative with clean styling
+interface StackedTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number;
+    color: string;
+    dataKey: string;
+  }>;
+  label?: string;
+}
+
+function StackedTooltip({ active, payload, label }: StackedTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  // Sort to ensure Positive comes before Negative
+  const sortedPayload = [...payload].sort((a, b) => {
+    if (a.name === 'Positive') return -1;
+    if (b.name === 'Positive') return 1;
+    return 0;
+  });
+
+  return (
+    <div className="bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 shadow-lg">
+      <p className="text-caption text-text-secondary mb-1.5">{label}</p>
+      {sortedPayload.map((entry) => (
+        <div key={entry.dataKey} className="flex items-center gap-2 text-body-sm">
+          <span
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: entry.color }}
+          />
+          <span className={entry.name === 'Positive' ? 'text-accent-green' : 'text-accent-red'}>
+            {entry.name}
+          </span>
+          <span className="text-text-primary font-medium">
+            {entry.value.toLocaleString()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Stacked bar chart for positive/negative reviews
 interface StackedBarChartProps {
   data: DataPoint[];
@@ -228,13 +271,8 @@ export function StackedBarChart({
             />
           )}
           <Tooltip
-            contentStyle={{
-              backgroundColor: '#1a1a1f',
-              border: '1px solid #36363e',
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            }}
-            labelStyle={{ color: '#b4b4bc', marginBottom: '4px' }}
+            content={<StackedTooltip />}
+            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
           />
           <Bar
             dataKey={positiveKey}

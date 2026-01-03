@@ -435,9 +435,9 @@ function SummarySection({
   const displayedCategories = categoriesExpanded ? categories : categories.slice(0, CATEGORY_LIMIT);
 
   return (
-    <section>
+    <section className="overflow-hidden">
       <SectionHeader title="Summary" id={id} />
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-full">
         {/* Row 1: Trends */}
         {trends && (
           <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
