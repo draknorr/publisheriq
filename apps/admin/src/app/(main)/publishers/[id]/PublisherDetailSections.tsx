@@ -105,6 +105,39 @@ function formatOwners(min: number | null, max: number | null): string {
   return `${formatNum(min)} - ${formatNum(max)}`;
 }
 
+/**
+ * Month names for consistent formatting between server and client.
+ * Using manual lookup avoids toLocaleDateString hydration mismatches.
+ */
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+/**
+ * Safely parse a month_start string (YYYY-MM or YYYY-MM-DD format)
+ * and return a formatted month label like "December 2025".
+ */
+function formatMonthLabel(monthStart: string): string {
+  if (!monthStart) return '—';
+
+  // Validate YYYY-MM or YYYY-MM-DD format
+  const isoPattern = /^(\d{4})-(\d{2})(?:-\d{2})?$/;
+  const match = monthStart.match(isoPattern);
+
+  if (!match) {
+    // Bad data - hide it
+    return '—';
+  }
+
+  const year = match[1]; // Keep as string "2025"
+  const monthIndex = parseInt(match[2], 10) - 1; // 0-indexed
+
+  if (monthIndex < 0 || monthIndex > 11) return '—';
+
+  return `${MONTH_NAMES[monthIndex]} ${year}`; // "December 2025"
+}
+
 export function PublisherDetailSections({
   publisher,
   apps,
@@ -577,7 +610,7 @@ function ReviewsSection({
   apps: PublisherApp[];
 }) {
   const histogramData = [...histogram].reverse().slice(-12).map((h) => ({
-    month: new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+    month: formatMonthLabel(h.month_start),
     positive: h.recommendations_up,
     negative: h.recommendations_down,
   }));
@@ -667,7 +700,7 @@ function ReviewsSection({
                   {histogram.slice(0, 4).map((h) => {
                     const total = h.recommendations_up + h.recommendations_down;
                     const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
-                    const monthLabel = new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                    const monthLabel = formatMonthLabel(h.month_start);
 
                     const rowContent = (
                       <>

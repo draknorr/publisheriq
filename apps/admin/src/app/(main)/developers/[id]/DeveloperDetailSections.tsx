@@ -107,8 +107,17 @@ function formatOwners(min: number | null, max: number | null): string {
 }
 
 /**
+ * Month names for consistent formatting between server and client.
+ * Using manual lookup avoids toLocaleDateString hydration mismatches.
+ */
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+/**
  * Safely parse a month_start string (YYYY-MM or YYYY-MM-DD format)
- * and return a formatted month label.
+ * and return a formatted month label like "December 2025".
  */
 function formatMonthLabel(monthStart: string): string {
   if (!monthStart) return '—';
@@ -118,21 +127,16 @@ function formatMonthLabel(monthStart: string): string {
   const match = monthStart.match(isoPattern);
 
   if (!match) {
-    // Bad data - return as-is (truncated if too long)
-    return monthStart.length > 10 ? monthStart.substring(0, 10) : monthStart;
+    // Bad data - hide it
+    return '—';
   }
 
-  const year = parseInt(match[1], 10);
-  const month = parseInt(match[2], 10);
+  const year = match[1]; // Keep as string "2025"
+  const monthIndex = parseInt(match[2], 10) - 1; // 0-indexed
 
-  const date = new Date(Date.UTC(year, month - 1, 1));
-  if (isNaN(date.getTime())) return monthStart;
+  if (monthIndex < 0 || monthIndex > 11) return '—';
 
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    year: '2-digit',
-    timeZone: 'UTC',
-  });
+  return `${MONTH_NAMES[monthIndex]} ${year}`; // "December 2025"
 }
 
 // Animation variants

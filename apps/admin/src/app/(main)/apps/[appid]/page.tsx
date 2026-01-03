@@ -210,7 +210,9 @@ async function getReviewHistogram(appid: number): Promise<ReviewHistogram[]> {
     .order('month_start', { ascending: false })
     .limit(24);
 
-  return data ?? [];
+  // Validate ISO date format (YYYY-MM-DD or YYYY-MM) and filter out malformed entries
+  const isoDatePattern = /^\d{4}-\d{2}(?:-\d{2})?$/;
+  return (data ?? []).filter(h => isoDatePattern.test(h.month_start));
 }
 
 async function getTrends(appid: number): Promise<AppTrends | null> {
