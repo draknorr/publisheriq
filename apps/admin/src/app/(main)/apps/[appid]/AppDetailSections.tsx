@@ -536,11 +536,11 @@ function SummarySection({
           </div>
         </div>
 
-        {/* Row 2: Metadata Row (compact inline) */}
+        {/* Row 2: Developer/Publisher/Franchise Row */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 rounded-md border border-border-subtle bg-surface-raised">
           {/* Developers */}
           <div className="flex items-center gap-2">
-            <span className="text-caption text-text-tertiary">Dev:</span>
+            <span className="text-caption text-text-tertiary">Developer:</span>
             {developers.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {developers.map((dev) => (
@@ -560,7 +560,7 @@ function SummarySection({
 
           {/* Publishers */}
           <div className="flex items-center gap-2">
-            <span className="text-caption text-text-tertiary">Pub:</span>
+            <span className="text-caption text-text-tertiary">Publisher:</span>
             {publishers.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {publishers.map((pub) => (
@@ -578,25 +578,6 @@ function SummarySection({
             )}
           </div>
 
-          {/* Genres */}
-          {genres.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-caption text-text-tertiary">Genres:</span>
-              {genres.map((genre) => (
-                <span
-                  key={genre.id}
-                  className={`px-2 py-0.5 rounded text-body-sm ${
-                    genre.is_primary
-                      ? 'bg-accent-purple/20 text-accent-purple font-medium'
-                      : 'bg-accent-purple/10 text-accent-purple'
-                  }`}
-                >
-                  {genre.is_primary && '★ '}{genre.name}
-                </span>
-              ))}
-            </div>
-          )}
-
           {/* Franchises */}
           {franchises.length > 0 && (
             <div className="flex items-center gap-1.5">
@@ -613,7 +594,26 @@ function SummarySection({
           )}
         </div>
 
-        {/* Row 3: Platform Stats (3-col grid) */}
+        {/* Row 3: Genres */}
+        {genres.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Genres:</span>
+            {genres.map((genre) => (
+              <span
+                key={genre.id}
+                className={`px-2 py-0.5 rounded text-body-sm ${
+                  genre.is_primary
+                    ? 'bg-accent-purple/20 text-accent-purple font-medium'
+                    : 'bg-accent-purple/10 text-accent-purple'
+                }`}
+              >
+                {genre.is_primary && '★ '}{genre.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Row 4: Platform Stats (3-col grid) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Platforms Card */}
           {app.platforms && (
