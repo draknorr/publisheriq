@@ -190,14 +190,25 @@ export async function getLastSyncTimes(supabase: SupabaseClient<Database>): Prom
 
 /**
  * Get complete sync health data
+ * @param sharedData Optional pre-fetched data to avoid duplicate queries
  */
-export async function getSyncHealthData(supabase: SupabaseClient<Database>): Promise<SyncHealthData> {
+export async function getSyncHealthData(
+  supabase: SupabaseClient<Database>,
+  sharedData?: {
+    lastSyncs?: SyncHealthData['lastSyncs'];
+    overdueApps?: number;
+  }
+): Promise<SyncHealthData> {
+  // Only fetch what we don't already have
+  const needsLastSyncs = !sharedData?.lastSyncs;
+  const needsOverdue = sharedData?.overdueApps === undefined;
+
   const [jobs24h, successRate7d, overdueApps, appsWithErrors, lastSyncs] = await Promise.all([
     getJobStats24h(supabase),
     getSuccessRate7d(supabase),
-    getOverdueAppsCount(supabase),
+    needsOverdue ? getOverdueAppsCount(supabase) : Promise.resolve(sharedData!.overdueApps!),
     getAppsWithErrorsCount(supabase),
-    getLastSyncTimes(supabase),
+    needsLastSyncs ? getLastSyncTimes(supabase) : Promise.resolve(sharedData!.lastSyncs!),
   ]);
 
   return {
@@ -211,253 +222,129 @@ export async function getSyncHealthData(supabase: SupabaseClient<Database>): Pro
 
 /**
  * Get priority distribution of apps
+ * Uses RPC function to count on database side instead of fetching all rows
  */
 export async function getPriorityDistribution(supabase: SupabaseClient<Database>): Promise<PriorityDistribution> {
-  const { data } = await supabase
-    .from('sync_status')
-    .select('priority_score')
-    .eq('is_syncable', true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('get_priority_distribution');
 
-  const distribution: PriorityDistribution = {
-    high: 0,
-    medium: 0,
-    normal: 0,
-    low: 0,
-    minimal: 0,
-  };
-
-  if (data) {
-    for (const row of data) {
-      const score = row.priority_score ?? 0;
-      if (score >= 150) distribution.high++;
-      else if (score >= 100) distribution.medium++;
-      else if (score >= 50) distribution.normal++;
-      else if (score >= 25) distribution.low++;
-      else distribution.minimal++;
-    }
+  if (error || !data || data.length === 0) {
+    // Fallback to default values if RPC fails
+    return { high: 0, medium: 0, normal: 0, low: 0, minimal: 0 };
   }
 
-  return distribution;
+  const row = data[0];
+  return {
+    high: Number(row.high ?? 0),
+    medium: Number(row.medium ?? 0),
+    normal: Number(row.normal_priority ?? 0),
+    low: Number(row.low ?? 0),
+    minimal: Number(row.minimal ?? 0),
+  };
 }
 
 /**
  * Get queue status (apps due for sync at different time intervals)
+ * Uses RPC function to get all counts in a single query
  */
 export async function getQueueStatus(supabase: SupabaseClient<Database>): Promise<QueueStatus> {
-  const now = new Date();
-  const in1Hour = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-  const in6Hours = new Date(now.getTime() + 6 * 60 * 60 * 1000).toISOString();
-  const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('get_queue_status');
 
-  const [overdue, dueIn1Hour, dueIn6Hours, dueIn24Hours] = await Promise.all([
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .lt('next_sync_after', now.toISOString())
-      .eq('is_syncable', true),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .gte('next_sync_after', now.toISOString())
-      .lt('next_sync_after', in1Hour)
-      .eq('is_syncable', true),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .gte('next_sync_after', now.toISOString())
-      .lt('next_sync_after', in6Hours)
-      .eq('is_syncable', true),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .gte('next_sync_after', now.toISOString())
-      .lt('next_sync_after', in24Hours)
-      .eq('is_syncable', true),
-  ]);
+  if (error || !data || data.length === 0) {
+    // Fallback to default values if RPC fails
+    return { overdue: 0, dueIn1Hour: 0, dueIn6Hours: 0, dueIn24Hours: 0 };
+  }
 
+  const row = data[0];
   return {
-    overdue: overdue.count ?? 0,
-    dueIn1Hour: dueIn1Hour.count ?? 0,
-    dueIn6Hours: dueIn6Hours.count ?? 0,
-    dueIn24Hours: dueIn24Hours.count ?? 0,
+    overdue: Number(row.overdue ?? 0),
+    dueIn1Hour: Number(row.due_in_1_hour ?? 0),
+    dueIn6Hours: Number(row.due_in_6_hours ?? 0),
+    dueIn24Hours: Number(row.due_in_24_hours ?? 0),
   };
 }
 
 /**
  * Get apps with consecutive sync errors
+ * Uses embedded select (JOIN) to get app names in a single query
  */
 export async function getAppsWithErrors(supabase: SupabaseClient<Database>, limit = 20): Promise<AppWithError[]> {
-  const { data: syncStatus } = await supabase
+  // Use embedded select to JOIN with apps table in single query
+  const { data } = await supabase
     .from('sync_status')
-    .select('appid, consecutive_errors, last_error_source, last_error_message, last_error_at')
+    .select(`
+      appid,
+      consecutive_errors,
+      last_error_source,
+      last_error_message,
+      last_error_at,
+      apps(name)
+    `)
     .gt('consecutive_errors', 0)
     .order('consecutive_errors', { ascending: false })
     .limit(limit);
 
-  if (!syncStatus || syncStatus.length === 0) return [];
+  if (!data || data.length === 0) return [];
 
-  // Get app names
-  const appIds = syncStatus.map(s => s.appid);
-  const { data: apps } = await supabase
-    .from('apps')
-    .select('appid, name')
-    .in('appid', appIds);
-
-  const appMap = new Map(apps?.map(a => [a.appid, a.name]) ?? []);
-
-  return syncStatus.map(s => ({
-    appid: s.appid,
-    name: appMap.get(s.appid) ?? `App ${s.appid}`,
-    consecutive_errors: s.consecutive_errors ?? 0,
-    last_error_source: s.last_error_source,
-    last_error_message: s.last_error_message,
-    last_error_at: s.last_error_at,
+  return data.map(row => ({
+    appid: row.appid,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    name: (row.apps as any)?.name ?? `App ${row.appid}`,
+    consecutive_errors: row.consecutive_errors ?? 0,
+    last_error_source: row.last_error_source,
+    last_error_message: row.last_error_message,
+    last_error_at: row.last_error_at,
   }));
 }
 
 /**
  * Get completion stats for each sync source
  * Shows how many apps have been synced vs never synced per source
+ * Uses RPC function to get all counts in a single query
+ * @param sharedData Optional pre-fetched data to avoid duplicate queries
  */
 export async function getSourceCompletionStats(
-  supabase: SupabaseClient<Database>
+  supabase: SupabaseClient<Database>,
+  sharedData?: {
+    totalApps?: number;
+    lastSyncs?: SyncHealthData['lastSyncs'];
+  }
 ): Promise<SourceCompletionStats[]> {
-  // Get total syncable apps count
-  const { count: totalApps } = await supabase
-    .from('sync_status')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_syncable', true);
+  // Get last sync times (use shared data if available)
+  const lastSyncs = sharedData?.lastSyncs ?? await getLastSyncTimes(supabase);
 
-  const total = totalApps ?? 0;
-  const now = new Date();
-  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // Use RPC to get all completion stats in a single query
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('get_source_completion_stats');
 
-  // Query each source's completion and staleness in parallel
-  const [
-    steamspySynced,
-    steamspyTotal,
-    storefrontSynced,
-    reviewsSynced,
-    histogramSynced,
-    pageCreationSynced,
-    steamspyStale,
-    storefrontStale,
-    reviewsStale,
-    histogramStale,
-  ] = await Promise.all([
-    // Synced counts (NOT NULL)
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_steamspy_sync', 'is', null),
-    // SteamSpy total: only apps where steamspy_available is not explicitly FALSE
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .or('steamspy_available.is.null,steamspy_available.eq.true'),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_storefront_sync', 'is', null),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_reviews_sync', 'is', null),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_histogram_sync', 'is', null),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_page_creation_scrape', 'is', null),
-    // Stale counts (synced but older than threshold)
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_steamspy_sync', 'is', null)
-      .lt('last_steamspy_sync', oneDayAgo),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_storefront_sync', 'is', null)
-      .lt('last_storefront_sync', oneDayAgo),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_reviews_sync', 'is', null)
-      .lt('last_reviews_sync', oneDayAgo),
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_histogram_sync', 'is', null)
-      .lt('last_histogram_sync', sevenDaysAgo),
-  ]);
+  if (error || !data || data.length === 0) {
+    // Fallback to empty array if RPC fails
+    return [];
+  }
 
-  // Get last sync times from jobs
-  const lastSyncs = await getLastSyncTimes(supabase);
+  // Map RPC results to SourceCompletionStats format
+  const lastSyncMap: Record<string, string | null> = {
+    steamspy: lastSyncs.steamspy,
+    storefront: lastSyncs.storefront,
+    reviews: lastSyncs.reviews,
+    histogram: lastSyncs.histogram,
+    page_creation: null,
+  };
 
-  const steamspyTotalCount = steamspyTotal.count ?? total;
-  const sources: SourceCompletionStats[] = [
-    {
-      source: 'steamspy',
-      totalApps: steamspyTotalCount,
-      syncedApps: steamspySynced.count ?? 0,
-      neverSynced: steamspyTotalCount - (steamspySynced.count ?? 0),
-      staleApps: steamspyStale.count ?? 0,
-      completionPercent: steamspyTotalCount > 0 ? ((steamspySynced.count ?? 0) / steamspyTotalCount) * 100 : 0,
-      lastSyncTime: lastSyncs.steamspy,
-    },
-    {
-      source: 'storefront',
-      totalApps: total,
-      syncedApps: storefrontSynced.count ?? 0,
-      neverSynced: total - (storefrontSynced.count ?? 0),
-      staleApps: storefrontStale.count ?? 0,
-      completionPercent: total > 0 ? ((storefrontSynced.count ?? 0) / total) * 100 : 0,
-      lastSyncTime: lastSyncs.storefront,
-    },
-    {
-      source: 'reviews',
-      totalApps: total,
-      syncedApps: reviewsSynced.count ?? 0,
-      neverSynced: total - (reviewsSynced.count ?? 0),
-      staleApps: reviewsStale.count ?? 0,
-      completionPercent: total > 0 ? ((reviewsSynced.count ?? 0) / total) * 100 : 0,
-      lastSyncTime: lastSyncs.reviews,
-    },
-    {
-      source: 'histogram',
-      totalApps: total,
-      syncedApps: histogramSynced.count ?? 0,
-      neverSynced: total - (histogramSynced.count ?? 0),
-      staleApps: histogramStale.count ?? 0,
-      completionPercent: total > 0 ? ((histogramSynced.count ?? 0) / total) * 100 : 0,
-      lastSyncTime: lastSyncs.histogram,
-    },
-    {
-      source: 'page_creation',
-      totalApps: total,
-      syncedApps: pageCreationSynced.count ?? 0,
-      neverSynced: total - (pageCreationSynced.count ?? 0),
-      staleApps: 0, // page_creation doesn't go stale
-      completionPercent: total > 0 ? ((pageCreationSynced.count ?? 0) / total) * 100 : 0,
-      lastSyncTime: null,
-    },
-  ];
-
-  return sources;
+  return data.map((row: { source: string; total_apps: number; synced_apps: number; stale_apps: number }) => {
+    const totalApps = Number(row.total_apps ?? 0);
+    const syncedApps = Number(row.synced_apps ?? 0);
+    return {
+      source: row.source as SourceCompletionStats['source'],
+      totalApps,
+      syncedApps,
+      neverSynced: totalApps - syncedApps,
+      staleApps: Number(row.stale_apps ?? 0),
+      completionPercent: totalApps > 0 ? (syncedApps / totalApps) * 100 : 0,
+      lastSyncTime: lastSyncMap[row.source] ?? null,
+    };
+  });
 }
 
 /**
@@ -528,61 +415,39 @@ export async function getPICSSyncState(
 
 /**
  * Get PICS data completion statistics
+ * Uses RPC function to get all counts in a single query
+ * @param sharedTotalApps Optional pre-fetched total apps count (ignored when using RPC)
  */
 export async function getPICSDataStats(
-  supabase: SupabaseClient<Database>
+  supabase: SupabaseClient<Database>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sharedTotalApps?: number
 ): Promise<PICSDataStats> {
-  // Get total syncable apps
-  const { count: totalApps } = await supabase
-    .from('sync_status')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_syncable', true);
+  // Use RPC to get all PICS stats in a single query
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('get_pics_data_stats');
 
-  // Run all PICS data checks in parallel
-  const [
-    withPicsSync,
-    withCategories,
-    withGenres,
-    withTags,
-    withFranchises,
-    withParentApp,
-  ] = await Promise.all([
-    // Apps with last_pics_sync set
-    supabase
-      .from('sync_status')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true)
-      .not('last_pics_sync', 'is', null),
-    // Apps with categories
-    supabase
-      .from('app_categories')
-      .select('appid', { count: 'exact', head: true }),
-    // Apps with genres
-    supabase
-      .from('app_genres')
-      .select('appid', { count: 'exact', head: true }),
-    // Apps with PICS tags (distinct count of apps that have tags from PICS)
-    supabase
-      .from('app_steam_tags')
-      .select('appid', { count: 'exact', head: true }),
-    // Apps with franchises
-    supabase
-      .from('app_franchises')
-      .select('appid', { count: 'exact', head: true }),
-    // Apps with parent_appid set (DLC/demos linked to parent game)
-    supabase
-      .from('apps')
-      .select('*', { count: 'exact', head: true })
-      .not('parent_appid', 'is', null),
-  ]);
+  if (error || !data || data.length === 0) {
+    // Fallback to default values if RPC fails
+    return {
+      totalApps: 0,
+      withPicsSync: 0,
+      withCategories: 0,
+      withGenres: 0,
+      withTags: 0,
+      withFranchises: 0,
+      withParentApp: 0,
+    };
+  }
 
+  const row = data[0];
   return {
-    totalApps: totalApps ?? 0,
-    withPicsSync: withPicsSync.count ?? 0,
-    withCategories: withCategories.count ?? 0,
-    withGenres: withGenres.count ?? 0,
-    withTags: withTags.count ?? 0,
-    withFranchises: withFranchises.count ?? 0,
-    withParentApp: withParentApp.count ?? 0,
+    totalApps: Number(row.total_apps ?? 0),
+    withPicsSync: Number(row.with_pics_sync ?? 0),
+    withCategories: Number(row.with_categories ?? 0),
+    withGenres: Number(row.with_genres ?? 0),
+    withTags: Number(row.with_tags ?? 0),
+    withFranchises: Number(row.with_franchises ?? 0),
+    withParentApp: Number(row.with_parent_app ?? 0),
   };
 }

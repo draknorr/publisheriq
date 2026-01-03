@@ -9,6 +9,7 @@ import {
   getFullyCompletedAppsCount,
   getPICSSyncState,
   getPICSDataStats,
+  getLastSyncTimes,
   type PriorityDistribution,
   type QueueStatus,
   type AppWithError,
@@ -17,6 +18,7 @@ import {
   type PICSSyncState,
   type PICSDataStats,
 } from '@/lib/sync-queries';
+import { getCachedDashboardData, setCachedDashboardData } from '@/lib/admin-dashboard-cache';
 import { AdminDashboard } from './AdminDashboard';
 
 export const dynamic = 'force-dynamic';
@@ -69,27 +71,46 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
   if (!isSupabaseConfigured()) {
     return null;
   }
+
+  // Check cache first - return cached data if available and fresh
+  const cached = getCachedDashboardData();
+  if (cached) {
+    return cached;
+  }
+
   const supabase = getSupabase();
 
+  // Phase 1: Fetch shared data first to avoid duplicate queries
+  // These are used by multiple functions below
+  const [queueStatus, lastSyncs, totalAppsResult] = await Promise.all([
+    getQueueStatus(supabase),
+    getLastSyncTimes(supabase),
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true),
+  ]);
+  const totalApps = totalAppsResult.count ?? 0;
+
+  // Phase 2: Fetch remaining data, passing shared data where needed
   const [
     syncHealth,
     priorityDistribution,
-    queueStatus,
     appsWithErrors,
     completionStats,
     fullyCompletedCount,
     runningJobs,
-    recentJobs,
     allJobs,
     picsSyncState,
     picsDataStats,
     chatLogs,
   ] = await Promise.all([
-    getSyncHealthData(supabase),
+    // Pass queueStatus.overdue and lastSyncs to avoid re-fetching
+    getSyncHealthData(supabase, { lastSyncs, overdueApps: queueStatus.overdue }),
     getPriorityDistribution(supabase),
-    getQueueStatus(supabase),
     getAppsWithErrors(supabase, 20),
-    getSourceCompletionStats(supabase),
+    // Pass totalApps and lastSyncs to avoid re-fetching
+    getSourceCompletionStats(supabase, { totalApps, lastSyncs }),
     getFullyCompletedAppsCount(supabase),
     supabase
       .from('sync_jobs')
@@ -100,14 +121,10 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
       .from('sync_jobs')
       .select('*')
       .order('started_at', { ascending: false })
-      .limit(10),
-    supabase
-      .from('sync_jobs')
-      .select('*')
-      .order('started_at', { ascending: false })
       .limit(100),
     getPICSSyncState(supabase),
-    getPICSDataStats(supabase),
+    // Pass totalApps to avoid re-fetching
+    getPICSDataStats(supabase, totalApps),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase.from('chat_query_logs') as any)
       .select('*')
@@ -115,7 +132,9 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
       .limit(20),
   ]);
 
-  return {
+  const allJobsData = allJobs.data ?? [];
+
+  const data: AdminDashboardData = {
     syncHealth,
     priorityDistribution,
     queueStatus,
@@ -123,12 +142,17 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
     completionStats,
     fullyCompletedCount,
     runningJobs: runningJobs.data ?? [],
-    recentJobs: recentJobs.data ?? [],
-    allJobs: allJobs.data ?? [],
+    recentJobs: allJobsData.slice(0, 10), // Derive from allJobs instead of separate query
+    allJobs: allJobsData,
     picsSyncState,
     picsDataStats,
     chatLogs: chatLogs.data ?? [],
   };
+
+  // Cache the fresh data for subsequent requests
+  setCachedDashboardData(data);
+
+  return data;
 }
 
 export default async function AdminDashboardPage() {
