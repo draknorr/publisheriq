@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar } from '@/components/data-display';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar, ReviewScoreBadge } from '@/components/data-display';
 import { SimilaritySection } from '@/components/similarity';
-import { CheckCircle2, XCircle, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Card } from '@/components/ui';
+import { CheckCircle2, XCircle, AlertTriangle, ChevronRight, ChevronDown, Monitor, Gamepad2, Calendar, FileText, Wrench, Globe, ExternalLink } from 'lucide-react';
 
 interface AppDetails {
   appid: number;
@@ -141,13 +143,44 @@ interface AppDetailSectionsProps {
 }
 
 const sections = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'summary', label: 'Summary' },
   { id: 'similar', label: 'Similar' },
-  { id: 'pics', label: 'PICS Data' },
   { id: 'metrics', label: 'Metrics' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'sync', label: 'Sync Status' },
 ];
+
+// Limits for expandable sections
+const TAG_LIMIT = 12;
+const LANGUAGE_LIMIT = 10;
+const DLC_LIMIT = 5;
+const CATEGORY_LIMIT = 6;
+const CONTENT_DESCRIPTOR_LIMIT = 5;
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: 'spring',
+      stiffness: 300,
+      damping: 24,
+    },
+  },
+};
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
@@ -257,7 +290,8 @@ export function AppDetailSections({
   dlcs,
   steamTags,
 }: AppDetailSectionsProps) {
-  const [activeSection, setActiveSection] = useState('overview');
+  const [activeSection, setActiveSection] = useState('summary');
+  const latestMetrics = metrics[0] ?? null;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -313,8 +347,8 @@ export function AppDetailSections({
 
       {/* All sections in scrollable view */}
       <div className="space-y-8">
-        <OverviewSection
-          id="overview"
+        <SummarySection
+          id="summary"
           app={app}
           developers={developers}
           publishers={publishers}
@@ -323,6 +357,9 @@ export function AppDetailSections({
           trends={trends}
           genres={genres}
           franchises={franchises}
+          steamDeck={steamDeck}
+          categories={categories}
+          dlcs={dlcs}
         />
         {/* Similar Games Section */}
         {app.type === 'game' && !app.is_delisted && (
@@ -332,20 +369,14 @@ export function AppDetailSections({
               entityId={app.appid}
               entityName={app.name}
               entityType="game"
-              limit={8}
+              limit={10}
               showFilters={true}
+              compact={true}
             />
           </section>
         )}
-        <PICSSection
-          id="pics"
-          app={app}
-          steamDeck={steamDeck}
-          categories={categories}
-          dlcs={dlcs}
-        />
         <MetricsSection id="metrics" metrics={metrics} />
-        <ReviewsSection id="reviews" histogram={histogram} />
+        <ReviewsSection id="reviews" histogram={histogram} latestMetrics={latestMetrics} />
         <SyncSection id="sync" syncStatus={syncStatus} />
       </div>
     </div>
@@ -360,7 +391,7 @@ function SectionHeader({ title, id }: { title: string; id: string }) {
   );
 }
 
-function OverviewSection({
+function SummarySection({
   id,
   app,
   developers,
@@ -370,6 +401,9 @@ function OverviewSection({
   trends,
   genres,
   franchises,
+  steamDeck,
+  categories,
+  dlcs,
 }: {
   id: string;
   app: AppDetails;
@@ -380,12 +414,31 @@ function OverviewSection({
   trends: AppTrends | null;
   genres: Genre[];
   franchises: Franchise[];
+  steamDeck: SteamDeckInfo | null;
+  categories: Category[];
+  dlcs: DLCApp[];
 }) {
+  // Expandable states
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const [languagesExpanded, setLanguagesExpanded] = useState(false);
+  const [contentDescriptorsExpanded, setContentDescriptorsExpanded] = useState(false);
+  const [dlcsExpanded, setDlcsExpanded] = useState(false);
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
+
+  const contentDescriptors = parseContentDescriptors(app.content_descriptors);
+  const languageKeys = app.languages ? Object.keys(app.languages) : [];
+  const namedTags = steamTags.filter(t => !t.name.startsWith('Tag '));
+  const displayedTags = tagsExpanded ? namedTags : namedTags.slice(0, TAG_LIMIT);
+  const displayedLanguages = languagesExpanded ? languageKeys : languageKeys.slice(0, LANGUAGE_LIMIT);
+  const displayedDescriptors = contentDescriptorsExpanded ? contentDescriptors : contentDescriptors.slice(0, CONTENT_DESCRIPTOR_LIMIT);
+  const displayedDLCs = dlcsExpanded ? dlcs : dlcs.slice(0, DLC_LIMIT);
+  const displayedCategories = categoriesExpanded ? categories : categories.slice(0, CATEGORY_LIMIT);
+
   return (
     <section>
-      <SectionHeader title="Overview" id={id} />
+      <SectionHeader title="Summary" id={id} />
       <div className="space-y-4">
-        {/* Trends - compact inline row */}
+        {/* Row 1: Trends */}
         {trends && (
           <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
             <TrendBadge
@@ -405,7 +458,7 @@ function OverviewSection({
           </div>
         )}
 
-        {/* Developer / Publisher - inline row */}
+        {/* Row 2: Developer / Publisher + Genres/Franchises */}
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex items-center gap-2">
             <span className="text-caption text-text-tertiary">Dev:</span>
@@ -481,40 +534,38 @@ function OverviewSection({
           </div>
         )}
 
-        {/* PICS Steam Tags (ranked) - compact */}
-        {steamTags.length > 0 && (() => {
-          const namedTags = steamTags.filter(t => !t.name.startsWith('Tag '));
-          const unnamedCount = steamTags.length - namedTags.length;
-          const displayTags = namedTags.slice(0, 12);
-          const remainingCount = (namedTags.length > 12 ? namedTags.length - 12 : 0) + unnamedCount;
-
-          return namedTags.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-caption text-text-tertiary mr-1">Tags:</span>
-              {displayTags.map((tag) => (
-                <a
-                  key={tag.id}
-                  href={`https://store.steampowered.com/search/?tags=${tag.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors"
-                  title={`Rank #${tag.rank}`}
-                >
-                  {tag.name}
-                </a>
-              ))}
-              {remainingCount > 0 && (
-                <span className="text-caption text-text-muted">+{remainingCount}</span>
-              )}
-            </div>
-          ) : null;
-        })()}
+        {/* Row 3: Tags (expandable) */}
+        {namedTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Tags:</span>
+            {displayedTags.map((tag) => (
+              <a
+                key={tag.id}
+                href={`https://store.steampowered.com/search/?tags=${tag.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors"
+                title={`Rank #${tag.rank}`}
+              >
+                {tag.name}
+              </a>
+            ))}
+            {namedTags.length > TAG_LIMIT && (
+              <button
+                onClick={() => setTagsExpanded(!tagsExpanded)}
+                className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+              >
+                {tagsExpanded ? 'Show less' : `+${namedTags.length - TAG_LIMIT} more`}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* SteamSpy Tags - shown if no PICS tags */}
         {tags.length > 0 && steamTags.length === 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-caption text-text-tertiary mr-1">Tags:</span>
-            {tags.slice(0, 12).map(({ tag }) => (
+            {tags.slice(0, TAG_LIMIT).map(({ tag }) => (
               <span
                 key={tag}
                 className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary"
@@ -522,75 +573,33 @@ function OverviewSection({
                 {tag}
               </span>
             ))}
-            {tags.length > 12 && (
-              <span className="text-caption text-text-muted">+{tags.length - 12}</span>
+            {tags.length > TAG_LIMIT && (
+              <span className="text-caption text-text-muted">+{tags.length - TAG_LIMIT}</span>
             )}
           </div>
         )}
 
-        {/* App Details - compact 6-col grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
-          <div>
-            <p className="text-caption text-text-tertiary">Release</p>
-            <p className="text-body-sm text-text-primary">{app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}</p>
-          </div>
-          <div>
-            <p className="text-caption text-text-tertiary">Page Created</p>
-            <p className="text-body-sm text-text-primary">{formatDate(app.page_creation_date)}</p>
-          </div>
-          <div>
-            <p className="text-caption text-text-tertiary">Workshop</p>
-            <p className={`text-body-sm ${app.has_workshop ? 'text-accent-green' : 'text-text-muted'}`}>
-              {app.has_workshop ? 'Yes' : 'No'}
-            </p>
-          </div>
-          <div>
-            <p className="text-caption text-text-tertiary">Dev Info</p>
-            <p className={`text-body-sm ${app.has_developer_info ? 'text-accent-green' : 'text-accent-yellow'}`}>
-              {app.has_developer_info ? 'Complete' : 'Pending'}
-            </p>
-          </div>
-          <div>
-            <p className="text-caption text-text-tertiary">First Seen</p>
-            <p className="text-body-sm text-text-primary">{formatDate(app.created_at)}</p>
-          </div>
-          <div>
-            <p className="text-caption text-text-tertiary">Updated</p>
-            <p className="text-body-sm text-text-primary">{formatDate(app.updated_at)}</p>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+        {/* Row 4: Platform Stats (3-col grid) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Platforms Card */}
+          {app.platforms && (
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-2">
+                <Monitor className="h-4 w-4 text-text-tertiary" />
+                <h3 className="text-body-sm font-medium text-text-primary">Platforms</h3>
+              </div>
+              <p className="text-body-sm text-text-secondary capitalize">{app.platforms.replace(/,/g, ', ')}</p>
+            </Card>
+          )}
 
-function PICSSection({
-  id,
-  app,
-  steamDeck,
-  categories,
-  dlcs,
-}: {
-  id: string;
-  app: AppDetails;
-  steamDeck: SteamDeckInfo | null;
-  categories: Category[];
-  dlcs: DLCApp[];
-}) {
-  const hasPICSData = steamDeck || categories.length > 0 || app.controller_support || app.platforms || app.metacritic_score || app.parent_appid || app.languages || dlcs.length > 0 || app.pics_review_score;
-  const contentDescriptors = parseContentDescriptors(app.content_descriptors);
-  const [showAllDLCs, setShowAllDLCs] = useState(false);
-
-  return (
-    <section>
-      <SectionHeader title="PICS Data" id={id} />
-      {hasPICSData ? (
-        <div className="space-y-4">
-          {/* Steam Deck + Features row */}
-          <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
-            {steamDeck && (
-              <>
-                <span className="text-caption text-text-tertiary">Deck:</span>
+          {/* Steam Deck Card */}
+          {steamDeck && (
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-2">
+                <Gamepad2 className="h-4 w-4 text-text-tertiary" />
+                <h3 className="text-body-sm font-medium text-text-primary">Steam Deck</h3>
+              </div>
+              <div className="flex items-center gap-2">
                 <span className={`px-2 py-0.5 rounded text-body-sm font-medium ${
                   steamDeck.category === 'verified' ? 'bg-accent-green/15 text-accent-green' :
                   steamDeck.category === 'playable' ? 'bg-accent-yellow/15 text-accent-yellow' :
@@ -603,112 +612,181 @@ function PICSSection({
                 </span>
                 {(steamDeck.tests_passed || steamDeck.tests_failed) && (
                   <span className="text-caption text-text-muted">
-                    ({steamDeck.tests_passed?.length ?? 0} passed, {steamDeck.tests_failed?.length ?? 0} failed)
+                    {steamDeck.tests_passed?.length ?? 0}✓ {steamDeck.tests_failed?.length ?? 0}✗
                   </span>
                 )}
-              </>
-            )}
-            {categories.length > 0 && (
-              <>
-                {steamDeck && <span className="text-border-subtle">|</span>}
-                <span className="text-caption text-text-tertiary">Features:</span>
-                {categories.slice(0, 6).map((category) => (
-                  <span key={category.id} className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary">
-                    {category.name}
-                  </span>
-                ))}
-                {categories.length > 6 && <span className="text-caption text-text-muted">+{categories.length - 6}</span>}
-              </>
+              </div>
+            </Card>
+          )}
+
+          {/* Controller Support Card */}
+          {app.controller_support && (
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-2">
+                <Gamepad2 className="h-4 w-4 text-text-tertiary" />
+                <h3 className="text-body-sm font-medium text-text-primary">Controller</h3>
+              </div>
+              <p className="text-body-sm text-text-secondary capitalize">{app.controller_support}</p>
+            </Card>
+          )}
+        </div>
+
+        {/* Row 5: Quick Facts + PICS Metadata grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <div>
+            <p className="text-caption text-text-tertiary flex items-center gap-1"><Calendar className="h-3 w-3" /> Release</p>
+            <p className="text-body-sm text-text-primary">{app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary flex items-center gap-1"><FileText className="h-3 w-3" /> Page Created</p>
+            <p className="text-body-sm text-text-primary">{formatDate(app.page_creation_date)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary flex items-center gap-1"><Wrench className="h-3 w-3" /> Workshop</p>
+            <p className={`text-body-sm ${app.has_workshop ? 'text-accent-green' : 'text-text-muted'}`}>
+              {app.has_workshop ? 'Yes' : 'No'}
+            </p>
+          </div>
+          {app.pics_review_score !== null && (
+            <div>
+              <p className="text-caption text-text-tertiary">PICS Score</p>
+              <p className={`text-body-sm font-medium ${
+                app.pics_review_score >= 7 ? 'text-accent-green' :
+                app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
+              }`}>
+                {app.pics_review_score} ({getPICSReviewScoreDescription(app.pics_review_score).split(' ').slice(-1)[0]})
+              </p>
+            </div>
+          )}
+          {app.metacritic_score !== null && (
+            <div>
+              <p className="text-caption text-text-tertiary">Metacritic</p>
+              <p className={`text-body-sm font-medium ${
+                app.metacritic_score >= 75 ? 'text-accent-green' :
+                app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
+              }`}>{app.metacritic_score}</p>
+            </div>
+          )}
+          {app.parent_appid !== null && (
+            <div>
+              <p className="text-caption text-text-tertiary">Parent App</p>
+              <Link href={`/apps/${app.parent_appid}`} className="text-body-sm text-accent-blue hover:underline">
+                {app.parent_appid}
+              </Link>
+            </div>
+          )}
+          {app.release_state && (
+            <div>
+              <p className="text-caption text-text-tertiary">Release State</p>
+              <p className="text-body-sm text-text-primary capitalize">{app.release_state}</p>
+            </div>
+          )}
+          {app.app_state && (
+            <div>
+              <p className="text-caption text-text-tertiary">App State</p>
+              <p className="text-body-sm text-text-primary">{app.app_state}</p>
+            </div>
+          )}
+          {app.last_content_update && (
+            <div>
+              <p className="text-caption text-text-tertiary">Content Update</p>
+              <p className="text-body-sm text-text-primary">{formatDate(app.last_content_update)}</p>
+            </div>
+          )}
+          {app.current_build_id && (
+            <div>
+              <p className="text-caption text-text-tertiary">Build ID</p>
+              <p className="text-body-sm text-text-primary font-mono">{app.current_build_id}</p>
+            </div>
+          )}
+          {app.homepage_url && (
+            <div className="col-span-2">
+              <p className="text-caption text-text-tertiary flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Homepage</p>
+              <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body-sm text-accent-blue hover:underline truncate block">
+                {app.homepage_url.replace(/^https?:\/\//, '')}
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Row 6: Features/Categories (expandable) */}
+        {categories.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Features:</span>
+            {displayedCategories.map((category) => (
+              <span key={category.id} className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary">
+                {category.name}
+              </span>
+            ))}
+            {categories.length > CATEGORY_LIMIT && (
+              <button
+                onClick={() => setCategoriesExpanded(!categoriesExpanded)}
+                className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+              >
+                {categoriesExpanded ? 'Show less' : `+${categories.length - CATEGORY_LIMIT} more`}
+              </button>
             )}
           </div>
+        )}
 
-          {/* PICS Metadata - 6 col dense grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
-            {app.pics_review_score !== null && (
-              <div>
-                <p className="text-caption text-text-tertiary">Review Score</p>
-                <p className={`text-body-sm font-medium ${
-                  app.pics_review_score >= 7 ? 'text-accent-green' :
-                  app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
-                }`}>
-                  {app.pics_review_score} ({getPICSReviewScoreDescription(app.pics_review_score).split(' ').slice(-1)[0]})
-                </p>
-              </div>
-            )}
-            {app.pics_review_percentage !== null && (
-              <div>
-                <p className="text-caption text-text-tertiary">Review %</p>
-                <p className="text-body-sm text-text-primary">{app.pics_review_percentage}%</p>
-              </div>
-            )}
-            {app.metacritic_score !== null && (
-              <div>
-                <p className="text-caption text-text-tertiary">Metacritic</p>
-                <p className={`text-body-sm font-medium ${
-                  app.metacritic_score >= 75 ? 'text-accent-green' :
-                  app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
-                }`}>{app.metacritic_score}</p>
-              </div>
-            )}
-            {app.platforms && (
-              <div>
-                <p className="text-caption text-text-tertiary">Platforms</p>
-                <p className="text-body-sm text-text-primary capitalize">{app.platforms.replace(/,/g, ', ')}</p>
-              </div>
-            )}
-            {app.controller_support && (
-              <div>
-                <p className="text-caption text-text-tertiary">Controller</p>
-                <p className="text-body-sm text-text-primary capitalize">{app.controller_support}</p>
-              </div>
-            )}
-            {app.parent_appid !== null && (
-              <div>
-                <p className="text-caption text-text-tertiary">Parent</p>
-                <Link href={`/apps/${app.parent_appid}`} className="text-body-sm text-accent-blue hover:underline">
-                  {app.parent_appid}
+        {/* Row 7: DLCs (expandable) */}
+        {dlcs.length > 0 && (
+          <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-body-sm font-medium text-text-primary">DLC ({dlcs.length})</span>
+              {dlcs.length > DLC_LIMIT && (
+                <button
+                  onClick={() => setDlcsExpanded(!dlcsExpanded)}
+                  className="text-caption text-accent-blue hover:bg-accent-blue/10 px-2 py-0.5 rounded transition-colors"
+                >
+                  {dlcsExpanded ? 'Show less' : `+${dlcs.length - DLC_LIMIT} more`}
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {displayedDLCs.map((dlc) => (
+                <Link
+                  key={dlc.appid}
+                  href={`/apps/${dlc.appid}`}
+                  className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors truncate max-w-48"
+                  title={dlc.name}
+                >
+                  {dlc.name}
                 </Link>
-              </div>
-            )}
-            {app.release_state && (
-              <div>
-                <p className="text-caption text-text-tertiary">Release State</p>
-                <p className="text-body-sm text-text-primary capitalize">{app.release_state}</p>
-              </div>
-            )}
-            {app.app_state && (
-              <div>
-                <p className="text-caption text-text-tertiary">App State</p>
-                <p className="text-body-sm text-text-primary">{app.app_state}</p>
-              </div>
-            )}
-            {app.last_content_update && (
-              <div>
-                <p className="text-caption text-text-tertiary">Content Update</p>
-                <p className="text-body-sm text-text-primary">{formatDate(app.last_content_update)}</p>
-              </div>
-            )}
-            {app.current_build_id && (
-              <div>
-                <p className="text-caption text-text-tertiary">Build ID</p>
-                <p className="text-body-sm text-text-primary font-mono">{app.current_build_id}</p>
-              </div>
-            )}
-            {app.homepage_url && (
-              <div className="col-span-2">
-                <p className="text-caption text-text-tertiary">Homepage</p>
-                <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body-sm text-accent-blue hover:underline truncate block">
-                  {app.homepage_url.replace(/^https?:\/\//, '')}
-                </a>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
+        )}
 
-          {/* Content Descriptors (inline) */}
+        {/* Row 8: Languages + Content Descriptors (expandable) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Languages */}
+          {languageKeys.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-text-tertiary" />
+              <span className="text-caption text-text-tertiary mr-1">Languages:</span>
+              {displayedLanguages.map((lang) => (
+                <span key={lang} className="px-2 py-0.5 rounded text-caption bg-surface-elevated text-text-secondary">
+                  {lang}
+                </span>
+              ))}
+              {languageKeys.length > LANGUAGE_LIMIT && (
+                <button
+                  onClick={() => setLanguagesExpanded(!languagesExpanded)}
+                  className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                >
+                  {languagesExpanded ? 'Show less' : `+${languageKeys.length - LANGUAGE_LIMIT} more`}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Content Descriptors */}
           {contentDescriptors.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-caption text-text-tertiary">Warnings:</span>
-              {contentDescriptors.map((descriptor) => (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 text-accent-orange" />
+              <span className="text-caption text-text-tertiary mr-1">Warnings:</span>
+              {displayedDescriptors.map((descriptor) => (
                 <span
                   key={descriptor.id}
                   className={`px-2 py-0.5 rounded text-caption font-medium ${
@@ -720,58 +798,18 @@ function PICSSection({
                   {descriptor.label}
                 </span>
               ))}
-            </div>
-          )}
-
-          {/* DLC List - compact collapsible */}
-          {dlcs.length > 0 && (
-            <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-body-sm font-medium text-text-primary">DLC ({dlcs.length})</span>
-                {dlcs.length > 5 && (
-                  <button onClick={() => setShowAllDLCs(!showAllDLCs)} className="text-caption text-accent-blue hover:underline">
-                    {showAllDLCs ? 'Show less' : `Show all`}
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {(showAllDLCs ? dlcs : dlcs.slice(0, 5)).map((dlc) => (
-                  <Link
-                    key={dlc.appid}
-                    href={`/apps/${dlc.appid}`}
-                    className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors truncate max-w-48"
-                    title={dlc.name}
-                  >
-                    {dlc.name}
-                  </Link>
-                ))}
-                {!showAllDLCs && dlcs.length > 5 && (
-                  <span className="text-caption text-text-muted">+{dlcs.length - 5} more</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Languages - inline */}
-          {app.languages && Object.keys(app.languages).length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-caption text-text-tertiary mr-1">Languages:</span>
-              {Object.keys(app.languages).slice(0, 10).map((lang) => (
-                <span key={lang} className="px-2 py-0.5 rounded text-caption bg-surface-elevated text-text-secondary">
-                  {lang}
-                </span>
-              ))}
-              {Object.keys(app.languages).length > 10 && (
-                <span className="text-caption text-text-muted">+{Object.keys(app.languages).length - 10}</span>
+              {contentDescriptors.length > CONTENT_DESCRIPTOR_LIMIT && (
+                <button
+                  onClick={() => setContentDescriptorsExpanded(!contentDescriptorsExpanded)}
+                  className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                >
+                  {contentDescriptorsExpanded ? 'Show less' : `+${contentDescriptors.length - CONTENT_DESCRIPTOR_LIMIT} more`}
+                </button>
               )}
             </div>
           )}
         </div>
-      ) : (
-        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
-          No PICS data available
-        </p>
-      )}
+      </div>
     </section>
   );
 }
@@ -922,94 +960,182 @@ function MetricsSection({
 function ReviewsSection({
   id,
   histogram,
+  latestMetrics,
 }: {
   id: string;
   histogram: ReviewHistogram[];
+  latestMetrics: DailyMetric | null;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const REVIEW_MONTHS_LIMIT = 6;
+
   const histogramData = [...histogram].reverse().slice(-12).map((h) => ({
     month: formatMonthLabel(h.month_start),
     positive: h.recommendations_up,
     negative: h.recommendations_down,
   }));
 
+  const displayedHistogram = isExpanded ? histogram.slice(0, 12) : histogram.slice(0, REVIEW_MONTHS_LIMIT);
+
+  // Aggregated review data
+  const totalReviews = latestMetrics?.total_reviews ?? 0;
+  const positiveReviews = latestMetrics?.positive_reviews ?? 0;
+  const negativeReviews = latestMetrics?.negative_reviews ?? 0;
+  const aggregatedScore = totalReviews > 0 ? Math.round((positiveReviews / totalReviews) * 100) : 0;
+
   return (
     <section>
       <SectionHeader title="Reviews" id={id} />
       {histogram.length > 0 ? (
-        <div className="space-y-4">
-          {/* Chart - compact */}
-          <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-            <h3 className="text-body-sm font-medium text-text-primary mb-2">Monthly Distribution</h3>
-            <StackedBarChart
-              data={histogramData}
-              xKey="month"
-              positiveKey="positive"
-              negativeKey="negative"
-              height={180}
-            />
-          </div>
-
-          {/* Reviews - mobile card view, desktop table */}
-          <div className="rounded-md border border-border-subtle overflow-hidden">
-            {/* Mobile: Card view */}
-            <div className="sm:hidden divide-y divide-border-subtle">
-              {histogram.slice(0, 4).map((h) => {
-                const total = h.recommendations_up + h.recommendations_down;
-                const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
-                return (
-                  <div key={h.month_start} className="p-3 bg-surface-raised">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-body-sm text-text-primary font-medium">{formatMonthLabel(h.month_start)}</span>
-                      <span className="text-caption text-text-secondary">{ratio.toFixed(0)}%</span>
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+          className="space-y-4"
+        >
+          {/* Aggregated Review Summary */}
+          {totalReviews > 0 && (
+            <motion.div variants={itemVariants}>
+              <div className="p-4 rounded-md border border-border-subtle bg-surface-raised">
+                <div className="flex flex-wrap items-center gap-6">
+                  <div className="flex items-center gap-3">
+                    <ReviewScoreBadge
+                      score={aggregatedScore}
+                      description={latestMetrics?.review_score_desc ?? undefined}
+                    />
+                    <div>
+                      <div className="text-body-sm font-medium text-text-primary">
+                        {totalReviews.toLocaleString()} total reviews
+                      </div>
+                      <div className="text-caption text-text-muted">
+                        {latestMetrics?.review_score_desc ?? 'No rating'}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-caption mb-2">
-                      <span className="text-accent-green">{h.recommendations_up.toLocaleString()}</span>
-                      <span className="text-text-muted">/</span>
-                      <span className="text-accent-red">{h.recommendations_down.toLocaleString()}</span>
-                      <span className="text-text-muted">({total.toLocaleString()} total)</span>
-                    </div>
-                    <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
                   </div>
-                );
-              })}
+                  <div className="flex-1 min-w-[200px] max-w-md">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="text-caption text-accent-green">{positiveReviews.toLocaleString()} positive</span>
+                      <span className="text-caption text-text-muted">·</span>
+                      <span className="text-caption text-accent-red">{negativeReviews.toLocaleString()} negative</span>
+                    </div>
+                    <RatioBar positive={positiveReviews} negative={negativeReviews} height={10} />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Chart - compact */}
+          <motion.div variants={itemVariants}>
+            <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+              <h3 className="text-body-sm font-medium text-text-primary mb-2">Monthly Distribution</h3>
+              <StackedBarChart
+                data={histogramData}
+                xKey="month"
+                positiveKey="positive"
+                negativeKey="negative"
+                height={180}
+              />
             </div>
-            {/* Desktop: Table view */}
-            <table className="w-full hidden sm:table">
-              <thead className="bg-surface-elevated">
-                <tr>
-                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Month</th>
-                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">+/-</th>
-                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Total</th>
-                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">%</th>
-                  <th className="px-3 py-2 w-24 text-caption font-medium text-text-tertiary">Ratio</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-subtle">
-                {histogram.slice(0, 4).map((h) => {
-                  const total = h.recommendations_up + h.recommendations_down;
-                  const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
-                  return (
-                    <tr key={h.month_start} className="bg-surface-raised">
-                      <td className="px-3 py-2 text-caption text-text-primary">
-                        {formatMonthLabel(h.month_start)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-caption">
-                        <span className="text-accent-green">{h.recommendations_up.toLocaleString()}</span>
-                        <span className="text-text-muted">/</span>
-                        <span className="text-accent-red">{h.recommendations_down.toLocaleString()}</span>
-                      </td>
-                      <td className="px-3 py-2 text-right text-caption text-text-secondary">{total.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right text-caption text-text-secondary">{ratio.toFixed(0)}%</td>
-                      <td className="px-3 py-2">
+          </motion.div>
+
+          {/* Reviews table with animation */}
+          <motion.div variants={itemVariants}>
+            <div className="rounded-md border border-border-subtle overflow-hidden">
+              {/* Mobile: Card view */}
+              <div className="sm:hidden divide-y divide-border-subtle">
+                <AnimatePresence>
+                  {displayedHistogram.map((h) => {
+                    const total = h.recommendations_up + h.recommendations_down;
+                    const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
+                    return (
+                      <motion.div
+                        key={h.month_start}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="p-3 bg-surface-raised"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-body-sm text-text-primary font-medium">{formatMonthLabel(h.month_start)}</span>
+                          <span className="text-caption text-text-secondary">{ratio.toFixed(0)}%</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-caption mb-2">
+                          <span className="text-accent-green">{h.recommendations_up.toLocaleString()}</span>
+                          <span className="text-text-muted">/</span>
+                          <span className="text-accent-red">{h.recommendations_down.toLocaleString()}</span>
+                          <span className="text-text-muted">({total.toLocaleString()} total)</span>
+                        </div>
                         <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+              {/* Desktop: Table view */}
+              <table className="w-full hidden sm:table">
+                <thead className="bg-surface-elevated">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Month</th>
+                    <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Positive</th>
+                    <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Negative</th>
+                    <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Total</th>
+                    <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">%</th>
+                    <th className="px-3 py-2 w-24 text-caption font-medium text-text-tertiary">Ratio</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  <AnimatePresence>
+                    {displayedHistogram.map((h) => {
+                      const total = h.recommendations_up + h.recommendations_down;
+                      const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
+                      return (
+                        <motion.tr
+                          key={h.month_start}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="bg-surface-raised hover:bg-surface-elevated transition-colors"
+                        >
+                          <td className="px-3 py-2 text-caption text-text-primary">
+                            {formatMonthLabel(h.month_start)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-caption text-accent-green">
+                            {h.recommendations_up.toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 text-right text-caption text-accent-red">
+                            {h.recommendations_down.toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 text-right text-caption text-text-secondary">{total.toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right text-caption text-text-secondary">{ratio.toFixed(0)}%</td>
+                          <td className="px-3 py-2">
+                            <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+
+              {/* Expand/Collapse button */}
+              {histogram.length > REVIEW_MONTHS_LIMIT && (
+                <div className="p-2 bg-surface-elevated border-t border-border-subtle">
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="w-full flex items-center justify-center gap-1 py-1.5 text-caption text-accent-blue hover:bg-accent-blue/10 rounded transition-colors"
+                  >
+                    {isExpanded ? 'Show less' : `Show ${Math.min(histogram.length, 12) - REVIEW_MONTHS_LIMIT} more months`}
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
       ) : (
         <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
           No review histogram data available

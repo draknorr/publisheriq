@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui';
 import { SimilarityCard } from './SimilarityCard';
+import { CompactSimilarityCard } from './CompactSimilarityCard';
 import { Loader2, AlertCircle, Filter } from 'lucide-react';
 
 type EntityType = 'game' | 'publisher' | 'developer';
@@ -43,6 +44,7 @@ interface SimilaritySectionProps {
   entityType: EntityType;
   limit?: number;
   showFilters?: boolean;
+  compact?: boolean; // Use horizontal scroll layout with compact cards
   className?: string;
 }
 
@@ -60,6 +62,7 @@ export function SimilaritySection({
   entityType,
   limit = 8,
   showFilters = false,
+  compact = false,
   className = '',
 }: SimilaritySectionProps) {
   const [results, setResults] = useState<SimilarEntity[]>([]);
@@ -154,6 +157,26 @@ export function SimilaritySection({
             This {entityType} may not be indexed for similarity search yet
           </p>
         </Card>
+      ) : compact ? (
+        <div className="relative">
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border-subtle scrollbar-track-transparent">
+            {results.map((entity) => (
+              <CompactSimilarityCard
+                key={entity.id}
+                id={entity.id}
+                name={entity.name}
+                score={entity.score}
+                type={entity.type}
+                genres={entity.genres}
+                tags={entity.tags}
+                reviewPercentage={entity.review_percentage}
+                priceCents={entity.price_cents}
+                isFree={entity.is_free}
+                entityType={entityType}
+              />
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {results.map((entity) => (

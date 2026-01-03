@@ -449,16 +449,29 @@ export default async function AppDetailPage({
             Unreleased
           </span>
         )}
-        <span className="text-text-tertiary text-body-sm">
-          ID: <span className="font-mono text-text-secondary">{app.appid}</span>
-        </span>
+        <a
+          href={`https://store.steampowered.com/app/${app.appid}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-text-tertiary text-body-sm hover:text-accent-blue transition-colors"
+        >
+          ID: <span className="font-mono text-text-secondary hover:text-accent-blue">{app.appid}</span>
+        </a>
         <span className="text-text-tertiary">·</span>
-        <span className="text-subheading text-text-primary">
-          {formatPrice(app.current_price_cents, app.is_free)}
+        <div className="flex items-center gap-2">
+          <span className={`text-subheading font-semibold ${
+            app.current_discount_percent && app.current_discount_percent > 0
+              ? 'text-accent-green'
+              : 'text-text-primary'
+          }`}>
+            {formatPrice(app.current_price_cents, app.is_free)}
+          </span>
           {app.current_discount_percent && app.current_discount_percent > 0 && (
-            <span className="ml-2 text-accent-green text-body-sm">-{app.current_discount_percent}%</span>
+            <span className="px-2 py-0.5 rounded-md bg-accent-green/15 text-accent-green text-body-sm font-medium">
+              -{app.current_discount_percent}%
+            </span>
           )}
-        </span>
+        </div>
       </div>
 
       {/* Key metrics row - compact */}
