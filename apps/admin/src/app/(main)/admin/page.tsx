@@ -17,7 +17,7 @@ import {
   type PICSSyncState,
   type PICSDataStats,
 } from '@/lib/sync-queries';
-import { AdminDashboardTabs } from './AdminDashboardTabs';
+import { AdminDashboard } from './AdminDashboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,14 +119,14 @@ export default async function AdminDashboardPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
-        <p className="mt-2 text-gray-400">
-          Monitor sync health, job history, and system status
+      <div className="mb-4">
+        <h1 className="text-display-sm text-text-primary">Admin Dashboard</h1>
+        <p className="mt-1 text-body-sm text-text-secondary">
+          System health, sync status, and job monitoring
         </p>
       </div>
 
-      <AdminDashboardTabs data={data} />
+      <AdminDashboard data={data} />
     </div>
   );
 }

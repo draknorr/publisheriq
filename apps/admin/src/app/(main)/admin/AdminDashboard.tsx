@@ -1,0 +1,497 @@
+'use client';
+
+import { useState } from 'react';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { StatusBar } from '@/components/data-display/DenseMetricGrid';
+import { SourceCompletionCard } from '@/components/data-display/MiniProgressBar';
+import {
+  formatRelativeTime,
+  formatDuration,
+  type PriorityDistribution,
+} from '@/lib/sync-queries';
+import type { AdminDashboardData, SyncJob } from './page';
+import { CheckCircle2 } from 'lucide-react';
+
+// Source configuration
+const sourceConfig: Record<string, { label: string; icon: string }> = {
+  steamspy: { label: 'SteamSpy', icon: '📊' },
+  storefront: { label: 'Storefront', icon: '🏪' },
+  reviews: { label: 'Reviews', icon: '⭐' },
+  histogram: { label: 'Histogram', icon: '📈' },
+  page_creation: { label: 'Page Creation', icon: '📅' },
+  pics: { label: 'PICS', icon: '⚡' },
+};
+
+// Priority tier configuration
+const priorityConfig = [
+  { key: 'high', label: 'High', color: 'bg-accent-red', interval: '6hr' },
+  { key: 'medium', label: 'Med', color: 'bg-accent-orange', interval: '12hr' },
+  { key: 'normal', label: 'Norm', color: 'bg-accent-yellow', interval: '24hr' },
+  { key: 'low', label: 'Low', color: 'bg-accent-primary', interval: '48hr' },
+  { key: 'minimal', label: 'Min', color: 'bg-text-muted', interval: '7d' },
+] as const;
+
+// Job status colors
+const jobStatusColors: Record<string, string> = {
+  running: 'bg-accent-primary/15 text-accent-primary border-accent-primary/30',
+  completed: 'bg-accent-green/15 text-accent-green border-accent-green/30',
+  failed: 'bg-accent-red/15 text-accent-red border-accent-red/30',
+};
+
+export function AdminDashboard({ data }: { data: AdminDashboardData }) {
+  const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(new Set());
+
+  const toggleJobExpanded = (id: string) => {
+    setExpandedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Calculate overall completion
+  const overallCompletion =
+    data.completionStats.length > 0
+      ? data.completionStats.reduce((sum, s) => sum + s.completionPercent, 0) /
+        data.completionStats.length
+      : 0;
+
+  const totalApps = data.completionStats[0]?.totalApps ?? 0;
+  const priorityTotal = Object.values(data.priorityDistribution).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="space-y-3">
+      {/* Top Status Bar - Always Visible */}
+      <StatusBar
+        metrics={[
+          {
+            label: 'Running',
+            value: data.runningJobs.length,
+            status: data.runningJobs.length > 0 ? 'info' : 'neutral',
+          },
+          {
+            label: 'Jobs (24h)',
+            value: data.syncHealth.jobs24h.total,
+            status: 'neutral',
+          },
+          {
+            label: 'Success',
+            value: `${data.syncHealth.successRate7d.toFixed(1)}%`,
+            status: data.syncHealth.successRate7d >= 95 ? 'success' : data.syncHealth.successRate7d >= 80 ? 'warning' : 'error',
+          },
+          {
+            label: 'Overdue',
+            value: data.syncHealth.overdueApps,
+            status: data.syncHealth.overdueApps > 500 ? 'error' : data.syncHealth.overdueApps > 100 ? 'warning' : 'success',
+          },
+          {
+            label: 'Errors',
+            value: data.syncHealth.appsWithErrors,
+            status: data.syncHealth.appsWithErrors > 10 ? 'error' : data.syncHealth.appsWithErrors > 0 ? 'warning' : 'success',
+          },
+          {
+            label: 'PICS',
+            value: data.picsSyncState.lastChangeNumber > 0 ? `#${data.picsSyncState.lastChangeNumber.toLocaleString()}` : 'N/A',
+            status: data.picsSyncState.lastChangeNumber > 0 ? 'info' : 'neutral',
+          },
+        ]}
+      />
+
+      {/* Data Completion Section */}
+      <CollapsibleSection
+        title="Data Completion"
+        badge={{ value: `${overallCompletion.toFixed(1)}%`, variant: overallCompletion >= 80 ? 'success' : overallCompletion >= 50 ? 'info' : 'warning' }}
+        headerExtra={
+          <span className="text-caption text-text-muted">
+            {data.fullyCompletedCount.toLocaleString()} / {totalApps.toLocaleString()} complete
+          </span>
+        }
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {data.completionStats.map((stats) => (
+            <SourceCompletionCard
+              key={stats.source}
+              source={sourceConfig[stats.source]?.label ?? stats.source}
+              icon={sourceConfig[stats.source]?.icon ?? '📦'}
+              synced={stats.syncedApps}
+              total={stats.totalApps}
+              lastSync={stats.lastSyncTime ? formatRelativeTime(stats.lastSyncTime) : undefined}
+            />
+          ))}
+        </div>
+      </CollapsibleSection>
+
+      {/* Sync Queue Section */}
+      <CollapsibleSection
+        title="Sync Queue"
+        badge={{
+          value: data.queueStatus.overdue,
+          variant: data.queueStatus.overdue > 500 ? 'error' : data.queueStatus.overdue > 100 ? 'warning' : 'success',
+        }}
+        defaultOpen={false}
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Priority Distribution */}
+          <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
+            <div className="text-caption text-text-secondary mb-2">Priority Distribution</div>
+            <div className="space-y-1.5">
+              {priorityConfig.map(({ key, label, color, interval }) => {
+                const count = data.priorityDistribution[key as keyof PriorityDistribution];
+                const pct = priorityTotal > 0 ? (count / priorityTotal) * 100 : 0;
+                return (
+                  <div key={key} className="flex items-center gap-2">
+                    <div className="w-12 text-caption text-text-tertiary">{label}</div>
+                    <div className="flex-1 h-1.5 rounded-full bg-surface-overlay overflow-hidden">
+                      <div
+                        className={`h-full ${color} transition-all`}
+                        style={{ width: `${Math.max(pct, 0.5)}%` }}
+                      />
+                    </div>
+                    <div className="w-16 text-caption text-text-secondary text-right">
+                      {count.toLocaleString()}
+                    </div>
+                    <div className="w-8 text-caption-sm text-text-muted">{interval}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2 pt-2 border-t border-border-subtle text-caption text-text-muted">
+              Total: {priorityTotal.toLocaleString()} apps
+            </div>
+          </div>
+
+          {/* Queue Status */}
+          <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
+            <div className="text-caption text-text-secondary mb-2">Queue Status</div>
+            <div className="grid grid-cols-2 gap-2">
+              <QueueMetric
+                label="Overdue"
+                value={data.queueStatus.overdue}
+                status={data.queueStatus.overdue > 500 ? 'error' : data.queueStatus.overdue > 100 ? 'warning' : 'success'}
+              />
+              <QueueMetric
+                label="Due < 1hr"
+                value={data.queueStatus.dueIn1Hour}
+                status="warning"
+              />
+              <QueueMetric
+                label="Due < 6hr"
+                value={data.queueStatus.dueIn6Hours}
+                status="info"
+              />
+              <QueueMetric
+                label="Due < 24hr"
+                value={data.queueStatus.dueIn24Hours}
+                status="neutral"
+              />
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* PICS Service Section */}
+      <CollapsibleSection
+        title="PICS Service"
+        badge={{
+          value: data.picsSyncState.lastChangeNumber > 0 ? 'Active' : 'Inactive',
+          variant: data.picsSyncState.lastChangeNumber > 0 ? 'success' : 'warning',
+        }}
+        defaultOpen={false}
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Sync State */}
+          <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-caption text-text-tertiary">Change Number</div>
+                <div className="text-body font-semibold text-text-primary">
+                  {data.picsSyncState.lastChangeNumber > 0
+                    ? data.picsSyncState.lastChangeNumber.toLocaleString()
+                    : '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-caption text-text-tertiary">Last Updated</div>
+                <div className="text-body font-semibold text-text-primary">
+                  {data.picsSyncState.updatedAt
+                    ? formatRelativeTime(data.picsSyncState.updatedAt)
+                    : '-'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Data Coverage */}
+          <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
+            <div className="text-caption text-text-secondary mb-2">Data Coverage</div>
+            <div className="grid grid-cols-3 gap-2">
+              <PICSMetric
+                label="PICS Synced"
+                value={data.picsDataStats.withPicsSync}
+                total={data.picsDataStats.totalApps}
+              />
+              <PICSMetric label="Tags" value={data.picsDataStats.withTags} isTotal />
+              <PICSMetric label="Categories" value={data.picsDataStats.withCategories} isTotal />
+              <PICSMetric label="Genres" value={data.picsDataStats.withGenres} isTotal />
+              <PICSMetric label="Franchises" value={data.picsDataStats.withFranchises} isTotal />
+              <PICSMetric label="Parent App" value={data.picsDataStats.withParentApp} isTotal />
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* Errors Section */}
+      <CollapsibleSection
+        title="Sync Errors"
+        badge={{
+          value: data.appsWithErrors.length,
+          variant: data.appsWithErrors.length > 10 ? 'error' : data.appsWithErrors.length > 0 ? 'warning' : 'success',
+        }}
+        defaultOpen={data.appsWithErrors.length > 0}
+      >
+        {data.appsWithErrors.length === 0 ? (
+          <div className="flex items-center gap-2 py-2 text-accent-green">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-body-sm">No sync errors</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-body-sm">
+              <thead>
+                <tr className="border-b border-border-subtle">
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">App</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Errors</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Source</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Last Error</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {data.appsWithErrors.slice(0, 10).map((app) => (
+                  <tr key={app.appid} className="hover:bg-surface-elevated/50">
+                    <td className="py-1.5">
+                      <div className="text-text-primary font-medium truncate max-w-[200px]">{app.name}</div>
+                      <div className="text-caption text-text-muted">ID: {app.appid}</div>
+                    </td>
+                    <td className="py-1.5">
+                      <span className="px-1.5 py-0.5 rounded text-caption bg-accent-red/15 text-accent-red">
+                        {app.consecutive_errors}x
+                      </span>
+                    </td>
+                    <td className="py-1.5 text-text-secondary">{app.last_error_source ?? '-'}</td>
+                    <td className="py-1.5">
+                      <div className="text-text-secondary truncate max-w-[250px]" title={app.last_error_message ?? ''}>
+                        {app.last_error_message ?? '-'}
+                      </div>
+                      <div className="text-caption text-text-muted">{formatRelativeTime(app.last_error_at)}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {data.appsWithErrors.length > 10 && (
+              <div className="mt-2 text-caption text-text-muted">
+                +{data.appsWithErrors.length - 10} more errors
+              </div>
+            )}
+          </div>
+        )}
+      </CollapsibleSection>
+
+      {/* Recent Jobs Section */}
+      <CollapsibleSection
+        title="Recent Jobs"
+        badge={{ value: data.allJobs.length, variant: 'default' }}
+        defaultOpen={false}
+      >
+        <div className="space-y-1">
+          {data.allJobs.slice(0, 15).map((job) => (
+            <JobRow
+              key={job.id}
+              job={job}
+              isExpanded={expandedJobIds.has(job.id)}
+              onToggle={() => toggleJobExpanded(job.id)}
+            />
+          ))}
+        </div>
+      </CollapsibleSection>
+
+      {/* Last Sync Times */}
+      <CollapsibleSection title="Last Sync Times" defaultOpen={false}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <LastSyncItem label="SteamSpy" time={data.syncHealth.lastSyncs.steamspy} />
+          <LastSyncItem label="Storefront" time={data.syncHealth.lastSyncs.storefront} />
+          <LastSyncItem label="Reviews" time={data.syncHealth.lastSyncs.reviews} />
+          <LastSyncItem label="Histogram" time={data.syncHealth.lastSyncs.histogram} />
+        </div>
+      </CollapsibleSection>
+    </div>
+  );
+}
+
+// Helper Components
+
+function QueueMetric({
+  label,
+  value,
+  status,
+}: {
+  label: string;
+  value: number;
+  status: 'success' | 'warning' | 'error' | 'info' | 'neutral';
+}) {
+  const statusColors = {
+    success: 'text-accent-green',
+    warning: 'text-accent-yellow',
+    error: 'text-accent-red',
+    info: 'text-accent-primary',
+    neutral: 'text-text-primary',
+  };
+
+  return (
+    <div className="p-2 rounded bg-surface-raised border border-border-subtle">
+      <div className="text-caption text-text-tertiary">{label}</div>
+      <div className={`text-body font-semibold ${statusColors[status]}`}>
+        {value.toLocaleString()}
+      </div>
+    </div>
+  );
+}
+
+function PICSMetric({
+  label,
+  value,
+  total,
+  isTotal,
+}: {
+  label: string;
+  value: number;
+  total?: number;
+  isTotal?: boolean;
+}) {
+  if (isTotal) {
+    return (
+      <div className="text-center">
+        <div className="text-body font-semibold text-text-primary">{value.toLocaleString()}</div>
+        <div className="text-caption text-text-muted">{label}</div>
+      </div>
+    );
+  }
+
+  const pct = total && total > 0 ? (value / total) * 100 : 0;
+  return (
+    <div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-body font-semibold text-text-primary">{value.toLocaleString()}</span>
+        <span className="text-caption text-text-muted">({pct.toFixed(1)}%)</span>
+      </div>
+      <div className="text-caption text-text-tertiary">{label}</div>
+    </div>
+  );
+}
+
+function JobRow({
+  job,
+  isExpanded,
+  onToggle,
+}: {
+  job: SyncJob;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const duration = job.completed_at
+    ? formatDuration(new Date(job.completed_at).getTime() - new Date(job.started_at).getTime())
+    : 'Running...';
+
+  return (
+    <div className="border border-border-subtle rounded overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-surface-elevated/50 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span
+            className={`px-1.5 py-0.5 rounded text-caption border ${
+              jobStatusColors[job.status] ?? 'bg-surface-elevated text-text-secondary'
+            }`}
+          >
+            {job.status}
+          </span>
+          <span className="text-body-sm font-medium text-text-primary">{job.job_type}</span>
+          {job.batch_size && (
+            <span className="text-caption text-text-muted">({job.batch_size})</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-caption text-text-secondary">
+          <span className="text-accent-green">{job.items_succeeded ?? 0}</span>
+          <span className="text-text-muted">/</span>
+          <span>{job.items_processed ?? 0}</span>
+          {(job.items_failed ?? 0) > 0 && (
+            <span className="text-accent-red">({job.items_failed} failed)</span>
+          )}
+          <span className="text-text-muted">{duration}</span>
+          <span className="text-text-muted">{formatRelativeTime(job.started_at)}</span>
+        </div>
+      </button>
+      {isExpanded && (
+        <div className="px-2 py-2 bg-surface-elevated/30 border-t border-border-subtle text-body-sm">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-caption">
+            <div>
+              <span className="text-text-muted">Started:</span>{' '}
+              <span className="text-text-secondary">{new Date(job.started_at).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-text-muted">Completed:</span>{' '}
+              <span className="text-text-secondary">
+                {job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'}
+              </span>
+            </div>
+            {(job.items_created !== null || job.items_updated !== null) && (
+              <div className="col-span-2">
+                <span className="text-text-muted">Processing:</span>{' '}
+                <span className="text-accent-primary">{job.items_created ?? 0} new</span>
+                {' | '}
+                <span className="text-accent-green">{job.items_updated ?? 0} updated</span>
+              </div>
+            )}
+            {job.error_message && (
+              <div className="col-span-2 mt-1">
+                <div className="text-accent-red">Error:</div>
+                <div className="p-1.5 mt-0.5 rounded bg-accent-red/10 text-accent-red font-mono text-caption-sm">
+                  {job.error_message}
+                </div>
+              </div>
+            )}
+            {job.github_run_id && (
+              <div className="col-span-2">
+                <a
+                  href={`https://github.com/draknorr/publisheriq/actions/runs/${job.github_run_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  View GitHub Actions Run
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LastSyncItem({ label, time }: { label: string; time: string | null }) {
+  return (
+    <div className="p-2 rounded border border-border-subtle bg-surface-elevated/50">
+      <div className="text-caption text-text-tertiary">{label}</div>
+      <div className="text-body-sm font-medium text-text-primary">
+        {time ? formatRelativeTime(time) : 'Never'}
+      </div>
+    </div>
+  );
+}
