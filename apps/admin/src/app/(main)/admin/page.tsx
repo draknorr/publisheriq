@@ -37,6 +37,19 @@ export interface SyncJob {
   batch_size: number | null;
 }
 
+export interface ChatQueryLog {
+  id: string;
+  query_text: string;
+  tool_names: string[];
+  tool_count: number;
+  iteration_count: number;
+  response_length: number;
+  timing_llm_ms: number | null;
+  timing_tools_ms: number | null;
+  timing_total_ms: number | null;
+  created_at: string;
+}
+
 export interface AdminDashboardData {
   syncHealth: SyncHealthData;
   priorityDistribution: PriorityDistribution;
@@ -49,6 +62,7 @@ export interface AdminDashboardData {
   allJobs: SyncJob[];
   picsSyncState: PICSSyncState;
   picsDataStats: PICSDataStats;
+  chatLogs: ChatQueryLog[];
 }
 
 async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
@@ -69,6 +83,7 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
     allJobs,
     picsSyncState,
     picsDataStats,
+    chatLogs,
   ] = await Promise.all([
     getSyncHealthData(supabase),
     getPriorityDistribution(supabase),
@@ -93,6 +108,11 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
       .limit(100),
     getPICSSyncState(supabase),
     getPICSDataStats(supabase),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from('chat_query_logs') as any)
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20),
   ]);
 
   return {
@@ -107,6 +127,7 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
     allJobs: allJobs.data ?? [],
     picsSyncState,
     picsDataStats,
+    chatLogs: chatLogs.data ?? [],
   };
 }
 

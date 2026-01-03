@@ -9,8 +9,8 @@ import {
   formatDuration,
   type PriorityDistribution,
 } from '@/lib/sync-queries';
-import type { AdminDashboardData, SyncJob } from './page';
-import { CheckCircle2 } from 'lucide-react';
+import type { AdminDashboardData, SyncJob, ChatQueryLog } from './page';
+import { CheckCircle2, MessageSquare } from 'lucide-react';
 
 // Source configuration
 const sourceConfig: Record<string, { label: string; icon: string }> = {
@@ -37,6 +37,13 @@ const jobStatusColors: Record<string, string> = {
   completed: 'bg-accent-green/15 text-accent-green border-accent-green/30',
   failed: 'bg-accent-red/15 text-accent-red border-accent-red/30',
 };
+
+// Format milliseconds to human readable
+function formatMs(ms: number | null): string {
+  if (ms === null) return '-';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 export function AdminDashboard({ data }: { data: AdminDashboardData }) {
   const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(new Set());
@@ -318,6 +325,9 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
           <LastSyncItem label="Histogram" time={data.syncHealth.lastSyncs.histogram} />
         </div>
       </CollapsibleSection>
+
+      {/* Chat Logs Section */}
+      <ChatLogsSection logs={data.chatLogs} />
     </div>
   );
 }
@@ -477,5 +487,106 @@ function LastSyncItem({ label, time }: { label: string; time: string | null }) {
         {time ? formatRelativeTime(time) : 'Never'}
       </div>
     </div>
+  );
+}
+
+function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
+  const avgResponseTime =
+    logs.length > 0
+      ? Math.round(logs.reduce((sum, l) => sum + (l.timing_total_ms ?? 0), 0) / logs.length)
+      : null;
+
+  const avgToolCalls =
+    logs.length > 0
+      ? (logs.reduce((sum, l) => sum + l.tool_count, 0) / logs.length).toFixed(1)
+      : '-';
+
+  const queriesWithTools = logs.filter((l) => l.tool_count > 0).length;
+
+  return (
+    <CollapsibleSection
+      title="Chat Logs"
+      badge={{ value: logs.length, variant: 'default' }}
+      headerExtra={
+        <span className="text-caption text-text-muted">7-day retention</span>
+      }
+    >
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <div className="p-2 rounded border border-border-subtle bg-surface-elevated/50">
+          <div className="text-caption text-text-tertiary">Total Queries</div>
+          <div className="text-body font-semibold text-text-primary">{logs.length}</div>
+        </div>
+        <div className="p-2 rounded border border-border-subtle bg-surface-elevated/50">
+          <div className="text-caption text-text-tertiary">Avg Response</div>
+          <div className="text-body font-semibold text-text-primary">{formatMs(avgResponseTime)}</div>
+        </div>
+        <div className="p-2 rounded border border-border-subtle bg-surface-elevated/50">
+          <div className="text-caption text-text-tertiary">Avg Tools</div>
+          <div className="text-body font-semibold text-text-primary">{avgToolCalls}</div>
+        </div>
+        <div className="p-2 rounded border border-border-subtle bg-surface-elevated/50">
+          <div className="text-caption text-text-tertiary">With Tools</div>
+          <div className="text-body font-semibold text-text-primary">{queriesWithTools}</div>
+        </div>
+      </div>
+
+      {/* Logs Table */}
+      {logs.length === 0 ? (
+        <div className="flex items-center gap-2 py-2 text-text-secondary">
+          <MessageSquare className="h-4 w-4" />
+          <span className="text-body-sm">No chat logs yet</span>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-body-sm">
+            <thead>
+              <tr className="border-b border-border-subtle">
+                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Query</th>
+                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Tools</th>
+                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Time</th>
+                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">When</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-subtle">
+              {logs.slice(0, 10).map((log) => (
+                <tr key={log.id} className="hover:bg-surface-elevated/50">
+                  <td className="py-1.5">
+                    <div className="text-text-primary truncate max-w-[300px]" title={log.query_text}>
+                      {log.query_text}
+                    </div>
+                  </td>
+                  <td className="py-1.5">
+                    <div className="flex flex-wrap gap-1">
+                      {log.tool_names.slice(0, 3).map((tool) => (
+                        <span
+                          key={tool}
+                          className="px-1.5 py-0.5 rounded text-caption bg-accent-primary/15 text-accent-primary"
+                        >
+                          {tool}
+                        </span>
+                      ))}
+                      {log.tool_names.length > 3 && (
+                        <span className="text-caption text-text-muted">+{log.tool_names.length - 3}</span>
+                      )}
+                      {log.tool_names.length === 0 && (
+                        <span className="text-caption text-text-muted">-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-1.5 text-text-secondary">{formatMs(log.timing_total_ms)}</td>
+                  <td className="py-1.5 text-text-muted">{formatRelativeTime(log.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {logs.length > 10 && (
+            <div className="mt-2 text-caption text-text-muted">
+              +{logs.length - 10} more logs
+            </div>
+          )}
+        </div>
+      )}
+    </CollapsibleSection>
   );
 }

@@ -12,7 +12,6 @@ import {
   X,
   MessageSquare,
   Shield,
-  ScrollText,
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
@@ -31,7 +30,6 @@ const navItems: NavItem[] = [
   { href: '/publishers', label: 'Publishers', icon: Building2 },
   { href: '/developers', label: 'Developers', icon: Users },
   { href: '/admin', label: 'Admin Dashboard', icon: Shield },
-  { href: '/admin/chat-logs', label: 'Chat Logs', icon: ScrollText },
 ];
 
 export function Sidebar() {
