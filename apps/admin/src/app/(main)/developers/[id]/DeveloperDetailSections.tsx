@@ -113,20 +113,20 @@ function formatOwners(min: number | null, max: number | null): string {
 function formatMonthLabel(monthStart: string): string {
   if (!monthStart) return '—';
 
-  // Handle YYYY-MM format by appending -01
-  const dateStr = monthStart.length === 7 ? `${monthStart}-01` : monthStart;
+  // Validate YYYY-MM or YYYY-MM-DD format
+  const isoPattern = /^(\d{4})-(\d{2})(?:-\d{2})?$/;
+  const match = monthStart.match(isoPattern);
 
-  // Parse with explicit UTC to avoid timezone shifts
-  const parts = dateStr.split('-');
-  if (parts.length < 2) return '—';
+  if (!match) {
+    // Bad data - return as-is (truncated if too long)
+    return monthStart.length > 10 ? monthStart.substring(0, 10) : monthStart;
+  }
 
-  const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10);
-  const day = parts[2] ? parseInt(parts[2], 10) : 1;
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
 
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  if (isNaN(date.getTime())) return '—';
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  if (isNaN(date.getTime())) return monthStart;
 
   return date.toLocaleDateString('en-US', {
     month: 'short',
