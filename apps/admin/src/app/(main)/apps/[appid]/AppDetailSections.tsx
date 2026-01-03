@@ -363,7 +363,7 @@ export function AppDetailSections({
         />
         {/* Similar Games Section */}
         {app.type === 'game' && !app.is_delisted && (
-          <section id="similar">
+          <section id="similar" className="overflow-hidden">
             <SectionHeader title="Similar Games" id="similar-header" />
             <SimilaritySection
               entityId={app.appid}
