@@ -81,6 +81,30 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 **lookup_publishers** - Search publisher names (use BEFORE querying by publisher)
 **lookup_developers** - Search developer names (use BEFORE querying by developer)
 
+## CRITICAL: Tag-Based Query Routing
+
+**The Discovery cube only supports these hardcoded tag segments:** roguelike, roguelite, vrGame, multiplayer, singleplayer, coop, openWorld
+
+**For ALL OTHER game types/tags, you MUST use search_games:**
+- Historical, Turn-based, Isometric, Deck-building, Survival, Farming, Crafting, City-builder, 4X, Grand Strategy, Visual Novel, Dating Sim, Metroidvania, Souls-like, JRPG, CRPG, etc.
+
+**Decision Rule:**
+1. Check if the game type/tag is a Discovery segment (listed above)
+2. If YES → Use query_analytics with Discovery cube
+3. If NO → Use search_games with tags filter
+
+**IMPORTANT:** When query mentions BOTH a Discovery segment (like onSale) AND a non-segment tag (like "historical"):
+- ALWAYS use search_games (tags take priority)
+- search_games supports: tags, review_percentage, release_year, platforms, steam_deck, on_sale, order_by
+- You can filter by review score AND tags AND on_sale in one search_games call
+
+**Examples:**
+- "historical games with good reviews" → search_games(tags: ["Historical"], review_percentage: {gte: 80})
+- "deals on historical games" → search_games(tags: ["Historical"], on_sale: true)
+- "turn-based RPGs released in 2024" → search_games(tags: ["Turn-Based", "RPG"], release_year: {gte: 2024, lte: 2024})
+- "roguelike games" → query_analytics with segment: Discovery.roguelike (hardcoded segment)
+- "VR games on sale" → query_analytics with segments: [Discovery.vrGame, Discovery.onSale] (both are segments)
+
 ## MANDATORY: Default Ordering
 
 **Every query returning game lists MUST include an order clause. Default to releaseDate desc (newest first).**
@@ -302,6 +326,7 @@ Filters:
 - **steam_deck**: ["verified"], ["playable"], or ["verified", "playable"]
 - **release_year**: {gte: 2019, lte: 2020} or {gte: 2020}
 - **review_percentage**: {gte: 90} for 90%+ positive reviews
+- **on_sale**: true to filter to only games currently discounted
 - **order_by**: "reviews" (default), "score", "release_date", "owners"
 
 **IMPORTANT - Tag Behavior:**
@@ -319,6 +344,8 @@ Examples:
 - "Cozy games with 90%+ reviews" → search_games with tags: ["Cozy"], review_percentage: {gte: 90}
 - "Souls-like games on Steam Deck" → search_games with tags: ["Souls-like"], steam_deck: ["verified", "playable"]
 - "Games with Workshop support" → search_games with categories: ["Workshop"]
+- "Historical games on sale" → search_games with tags: ["Historical"], on_sale: true
+- "Deals on survival games with good reviews" → search_games with tags: ["Survival"], on_sale: true, review_percentage: {gte: 80}
 
 ## lookup_tags Tool
 

@@ -21,6 +21,7 @@ export interface SearchGamesArgs {
   review_percentage?: { gte?: number };
   metacritic_score?: { gte?: number };
   is_free?: boolean;
+  on_sale?: boolean;
   limit?: number;
   order_by?: 'reviews' | 'score' | 'release_date' | 'owners';
 }
@@ -91,6 +92,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     review_percentage,
     metacritic_score,
     is_free,
+    on_sale,
     limit = DEFAULT_RESULTS,
     order_by = 'reviews',
   } = args;
@@ -141,6 +143,9 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     }
     if (is_free !== undefined) {
       filtersApplied.push(`is_free: ${is_free}`);
+    }
+    if (on_sale === true) {
+      filtersApplied.push('on_sale: true');
     }
 
     // We use a hybrid approach:
@@ -282,6 +287,11 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     // Free to play
     if (is_free !== undefined) {
       queryBuilder = queryBuilder.eq('is_free', is_free);
+    }
+
+    // On sale - filter to only discounted games
+    if (on_sale === true) {
+      queryBuilder = queryBuilder.gt('current_discount_percent', 0);
     }
 
     // Release year filtering - filter at database level for efficiency
