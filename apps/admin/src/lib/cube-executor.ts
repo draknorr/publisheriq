@@ -7,6 +7,33 @@
 
 import jwt from 'jsonwebtoken';
 
+// Retry configuration for transient errors
+interface RetryConfig {
+  maxRetries: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  retryableStatusCodes: number[];
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  initialDelayMs: 500,
+  maxDelayMs: 4000,
+  retryableStatusCodes: [502, 503, 504, 408, 429],
+};
+
+const QUERY_TIMEOUT_MS = 30000; // 30 seconds
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function calculateBackoff(attempt: number, initialDelay: number, maxDelay: number): number {
+  const delay = initialDelay * Math.pow(2, attempt);
+  const jitter = delay * 0.1 * Math.random(); // Add 10% jitter
+  return Math.min(delay + jitter, maxDelay);
+}
+
 interface CubeFilter {
   member: string;
   operator: string;
@@ -144,6 +171,10 @@ interface CubeResult {
   rowCount: number;
   cached?: boolean;
   error?: string;
+  retryInfo?: {
+    attempts: number;
+    succeeded?: boolean;
+  };
   debug?: {
     cubeQuery?: Record<string, unknown>;
     filters?: unknown[];
@@ -175,9 +206,12 @@ function generateToken(): string {
 }
 
 /**
- * Internal function to execute a Cube.dev query
+ * Internal function to execute a Cube.dev query with retry logic
  */
-async function executeCubeQueryInternal(query: CubeQuery): Promise<CubeResult> {
+async function executeCubeQueryInternal(
+  query: CubeQuery,
+  config: RetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<CubeResult> {
   const apiUrl = process.env.CUBE_API_URL;
 
   if (!apiUrl) {
@@ -225,100 +259,153 @@ async function executeCubeQueryInternal(query: CubeQuery): Promise<CubeResult> {
     cubeQuery.limit = 50; // Default limit
   }
 
-  try {
-    const token = generateToken();
+  let lastError: string | null = null;
 
-    const response = await fetch(`${apiUrl}/cubejs-api/v1/load`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ query: cubeQuery }),
-    });
+  for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+    try {
+      const token = generateToken();
 
-    if (!response.ok) {
-      const errorText = await response.text();
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(`${apiUrl}/cubejs-api/v1/load`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ query: cubeQuery }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          const errorMsg = `Cube.dev query failed: ${response.status} - ${errorText}`;
+
+          // Check if this is a retryable error
+          if (config.retryableStatusCodes.includes(response.status) && attempt < config.maxRetries) {
+            const backoffMs = calculateBackoff(attempt, config.initialDelayMs, config.maxDelayMs);
+            console.log(`[Cube] Retrying after ${response.status} error (attempt ${attempt + 1}/${config.maxRetries}), waiting ${Math.round(backoffMs)}ms`);
+            lastError = errorMsg;
+            await sleep(backoffMs);
+            continue;
+          }
+
+          return {
+            success: false,
+            data: [],
+            rowCount: 0,
+            error: errorMsg,
+            retryInfo: attempt > 0 ? { attempts: attempt + 1, succeeded: false } : undefined,
+          };
+        }
+
+        const result = await response.json();
+
+        // Extract data and format for LLM
+        const data = result.data || [];
+
+        // Simplify field names (remove Cube prefix)
+        const simplifiedData = data.map((row: Record<string, unknown>) => {
+          const simplified: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(row)) {
+            // Remove cube prefix: "Discovery.name" -> "name"
+            const simplifiedKey = key.includes('.') ? key.split('.').pop()! : key;
+            simplified[simplifiedKey] = value;
+          }
+          return simplified;
+        });
+
+        // Apply sorting at application layer (Cube.dev doesn't always respect ORDER BY for time dimensions)
+        let sortedData = simplifiedData;
+        if (query.order) {
+          const orderEntries = Object.entries(query.order);
+          if (orderEntries.length > 0) {
+            const [orderField, orderDir] = orderEntries[0];
+            // Extract field name without cube prefix
+            const fieldName = orderField.includes('.') ? orderField.split('.').pop()! : orderField;
+
+            sortedData = [...simplifiedData].sort((a, b) => {
+              const aVal = a[fieldName];
+              const bVal = b[fieldName];
+
+              // Handle null/undefined values - push to end
+              if (aVal == null && bVal == null) return 0;
+              if (aVal == null) return 1;
+              if (bVal == null) return -1;
+
+              // Compare values
+              let comparison = 0;
+              if (typeof aVal === 'string' && typeof bVal === 'string') {
+                // Date strings or regular strings
+                comparison = aVal.localeCompare(bVal);
+              } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+                comparison = aVal - bVal;
+              } else {
+                comparison = String(aVal).localeCompare(String(bVal));
+              }
+
+              return orderDir === 'desc' ? -comparison : comparison;
+            });
+          }
+        }
+
+        if (attempt > 0) {
+          console.log(`[Cube] Query succeeded after ${attempt + 1} attempts`);
+        }
+
+        return {
+          success: true,
+          data: sortedData,
+          rowCount: simplifiedData.length,
+          cached: result.query?.hitPreAggregations || false,
+          retryInfo: attempt > 0 ? { attempts: attempt + 1, succeeded: true } : undefined,
+          debug: {
+            cubeQuery: cubeQuery,
+            filters: cubeQuery.filters as unknown[],
+            segments: cubeQuery.segments as string[],
+            order: cubeQuery.order as Record<string, string>,
+            limit: cubeQuery.limit as number,
+          },
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      const isTimeoutOrNetwork = message.includes('abort') || message.includes('fetch') || message.includes('network') || message.includes('ECONNREFUSED');
+
+      // Retry on network errors or timeouts
+      if (isTimeoutOrNetwork && attempt < config.maxRetries) {
+        const backoffMs = calculateBackoff(attempt, config.initialDelayMs, config.maxDelayMs);
+        console.log(`[Cube] Retrying after error: ${message} (attempt ${attempt + 1}/${config.maxRetries}), waiting ${Math.round(backoffMs)}ms`);
+        lastError = `Cube.dev query error: ${message}`;
+        await sleep(backoffMs);
+        continue;
+      }
+
       return {
         success: false,
         data: [],
         rowCount: 0,
-        error: `Cube.dev query failed: ${response.status} - ${errorText}`,
+        error: `Cube.dev query error: ${message}`,
+        retryInfo: attempt > 0 ? { attempts: attempt + 1, succeeded: false } : undefined,
       };
     }
-
-    const result = await response.json();
-
-    // Extract data and format for LLM
-    const data = result.data || [];
-
-    // Simplify field names (remove Cube prefix)
-    const simplifiedData = data.map((row: Record<string, unknown>) => {
-      const simplified: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(row)) {
-        // Remove cube prefix: "Discovery.name" -> "name"
-        const simplifiedKey = key.includes('.') ? key.split('.').pop()! : key;
-        simplified[simplifiedKey] = value;
-      }
-      return simplified;
-    });
-
-    // Apply sorting at application layer (Cube.dev doesn't always respect ORDER BY for time dimensions)
-    let sortedData = simplifiedData;
-    if (query.order) {
-      const orderEntries = Object.entries(query.order);
-      if (orderEntries.length > 0) {
-        const [orderField, orderDir] = orderEntries[0];
-        // Extract field name without cube prefix
-        const fieldName = orderField.includes('.') ? orderField.split('.').pop()! : orderField;
-
-        sortedData = [...simplifiedData].sort((a, b) => {
-          const aVal = a[fieldName];
-          const bVal = b[fieldName];
-
-          // Handle null/undefined values - push to end
-          if (aVal == null && bVal == null) return 0;
-          if (aVal == null) return 1;
-          if (bVal == null) return -1;
-
-          // Compare values
-          let comparison = 0;
-          if (typeof aVal === 'string' && typeof bVal === 'string') {
-            // Date strings or regular strings
-            comparison = aVal.localeCompare(bVal);
-          } else if (typeof aVal === 'number' && typeof bVal === 'number') {
-            comparison = aVal - bVal;
-          } else {
-            comparison = String(aVal).localeCompare(String(bVal));
-          }
-
-          return orderDir === 'desc' ? -comparison : comparison;
-        });
-      }
-    }
-
-    return {
-      success: true,
-      data: sortedData,
-      rowCount: simplifiedData.length,
-      cached: result.query?.hitPreAggregations || false,
-      debug: {
-        cubeQuery: cubeQuery,
-        filters: cubeQuery.filters as unknown[],
-        segments: cubeQuery.segments as string[],
-        order: cubeQuery.order as Record<string, string>,
-        limit: cubeQuery.limit as number,
-      },
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return {
-      success: false,
-      data: [],
-      rowCount: 0,
-      error: `Cube.dev query error: ${message}`,
-    };
   }
+
+  // Should not reach here, but handle it
+  return {
+    success: false,
+    data: [],
+    rowCount: 0,
+    error: lastError || 'Cube.dev query failed after max retries',
+    retryInfo: { attempts: config.maxRetries + 1, succeeded: false },
+  };
 }
 
 /**

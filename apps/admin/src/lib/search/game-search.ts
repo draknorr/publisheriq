@@ -39,6 +39,7 @@ export interface GameSearchResult {
   metacritic_score: number | null;
   total_reviews: number | null;
   is_free: boolean;
+  priceDollars: number | null;
 }
 
 /**
@@ -243,6 +244,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         controller_support,
         is_free,
         release_date,
+        current_price_cents,
         pics_review_percentage,
         metacritic_score,
         app_steam_deck!left(category),
@@ -318,6 +320,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       controller_support: string | null;
       is_free: boolean;
       release_date: string | null;
+      current_price_cents: number | null;
       pics_review_percentage: number | null;
       metacritic_score: number | null;
       app_steam_deck: { category: string }[] | null;
@@ -336,6 +339,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         const releaseYear = row.release_date ? new Date(row.release_date).getFullYear() : null;
         const reviewPct =
           metrics?.[0]?.positive_percentage ?? row.pics_review_percentage ?? null;
+        const priceDollars = row.current_price_cents ? row.current_price_cents / 100 : null;
 
         return {
           appid: row.appid,
@@ -348,6 +352,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
           metacritic_score: row.metacritic_score,
           total_reviews: metrics?.[0]?.total_reviews ?? null,
           is_free: row.is_free,
+          priceDollars,
           _owners_midpoint: metrics?.[0]?.owners_midpoint ?? null,
         };
       });
