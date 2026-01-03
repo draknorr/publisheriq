@@ -275,6 +275,9 @@ async function getDeveloperReviewHistogram(developerId: number): Promise<ReviewH
 
   if (!data) return [];
 
+  // Validate ISO date format (YYYY-MM-DD or YYYY-MM)
+  const isoDatePattern = /^\d{4}-\d{2}(?:-\d{2})?$/;
+
   // Aggregate by month while preserving per-game data
   const monthMap = new Map<string, {
     up: number;
@@ -283,6 +286,11 @@ async function getDeveloperReviewHistogram(developerId: number): Promise<ReviewH
   }>();
 
   for (const h of data) {
+    // Skip entries with invalid month_start format (bad data like "Since jun 25")
+    if (!isoDatePattern.test(h.month_start)) {
+      continue;
+    }
+
     // Normalize to YYYY-MM for grouping (e.g., "2025-12" from "2025-12-15")
     const monthKey = h.month_start.substring(0, 7);
     const existing = monthMap.get(monthKey) ?? { up: 0, down: 0, games: new Map() };
