@@ -16,13 +16,12 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-// Script to prevent theme flash on load
+// Script to prevent theme flash on load (light mode default)
 const themeScript = `
   (function() {
     try {
       const theme = localStorage.getItem('publisheriq-theme');
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (theme === 'dark' || (!theme && prefersDark)) {
+      if (theme === 'dark') {
         document.documentElement.classList.add('dark');
       }
     } catch (e) {}

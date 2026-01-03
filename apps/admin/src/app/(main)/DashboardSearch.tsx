@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Sparkles, ArrowRight } from 'lucide-react';
+import { Search, ArrowRight } from 'lucide-react';
 import { getRandomPrompts } from '@/lib/example-prompts';
 
 export function DashboardSearch() {
@@ -25,12 +25,6 @@ export function DashboardSearch() {
   return (
     <div className="py-12 md:py-16">
       <div className="max-w-2xl mx-auto text-center">
-        {/* AI Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-primary/10 border border-accent-primary/20 mb-6">
-          <Sparkles className="w-3.5 h-3.5 text-accent-primary" />
-          <span className="text-caption text-accent-primary font-medium">AI-Powered Intelligence</span>
-        </div>
-
         {/* Heading */}
         <h1 className="text-display text-text-primary mb-3">
           Gaming Intelligence at Your Fingertips
