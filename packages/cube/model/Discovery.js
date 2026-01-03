@@ -13,6 +13,7 @@ cube('Discovery', {
       a.type,
       a.is_free,
       a.current_price_cents,
+      a.current_discount_percent,
       a.release_date,
       a.last_content_update,
       a.platforms,
@@ -66,6 +67,10 @@ cube('Discovery', {
     },
     priceDollars: {
       sql: `ROUND(current_price_cents / 100.0, 2)`,
+      type: 'number',
+    },
+    discountPercent: {
+      sql: `current_discount_percent`,
       type: 'number',
     },
     releaseDate: {
@@ -201,6 +206,9 @@ cube('Discovery', {
     },
     paid: {
       sql: `${CUBE}.is_free = false`,
+    },
+    onSale: {
+      sql: `${CUBE}.current_discount_percent > 0`,
     },
     highlyRated: {
       sql: `COALESCE(${CUBE}.positive_percentage, ${CUBE}.pics_review_percentage) >= 80`,

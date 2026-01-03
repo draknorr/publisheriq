@@ -40,6 +40,7 @@ export interface GameSearchResult {
   total_reviews: number | null;
   is_free: boolean;
   priceDollars: number | null;
+  discountPercent: number | null;
 }
 
 /**
@@ -245,6 +246,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         is_free,
         release_date,
         current_price_cents,
+        current_discount_percent,
         pics_review_percentage,
         metacritic_score,
         app_steam_deck!left(category),
@@ -321,6 +323,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       is_free: boolean;
       release_date: string | null;
       current_price_cents: number | null;
+      current_discount_percent: number | null;
       pics_review_percentage: number | null;
       metacritic_score: number | null;
       app_steam_deck: { category: string }[] | null;
@@ -353,6 +356,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
           total_reviews: metrics?.[0]?.total_reviews ?? null,
           is_free: row.is_free,
           priceDollars,
+          discountPercent: row.current_discount_percent ?? null,
           _owners_midpoint: metrics?.[0]?.owners_midpoint ?? null,
         };
       });
