@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar, ReviewScoreBadge } from '@/components/data-display';
 import { SimilaritySection } from '@/components/similarity';
 import { Card } from '@/components/ui';
-import { CheckCircle2, XCircle, AlertTriangle, ChevronRight, ChevronDown, Monitor, Gamepad2, Calendar, FileText, Wrench, Globe, ExternalLink } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, ChevronRight, ChevronDown, Monitor, Gamepad2, Calendar, FileText, Wrench, Globe, ExternalLink, Layers } from 'lucide-react';
 
 interface AppDetails {
   appid: number;
@@ -594,27 +594,8 @@ function SummarySection({
           )}
         </div>
 
-        {/* Row 3: Genres */}
-        {genres.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-caption text-text-tertiary mr-1">Genres:</span>
-            {genres.map((genre) => (
-              <span
-                key={genre.id}
-                className={`px-2 py-0.5 rounded text-body-sm ${
-                  genre.is_primary
-                    ? 'bg-accent-purple/20 text-accent-purple font-medium'
-                    : 'bg-accent-purple/10 text-accent-purple'
-                }`}
-              >
-                {genre.is_primary && '★ '}{genre.name}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Row 4: Platform Stats (3-col grid) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Row 3: Platform Stats + Genres (responsive grid) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {/* Platforms Card */}
           {app.platforms && (
             <Card padding="md">
@@ -623,6 +604,30 @@ function SummarySection({
                 <h3 className="text-body-sm font-medium text-text-primary">Platforms</h3>
               </div>
               <p className="text-body-sm text-text-secondary capitalize">{app.platforms.replace(/,/g, ', ')}</p>
+            </Card>
+          )}
+
+          {/* Genres Card */}
+          {genres.length > 0 && (
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-2">
+                <Layers className="h-4 w-4 text-text-tertiary" />
+                <h3 className="text-body-sm font-medium text-text-primary">Genres</h3>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {genres.map((genre) => (
+                  <span
+                    key={genre.id}
+                    className={`px-1.5 py-0.5 rounded text-caption ${
+                      genre.is_primary
+                        ? 'bg-accent-purple/20 text-accent-purple font-medium'
+                        : 'bg-accent-purple/10 text-accent-purple'
+                    }`}
+                  >
+                    {genre.is_primary && '★ '}{genre.name}
+                  </span>
+                ))}
+              </div>
             </Card>
           )}
 
