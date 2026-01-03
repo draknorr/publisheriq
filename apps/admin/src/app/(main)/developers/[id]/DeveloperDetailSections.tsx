@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui';
-import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover, MonthlyReviewBreakdownPopover } from '@/components/data-display';
-import { ChevronRight, ChevronDown, Users, Building2, Monitor, Gamepad2, Layers, Calendar, FileText, Globe } from 'lucide-react';
+import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover } from '@/components/data-display';
+import { ChevronRight, ChevronDown, Users, Building2, Monitor, Gamepad2, Layers, Calendar, FileText, Globe, BarChart3 } from 'lucide-react';
 import type { PortfolioPICSData } from '@/lib/portfolio-pics';
 
 interface Developer {
@@ -108,7 +108,7 @@ function formatOwners(min: number | null, max: number | null): string {
 
 /**
  * Safely parse a month_start string (YYYY-MM or YYYY-MM-DD format)
- * and return a formatted month label. Fixes the "Dec 25" date bug.
+ * and return a formatted month label.
  */
 function formatMonthLabel(monthStart: string): string {
   if (!monthStart) return '—';
@@ -269,6 +269,18 @@ function SummarySection({
   picsData: PortfolioPICSData | null;
   totalGames: number;
 }) {
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const [featuresExpanded, setFeaturesExpanded] = useState(false);
+  const [languagesExpanded, setLanguagesExpanded] = useState(false);
+
+  const TAG_LIMIT = 12;
+  const FEATURE_LIMIT = 10;
+  const LANGUAGE_LIMIT = 8;
+
+  const displayedTags = tagsExpanded ? tags : tags.slice(0, TAG_LIMIT);
+  const displayedFeatures = picsData ? (featuresExpanded ? picsData.categories : picsData.categories.slice(0, FEATURE_LIMIT)) : [];
+  const displayedLanguages = picsData ? (languagesExpanded ? picsData.languages : picsData.languages.slice(0, LANGUAGE_LIMIT)) : [];
+
   return (
     <section>
       <SectionHeader title="Summary" id={id} />
@@ -301,7 +313,7 @@ function SummarySection({
             {tags.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-caption text-text-tertiary mr-1">Top Tags:</span>
-                {tags.slice(0, 12).map(({ tag, vote_count }) => (
+                {displayedTags.map(({ tag, vote_count }) => (
                   <span
                     key={tag}
                     className="px-2 py-0.5 rounded bg-surface-elevated border border-border-subtle text-caption text-text-secondary hover:border-border-muted transition-colors"
@@ -311,10 +323,13 @@ function SummarySection({
                     <span className="ml-1.5 text-text-muted">{vote_count.toLocaleString()}</span>
                   </span>
                 ))}
-                {tags.length > 12 && (
-                  <span className="text-caption text-text-muted">
-                    +{tags.length - 12} more
-                  </span>
+                {tags.length > TAG_LIMIT && (
+                  <button
+                    onClick={() => setTagsExpanded(!tagsExpanded)}
+                    className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                  >
+                    {tagsExpanded ? 'Show less' : `+${tags.length - TAG_LIMIT} more`}
+                  </button>
                 )}
               </div>
             ) : (
@@ -368,16 +383,40 @@ function SummarySection({
           </div>
         )}
 
-        {/* Row 3: Genre Waffle Chart */}
+        {/* Row 3: Genre Distribution - Horizontal Bar Chart */}
         {picsData && picsData.genres.length > 0 && (
-          <GenreWaffleChart genres={picsData.genres} totalGames={totalGames} />
+          <GenreBarChart genres={picsData.genres} totalGames={totalGames} />
         )}
 
         {/* Row 4: Features + Franchises */}
         {picsData && (picsData.categories.length > 0 || picsData.franchises.length > 0) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {picsData.categories.length > 0 && (
-              <FeaturesCard categories={picsData.categories} />
+              <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+                <h3 className="text-body-sm font-medium text-text-primary mb-2 flex items-center gap-2">
+                  <Gamepad2 className="h-4 w-4 text-text-tertiary" />
+                  Top Features
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {displayedFeatures.map((cat) => (
+                    <span
+                      key={cat.category_id}
+                      className="px-2 py-1 rounded-md bg-surface-elevated border border-border-subtle text-caption text-text-secondary hover:border-border-muted transition-colors"
+                    >
+                      {cat.name}
+                      <span className="ml-1.5 text-text-muted">{cat.game_count}</span>
+                    </span>
+                  ))}
+                  {picsData.categories.length > FEATURE_LIMIT && (
+                    <button
+                      onClick={() => setFeaturesExpanded(!featuresExpanded)}
+                      className="px-2 py-1 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                    >
+                      {featuresExpanded ? 'Show less' : `+${picsData.categories.length - FEATURE_LIMIT} more`}
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
             {picsData.franchises.length > 0 && (
               <FranchisesCard franchises={picsData.franchises} />
@@ -393,7 +432,7 @@ function SummarySection({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Globe className="h-3.5 w-3.5 text-text-tertiary" />
                   <span className="text-caption text-text-tertiary mr-1">Languages:</span>
-                  {picsData.languages.slice(0, 8).map((lang) => (
+                  {displayedLanguages.map((lang) => (
                     <span
                       key={lang.language}
                       className="px-1.5 py-0.5 rounded text-caption bg-surface-elevated text-text-secondary"
@@ -402,10 +441,13 @@ function SummarySection({
                       <span className="ml-1 text-text-muted">{lang.game_count}</span>
                     </span>
                   ))}
-                  {picsData.languages.length > 8 && (
-                    <span className="text-caption text-text-muted">
-                      +{picsData.languages.length - 8}
-                    </span>
+                  {picsData.languages.length > LANGUAGE_LIMIT && (
+                    <button
+                      onClick={() => setLanguagesExpanded(!languagesExpanded)}
+                      className="px-1.5 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                    >
+                      {languagesExpanded ? 'Show less' : `+${picsData.languages.length - LANGUAGE_LIMIT}`}
+                    </button>
                   )}
                 </div>
               </div>
@@ -436,10 +478,10 @@ function SummarySection({
 }
 
 // ============================================================================
-// GENRE WAFFLE CHART - Visual genre distribution
+// GENRE BAR CHART - Horizontal bars for overlapping genre data
 // ============================================================================
 
-const GENRE_COLORS = [
+const GENRE_BAR_COLORS = [
   'bg-violet-500',
   'bg-blue-500',
   'bg-cyan-500',
@@ -448,168 +490,55 @@ const GENRE_COLORS = [
   'bg-orange-500',
   'bg-rose-500',
   'bg-pink-500',
-  'bg-indigo-500',
-  'bg-teal-500',
 ];
 
-const GENRE_LEGEND_COLORS = [
-  'bg-violet-500',
-  'bg-blue-500',
-  'bg-cyan-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-orange-500',
-  'bg-rose-500',
-  'bg-pink-500',
-  'bg-indigo-500',
-  'bg-teal-500',
-];
-
-interface GenreWaffleChartProps {
+interface GenreBarChartProps {
   genres: { genre_id: number; name: string; game_count: number; is_primary_count: number }[];
   totalGames: number;
 }
 
-function GenreWaffleChart({ genres, totalGames }: GenreWaffleChartProps) {
-  const GRID_SIZE = 100; // 10x10 grid = 100 cells
-
-  const { cells } = useMemo(() => {
-    const result: { genre: typeof genres[0] | null; colorIndex: number }[] = [];
-    const colorMap = new Map<number, number>();
-    let cellIndex = 0;
-
-    // Assign colors to genres
-    genres.slice(0, 10).forEach((genre, i) => {
-      colorMap.set(genre.genre_id, i);
-    });
-
-    // Fill cells based on genre proportions
-    for (const genre of genres.slice(0, 10)) {
-      const cellCount = Math.max(1, Math.round((genre.game_count / totalGames) * GRID_SIZE));
-      const colorIndex = colorMap.get(genre.genre_id) ?? 0;
-
-      for (let i = 0; i < cellCount && cellIndex < GRID_SIZE; i++) {
-        result.push({ genre, colorIndex });
-        cellIndex++;
-      }
-    }
-
-    // Fill remaining cells with neutral color
-    while (cellIndex < GRID_SIZE) {
-      result.push({ genre: null, colorIndex: -1 });
-      cellIndex++;
-    }
-
-    return { cells: result };
-  }, [genres, totalGames]);
-
-  const [hoveredGenre, setHoveredGenre] = useState<number | null>(null);
-
+function GenreBarChart({ genres, totalGames }: GenreBarChartProps) {
   return (
     <div className="p-4 rounded-lg border border-border-subtle bg-surface-raised">
-      <h3 className="text-body-sm font-medium text-text-primary mb-3">Genre Distribution</h3>
-
-      <div className="flex flex-col md:flex-row gap-4">
-        {/* Waffle Grid: 10x10 */}
-        <div className="grid grid-cols-10 gap-0.5 w-full max-w-[280px] aspect-square">
-          {cells.map((cell, i) => {
-            const isHovered = hoveredGenre !== null && cell.genre?.genre_id === hoveredGenre;
-            const isFaded = hoveredGenre !== null && cell.genre?.genre_id !== hoveredGenre;
-
-            return (
-              <motion.div
-                key={i}
-                className={`rounded-sm cursor-pointer transition-all duration-150 ${
-                  cell.colorIndex >= 0
-                    ? `${GENRE_COLORS[cell.colorIndex]} ${isFaded ? 'opacity-30' : 'opacity-80'}`
-                    : 'bg-surface-elevated opacity-40'
-                }`}
-                whileHover={{ scale: 1.15, zIndex: 10 }}
-                onMouseEnter={() => cell.genre && setHoveredGenre(cell.genre.genre_id)}
-                onMouseLeave={() => setHoveredGenre(null)}
-                style={{
-                  transform: isHovered ? 'scale(1.15)' : 'scale(1)',
-                }}
-                title={cell.genre ? `${cell.genre.name}: ${cell.genre.game_count} games (${Math.round((cell.genre.game_count / totalGames) * 100)}%)` : 'Other'}
-              />
-            );
-          })}
-        </div>
-
-        {/* Legend */}
-        <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-1.5 content-start">
-          {genres.slice(0, 10).map((genre, i) => {
-            const percentage = Math.round((genre.game_count / totalGames) * 100);
-            const isHovered = hoveredGenre === genre.genre_id;
-
-            return (
-              <div
-                key={genre.genre_id}
-                className={`flex items-center gap-2 py-0.5 px-1 rounded transition-colors cursor-pointer ${
-                  isHovered ? 'bg-surface-elevated' : ''
-                }`}
-                onMouseEnter={() => setHoveredGenre(genre.genre_id)}
-                onMouseLeave={() => setHoveredGenre(null)}
-              >
-                <div className={`w-3 h-3 rounded-sm flex-shrink-0 ${GENRE_LEGEND_COLORS[i]}`} />
-                <span className="text-caption text-text-secondary truncate flex-1">
-                  {genre.name}
-                </span>
-                <span className="text-caption text-text-muted flex-shrink-0">
-                  {percentage}%
-                </span>
-              </div>
-            );
-          })}
-          {genres.length > 10 && (
-            <div className="flex items-center gap-2 py-0.5 px-1 col-span-2">
-              <div className="w-3 h-3 rounded-sm flex-shrink-0 bg-surface-elevated" />
-              <span className="text-caption text-text-muted">
-                +{genres.length - 10} more genres
-              </span>
-            </div>
-          )}
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart3 className="h-4 w-4 text-text-tertiary" />
+        <h3 className="text-body-sm font-medium text-text-primary">Genre Distribution</h3>
+        <span className="text-caption text-text-muted">(games can have multiple genres)</span>
       </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// FEATURES & FRANCHISES CARDS
-// ============================================================================
-
-interface FeaturesCardProps {
-  categories: { category_id: number; name: string; game_count: number }[];
-}
-
-function FeaturesCard({ categories }: FeaturesCardProps) {
-  return (
-    <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-      <h3 className="text-body-sm font-medium text-text-primary mb-2 flex items-center gap-2">
-        <Gamepad2 className="h-4 w-4 text-text-tertiary" />
-        Top Features
-      </h3>
-      <div className="flex flex-wrap gap-1.5">
-        {categories.slice(0, 10).map((cat) => (
-          <span
-            key={cat.category_id}
-            className="px-2 py-1 rounded-md bg-surface-elevated border border-border-subtle
-                       text-caption text-text-secondary hover:border-border-muted transition-colors"
-          >
-            {cat.name}
-            <span className="ml-1.5 text-text-muted">{cat.game_count}</span>
-          </span>
-        ))}
-        {categories.length > 10 && (
-          <span className="px-2 py-1 text-caption text-text-muted">
-            +{categories.length - 10} more
-          </span>
+      <div className="space-y-2">
+        {genres.slice(0, 8).map((genre, i) => {
+          const percentage = Math.round((genre.game_count / totalGames) * 100);
+          return (
+            <div key={genre.genre_id} className="flex items-center gap-3">
+              <div className="w-24 text-caption text-text-secondary truncate" title={genre.name}>
+                {genre.name}
+              </div>
+              <div className="flex-1 h-5 bg-surface-elevated rounded overflow-hidden">
+                <motion.div
+                  className={`h-full ${GENRE_BAR_COLORS[i]} rounded`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percentage}%` }}
+                  transition={{ duration: 0.5, delay: i * 0.05 }}
+                />
+              </div>
+              <div className="w-20 text-caption text-text-muted text-right">
+                {percentage}%
+                <span className="text-text-tertiary ml-1">({genre.game_count})</span>
+              </div>
+            </div>
+          );
+        })}
+        {genres.length > 8 && (
+          <p className="text-caption text-text-muted pt-1">+{genres.length - 8} more genres</p>
         )}
       </div>
     </div>
   );
 }
+
+// ============================================================================
+// FRANCHISES CARD
+// ============================================================================
 
 interface FranchisesCardProps {
   franchises: { id: number; name: string; game_count: number }[];
@@ -626,8 +555,7 @@ function FranchisesCard({ franchises }: FranchisesCardProps) {
         {franchises.map((f) => (
           <span
             key={f.id}
-            className="px-2 py-1 rounded-md bg-accent-cyan/10 border border-accent-cyan/20
-                       text-caption text-accent-cyan font-medium"
+            className="px-2 py-1 rounded-md bg-accent-cyan/10 border border-accent-cyan/20 text-caption text-accent-cyan font-medium"
           >
             {f.name}
             <span className="ml-1.5 opacity-70">{f.game_count}</span>
@@ -690,7 +618,7 @@ function DistributionRow({
 }
 
 // ============================================================================
-// REVIEWS SECTION - With Framer Motion animations
+// REVIEWS SECTION - Fixed table layout
 // ============================================================================
 
 function ReviewsSection({
@@ -727,7 +655,7 @@ function ReviewsSection({
   const totalReviews = totalPositive + totalNegative;
   const aggregatedScore = totalReviews > 0 ? Math.round((totalPositive / totalReviews) * 100) : 0;
 
-  const displayedHistogram = isExpanded ? histogram.slice(0, 12) : histogram.slice(0, 4);
+  const displayedHistogram = isExpanded ? histogram.slice(0, 12) : histogram.slice(0, 6);
 
   return (
     <section>
@@ -740,36 +668,36 @@ function ReviewsSection({
           viewport={{ once: true, margin: "-50px" }}
           className="space-y-4"
         >
-          {/* Aggregated Review Summary with Popover */}
+          {/* Aggregated Review Summary */}
           {totalReviews > 0 && (
             <motion.div variants={itemVariants}>
-              <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-                <div className="flex items-center gap-4">
+              <div className="p-4 rounded-md border border-border-subtle bg-surface-raised">
+                <div className="flex flex-wrap items-center gap-6">
                   <ReviewBreakdownPopover
                     games={gameReviewData}
                     trigger={
-                      <div className="flex items-center gap-2 p-2 -m-2 rounded hover:bg-surface-elevated transition-colors cursor-pointer">
+                      <div className="flex items-center gap-3 p-2 -m-2 rounded hover:bg-surface-elevated transition-colors cursor-pointer">
                         <ReviewScoreBadge score={aggregatedScore} />
-                        <span className="text-caption text-text-secondary">
-                          {totalReviews.toLocaleString()} reviews
-                        </span>
-                      </div>
-                    }
-                    title="Overall Review Breakdown"
-                  />
-                  <ReviewBreakdownPopover
-                    games={gameReviewData}
-                    trigger={
-                      <div className="flex-1 max-w-xs p-2 -m-2 rounded hover:bg-surface-elevated transition-colors cursor-pointer">
-                        <RatioBar positive={totalPositive} negative={totalNegative} />
-                        <div className="flex justify-between mt-1 text-caption">
-                          <span className="text-accent-green">{totalPositive.toLocaleString()}</span>
-                          <span className="text-accent-red">{totalNegative.toLocaleString()}</span>
+                        <div>
+                          <div className="text-body-sm font-medium text-text-primary">
+                            {totalReviews.toLocaleString()} reviews
+                          </div>
+                          <div className="text-caption text-text-muted">
+                            across {gameReviewData.length} games
+                          </div>
                         </div>
                       </div>
                     }
                     title="Overall Review Breakdown"
                   />
+                  <div className="flex-1 min-w-[200px] max-w-md">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="text-caption text-accent-green">{totalPositive.toLocaleString()} positive</span>
+                      <span className="text-caption text-text-muted">·</span>
+                      <span className="text-caption text-accent-red">{totalNegative.toLocaleString()} negative</span>
+                    </div>
+                    <RatioBar positive={totalPositive} negative={totalNegative} height={10} />
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -777,33 +705,34 @@ function ReviewsSection({
 
           {/* Monthly Distribution Chart */}
           <motion.div variants={itemVariants}>
-            <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-              <h3 className="text-body-sm font-medium text-text-primary mb-2">Monthly Distribution</h3>
+            <div className="p-4 rounded-md border border-border-subtle bg-surface-raised">
+              <h3 className="text-body-sm font-medium text-text-primary mb-3">Monthly Distribution</h3>
               <StackedBarChart
                 data={histogramData}
                 xKey="month"
                 positiveKey="positive"
                 negativeKey="negative"
-                height={140}
+                height={160}
               />
             </div>
           </motion.div>
 
-          {/* Monthly Breakdown Table */}
+          {/* Monthly Breakdown Table - Fixed structure */}
           <motion.div variants={itemVariants}>
             <div className="rounded-md border border-border-subtle overflow-hidden">
-              <div className="px-3 py-2 border-b border-border-subtle bg-surface-raised">
+              <div className="px-4 py-3 border-b border-border-subtle bg-surface-raised">
                 <h3 className="text-body-sm font-medium text-text-primary">Monthly Breakdown</h3>
               </div>
-              <div className="overflow-x-auto scrollbar-thin">
+              <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-surface-elevated">
                     <tr>
-                      <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Month</th>
-                      <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">+/-</th>
-                      <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Total</th>
-                      <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">%</th>
-                      <th className="px-3 py-2 w-24 text-caption font-medium text-text-tertiary">Ratio</th>
+                      <th className="px-4 py-3 text-left text-caption font-medium text-text-tertiary w-24">Month</th>
+                      <th className="px-4 py-3 text-right text-caption font-medium text-text-tertiary w-28">Positive</th>
+                      <th className="px-4 py-3 text-right text-caption font-medium text-text-tertiary w-28">Negative</th>
+                      <th className="px-4 py-3 text-right text-caption font-medium text-text-tertiary w-24">Total</th>
+                      <th className="px-4 py-3 text-right text-caption font-medium text-text-tertiary w-20">Score</th>
+                      <th className="px-4 py-3 text-caption font-medium text-text-tertiary w-40">Ratio</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-subtle">
@@ -813,56 +742,33 @@ function ReviewsSection({
                         const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
                         const monthLabel = formatMonthLabel(h.month_start);
 
-                        const rowContent = (
-                          <>
-                            <td className="px-3 py-2 text-caption text-text-primary">
-                              {monthLabel}
-                            </td>
-                            <td className="px-3 py-2 text-right text-caption">
-                              <span className="text-accent-green">{h.recommendations_up.toLocaleString()}</span>
-                              <span className="text-text-muted mx-0.5">/</span>
-                              <span className="text-accent-red">{h.recommendations_down.toLocaleString()}</span>
-                            </td>
-                            <td className="px-3 py-2 text-right text-caption text-text-secondary">{total.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-right text-caption text-text-secondary">{ratio.toFixed(0)}%</td>
-                            <td className="px-3 py-2">
-                              <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
-                            </td>
-                          </>
-                        );
-
-                        // If we have per-game breakdown for this month, wrap with popover
-                        if (h.games && h.games.length > 0) {
-                          return (
-                            <MonthlyReviewBreakdownPopover
-                              key={h.month_start}
-                              games={h.games}
-                              monthLabel={monthLabel}
-                              trigger={
-                                <motion.tr
-                                  layout
-                                  initial={{ opacity: 0, y: -10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, y: -10 }}
-                                  className="bg-surface-raised hover:bg-surface-elevated transition-colors cursor-pointer"
-                                >
-                                  {rowContent}
-                                </motion.tr>
-                              }
-                            />
-                          );
-                        }
-
                         return (
                           <motion.tr
                             key={h.month_start}
                             layout
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
                             className="bg-surface-raised hover:bg-surface-elevated transition-colors"
                           >
-                            {rowContent}
+                            <td className="px-4 py-3 text-body-sm text-text-primary font-medium">
+                              {monthLabel}
+                            </td>
+                            <td className="px-4 py-3 text-right text-body-sm text-accent-green">
+                              {h.recommendations_up.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-right text-body-sm text-accent-red">
+                              {h.recommendations_down.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-right text-body-sm text-text-secondary">
+                              {total.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-right text-body-sm text-text-secondary">
+                              {ratio.toFixed(0)}%
+                            </td>
+                            <td className="px-4 py-3">
+                              <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
+                            </td>
                           </motion.tr>
                         );
                       })}
@@ -872,12 +778,10 @@ function ReviewsSection({
               </div>
 
               {/* Expand/Collapse Button */}
-              {histogram.length > 4 && (
-                <motion.button
+              {histogram.length > 6 && (
+                <button
                   onClick={() => setIsExpanded(!isExpanded)}
-                  className="w-full px-3 py-2 text-caption text-accent-blue hover:bg-surface-elevated transition-colors flex items-center justify-center gap-1"
-                  whileHover={{ backgroundColor: 'var(--surface-elevated)' }}
-                  whileTap={{ scale: 0.99 }}
+                  className="w-full px-4 py-3 text-body-sm text-accent-blue hover:bg-surface-elevated transition-colors flex items-center justify-center gap-2 border-t border-border-subtle"
                 >
                   <motion.span
                     animate={{ rotate: isExpanded ? 180 : 0 }}
@@ -885,14 +789,14 @@ function ReviewsSection({
                   >
                     <ChevronDown className="h-4 w-4" />
                   </motion.span>
-                  {isExpanded ? 'Show Less' : `Show ${Math.min(histogram.length - 4, 8)} More Months`}
-                </motion.button>
+                  {isExpanded ? 'Show Less' : `Show ${Math.min(histogram.length - 6, 6)} More Months`}
+                </button>
               )}
             </div>
           </motion.div>
         </motion.div>
       ) : (
-        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
+        <p className="text-body-sm text-text-muted p-4 rounded-md border border-border-subtle bg-surface-raised">
           No review histogram data available
         </p>
       )}
