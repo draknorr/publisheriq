@@ -47,6 +47,12 @@ PublisherIQ is a Steam data acquisition platform that collects, stores, and anal
 │  ├─ steam_tags/genres PICS reference tables                             │
 │  └─ app_steam_deck    Steam Deck compatibility                          │
 │                                                                         │
+│  Cube.js (Semantic Layer - Fly.io)                                      │
+│  ├─ Discovery         Games + metrics (main game queries)               │
+│  ├─ PublisherMetrics  Publisher aggregations                            │
+│  ├─ DeveloperMetrics  Developer aggregations                            │
+│  └─ DailyMetrics      Time-series analytics                             │
+│                                                                         │
 │  Qdrant Cloud (Vector Database)                                         │
 │  ├─ publisheriq_games           Game embeddings for similarity          │
 │  ├─ publisheriq_publishers_*    Publisher portfolio/identity vectors    │
@@ -73,12 +79,13 @@ PublisherIQ is a Steam data acquisition platform that collects, stores, and anal
 | Frontend | Next.js 15 (React 19) | Admin dashboard |
 | Styling | TailwindCSS | UI components |
 | Database | Supabase (PostgreSQL) | Data storage |
+| Semantic Layer | Cube.js | Type-safe analytics queries |
 | Vector DB | Qdrant Cloud | Semantic similarity search |
 | Embeddings | OpenAI text-embedding-3-small | Vector generation (1536 dimensions) |
 | Workers | GitHub Actions | Scheduled data collection |
 | PICS Service | Python + SteamKit2 | Real-time Steam data |
 | AI | Claude (Anthropic) | Natural language queries + tool use |
-| Deployment | Vercel, Railway | Hosting |
+| Deployment | Vercel, Railway, Fly.io | Hosting (Dashboard, PICS, Cube.js) |
 
 ## Monorepo Structure
 
@@ -131,8 +138,19 @@ publisheriq/
 The Next.js application provides:
 - **Data browsing** - Tables for apps, publishers, developers with filtering
 - **Sync monitoring** - Job status, error tracking, PICS metrics
-- **Chat interface** - Natural language database queries with tool use
+- **Chat interface** - Natural language queries via Cube.js with tool use
 - **Similarity search** - Find semantically similar games, publishers, developers
+
+### Cube.js Semantic Layer
+
+Cube.js provides type-safe analytics queries:
+- **Pre-defined schemas** - Cubes for Discovery, Publishers, Developers, DailyMetrics
+- **Segments** - Pre-computed filters (trending, highly rated, Steam Deck verified)
+- **JWT authentication** - Secure API access
+- **Pre-aggregations** - Cached rollups for fast queries
+- **Deployed on Fly.io** - Separate from the dashboard for scalability
+
+See [Chat Data System](chat-data-system.md) for complete Cube.js schema documentation.
 
 ### Ingestion Workers
 
@@ -179,13 +197,15 @@ PostgreSQL via Supabase with:
 
 ## Security
 
-- **Read-only queries** - Chat interface only executes SELECT
-- **Dual validation** - Client-side + database function validation
+- **Semantic layer queries** - Chat uses Cube.js, not raw SQL (no injection risk)
+- **JWT authentication** - Cube.js API requires signed tokens
+- **Read-only queries** - Chat interface cannot modify data
 - **Service keys** - Server-side only, never exposed to browser
 - **Rate limiting** - Token bucket algorithm prevents API abuse
 
 ## Related Documentation
 
+- [Chat Data System](chat-data-system.md) - Complete chat/LLM architecture and Cube.js schemas
 - [Data Sources](data-sources.md) - API specifications
 - [Database Schema](database-schema.md) - Table definitions
 - [Sync Pipeline](sync-pipeline.md) - Data flow details

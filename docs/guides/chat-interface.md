@@ -2,12 +2,36 @@
 
 A natural language interface for querying the Steam database. Ask questions in plain English and get instant answers with data tables, charts, and clickable game links.
 
+> For technical implementation details, see [Chat Data System Architecture](../architecture/chat-data-system.md).
+
 ## Getting Started
 
 1. Navigate to the **Chat** page in the admin dashboard (`/chat`)
 2. Type your question in the text box at the bottom
 3. Press **Enter** or click Send
 4. View the response with formatted tables and clickable game names
+
+## How It Works
+
+The chat interface uses a multi-layered architecture:
+
+1. **Natural Language Understanding**: Your question is analyzed by Claude (Anthropic's LLM)
+2. **Tool Selection**: The AI selects the appropriate tool(s) to answer your question:
+   - **query_analytics**: Structured queries via Cube.js semantic layer
+   - **find_similar**: Vector similarity search via Qdrant
+   - **search_games**: Tag/genre-based game discovery
+   - **lookup_publishers/developers**: Name lookups for accurate filtering
+   - **lookup_tags**: Discover available tags and genres
+3. **Query Execution**: Queries run against PostgreSQL via Cube.js (not raw SQL)
+4. **Entity Linking**: Results are pre-formatted with clickable links
+5. **Response Generation**: The AI formats the results into a readable response
+
+This architecture ensures:
+- **Type-safe queries** through pre-defined Cube.js schemas
+- **Consistent linking** for all game, publisher, and developer names
+- **Fuzzy matching** for tags and entity names
+
+---
 
 ## What You Can Ask
 
@@ -121,15 +145,16 @@ Very long responses are automatically collapsed. Click "Show more" to expand the
 
 Each response has an expandable "Query Details" section that shows:
 
-1. **SQL Query** - The exact database query that was executed
-2. **Reasoning** - Why the AI chose this particular query structure
-3. **Results** - Number of rows returned
+1. **Tool Calls** - Which tools were used (query_analytics, find_similar, etc.)
+2. **Cube Query** - The structured Cube.js query that was executed
+3. **Reasoning** - Why the AI chose this particular query structure
+4. **Results** - Number of rows returned and data preview
 
 This is useful for:
 - Understanding how your question was interpreted
-- Learning the database schema
-- Copying queries for external use
+- Learning the Cube.js schema and available dimensions
 - Debugging unexpected results
+- Seeing which segments and filters were applied
 
 ## Tips for Better Results
 
@@ -146,17 +171,31 @@ Instead of: "Tell me about Valve"
 Try: "How many games has Valve published and what's their average review score?"
 
 ### Use Domain Terms
-The system understands terms like:
-- **Indie** - Games where developer = publisher
+The system understands these terms and maps them to pre-defined query segments:
+
+| Term | What It Means |
+|------|---------------|
+| **Indie** | Games with < 100K owners |
+| **Popular** | Games with 1000+ reviews |
+| **Mainstream** | Games with >= 100K owners |
+| **Trending** | 30-day review trend is positive |
+| **Highly rated** | 80%+ positive reviews |
+| **Very positive** | 90%+ positive reviews |
+| **Overwhelmingly positive** | 95%+ positive reviews |
+| **Steam Deck Verified** | Fully compatible with Steam Deck |
+| **Steam Deck Playable** | Works on Steam Deck (includes verified) |
+| **Recently released** | Released in last 30 days |
+| **Recently updated** | Content update in last 30 days |
+| **Past 12 months** / **Last year** | Rolling 12-month window |
+| **Past 6 months** | Rolling 6-month window |
+| **Released in [YEAR]** | Specific year filter |
+
+Other terms:
 - **CCU** - Concurrent users (current players)
-- **Review velocity** - Reviews per day
-- **Trending** - Positive ratio change over time
-- **Similar** - Semantically related based on tags, genres, description
-- **Steam Deck Verified** - Fully compatible with Steam Deck
-- **Steam Deck Playable** - Works on Steam Deck with minor issues
+- **Review velocity** - Reviews per day (7-day average)
+- **Similar** - Semantically related via vector embeddings
 - **Controller support** - Full, partial, or none
-- **Less popular** - Fewer reviews than reference game
-- **More popular** - More reviews than reference game
+- **Less popular** / **More popular** - Relative to reference game
 
 ## Similarity Search
 
@@ -195,6 +234,33 @@ When comparing popularity:
 - **Less popular**: < 50% of the reference game's reviews
 - **Similar popularity**: 50%-200% of reference reviews
 - **More popular**: > 200% of reference reviews
+
+## Entity Linking
+
+All entity names in chat responses are automatically formatted as clickable links:
+
+- **Game names**: Click to view the game's detail page
+- **Publisher names**: Click to view the publisher's portfolio
+- **Developer names**: Click to view the developer's portfolio
+
+This linking is automatic and reliable because:
+1. Results include entity IDs from the database
+2. Links are pre-formatted before the AI sees the results
+3. The AI uses the pre-formatted links directly in responses
+
+**Note**: For linking to work correctly, the AI must include ID columns in queries. If you see plain text names (not clickable), the query may not have included the required IDs.
+
+---
+
+## Recent Updates
+
+- **Entity linking now automatic**: All entity names are pre-formatted with links
+- **Publisher/developer lookup**: System finds exact database names before querying (e.g., "Krafton" → "Krafton Inc.")
+- **Default ordering**: Game lists are ordered by release date (newest first) by default
+- **Cube.js integration**: Queries use semantic layer instead of raw SQL for safety and consistency
+- **Fuzzy tag matching**: search_games tool matches tags loosely ("rogue" finds "Roguelike")
+
+---
 
 ## Limitations
 

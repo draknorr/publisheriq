@@ -4,6 +4,8 @@
 
 **Database**: PostgreSQL (Supabase)
 
+**Semantic Layer**: Cube.js provides type-safe queries over these tables. See [Chat Data System](chat-data-system.md) for Cube schema documentation.
+
 ---
 
 ## Enum Types
@@ -225,9 +227,12 @@ Junction table linking apps to Steam tags (from PICS).
 | appid | INTEGER | NO | FK to apps.appid |
 | tag_id | INTEGER | NO | FK to steam_tags.tag_id |
 | rank | INTEGER | YES | Tag rank/priority (lower = more relevant) |
+| created_at | TIMESTAMPTZ | NO | When relationship was created |
 
 **Primary Key**: `(appid, tag_id)`
-**Indexes**: `idx_app_steam_tags_tag_id` on `tag_id`
+**Indexes**:
+- `idx_app_steam_tags_tag_id` on `tag_id`
+- `idx_app_steam_tags_created_at` on `created_at`
 
 ---
 
@@ -240,11 +245,13 @@ Junction table linking apps to genres.
 | appid | INTEGER | NO | FK to apps.appid |
 | genre_id | INTEGER | NO | FK to steam_genres.genre_id |
 | is_primary | BOOLEAN | NO | Whether this is the primary genre |
+| created_at | TIMESTAMPTZ | NO | When relationship was created |
 
 **Primary Key**: `(appid, genre_id)`
 **Indexes**:
 - `idx_app_genres_genre_id` on `genre_id`
 - `idx_app_genres_primary` on `appid` WHERE `is_primary = TRUE`
+- `idx_app_genres_created_at` on `created_at`
 
 ---
 
@@ -256,9 +263,12 @@ Junction table linking apps to feature categories.
 |--------|------|----------|-------------|
 | appid | INTEGER | NO | FK to apps.appid |
 | category_id | INTEGER | NO | FK to steam_categories.category_id |
+| created_at | TIMESTAMPTZ | NO | When relationship was created |
 
 **Primary Key**: `(appid, category_id)`
-**Indexes**: `idx_app_categories_category_id` on `category_id`
+**Indexes**:
+- `idx_app_categories_category_id` on `category_id`
+- `idx_app_categories_created_at` on `created_at`
 
 ---
 
@@ -270,9 +280,12 @@ Junction table linking apps to franchises.
 |--------|------|----------|-------------|
 | appid | INTEGER | NO | FK to apps.appid |
 | franchise_id | INTEGER | NO | FK to franchises.id |
+| created_at | TIMESTAMPTZ | NO | When relationship was created |
 
 **Primary Key**: `(appid, franchise_id)`
-**Indexes**: `idx_app_franchises_franchise` on `franchise_id`
+**Indexes**:
+- `idx_app_franchises_franchise` on `franchise_id`
+- `idx_app_franchises_created_at` on `created_at`
 
 ---
 
@@ -415,10 +428,42 @@ Job execution history.
 | items_processed | INTEGER | NO | 0 | Total items attempted |
 | items_succeeded | INTEGER | NO | 0 | Successfully processed |
 | items_failed | INTEGER | NO | 0 | Failed items |
+| items_created | INTEGER | NO | 0 | New records created |
+| items_updated | INTEGER | NO | 0 | Existing records updated |
 | batch_size | INTEGER | YES | NULL | Batch size used |
 | error_message | TEXT | YES | NULL | Error details if failed |
 | github_run_id | TEXT | YES | NULL | GitHub Actions run ID |
 | created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
+
+---
+
+### chat_query_logs
+
+Chat query analytics and debugging logs. **7-day retention** with automatic cleanup.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| query_text | TEXT | NO | - | User's chat query |
+| tool_names | TEXT[] | NO | '{}' | Array of tools used |
+| tool_count | INTEGER | NO | 0 | Number of tools called |
+| iteration_count | INTEGER | NO | 1 | LLM iteration count |
+| response_length | INTEGER | NO | 0 | Response character count |
+| timing_llm_ms | INTEGER | YES | NULL | LLM processing time (ms) |
+| timing_tools_ms | INTEGER | YES | NULL | Tool execution time (ms) |
+| timing_total_ms | INTEGER | YES | NULL | Total request time (ms) |
+| created_at | TIMESTAMPTZ | NO | NOW() | Query timestamp |
+
+**Indexes**:
+- `idx_chat_query_logs_created_at` on `created_at DESC`
+- `idx_chat_query_logs_tool_names` GIN index on `tool_names`
+
+**Cleanup Function**:
+```sql
+cleanup_old_chat_logs() -- Deletes logs older than 7 days
+```
+
+**Used by**: Admin chat logs dashboard at `/admin/chat-logs`
 
 ---
 
@@ -725,6 +770,96 @@ WHERE a.type = 'game'
 ORDER BY a.release_date DESC
 LIMIT 20;
 ```
+
+---
+
+## Materialized Views
+
+These pre-computed views power the Cube.js semantic layer for fast analytics.
+
+### latest_daily_metrics
+
+Most recent metrics snapshot for each game.
+
+```sql
+-- Pre-computed latest metrics per app
+SELECT DISTINCT ON (appid)
+  appid, metric_date, owners_min, owners_max,
+  ccu_peak, total_reviews, positive_reviews, review_score, price_cents
+FROM daily_metrics
+ORDER BY appid, metric_date DESC;
+```
+
+**Refreshed**: Every 6 hours via `REFRESH MATERIALIZED VIEW CONCURRENTLY`
+
+**Used by**: Discovery cube, LatestMetrics cube
+
+---
+
+### publisher_metrics
+
+ALL-TIME aggregated publisher statistics.
+
+| Column | Description |
+|--------|-------------|
+| `publisher_id` | Publisher ID (primary key) |
+| `publisher_name` | Publisher name |
+| `game_count` | Number of games published |
+| `total_owners` | Sum of estimated owners |
+| `total_ccu` | Sum of peak CCU |
+| `avg_review_score` | Average review score |
+| `total_reviews` | Total reviews across all games |
+| `positive_reviews` | Total positive reviews |
+| `revenue_estimate_cents` | Estimated revenue (owners × price) |
+| `is_trending` | Has at least one trending game |
+| `unique_developers` | Number of unique developers |
+
+**Used by**: PublisherMetrics cube
+
+---
+
+### developer_metrics
+
+ALL-TIME aggregated developer statistics. Same structure as publisher_metrics with `developer_id` instead of `publisher_id`.
+
+**Used by**: DeveloperMetrics cube
+
+---
+
+### publisher_year_metrics / developer_year_metrics
+
+Per-year aggregations for year-filtered queries.
+
+Additional columns:
+- `release_year` - Year games were released
+
+**Used by**: PublisherYearMetrics, DeveloperYearMetrics cubes
+
+---
+
+### publisher_game_metrics / developer_game_metrics
+
+Per-game data joined with publisher/developer info for rolling period queries.
+
+| Column | Description |
+|--------|-------------|
+| `publisher_id` / `developer_id` | Entity ID |
+| `publisher_name` / `developer_name` | Entity name |
+| `appid` | Game ID |
+| `game_name` | Game name |
+| `release_date` | Release date (for period filtering) |
+| `release_year` | Release year |
+| `owners` | Owner estimate midpoint |
+| `ccu` | Peak CCU |
+| `total_reviews` | Review count |
+| `review_score` | Review score |
+| `revenue_estimate_cents` | Revenue estimate |
+
+**Used by**: PublisherGameMetrics, DeveloperGameMetrics cubes (for "games in past 12 months" queries)
+
+**Indexes**:
+- Unique index on `(publisher_id, appid)` for concurrent refresh
+- Index on `release_date` for date-range filtering
 
 ---
 

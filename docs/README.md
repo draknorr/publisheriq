@@ -30,6 +30,7 @@ New to PublisherIQ? Start here:
 Understand how PublisherIQ works:
 
 - **[System Overview](architecture/overview.md)** - High-level architecture and component diagram
+- **[Chat Data System](architecture/chat-data-system.md)** - Complete chat/LLM architecture, Cube.js schemas, and tools
 - **[Data Sources](architecture/data-sources.md)** - Steam APIs, SteamSpy, PICS service
 - **[Database Schema](architecture/database-schema.md)** - Tables, relationships, SQL patterns
 - **[Sync Pipeline](architecture/sync-pipeline.md)** - How data flows through the system
@@ -51,7 +52,8 @@ Deploy PublisherIQ to production:
 
 How-to guides for common tasks:
 
-- **[Chat Interface](guides/chat-interface.md)** - Using the AI-powered query interface
+- **[Chat Interface](guides/chat-interface.md)** - Natural language queries via Cube.js with entity linking
+- **[Admin: Chat Logs](guides/admin-chat-logs.md)** - Analytics and debugging for chat queries
 - **[Running Workers](guides/running-workers.md)** - Manual worker execution
 - **[Adding New Workers](guides/adding-new-worker.md)** - Developer guide for new sync jobs
 - **[Troubleshooting](guides/troubleshooting.md)** - Common issues and solutions
@@ -75,6 +77,7 @@ Technical reference documentation:
 publisheriq/
 ├── apps/admin/           # Next.js admin dashboard
 ├── packages/
+│   ├── cube/             # Cube.js semantic layer models
 │   ├── database/         # Supabase client + types
 │   ├── ingestion/        # Data collection workers + embedding sync
 │   ├── qdrant/           # Vector database client for similarity search
