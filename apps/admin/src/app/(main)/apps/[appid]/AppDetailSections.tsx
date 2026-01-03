@@ -434,32 +434,111 @@ function SummarySection({
   const displayedDLCs = dlcsExpanded ? dlcs : dlcs.slice(0, DLC_LIMIT);
   const displayedCategories = categoriesExpanded ? categories : categories.slice(0, CATEGORY_LIMIT);
 
+  // Check if we have any extended facts to show
+  const hasExtendedFacts = app.pics_review_score !== null ||
+    app.metacritic_score !== null ||
+    app.parent_appid !== null ||
+    app.release_state ||
+    app.app_state ||
+    app.last_content_update ||
+    app.current_build_id ||
+    app.homepage_url;
+
   return (
     <section className="overflow-hidden">
       <SectionHeader title="Summary" id={id} />
       <div className="space-y-4 max-w-full">
-        {/* Row 1: Trends */}
-        {trends && (
-          <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
-            <TrendBadge
-              direction={(trends.trend_30d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
-              value={trends.trend_30d_change_pct ?? undefined}
-              label="30d"
-            />
-            <TrendBadge
-              direction={(trends.trend_90d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
-              value={trends.trend_90d_change_pct ?? undefined}
-              label="90d"
-            />
-            <span className="text-border-subtle">|</span>
-            <span className="text-caption text-text-tertiary">Reviews/day:</span>
-            <span className="text-body-sm font-medium text-text-primary">{trends.review_velocity_7d?.toFixed(1) ?? '—'} <span className="text-text-muted">(7d)</span></span>
-            <span className="text-body-sm font-medium text-text-primary">{trends.review_velocity_30d?.toFixed(1) ?? '—'} <span className="text-text-muted">(30d)</span></span>
+        {/* Row 1: Quick Facts + Tags (1:2 grid) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* Quick Facts Card */}
+          <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+            <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
+              <div>
+                <p className="text-caption text-text-tertiary flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Release
+                </p>
+                <p className="text-body-sm font-medium text-text-primary">
+                  {app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-caption text-text-tertiary flex items-center gap-1">
+                  <FileText className="h-3 w-3" /> Page Created
+                </p>
+                <p className="text-body-sm font-medium text-text-primary">{formatDate(app.page_creation_date)}</p>
+              </div>
+              {trends && (
+                <>
+                  <div className="col-span-2 flex flex-wrap items-center gap-2 pt-2 border-t border-border-subtle">
+                    <TrendBadge
+                      direction={(trends.trend_30d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
+                      value={trends.trend_30d_change_pct ?? undefined}
+                      label="30d"
+                    />
+                    <TrendBadge
+                      direction={(trends.trend_90d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
+                      value={trends.trend_90d_change_pct ?? undefined}
+                      label="90d"
+                    />
+                    <span className="text-caption text-text-muted ml-auto">
+                      {trends.review_velocity_7d?.toFixed(1) ?? '—'}/day
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        )}
 
-        {/* Row 2: Developer / Publisher + Genres/Franchises */}
-        <div className="flex flex-wrap items-start gap-4 w-full">
+          {/* Tags - spans 2 columns */}
+          <div className="lg:col-span-2 p-3 rounded-md border border-border-subtle bg-surface-raised">
+            {namedTags.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-caption text-text-tertiary mr-1">Tags:</span>
+                {displayedTags.map((tag) => (
+                  <a
+                    key={tag.id}
+                    href={`https://store.steampowered.com/search/?tags=${tag.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors"
+                    title={`Rank #${tag.rank}`}
+                  >
+                    {tag.name}
+                  </a>
+                ))}
+                {namedTags.length > TAG_LIMIT && (
+                  <button
+                    onClick={() => setTagsExpanded(!tagsExpanded)}
+                    className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                  >
+                    {tagsExpanded ? 'Show less' : `+${namedTags.length - TAG_LIMIT} more`}
+                  </button>
+                )}
+              </div>
+            ) : tags.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-caption text-text-tertiary mr-1">Tags:</span>
+                {tags.slice(0, TAG_LIMIT).map(({ tag }) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {tags.length > TAG_LIMIT && (
+                  <span className="text-caption text-text-muted">+{tags.length - TAG_LIMIT}</span>
+                )}
+              </div>
+            ) : (
+              <p className="text-caption text-text-muted">No tags available</p>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Metadata Row (compact inline) */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 rounded-md border border-border-subtle bg-surface-raised">
+          {/* Developers */}
           <div className="flex items-center gap-2">
             <span className="text-caption text-text-tertiary">Dev:</span>
             {developers.length > 0 ? (
@@ -478,6 +557,8 @@ function SummarySection({
               <span className="text-text-muted text-body-sm">—</span>
             )}
           </div>
+
+          {/* Publishers */}
           <div className="flex items-center gap-2">
             <span className="text-caption text-text-tertiary">Pub:</span>
             {publishers.length > 0 ? (
@@ -496,90 +577,43 @@ function SummarySection({
               <span className="text-text-muted text-body-sm">—</span>
             )}
           </div>
+
+          {/* Genres */}
+          {genres.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-caption text-text-tertiary">Genres:</span>
+              {genres.map((genre) => (
+                <span
+                  key={genre.id}
+                  className={`px-2 py-0.5 rounded text-body-sm ${
+                    genre.is_primary
+                      ? 'bg-accent-purple/20 text-accent-purple font-medium'
+                      : 'bg-accent-purple/10 text-accent-purple'
+                  }`}
+                >
+                  {genre.is_primary && '★ '}{genre.name}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Franchises */}
+          {franchises.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-caption text-text-tertiary">Franchise:</span>
+              {franchises.map((franchise) => (
+                <span
+                  key={franchise.id}
+                  className="px-2 py-0.5 rounded text-body-sm bg-accent-cyan/10 text-accent-cyan"
+                >
+                  {franchise.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Genres & Franchises - inline tags */}
-        {(genres.length > 0 || franchises.length > 0) && (
-          <div className="flex flex-wrap items-center gap-3 w-full">
-            {genres.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-caption text-text-tertiary">Genres:</span>
-                {genres.map((genre) => (
-                  <span
-                    key={genre.id}
-                    className={`px-2 py-0.5 rounded text-body-sm ${
-                      genre.is_primary
-                        ? 'bg-accent-purple/20 text-accent-purple font-medium'
-                        : 'bg-accent-purple/10 text-accent-purple'
-                    }`}
-                  >
-                    {genre.is_primary && '★ '}{genre.name}
-                  </span>
-                ))}
-              </div>
-            )}
-            {franchises.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-caption text-text-tertiary">Franchise:</span>
-                {franchises.map((franchise) => (
-                  <span
-                    key={franchise.id}
-                    className="px-2 py-0.5 rounded text-body-sm bg-accent-cyan/10 text-accent-cyan"
-                  >
-                    {franchise.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Row 3: Tags (expandable) */}
-        {namedTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 w-full">
-            <span className="text-caption text-text-tertiary mr-1">Tags:</span>
-            {displayedTags.map((tag) => (
-              <a
-                key={tag.id}
-                href={`https://store.steampowered.com/search/?tags=${tag.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors"
-                title={`Rank #${tag.rank}`}
-              >
-                {tag.name}
-              </a>
-            ))}
-            {namedTags.length > TAG_LIMIT && (
-              <button
-                onClick={() => setTagsExpanded(!tagsExpanded)}
-                className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
-              >
-                {tagsExpanded ? 'Show less' : `+${namedTags.length - TAG_LIMIT} more`}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* SteamSpy Tags - shown if no PICS tags */}
-        {tags.length > 0 && steamTags.length === 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 w-full">
-            <span className="text-caption text-text-tertiary mr-1">Tags:</span>
-            {tags.slice(0, TAG_LIMIT).map(({ tag }) => (
-              <span
-                key={tag}
-                className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary"
-              >
-                {tag}
-              </span>
-            ))}
-            {tags.length > TAG_LIMIT && (
-              <span className="text-caption text-text-muted">+{tags.length - TAG_LIMIT}</span>
-            )}
-          </div>
-        )}
-
-        {/* Row 4: Platform Stats (3-col grid) */}
+        {/* Row 3: Platform Stats (3-col grid) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Platforms Card */}
           {app.platforms && (
@@ -631,85 +665,81 @@ function SummarySection({
           )}
         </div>
 
-        {/* Row 5: Quick Facts grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised w-full">
-          <div>
-            <p className="text-caption text-text-tertiary flex items-center gap-1"><Calendar className="h-3 w-3" /> Release</p>
-            <p className="text-body-sm text-text-primary">{app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}</p>
+        {/* Row 4: Extended Facts grid (conditional) */}
+        {hasExtendedFacts && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised w-full">
+            {app.has_workshop !== undefined && (
+              <div>
+                <p className="text-caption text-text-tertiary flex items-center gap-1"><Wrench className="h-3 w-3" /> Workshop</p>
+                <p className={`text-body-sm ${app.has_workshop ? 'text-accent-green' : 'text-text-muted'}`}>
+                  {app.has_workshop ? 'Yes' : 'No'}
+                </p>
+              </div>
+            )}
+            {app.pics_review_score !== null && (
+              <div>
+                <p className="text-caption text-text-tertiary">Score</p>
+                <p className={`text-body-sm font-medium ${
+                  app.pics_review_score >= 7 ? 'text-accent-green' :
+                  app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
+                }`}>
+                  {app.pics_review_score} ({getPICSReviewScoreDescription(app.pics_review_score).split(' ').slice(-1)[0]})
+                </p>
+              </div>
+            )}
+            {app.metacritic_score !== null && (
+              <div>
+                <p className="text-caption text-text-tertiary">Metacritic</p>
+                <p className={`text-body-sm font-medium ${
+                  app.metacritic_score >= 75 ? 'text-accent-green' :
+                  app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
+                }`}>{app.metacritic_score}</p>
+              </div>
+            )}
+            {app.parent_appid !== null && (
+              <div>
+                <p className="text-caption text-text-tertiary">Parent App</p>
+                <Link href={`/apps/${app.parent_appid}`} className="text-body-sm text-accent-blue hover:underline">
+                  {app.parent_appid}
+                </Link>
+              </div>
+            )}
+            {app.release_state && (
+              <div>
+                <p className="text-caption text-text-tertiary">Release State</p>
+                <p className="text-body-sm text-text-primary capitalize">{app.release_state}</p>
+              </div>
+            )}
+            {app.app_state && (
+              <div>
+                <p className="text-caption text-text-tertiary">App State</p>
+                <p className="text-body-sm text-text-primary">{app.app_state}</p>
+              </div>
+            )}
+            {app.last_content_update && (
+              <div>
+                <p className="text-caption text-text-tertiary">Content Update</p>
+                <p className="text-body-sm text-text-primary">{formatDate(app.last_content_update)}</p>
+              </div>
+            )}
+            {app.current_build_id && (
+              <div>
+                <p className="text-caption text-text-tertiary">Build ID</p>
+                <p className="text-body-sm text-text-primary font-mono">{app.current_build_id}</p>
+              </div>
+            )}
+            {app.homepage_url && (
+              <div className="col-span-2">
+                <p className="text-caption text-text-tertiary flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Homepage</p>
+                <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body-sm text-accent-blue hover:underline truncate block">
+                  {app.homepage_url.replace(/^https?:\/\//, '')}
+                </a>
+              </div>
+            )}
           </div>
-          <div>
-            <p className="text-caption text-text-tertiary flex items-center gap-1"><FileText className="h-3 w-3" /> Page Created</p>
-            <p className="text-body-sm text-text-primary">{formatDate(app.page_creation_date)}</p>
-          </div>
-          <div>
-            <p className="text-caption text-text-tertiary flex items-center gap-1"><Wrench className="h-3 w-3" /> Workshop</p>
-            <p className={`text-body-sm ${app.has_workshop ? 'text-accent-green' : 'text-text-muted'}`}>
-              {app.has_workshop ? 'Yes' : 'No'}
-            </p>
-          </div>
-          {app.pics_review_score !== null && (
-            <div>
-              <p className="text-caption text-text-tertiary">Score</p>
-              <p className={`text-body-sm font-medium ${
-                app.pics_review_score >= 7 ? 'text-accent-green' :
-                app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
-              }`}>
-                {app.pics_review_score} ({getPICSReviewScoreDescription(app.pics_review_score).split(' ').slice(-1)[0]})
-              </p>
-            </div>
-          )}
-          {app.metacritic_score !== null && (
-            <div>
-              <p className="text-caption text-text-tertiary">Metacritic</p>
-              <p className={`text-body-sm font-medium ${
-                app.metacritic_score >= 75 ? 'text-accent-green' :
-                app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
-              }`}>{app.metacritic_score}</p>
-            </div>
-          )}
-          {app.parent_appid !== null && (
-            <div>
-              <p className="text-caption text-text-tertiary">Parent App</p>
-              <Link href={`/apps/${app.parent_appid}`} className="text-body-sm text-accent-blue hover:underline">
-                {app.parent_appid}
-              </Link>
-            </div>
-          )}
-          {app.release_state && (
-            <div>
-              <p className="text-caption text-text-tertiary">Release State</p>
-              <p className="text-body-sm text-text-primary capitalize">{app.release_state}</p>
-            </div>
-          )}
-          {app.app_state && (
-            <div>
-              <p className="text-caption text-text-tertiary">App State</p>
-              <p className="text-body-sm text-text-primary">{app.app_state}</p>
-            </div>
-          )}
-          {app.last_content_update && (
-            <div>
-              <p className="text-caption text-text-tertiary">Content Update</p>
-              <p className="text-body-sm text-text-primary">{formatDate(app.last_content_update)}</p>
-            </div>
-          )}
-          {app.current_build_id && (
-            <div>
-              <p className="text-caption text-text-tertiary">Build ID</p>
-              <p className="text-body-sm text-text-primary font-mono">{app.current_build_id}</p>
-            </div>
-          )}
-          {app.homepage_url && (
-            <div className="col-span-2">
-              <p className="text-caption text-text-tertiary flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Homepage</p>
-              <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body-sm text-accent-blue hover:underline truncate block">
-                {app.homepage_url.replace(/^https?:\/\//, '')}
-              </a>
-            </div>
-          )}
-        </div>
+        )}
 
-        {/* Row 6: Features/Categories (expandable) */}
+        {/* Row 5: Features/Categories (expandable) */}
         {categories.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 w-full">
             <span className="text-caption text-text-tertiary mr-1">Features:</span>
@@ -729,7 +759,7 @@ function SummarySection({
           </div>
         )}
 
-        {/* Row 7: DLCs (expandable) */}
+        {/* Row 6: DLCs (expandable) */}
         {dlcs.length > 0 && (
           <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
             <div className="flex items-center justify-between mb-2">
@@ -758,7 +788,7 @@ function SummarySection({
           </div>
         )}
 
-        {/* Row 8: Languages + Content Descriptors (expandable) */}
+        {/* Row 7: Languages + Content Descriptors (expandable) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Languages */}
           {languageKeys.length > 0 && (
