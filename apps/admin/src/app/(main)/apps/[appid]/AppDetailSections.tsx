@@ -459,7 +459,7 @@ function SummarySection({
         )}
 
         {/* Row 2: Developer / Publisher + Genres/Franchises */}
-        <div className="flex flex-wrap items-start gap-4">
+        <div className="flex flex-wrap items-start gap-4 w-full">
           <div className="flex items-center gap-2">
             <span className="text-caption text-text-tertiary">Dev:</span>
             {developers.length > 0 ? (
@@ -500,7 +500,7 @@ function SummarySection({
 
         {/* Genres & Franchises - inline tags */}
         {(genres.length > 0 || franchises.length > 0) && (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 w-full">
             {genres.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <span className="text-caption text-text-tertiary">Genres:</span>
@@ -536,7 +536,7 @@ function SummarySection({
 
         {/* Row 3: Tags (expandable) */}
         {namedTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 w-full">
             <span className="text-caption text-text-tertiary mr-1">Tags:</span>
             {displayedTags.map((tag) => (
               <a
@@ -563,7 +563,7 @@ function SummarySection({
 
         {/* SteamSpy Tags - shown if no PICS tags */}
         {tags.length > 0 && steamTags.length === 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 w-full">
             <span className="text-caption text-text-tertiary mr-1">Tags:</span>
             {tags.slice(0, TAG_LIMIT).map(({ tag }) => (
               <span
@@ -711,7 +711,7 @@ function SummarySection({
 
         {/* Row 6: Features/Categories (expandable) */}
         {categories.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 w-full">
             <span className="text-caption text-text-tertiary mr-1">Features:</span>
             {displayedCategories.map((category) => (
               <span key={category.id} className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary">
@@ -743,7 +743,7 @@ function SummarySection({
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 w-full">
               {displayedDLCs.map((dlc) => (
                 <Link
                   key={dlc.appid}
@@ -762,7 +762,7 @@ function SummarySection({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Languages */}
           {languageKeys.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5 w-full">
               <Globe className="h-3.5 w-3.5 text-text-tertiary" />
               <span className="text-caption text-text-tertiary mr-1">Languages:</span>
               {displayedLanguages.map((lang) => (
@@ -783,7 +783,7 @@ function SummarySection({
 
           {/* Content Descriptors */}
           {contentDescriptors.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5 w-full">
               <AlertTriangle className="h-3.5 w-3.5 text-accent-orange" />
               <span className="text-caption text-text-tertiary mr-1">Warnings:</span>
               {displayedDescriptors.map((descriptor) => (
