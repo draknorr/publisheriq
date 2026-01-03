@@ -632,7 +632,7 @@ function SummarySection({
         </div>
 
         {/* Row 5: Quick Facts grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised max-w-3xl">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised w-full">
           <div>
             <p className="text-caption text-text-tertiary flex items-center gap-1"><Calendar className="h-3 w-3" /> Release</p>
             <p className="text-body-sm text-text-primary">{app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}</p>
