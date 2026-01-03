@@ -5,7 +5,10 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'PublisherIQ',
+  title: {
+    default: 'PublisherIQ',
+    template: '%s | PublisherIQ',
+  },
   description: 'Gaming industry intelligence platform',
 };
 

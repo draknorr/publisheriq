@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getPortfolioPICSData } from '@/lib/portfolio-pics';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
@@ -8,6 +9,14 @@ import { ExternalLink } from 'lucide-react';
 import { PublisherDetailSections } from './PublisherDetailSections';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  if (!isSupabaseConfigured()) return { title: 'Publisher Details' };
+  const supabase = getSupabase();
+  const { data: publisher } = await supabase.from('publishers').select('name').eq('id', Number(id)).single();
+  return { title: publisher?.name || 'Publisher Details' };
+}
 
 interface Publisher {
   id: number;

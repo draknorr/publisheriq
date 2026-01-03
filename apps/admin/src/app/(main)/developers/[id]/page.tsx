@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getPortfolioPICSData } from '@/lib/portfolio-pics';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
@@ -8,6 +9,14 @@ import { ExternalLink } from 'lucide-react';
 import { DeveloperDetailSections } from './DeveloperDetailSections';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  if (!isSupabaseConfigured()) return { title: 'Developer Details' };
+  const supabase = getSupabase();
+  const { data: developer } = await supabase.from('developers').select('name').eq('id', Number(id)).single();
+  return { title: developer?.name || 'Developer Details' };
+}
 
 interface Developer {
   id: number;

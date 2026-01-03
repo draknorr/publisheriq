@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import Link from 'next/link';
@@ -5,6 +6,10 @@ import { PageHeader } from '@/components/layout';
 import { MetricCard, TrendIndicator, ReviewScoreBadge } from '@/components/data-display';
 import { Card } from '@/components/ui';
 import { TrendingUp, AlertCircle, MessageSquare, ExternalLink } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Apps',
+};
 
 export const dynamic = 'force-dynamic';
 

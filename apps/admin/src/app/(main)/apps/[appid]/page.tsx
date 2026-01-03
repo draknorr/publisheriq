@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
@@ -7,6 +8,14 @@ import { ExternalLink } from 'lucide-react';
 import { AppDetailSections } from './AppDetailSections';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({ params }: { params: Promise<{ appid: string }> }): Promise<Metadata> {
+  const { appid } = await params;
+  if (!isSupabaseConfigured()) return { title: 'App Details' };
+  const supabase = getSupabase();
+  const { data: app } = await supabase.from('apps').select('name').eq('appid', Number(appid)).single();
+  return { title: app?.name || 'App Details' };
+}
 
 interface AppDetails {
   appid: number;

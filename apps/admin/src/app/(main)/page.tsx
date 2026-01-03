@@ -1,9 +1,14 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { Card } from '@/components/ui';
 import { Gamepad2, Building2, Users, ArrowRight, Sparkles } from 'lucide-react';
 import { DashboardSearch } from './DashboardSearch';
+
+export const metadata: Metadata = {
+  title: 'Dashboard',
+};
 
 export const dynamic = 'force-dynamic';
 

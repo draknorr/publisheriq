@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import {
@@ -20,6 +21,10 @@ import {
 } from '@/lib/sync-queries';
 import { getCachedDashboardData, setCachedDashboardData } from '@/lib/admin-dashboard-cache';
 import { AdminDashboard } from './AdminDashboard';
+
+export const metadata: Metadata = {
+  title: 'Admin',
+};
 
 export const dynamic = 'force-dynamic';
 

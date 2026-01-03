@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import Link from 'next/link';
@@ -6,6 +7,10 @@ import { MetricCard, ReviewScoreBadge, TierBadge } from '@/components/data-displ
 import { Card } from '@/components/ui';
 import { Building2, Layers, TrendingUp, ExternalLink, ChevronDown, ChevronUp, Users } from 'lucide-react';
 import { AdvancedFilters } from '@/components/filters/AdvancedFilters';
+
+export const metadata: Metadata = {
+  title: 'Publishers',
+};
 
 export const dynamic = 'force-dynamic';
 

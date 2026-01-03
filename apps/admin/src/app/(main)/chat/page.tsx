@@ -1,4 +1,9 @@
+import type { Metadata } from 'next';
 import { ChatContainer } from '@/components/chat';
+
+export const metadata: Metadata = {
+  title: 'AI Chat',
+};
 
 export const dynamic = 'force-dynamic';
 
