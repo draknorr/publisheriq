@@ -283,7 +283,9 @@ async function getDeveloperReviewHistogram(developerId: number): Promise<ReviewH
   }>();
 
   for (const h of data) {
-    const existing = monthMap.get(h.month_start) ?? { up: 0, down: 0, games: new Map() };
+    // Normalize to YYYY-MM for grouping (e.g., "2025-12" from "2025-12-15")
+    const monthKey = h.month_start.substring(0, 7);
+    const existing = monthMap.get(monthKey) ?? { up: 0, down: 0, games: new Map() };
 
     // Update totals
     existing.up += h.recommendations_up;
@@ -295,7 +297,7 @@ async function getDeveloperReviewHistogram(developerId: number): Promise<ReviewH
     gameData.down += h.recommendations_down;
     existing.games.set(h.appid, gameData);
 
-    monthMap.set(h.month_start, existing);
+    monthMap.set(monthKey, existing);
   }
 
   return [...monthMap.entries()]
