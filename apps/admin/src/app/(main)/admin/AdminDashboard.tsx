@@ -132,7 +132,6 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
           value: data.queueStatus.overdue,
           variant: data.queueStatus.overdue > 500 ? 'error' : data.queueStatus.overdue > 100 ? 'warning' : 'success',
         }}
-        defaultOpen={false}
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Priority Distribution */}
@@ -200,46 +199,38 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
           value: data.picsSyncState.lastChangeNumber > 0 ? 'Active' : 'Inactive',
           variant: data.picsSyncState.lastChangeNumber > 0 ? 'success' : 'warning',
         }}
-        defaultOpen={false}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {/* Sync State */}
-          <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-caption text-text-tertiary">Change Number</div>
-                <div className="text-body font-semibold text-text-primary">
-                  {data.picsSyncState.lastChangeNumber > 0
-                    ? data.picsSyncState.lastChangeNumber.toLocaleString()
-                    : '-'}
-                </div>
-              </div>
-              <div>
-                <div className="text-caption text-text-tertiary">Last Updated</div>
-                <div className="text-body font-semibold text-text-primary">
-                  {data.picsSyncState.updatedAt
-                    ? formatRelativeTime(data.picsSyncState.updatedAt)
-                    : '-'}
-                </div>
+        <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
+          {/* Single row with sync state and data coverage */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            {/* Sync State */}
+            <div>
+              <div className="text-caption text-text-tertiary">Change Number</div>
+              <div className="text-body font-semibold text-text-primary">
+                {data.picsSyncState.lastChangeNumber > 0
+                  ? data.picsSyncState.lastChangeNumber.toLocaleString()
+                  : '-'}
               </div>
             </div>
-          </div>
-
-          {/* Data Coverage */}
-          <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
-            <div className="text-caption text-text-secondary mb-2">Data Coverage</div>
-            <div className="grid grid-cols-3 gap-2">
-              <PICSMetric
-                label="PICS Synced"
-                value={data.picsDataStats.withPicsSync}
-                total={data.picsDataStats.totalApps}
-              />
-              <PICSMetric label="Tags" value={data.picsDataStats.withTags} isTotal />
-              <PICSMetric label="Categories" value={data.picsDataStats.withCategories} isTotal />
-              <PICSMetric label="Genres" value={data.picsDataStats.withGenres} isTotal />
-              <PICSMetric label="Franchises" value={data.picsDataStats.withFranchises} isTotal />
-              <PICSMetric label="Parent App" value={data.picsDataStats.withParentApp} isTotal />
+            <div>
+              <div className="text-caption text-text-tertiary">Last Updated</div>
+              <div className="text-body font-semibold text-text-primary">
+                {data.picsSyncState.updatedAt
+                  ? formatRelativeTime(data.picsSyncState.updatedAt)
+                  : '-'}
+              </div>
             </div>
+            {/* Data Coverage */}
+            <PICSMetric
+              label="PICS Synced"
+              value={data.picsDataStats.withPicsSync}
+              total={data.picsDataStats.totalApps}
+            />
+            <PICSMetric label="Tags" value={data.picsDataStats.withTags} isTotal />
+            <PICSMetric label="Categories" value={data.picsDataStats.withCategories} isTotal />
+            <PICSMetric label="Genres" value={data.picsDataStats.withGenres} isTotal />
+            <PICSMetric label="Franchises" value={data.picsDataStats.withFranchises} isTotal />
+            <PICSMetric label="Parent App" value={data.picsDataStats.withParentApp} isTotal />
           </div>
         </div>
       </CollapsibleSection>
@@ -305,7 +296,6 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
       <CollapsibleSection
         title="Recent Jobs"
         badge={{ value: data.allJobs.length, variant: 'default' }}
-        defaultOpen={false}
       >
         <div className="space-y-1">
           {data.allJobs.slice(0, 15).map((job) => (
@@ -320,7 +310,7 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
       </CollapsibleSection>
 
       {/* Last Sync Times */}
-      <CollapsibleSection title="Last Sync Times" defaultOpen={false}>
+      <CollapsibleSection title="Last Sync Times">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <LastSyncItem label="SteamSpy" time={data.syncHealth.lastSyncs.steamspy} />
           <LastSyncItem label="Storefront" time={data.syncHealth.lastSyncs.storefront} />
@@ -372,23 +362,17 @@ function PICSMetric({
   total?: number;
   isTotal?: boolean;
 }) {
-  if (isTotal) {
-    return (
-      <div className="text-center">
-        <div className="text-body font-semibold text-text-primary">{value.toLocaleString()}</div>
-        <div className="text-caption text-text-muted">{label}</div>
-      </div>
-    );
-  }
-
   const pct = total && total > 0 ? (value / total) * 100 : 0;
+
   return (
     <div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-body font-semibold text-text-primary">{value.toLocaleString()}</span>
-        <span className="text-caption text-text-muted">({pct.toFixed(1)}%)</span>
-      </div>
       <div className="text-caption text-text-tertiary">{label}</div>
+      <div className="text-body font-semibold text-text-primary">
+        {value.toLocaleString()}
+        {!isTotal && total && (
+          <span className="text-caption text-text-muted ml-1">({pct.toFixed(1)}%)</span>
+        )}
+      </div>
     </div>
   );
 }
