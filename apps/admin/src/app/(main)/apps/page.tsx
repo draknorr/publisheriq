@@ -593,7 +593,7 @@ export default async function AppsPage({
                             Delisted
                           </span>
                         )}
-                        {app.consecutive_errors && app.consecutive_errors > 0 && (
+                        {(app.consecutive_errors ?? 0) > 0 && (
                           <span
                             className="px-1 py-0.5 rounded text-caption-sm bg-accent-orange/15 text-accent-orange shrink-0"
                             title={app.last_error_message ?? ''}
