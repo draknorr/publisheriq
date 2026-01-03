@@ -1,37 +1,104 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   LIGHT THEME (Default)
+   ============================================ */
 :root {
-  /* Core surfaces (lighter) */
-  --surface: #131316;
-  --surface-raised: #1a1a1f;
-  --surface-elevated: #222228;
-  --surface-overlay: #2a2a32;
+  /* Surface hierarchy */
+  --surface: #ffffff;
+  --surface-raised: #f8fafc;
+  --surface-elevated: #f1f5f9;
+  --surface-overlay: #e2e8f0;
 
-  /* Borders (more visible) */
-  --border-subtle: #2a2a32;
-  --border-muted: #36363e;
-  --border-prominent: #48485a;
+  /* Borders */
+  --border-subtle: #e2e8f0;
+  --border-muted: #cbd5e1;
+  --border-prominent: #94a3b8;
 
-  /* Text (better contrast) */
-  --text-primary: #f4f4f5;
-  --text-secondary: #b4b4bc;
-  --text-tertiary: #8e8e96;
-  --text-muted: #6e6e78;
+  /* Text hierarchy */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
 
-  /* Accents */
-  --accent-blue: #3b82f6;
-  --accent-green: #22c55e;
-  --accent-yellow: #eab308;
+  /* Primary accent - Teal */
+  --accent-primary: #0891b2;
+  --accent-primary-hover: #0e7490;
+  --accent-primary-muted: rgba(8, 145, 178, 0.1);
+
+  /* Semantic colors */
+  --accent-blue: #0ea5e9;
+  --accent-green: #10b981;
+  --accent-yellow: #f59e0b;
   --accent-red: #ef4444;
-  --accent-purple: #a855f7;
+  --accent-purple: #8b5cf6;
   --accent-cyan: #06b6d4;
   --accent-orange: #f97316;
+  --accent-pink: #ec4899;
+
+  /* Trend indicators */
+  --trend-positive: #10b981;
+  --trend-negative: #ef4444;
+  --trend-neutral: #64748b;
+
+  /* Chart colors */
+  --chart-grid: #e2e8f0;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: #e2e8f0;
 }
 
+/* ============================================
+   DARK THEME
+   ============================================ */
+.dark {
+  /* Surface hierarchy */
+  --surface: #09090b;
+  --surface-raised: #0f0f12;
+  --surface-elevated: #18181b;
+  --surface-overlay: #27272a;
+
+  /* Borders */
+  --border-subtle: #27272a;
+  --border-muted: #3f3f46;
+  --border-prominent: #52525b;
+
+  /* Text hierarchy */
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-muted: #52525b;
+
+  /* Primary accent - Cyan (brighter for dark mode) */
+  --accent-primary: #22d3ee;
+  --accent-primary-hover: #06b6d4;
+  --accent-primary-muted: rgba(34, 211, 238, 0.1);
+
+  /* Semantic colors (adjusted for dark backgrounds) */
+  --accent-blue: #38bdf8;
+  --accent-green: #34d399;
+  --accent-yellow: #fbbf24;
+  --accent-red: #f87171;
+  --accent-purple: #a78bfa;
+  --accent-cyan: #22d3ee;
+  --accent-orange: #fb923c;
+  --accent-pink: #f472b6;
+
+  /* Trend indicators */
+  --trend-positive: #34d399;
+  --trend-negative: #f87171;
+  --trend-neutral: #71717a;
+
+  /* Chart colors */
+  --chart-grid: #27272a;
+  --chart-tooltip-bg: #18181b;
+  --chart-tooltip-border: #3f3f46;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
 @layer base {
   * {
     @apply border-border-subtle;
@@ -45,21 +112,29 @@
 
   body {
     @apply bg-surface text-text-primary font-sans;
+    transition: background-color 200ms ease, color 200ms ease;
   }
 
   /* Focus ring styles */
   *:focus-visible {
-    @apply outline-none ring-2 ring-accent-blue ring-offset-2 ring-offset-surface;
+    @apply outline-none ring-2 ring-accent-primary ring-offset-2 ring-offset-surface;
   }
 
   /* Selection */
   ::selection {
-    @apply bg-accent-blue/30 text-text-primary;
+    background-color: rgba(8, 145, 178, 0.2);
+  }
+
+  .dark ::selection {
+    background-color: rgba(34, 211, 238, 0.2);
   }
 }
 
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
 @layer utilities {
-  /* Custom scrollbar for dark theme */
+  /* Custom scrollbar */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--border-muted) transparent;
@@ -95,7 +170,7 @@
 
   /* Text gradient utility */
   .text-gradient {
-    @apply bg-gradient-to-r from-accent-blue to-accent-cyan bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-accent-primary to-accent-cyan bg-clip-text text-transparent;
   }
 
   /* Glass effect */
@@ -116,6 +191,9 @@
   .animation-delay-500 { animation-delay: 500ms; }
 }
 
+/* ============================================
+   COMPONENT STYLES
+   ============================================ */
 @layer components {
   /* Chat prose styling for rich markdown */
   .prose-chat {

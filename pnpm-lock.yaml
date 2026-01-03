@@ -53,6 +53,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.47.10
         version: 2.89.0
+      geist:
+        specifier: ^1.5.1
+        version: 1.5.1(next@15.5.9(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       html-react-parser:
         specifier: ^5.2.11
         version: 5.2.11(@types/react@19.2.7)(react@19.2.3)
@@ -3428,6 +3431,11 @@ packages:
   gcp-metadata@6.1.1:
     resolution: {integrity: sha512-a4tiq7E0/5fTjxPAaH4jpjkSv/uCaU2p5KC6HVGrvl0cDjA8iBZv4vv1gyzlmK0ZUKqwpOyQMKzZQe3lTit77A==}
     engines: {node: '>=14'}
+
+  geist@1.5.1:
+    resolution: {integrity: sha512-mAHZxIsL2o3ZITFaBVFBnwyDOw+zNLYum6A6nIjpzCGIO8QtC3V76XF2RnZTyLx1wlDTmMDy8jg3Ib52MIjGvQ==}
+    peerDependencies:
+      next: '>=13.2.0'
 
   generate-object-property@1.2.0:
     resolution: {integrity: sha512-TuOwZWgJ2VAMEGJvAyPWvpqxSANF0LDpmyHauMjFYzaACvn+QTT/AZomvPCzVBV7yDN3OmwHQ5OvHaeLKre3JQ==}
@@ -9776,6 +9784,10 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  geist@1.5.1(next@15.5.9(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
+    dependencies:
+      next: 15.5.9(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 
   generate-object-property@1.2.0:
     dependencies:

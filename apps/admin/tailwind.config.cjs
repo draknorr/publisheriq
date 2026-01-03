@@ -4,62 +4,78 @@ module.exports = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  darkMode: 'class',
   theme: {
     extend: {
-      // Lighter dark color palette
+      // Color palette using CSS variables for dual theme support
       colors: {
-        // Surface hierarchy (lighter backgrounds)
+        // Surface hierarchy
         surface: {
-          DEFAULT: '#131316',
-          raised: '#1a1a1f',
-          elevated: '#222228',
-          overlay: '#2a2a32',
+          DEFAULT: 'var(--surface)',
+          raised: 'var(--surface-raised)',
+          elevated: 'var(--surface-elevated)',
+          overlay: 'var(--surface-overlay)',
         },
-        // Border hierarchy (more visible)
+        // Border hierarchy
         border: {
-          subtle: '#2a2a32',
-          muted: '#36363e',
-          prominent: '#48485a',
+          subtle: 'var(--border-subtle)',
+          muted: 'var(--border-muted)',
+          prominent: 'var(--border-prominent)',
         },
-        // Text hierarchy (better contrast)
+        // Text hierarchy
         text: {
-          primary: '#f4f4f5',
-          secondary: '#b4b4bc',
-          tertiary: '#8e8e96',
-          muted: '#6e6e78',
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
+          muted: 'var(--text-muted)',
         },
-        // Accent colors
+        // Primary accent (teal)
         accent: {
-          blue: '#3b82f6',
-          green: '#22c55e',
-          yellow: '#eab308',
-          red: '#ef4444',
-          purple: '#a855f7',
-          cyan: '#06b6d4',
-          orange: '#f97316',
-          pink: '#ec4899',
+          primary: 'var(--accent-primary)',
+          'primary-hover': 'var(--accent-primary-hover)',
+          'primary-muted': 'var(--accent-primary-muted)',
+          // Semantic colors
+          blue: 'var(--accent-blue)',
+          green: 'var(--accent-green)',
+          yellow: 'var(--accent-yellow)',
+          red: 'var(--accent-red)',
+          purple: 'var(--accent-purple)',
+          cyan: 'var(--accent-cyan)',
+          orange: 'var(--accent-orange)',
+          pink: 'var(--accent-pink)',
+        },
+        // Trend indicators
+        trend: {
+          positive: 'var(--trend-positive)',
+          negative: 'var(--trend-negative)',
+          neutral: 'var(--trend-neutral)',
         },
       },
       // Typography
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'monospace'],
+        sans: ['var(--font-geist-sans)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-geist-mono)', 'JetBrains Mono', 'Menlo', 'Monaco', 'monospace'],
       },
       fontSize: {
-        'display': ['2.25rem', { lineHeight: '2.5rem', letterSpacing: '-0.02em', fontWeight: '600' }],
-        'heading': ['1.5rem', { lineHeight: '2rem', letterSpacing: '-0.01em', fontWeight: '600' }],
-        'subheading': ['1.125rem', { lineHeight: '1.75rem', letterSpacing: '-0.01em', fontWeight: '500' }],
-        'body': ['0.875rem', { lineHeight: '1.5rem', fontWeight: '400' }],
-        'body-sm': ['0.8125rem', { lineHeight: '1.25rem', fontWeight: '400' }],
-        'caption': ['0.75rem', { lineHeight: '1rem', fontWeight: '500' }],
+        'display-lg': ['3rem', { lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '600' }],
+        'display': ['2.25rem', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '600' }],
+        'display-sm': ['1.875rem', { lineHeight: '1.25', letterSpacing: '-0.02em', fontWeight: '600' }],
+        'heading': ['1.5rem', { lineHeight: '1.35', letterSpacing: '-0.015em', fontWeight: '600' }],
+        'subheading': ['1.125rem', { lineHeight: '1.4', letterSpacing: '-0.01em', fontWeight: '500' }],
+        'body-lg': ['1rem', { lineHeight: '1.6', fontWeight: '400' }],
+        'body': ['0.875rem', { lineHeight: '1.5', fontWeight: '400' }],
+        'body-sm': ['0.8125rem', { lineHeight: '1.4', fontWeight: '400' }],
+        'caption': ['0.75rem', { lineHeight: '1.35', letterSpacing: '0.01em', fontWeight: '500' }],
+        'caption-sm': ['0.6875rem', { lineHeight: '1.3', letterSpacing: '0.02em', fontWeight: '500' }],
       },
       // Shadows
       boxShadow: {
-        'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
-        'elevated': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
-        'glow-blue': '0 0 20px rgba(59, 130, 246, 0.15)',
-        'glow-green': '0 0 20px rgba(34, 197, 94, 0.15)',
+        'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',
+        'elevated': '0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.08)',
+        'overlay': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+        'glow-primary': '0 0 20px var(--accent-primary-muted)',
+        'glow-green': '0 0 20px rgba(16, 185, 129, 0.15)',
         'glow-red': '0 0 20px rgba(239, 68, 68, 0.15)',
       },
       // Border radius
@@ -69,18 +85,25 @@ module.exports = {
         'md': '0.625rem',
         'lg': '0.75rem',
         'xl': '1rem',
+        '2xl': '1.25rem',
       },
       // Animation
       animation: {
-        'fade-in': 'fadeIn 0.2s ease-out',
-        'slide-up': 'slideUp 0.3s ease-out',
-        'slide-down': 'slideDown 0.3s ease-out',
+        'fade-in': 'fadeIn 200ms ease-out',
+        'fade-in-up': 'fadeInUp 300ms ease-out',
+        'slide-up': 'slideUp 300ms ease-out',
+        'slide-down': 'slideDown 300ms ease-out',
         'pulse-subtle': 'pulseSubtle 2s ease-in-out infinite',
+        'scale-in': 'scaleIn 200ms ease-out',
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        fadeInUp: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         slideUp: {
           '0%': { opacity: '0', transform: 'translateY(10px)' },
@@ -94,10 +117,19 @@ module.exports = {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.7' },
         },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
       },
       // Transition
       transitionDuration: {
         DEFAULT: '150ms',
+      },
+      // Spacing
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
       },
     },
   },

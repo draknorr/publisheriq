@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
+import { ThemeToggle } from '@/components/ui';
 
 interface NavItem {
   href: string;
@@ -101,7 +102,7 @@ export function Sidebar() {
               href="/"
               className="flex items-center gap-2.5 text-text-primary transition-opacity hover:opacity-80"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent-blue">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent-primary">
                 <Gamepad2 className="h-4 w-4 text-white" />
               </div>
               <span className="text-subheading tracking-tight">PublisherIQ</span>
@@ -109,7 +110,7 @@ export function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4">
+          <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">
             <div className="space-y-1">
               {navItems.map((item) => {
                 const active = isActive(item.href);
@@ -120,7 +121,7 @@ export function Sidebar() {
                     key={item.href}
                     href={item.href}
                     className={`
-                      group relative flex items-center gap-3 rounded-md px-3 py-2
+                      group relative flex items-center gap-3 rounded-lg px-3 py-2
                       text-body font-medium transition-all duration-150
                       ${
                         active
@@ -131,11 +132,11 @@ export function Sidebar() {
                   >
                     {/* Active indicator */}
                     {active && (
-                      <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-accent-blue" />
+                      <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-accent-primary" />
                     )}
                     <Icon
                       className={`h-4 w-4 flex-shrink-0 ${
-                        active ? 'text-accent-blue' : 'text-text-tertiary group-hover:text-text-secondary'
+                        active ? 'text-accent-primary' : 'text-text-tertiary group-hover:text-text-secondary'
                       }`}
                     />
                     {item.label}
@@ -147,19 +148,22 @@ export function Sidebar() {
 
           {/* Footer */}
           <div className="border-t border-border-subtle p-4">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-accent-green animate-pulse-subtle" />
-              <p className="text-caption text-text-muted">
-                Made by{' '}
-                <a
-                  href="https://www.ryanbohmann.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-text-secondary hover:text-text-primary transition-colors"
-                >
-                  Ryan
-                </a>
-              </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-accent-green animate-pulse-subtle" />
+                <p className="text-caption text-text-muted">
+                  Made by{' '}
+                  <a
+                    href="https://www.ryanbohmann.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    Ryan
+                  </a>
+                </p>
+              </div>
+              <ThemeToggle />
             </div>
           </div>
         </div>

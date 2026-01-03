@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, MessageSquare } from 'lucide-react';
+import { Search, Sparkles, ArrowRight } from 'lucide-react';
 import { getRandomPrompts } from '@/lib/example-prompts';
 
 export function DashboardSearch() {
   const [query, setQuery] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
   const [suggestions] = useState(() => getRandomPrompts(4));
   const router = useRouter();
 
@@ -22,42 +23,75 @@ export function DashboardSearch() {
   };
 
   return (
-    <div className="mb-12 py-8">
+    <div className="py-12 md:py-16">
       <div className="max-w-2xl mx-auto text-center">
-        {/* Icon */}
-        <div className="w-16 h-16 rounded-full bg-accent-blue/10 flex items-center justify-center mx-auto mb-6">
-          <MessageSquare className="w-8 h-8 text-accent-blue" />
+        {/* AI Badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-primary/10 border border-accent-primary/20 mb-6">
+          <Sparkles className="w-3.5 h-3.5 text-accent-primary" />
+          <span className="text-caption text-accent-primary font-medium">AI-Powered Intelligence</span>
         </div>
 
         {/* Heading */}
-        <h2 className="text-heading text-text-primary mb-3">
-          Welcome to PublisherIQ
-        </h2>
-        <p className="text-body text-text-secondary mb-8">
-          Ask anything about Steam or browse the full catalogue of data
+        <h1 className="text-display text-text-primary mb-3">
+          Gaming Intelligence at Your Fingertips
+        </h1>
+        <p className="text-body-lg text-text-secondary mb-8 max-w-lg mx-auto">
+          Research games, track market trends, and benchmark competitors with natural language queries
         </p>
 
         {/* Search Input */}
-        <form onSubmit={handleSubmit} className="relative mb-6">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+        <form onSubmit={handleSubmit} className="relative mb-8">
+          <div
+            className={`
+              relative rounded-2xl transition-all duration-200
+              ${isFocused ? 'shadow-glow-primary' : ''}
+            `}
+          >
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask anything about games, publishers, or trends..."
-              className="w-full pl-12 pr-4 py-4 text-body bg-surface-raised border border-border-subtle rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue transition-all"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder="Ask anything about games, publishers, or market trends..."
+              className={`
+                w-full pl-14 pr-14 py-5 text-body-lg
+                bg-surface-raised border rounded-2xl
+                text-text-primary placeholder:text-text-muted
+                focus:outline-none transition-all duration-200
+                ${isFocused
+                  ? 'border-accent-primary'
+                  : 'border-border-subtle hover:border-border-muted'
+                }
+              `}
             />
+            {query.trim() && (
+              <button
+                type="submit"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-accent-primary hover:bg-accent-primary-hover text-white transition-colors"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </form>
 
         {/* Example Prompts */}
         <div className="flex flex-wrap gap-2 justify-center">
-          {suggestions.map((suggestion) => (
+          {suggestions.map((suggestion, index) => (
             <button
               key={suggestion}
               onClick={() => handleSuggestionClick(suggestion)}
-              className="px-4 py-2 text-body-sm text-text-secondary bg-surface-elevated hover:bg-surface-overlay border border-border-subtle hover:border-border-muted rounded-full transition-all hover:text-text-primary"
+              className={`
+                px-4 py-2 text-body-sm text-text-secondary
+                bg-surface-elevated hover:bg-surface-overlay
+                border border-border-subtle hover:border-border-muted
+                rounded-full transition-all duration-150
+                hover:text-text-primary
+                animate-fade-in-up
+              `}
+              style={{ animationDelay: `${index * 50}ms` }}
             >
               {suggestion}
             </button>

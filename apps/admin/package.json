@@ -16,6 +16,7 @@
     "@publisheriq/database": "workspace:*",
     "@publisheriq/qdrant": "workspace:*",
     "@supabase/supabase-js": "^2.47.10",
+    "geist": "^1.5.1",
     "html-react-parser": "^5.2.11",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.562.0",

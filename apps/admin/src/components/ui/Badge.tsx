@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 
 type BadgeVariant =
   | 'default'
+  | 'primary'
   | 'success'
   | 'warning'
   | 'error'
@@ -20,6 +21,7 @@ interface BadgeProps {
 
 const variantStyles: Record<BadgeVariant, string> = {
   default: 'bg-surface-overlay text-text-secondary',
+  primary: 'bg-accent-primary/15 text-accent-primary',
   success: 'bg-accent-green/15 text-accent-green',
   warning: 'bg-accent-yellow/15 text-accent-yellow',
   error: 'bg-accent-red/15 text-accent-red',

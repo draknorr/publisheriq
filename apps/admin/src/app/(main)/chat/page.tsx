@@ -10,7 +10,7 @@ export default async function ChatPage({
   const { q: initialQuery } = await searchParams;
 
   return (
-    <div className="h-[calc(100vh-2rem)] flex flex-col">
+    <div className="h-full flex flex-col">
       <ChatContainer initialQuery={initialQuery} />
     </div>
   );

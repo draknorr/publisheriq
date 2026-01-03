@@ -10,7 +10,7 @@ const variantStyles = {
   default: 'bg-surface-raised border border-border-subtle',
   elevated: 'bg-surface-raised border border-border-subtle shadow-card',
   interactive:
-    'bg-surface-raised border border-border-subtle hover:border-border-muted hover:bg-surface-elevated transition-all duration-150 cursor-pointer',
+    'bg-surface-raised border border-border-subtle hover:border-border-muted hover:bg-surface-elevated transition-all duration-150 cursor-pointer hover-lift',
 };
 
 const paddingStyles = {
@@ -29,7 +29,7 @@ export function Card({
 }: CardProps) {
   return (
     <div
-      className={`rounded-lg ${variantStyles[variant]} ${paddingStyles[padding]} ${className}`}
+      className={`rounded-xl ${variantStyles[variant]} ${paddingStyles[padding]} ${className}`}
       {...props}
     >
       {children}
