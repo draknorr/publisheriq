@@ -229,22 +229,23 @@ async function main(): Promise<void> {
         });
       }
 
-      // Batch update sync_status
-      for (const update of updates) {
-        const { error } = await supabase
-          .from('sync_status')
-          .update({
-            priority_score: update.priority_score,
-            sync_interval_hours: update.sync_interval_hours,
-            refresh_tier: update.refresh_tier,
-            priority_calculated_at: update.priority_calculated_at,
-            next_sync_after: update.next_sync_after,
-          })
-          .eq('appid', update.appid);
+      // Bulk upsert all updates at once (much faster than individual updates)
+      const { error } = await supabase.from('sync_status').upsert(
+        updates.map((u) => ({
+          appid: u.appid,
+          priority_score: u.priority_score,
+          sync_interval_hours: u.sync_interval_hours,
+          refresh_tier: u.refresh_tier,
+          priority_calculated_at: u.priority_calculated_at,
+          next_sync_after: u.next_sync_after,
+        })),
+        { onConflict: 'appid' }
+      );
 
-        if (!error) {
-          updated++;
-        }
+      if (!error) {
+        updated += updates.length;
+      } else {
+        log.error('Batch upsert failed', { error, batchSize: updates.length });
       }
 
       offset += batchSize;
