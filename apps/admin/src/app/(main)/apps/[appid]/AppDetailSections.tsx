@@ -631,8 +631,8 @@ function SummarySection({
           )}
         </div>
 
-        {/* Row 5: Quick Facts + PICS Metadata grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
+        {/* Row 5: Quick Facts grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised max-w-3xl">
           <div>
             <p className="text-caption text-text-tertiary flex items-center gap-1"><Calendar className="h-3 w-3" /> Release</p>
             <p className="text-body-sm text-text-primary">{app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}</p>
@@ -649,7 +649,7 @@ function SummarySection({
           </div>
           {app.pics_review_score !== null && (
             <div>
-              <p className="text-caption text-text-tertiary">PICS Score</p>
+              <p className="text-caption text-text-tertiary">Score</p>
               <p className={`text-body-sm font-medium ${
                 app.pics_review_score >= 7 ? 'text-accent-green' :
                 app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
