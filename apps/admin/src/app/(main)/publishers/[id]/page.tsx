@@ -3,8 +3,7 @@ import { getPortfolioPICSData } from '@/lib/portfolio-pics';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
-import { Card } from '@/components/ui';
-import { MetricCard, ReviewScoreBadge, RatioBar } from '@/components/data-display';
+import { ReviewScoreBadge, RatioBar } from '@/components/data-display';
 import { ExternalLink } from 'lucide-react';
 import { PublisherDetailSections } from './PublisherDetailSections';
 
@@ -469,9 +468,9 @@ export default async function PublisherDetailPage({
       </div>
 
       {/* Key aggregated metrics row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
-        <Card className="col-span-2 p-4">
-          <div className="flex items-center justify-between mb-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mb-6">
+        <div className="col-span-2 p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <div className="flex items-center justify-between mb-1.5">
             {avgScore !== null ? (
               <ReviewScoreBadge score={avgScore} />
             ) : (
@@ -481,33 +480,29 @@ export default async function PublisherDetailPage({
               {gamesWithReviews} of {apps.length} games
             </span>
           </div>
-          <div className="text-body-sm text-text-secondary">
+          <div className="text-caption text-text-secondary mb-1.5">
             {formatNumber(totalPositive)} positive / {formatNumber(totalNegative)} negative
           </div>
           {totalPositive > 0 || totalNegative > 0 ? (
-            <RatioBar positive={totalPositive} negative={totalNegative} className="mt-2" />
+            <RatioBar positive={totalPositive} negative={totalNegative} />
           ) : null}
-        </Card>
-        <MetricCard
-          label="Total Reviews"
-          value={formatNumber(totalReviews)}
-          variant="compact"
-        />
-        <MetricCard
-          label="Est. Owners"
-          value={formatOwners(totalOwnersMin, totalOwnersMax)}
-          variant="compact"
-        />
-        <MetricCard
-          label="Total Peak CCU"
-          value={formatNumber(totalCCU)}
-          variant="compact"
-        />
-        <MetricCard
-          label="Games"
-          value={apps.length}
-          variant="compact"
-        />
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Total Reviews</p>
+          <p className="text-body font-semibold text-text-primary">{formatNumber(totalReviews)}</p>
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Est. Owners</p>
+          <p className="text-body font-semibold text-text-primary">{formatOwners(totalOwnersMin, totalOwnersMax)}</p>
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Total Peak CCU</p>
+          <p className="text-body font-semibold text-text-primary">{formatNumber(totalCCU)}</p>
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Games</p>
+          <p className="text-body font-semibold text-text-primary">{apps.length}</p>
+        </div>
       </div>
 
       {/* All sections */}

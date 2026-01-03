@@ -199,7 +199,7 @@ function SortHeader({
   newParams.set('order', nextOrder);
 
   return (
-    <th className={`px-4 py-3 text-left text-caption font-medium text-text-secondary ${className}`}>
+    <th className={`px-3 py-2 text-left text-caption font-medium text-text-tertiary ${className}`}>
       <Link
         href={`?${newParams.toString()}`}
         className={`hover:text-text-primary transition-colors ${isActive ? 'text-accent-blue' : ''}`}
@@ -338,7 +338,7 @@ export default async function PublishersPage({
       </div>
 
       {/* Search & Filters */}
-      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center">
         <form className="flex-1">
           <div className="relative">
             <input
@@ -506,10 +506,10 @@ export default async function PublishersPage({
       ) : (
         <>
           {/* Mobile Card View */}
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-2">
             {publishers.map((publisher) => (
               <Link key={publisher.id} href={`/publishers/${publisher.id}`}>
-                <Card variant="interactive" className="p-4">
+                <Card variant="interactive" padding="sm">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <span className="text-body font-medium text-text-primary">
                       {publisher.name}
@@ -565,13 +565,13 @@ export default async function PublishersPage({
                   <SortHeader field="weighted_review_score" label="Reviews" currentSort={sort} currentOrder={order} searchParams={currentParams} />
                   <SortHeader field="estimated_revenue_usd" label="Est. Revenue" currentSort={sort} currentOrder={order} searchParams={currentParams} />
                   <SortHeader field="games_trending_up" label="Trending" currentSort={sort} currentOrder={order} searchParams={currentParams} />
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Steam</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Steam</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {publishers.map((publisher) => (
                   <tr key={publisher.id} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/publishers/${publisher.id}`}
@@ -606,7 +606,7 @@ export default async function PublishersPage({
                     <td className="px-4 py-3 text-body-sm text-text-secondary">
                       {formatCompactNumber(publisher.total_ccu_peak)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {publisher.weighted_review_score !== null ? (
                         <ReviewScoreBadge score={publisher.weighted_review_score} />
                       ) : (
@@ -616,10 +616,10 @@ export default async function PublishersPage({
                     <td className="px-4 py-3 text-body-sm text-text-secondary">
                       {formatRevenue(publisher.estimated_revenue_usd)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <TrendingBadge up={publisher.games_trending_up} down={publisher.games_trending_down} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {publisher.steam_vanity_url ? (
                         <a
                           href={`https://store.steampowered.com/publisher/${publisher.steam_vanity_url}`}

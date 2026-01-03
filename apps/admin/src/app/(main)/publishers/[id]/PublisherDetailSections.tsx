@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui';
-import { Grid } from '@/components/layout';
 import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover, MonthlyReviewBreakdownPopover } from '@/components/data-display';
-import { Calendar, ChevronRight, Users, Building2, Monitor, Gamepad2, AlertTriangle } from 'lucide-react';
+import { ChevronRight, Users, Building2, Monitor, Gamepad2 } from 'lucide-react';
 import type { PortfolioPICSData } from '@/lib/portfolio-pics';
 
 interface Publisher {
@@ -170,7 +169,7 @@ export function PublisherDetailSections({
       </div>
 
       {/* All sections in scrollable view */}
-      <div className="space-y-12">
+      <div className="space-y-8">
         <OverviewSection id="overview" publisher={publisher} tags={tags} />
         <PortfolioPICSSection id="pics" picsData={picsData} totalGames={apps.length} />
         <GamesSection id="games" apps={apps} />
@@ -205,58 +204,44 @@ function OverviewSection({
   return (
     <section>
       <SectionHeader title="Overview" id={id} />
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Tags */}
         {tags.length > 0 && (
-          <div>
-            <h3 className="text-subheading text-text-primary mb-4">Top Tags</h3>
-            <div className="flex flex-wrap gap-2">
-              {tags.slice(0, 15).map(({ tag, vote_count }) => (
-                <span
-                  key={tag}
-                  className="px-3 py-1.5 rounded-md bg-surface-elevated border border-border-subtle text-body-sm text-text-secondary"
-                  title={`${vote_count.toLocaleString()} votes`}
-                >
-                  {tag}
-                  <span className="ml-2 text-text-muted">{vote_count.toLocaleString()}</span>
-                </span>
-              ))}
-              {tags.length > 15 && (
-                <span className="px-3 py-1.5 text-body-sm text-text-muted">
-                  +{tags.length - 15} more
-                </span>
-              )}
-            </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Top Tags:</span>
+            {tags.slice(0, 15).map(({ tag, vote_count }) => (
+              <span
+                key={tag}
+                className="px-2 py-0.5 rounded bg-surface-elevated border border-border-subtle text-caption text-text-secondary"
+                title={`${vote_count.toLocaleString()} votes`}
+              >
+                {tag}
+                <span className="ml-1.5 text-text-muted">{vote_count.toLocaleString()}</span>
+              </span>
+            ))}
+            {tags.length > 15 && (
+              <span className="text-caption text-text-muted">
+                +{tags.length - 15} more
+              </span>
+            )}
           </div>
         )}
 
-        {/* Publisher Details */}
-        <Card padding="lg">
-          <h3 className="text-subheading text-text-primary mb-4">Publisher Details</h3>
-          <Grid cols={3} gap="md">
-            <div className="flex items-start gap-3">
-              <Calendar className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">First Game Release</p>
-                <p className="text-body text-text-primary">{formatDate(publisher.first_game_release_date)}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Calendar className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">Page Created</p>
-                <p className="text-body text-text-primary">{formatDate(publisher.first_page_creation_date)}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Building2 className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">Total Games</p>
-                <p className="text-body text-text-primary">{publisher.game_count}</p>
-              </div>
-            </div>
-          </Grid>
-        </Card>
+        {/* Publisher Details - inline grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <div>
+            <p className="text-caption text-text-tertiary">First Release</p>
+            <p className="text-body-sm text-text-primary">{formatDate(publisher.first_game_release_date)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary">Page Created</p>
+            <p className="text-body-sm text-text-primary">{formatDate(publisher.first_page_creation_date)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary">Total Games</p>
+            <p className="text-body-sm text-text-primary">{publisher.game_count}</p>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -288,16 +273,16 @@ function PortfolioPICSSection({
   return (
     <section>
       <SectionHeader title="Portfolio PICS" id={id} />
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Platform / Steam Deck / Controller Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Platform Coverage */}
-          <Card padding="lg">
-            <div className="flex items-center gap-2 mb-4">
+          <Card padding="md">
+            <div className="flex items-center gap-2 mb-2">
               <Monitor className="h-4 w-4 text-text-tertiary" />
-              <h3 className="text-subheading text-text-primary">Platform Coverage</h3>
+              <h3 className="text-body-sm font-medium text-text-primary">Platform Coverage</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               <PlatformBar label="Windows" count={platformStats.platforms.windows} total={totalGames} />
               <PlatformBar label="macOS" count={platformStats.platforms.macos} total={totalGames} />
               <PlatformBar label="Linux" count={platformStats.platforms.linux} total={totalGames} />
@@ -305,12 +290,12 @@ function PortfolioPICSSection({
           </Card>
 
           {/* Steam Deck */}
-          <Card padding="lg">
-            <div className="flex items-center gap-2 mb-4">
+          <Card padding="md">
+            <div className="flex items-center gap-2 mb-2">
               <Gamepad2 className="h-4 w-4 text-text-tertiary" />
-              <h3 className="text-subheading text-text-primary">Steam Deck</h3>
+              <h3 className="text-body-sm font-medium text-text-primary">Steam Deck</h3>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <DistributionRow label="Verified" count={platformStats.steamDeck.verified} total={totalGames} color="green" />
               <DistributionRow label="Playable" count={platformStats.steamDeck.playable} total={totalGames} color="yellow" />
               <DistributionRow label="Unsupported" count={platformStats.steamDeck.unsupported} total={totalGames} color="red" />
@@ -319,12 +304,12 @@ function PortfolioPICSSection({
           </Card>
 
           {/* Controller Support */}
-          <Card padding="lg">
-            <div className="flex items-center gap-2 mb-4">
+          <Card padding="md">
+            <div className="flex items-center gap-2 mb-2">
               <Gamepad2 className="h-4 w-4 text-text-tertiary" />
-              <h3 className="text-subheading text-text-primary">Controller Support</h3>
+              <h3 className="text-body-sm font-medium text-text-primary">Controller Support</h3>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <DistributionRow label="Full" count={platformStats.controllerSupport.full} total={totalGames} color="green" />
               <DistributionRow label="Partial" count={platformStats.controllerSupport.partial} total={totalGames} color="yellow" />
               <DistributionRow label="None" count={platformStats.controllerSupport.none} total={totalGames} color="gray" />
@@ -334,119 +319,108 @@ function PortfolioPICSSection({
 
         {/* Genre Distribution */}
         {genres.length > 0 && (
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Genre Distribution</h3>
-            <div className="space-y-2">
+          <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+            <h3 className="text-body-sm font-medium text-text-primary mb-2">Genre Distribution</h3>
+            <div className="space-y-1.5">
               {genres.slice(0, 10).map((genre) => (
                 <div key={genre.genre_id} className="flex items-center gap-3">
-                  <div className="w-32 text-body-sm text-text-secondary truncate">{genre.name}</div>
-                  <div className="flex-1 h-4 bg-surface-elevated rounded-full overflow-hidden">
+                  <div className="w-28 text-caption text-text-secondary truncate">{genre.name}</div>
+                  <div className="flex-1 h-3 bg-surface-elevated rounded-full overflow-hidden">
                     <div
                       className="h-full bg-accent-purple/60 rounded-full"
                       style={{ width: `${(genre.game_count / totalGames) * 100}%` }}
                     />
                   </div>
-                  <div className="w-24 text-body-sm text-text-tertiary text-right">
+                  <div className="w-20 text-caption text-text-tertiary text-right">
                     {genre.game_count} {genre.is_primary_count > 0 && (
-                      <span className="text-accent-purple">({genre.is_primary_count} primary)</span>
+                      <span className="text-accent-purple">({genre.is_primary_count}★)</span>
                     )}
                   </div>
                 </div>
               ))}
               {genres.length > 10 && (
-                <p className="text-caption text-text-muted mt-2">+{genres.length - 10} more genres</p>
+                <p className="text-caption text-text-muted">+{genres.length - 10} more</p>
               )}
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Features/Categories */}
         {categories.length > 0 && (
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Features</h3>
-            <div className="flex flex-wrap gap-2">
-              {categories.slice(0, 15).map((category) => (
-                <span
-                  key={category.category_id}
-                  className="px-3 py-1.5 rounded-md bg-surface-elevated border border-border-subtle text-body-sm text-text-secondary"
-                >
-                  {category.name}
-                  <span className="ml-2 text-text-muted">{category.game_count}</span>
-                </span>
-              ))}
-              {categories.length > 15 && (
-                <span className="px-3 py-1.5 text-body-sm text-text-muted">
-                  +{categories.length - 15} more
-                </span>
-              )}
-            </div>
-          </Card>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Features:</span>
+            {categories.slice(0, 15).map((category) => (
+              <span
+                key={category.category_id}
+                className="px-2 py-0.5 rounded bg-surface-elevated border border-border-subtle text-caption text-text-secondary"
+              >
+                {category.name}
+                <span className="ml-1.5 text-text-muted">{category.game_count}</span>
+              </span>
+            ))}
+            {categories.length > 15 && (
+              <span className="text-caption text-text-muted">
+                +{categories.length - 15} more
+              </span>
+            )}
+          </div>
         )}
 
         {/* Franchises */}
         {franchises.length > 0 && (
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Franchises</h3>
-            <div className="flex flex-wrap gap-2">
-              {franchises.map((franchise) => (
-                <span
-                  key={franchise.id}
-                  className="px-3 py-1.5 rounded-md bg-accent-cyan/10 text-body-sm text-accent-cyan"
-                >
-                  {franchise.name}
-                  <span className="ml-2 opacity-70">{franchise.game_count} games</span>
-                </span>
-              ))}
-            </div>
-          </Card>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Franchises:</span>
+            {franchises.map((franchise) => (
+              <span
+                key={franchise.id}
+                className="px-2 py-0.5 rounded bg-accent-cyan/10 text-caption text-accent-cyan"
+              >
+                {franchise.name}
+                <span className="ml-1.5 opacity-70">{franchise.game_count}</span>
+              </span>
+            ))}
+          </div>
         )}
 
         {/* Languages */}
         {languages.length > 0 && (
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Language Support</h3>
-            <div className="flex flex-wrap gap-2">
-              {languages.slice(0, 12).map((lang) => (
-                <span
-                  key={lang.language}
-                  className="px-2 py-1 rounded text-caption bg-surface-elevated text-text-secondary"
-                >
-                  {lang.language}
-                  <span className="ml-1.5 text-text-muted">{lang.game_count}</span>
-                </span>
-              ))}
-              {languages.length > 12 && (
-                <span className="px-2 py-1 text-caption text-text-muted">
-                  +{languages.length - 12} more
-                </span>
-              )}
-            </div>
-          </Card>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Languages:</span>
+            {languages.slice(0, 12).map((lang) => (
+              <span
+                key={lang.language}
+                className="px-2 py-0.5 rounded text-caption bg-surface-elevated text-text-secondary"
+              >
+                {lang.language}
+                <span className="ml-1 text-text-muted">{lang.game_count}</span>
+              </span>
+            ))}
+            {languages.length > 12 && (
+              <span className="text-caption text-text-muted">
+                +{languages.length - 12} more
+              </span>
+            )}
+          </div>
         )}
 
         {/* Content Descriptors */}
         {contentDescriptors.length > 0 && (
-          <Card padding="lg">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="h-4 w-4 text-accent-orange" />
-              <h3 className="text-subheading text-text-primary">Content Warnings</h3>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {contentDescriptors.map((descriptor) => (
-                <span
-                  key={descriptor.descriptor_id}
-                  className={`px-3 py-1.5 rounded-md text-body-sm font-medium ${
-                    descriptor.severity === 'high'
-                      ? 'bg-accent-red/15 text-accent-red border border-accent-red/30'
-                      : 'bg-accent-orange/15 text-accent-orange border border-accent-orange/30'
-                  }`}
-                >
-                  {descriptor.label}
-                  <span className="ml-2 opacity-70">{descriptor.game_count} games</span>
-                </span>
-              ))}
-            </div>
-          </Card>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-caption text-text-tertiary">Warnings:</span>
+            {contentDescriptors.map((descriptor) => (
+              <span
+                key={descriptor.descriptor_id}
+                className={`px-2 py-0.5 rounded text-caption font-medium ${
+                  descriptor.severity === 'high'
+                    ? 'bg-accent-red/15 text-accent-red'
+                    : 'bg-accent-orange/15 text-accent-orange'
+                }`}
+              >
+                {descriptor.label}
+                <span className="ml-1.5 opacity-70">{descriptor.game_count}</span>
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </section>
@@ -514,45 +488,45 @@ function GamesSection({
     <section>
       <SectionHeader title="Games" id={id} />
       {sortedApps.length > 0 ? (
-        <Card padding="none">
-          <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
-            <h3 className="text-subheading text-text-primary">All Games</h3>
-            <span className="text-body-sm text-text-tertiary">{sortedApps.length} games</span>
+        <div className="rounded-md border border-border-subtle overflow-hidden">
+          <div className="px-3 py-2 border-b border-border-subtle flex items-center justify-between bg-surface-raised">
+            <h3 className="text-body-sm font-medium text-text-primary">All Games</h3>
+            <span className="text-caption text-text-tertiary">{sortedApps.length} games</span>
           </div>
           <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full min-w-[800px]">
+            <table className="w-full">
               <thead className="bg-surface-elevated">
                 <tr>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Name</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Type</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Reviews</th>
-                  <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Count</th>
-                  <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Owners</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">30d Trend</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Name</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Type</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Reviews</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Count</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Owners</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">30d Trend</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {sortedApps.map((app) => (
                   <tr key={app.appid} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/apps/${app.appid}`}
-                          className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+                          className="text-body-sm font-medium text-text-primary hover:text-accent-blue transition-colors"
                         >
                           {app.name}
                         </Link>
                         {app.is_delisted && (
-                          <span className="px-1.5 py-0.5 rounded text-caption bg-accent-red/15 text-accent-red">
+                          <span className="px-1 py-0.5 rounded text-caption-sm bg-accent-red/15 text-accent-red">
                             Delisted
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <TypeBadge type={app.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video'} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {app.total_reviews && app.total_reviews > 0 ? (
                         <ReviewScoreBadge
                           score={Math.round((app.positive_reviews ?? 0) / app.total_reviews * 100)}
@@ -561,13 +535,13 @@ function GamesSection({
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-body-sm text-text-secondary">
+                    <td className="px-3 py-2 text-right text-caption text-text-secondary">
                       {formatNumber(app.total_reviews)}
                     </td>
-                    <td className="px-4 py-3 text-right text-body-sm text-text-secondary">
+                    <td className="px-3 py-2 text-right text-caption text-text-secondary">
                       {formatOwners(app.owners_min, app.owners_max)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {app.trend_30d_direction ? (
                         <TrendIndicator
                           direction={app.trend_30d_direction as 'up' | 'down' | 'stable'}
@@ -583,11 +557,11 @@ function GamesSection({
               </tbody>
             </table>
           </div>
-        </Card>
+        </div>
       ) : (
-        <Card className="p-12 text-center">
-          <p className="text-text-muted">No games found for this publisher</p>
-        </Card>
+        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
+          No games found for this publisher
+        </p>
       )}
     </section>
   );
@@ -629,20 +603,18 @@ function ReviewsSection({
     <section>
       <SectionHeader title="Reviews" id={id} />
       {histogram.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Aggregated Review Summary with Popover */}
           {totalReviews > 0 && (
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">Overall Review Summary</h3>
-              <p className="text-body-sm text-text-tertiary mb-4">Hover or click to see game breakdown</p>
-              <div className="flex items-center gap-6">
+            <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+              <div className="flex items-center gap-4">
                 <ReviewBreakdownPopover
                   games={gameReviewData}
                   trigger={
-                    <div className="flex items-center gap-3 p-3 -m-3 rounded-lg hover:bg-surface-elevated transition-colors cursor-pointer">
-                      <ReviewScoreBadge score={aggregatedScore} className="text-lg px-3 py-1" />
-                      <span className="text-body-sm text-text-secondary">
-                        {totalReviews.toLocaleString()} total reviews
+                    <div className="flex items-center gap-2 p-2 -m-2 rounded hover:bg-surface-elevated transition-colors cursor-pointer">
+                      <ReviewScoreBadge score={aggregatedScore} />
+                      <span className="text-caption text-text-secondary">
+                        {totalReviews.toLocaleString()} reviews
                       </span>
                     </div>
                   }
@@ -651,65 +623,65 @@ function ReviewsSection({
                 <ReviewBreakdownPopover
                   games={gameReviewData}
                   trigger={
-                    <div className="flex-1 max-w-xs p-3 -m-3 rounded-lg hover:bg-surface-elevated transition-colors cursor-pointer">
+                    <div className="flex-1 max-w-xs p-2 -m-2 rounded hover:bg-surface-elevated transition-colors cursor-pointer">
                       <RatioBar positive={totalPositive} negative={totalNegative} />
-                      <div className="flex justify-between mt-2 text-caption">
-                        <span className="text-accent-green">{totalPositive.toLocaleString()} positive</span>
-                        <span className="text-accent-red">{totalNegative.toLocaleString()} negative</span>
+                      <div className="flex justify-between mt-1 text-caption">
+                        <span className="text-accent-green">{totalPositive.toLocaleString()}</span>
+                        <span className="text-accent-red">{totalNegative.toLocaleString()}</span>
                       </div>
                     </div>
                   }
                   title="Overall Review Breakdown"
                 />
               </div>
-            </Card>
+            </div>
           )}
 
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Monthly Review Distribution</h3>
-            <p className="text-body-sm text-text-tertiary mb-4">Aggregated across all games</p>
+          <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+            <h3 className="text-body-sm font-medium text-text-primary mb-2">Monthly Distribution</h3>
             <StackedBarChart
               data={histogramData}
               xKey="month"
               positiveKey="positive"
               negativeKey="negative"
-              height={250}
+              height={140}
             />
-          </Card>
+          </div>
 
-          <Card padding="none">
-            <div className="px-4 py-3 border-b border-border-subtle">
-              <h3 className="text-subheading text-text-primary">Monthly Breakdown</h3>
-              <p className="text-caption text-text-tertiary mt-1">Hover or click rows to see game breakdown</p>
+          <div className="rounded-md border border-border-subtle overflow-hidden">
+            <div className="px-3 py-2 border-b border-border-subtle bg-surface-raised">
+              <h3 className="text-body-sm font-medium text-text-primary">Monthly Breakdown</h3>
             </div>
             <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full min-w-[600px]">
+              <table className="w-full">
                 <thead className="bg-surface-elevated">
                   <tr>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Month</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Positive</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Negative</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Total</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Ratio</th>
-                    <th className="px-4 py-3 w-32 text-caption font-medium text-text-secondary">Distribution</th>
+                    <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Month</th>
+                    <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">+/-</th>
+                    <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Total</th>
+                    <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">%</th>
+                    <th className="px-3 py-2 w-24 text-caption font-medium text-text-tertiary">Ratio</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
-                  {histogram.slice(0, 6).map((h) => {
+                  {histogram.slice(0, 4).map((h) => {
                     const total = h.recommendations_up + h.recommendations_down;
                     const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
-                    const monthLabel = new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                    const monthLabel = new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 
                     const rowContent = (
                       <>
-                        <td className="px-4 py-3 text-body-sm text-text-primary">
+                        <td className="px-3 py-2 text-caption text-text-primary">
                           {monthLabel}
                         </td>
-                        <td className="px-4 py-3 text-right text-body-sm text-accent-green">{h.recommendations_up.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-body-sm text-accent-red">{h.recommendations_down.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-body-sm text-text-secondary">{total.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-body-sm text-text-secondary">{ratio.toFixed(0)}%</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2 text-right text-caption">
+                          <span className="text-accent-green">{h.recommendations_up.toLocaleString()}</span>
+                          <span className="text-text-muted mx-0.5">/</span>
+                          <span className="text-accent-red">{h.recommendations_down.toLocaleString()}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-caption text-text-secondary">{total.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right text-caption text-text-secondary">{ratio.toFixed(0)}%</td>
+                        <td className="px-3 py-2">
                           <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
                         </td>
                       </>
@@ -740,12 +712,12 @@ function ReviewsSection({
                 </tbody>
               </table>
             </div>
-          </Card>
+          </div>
         </div>
       ) : (
-        <Card className="p-12 text-center">
-          <p className="text-text-muted">No review histogram data available</p>
-        </Card>
+        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
+          No review histogram data available
+        </p>
       )}
     </section>
   );
@@ -763,60 +735,60 @@ function NetworkSection({
   return (
     <section>
       <SectionHeader title="Network" id={id} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Related Developers */}
-        <Card padding="lg">
-          <div className="flex items-center gap-2 mb-4">
+        <Card padding="md">
+          <div className="flex items-center gap-2 mb-2">
             <Users className="h-4 w-4 text-text-tertiary" />
-            <h3 className="text-subheading text-text-primary">Related Developers</h3>
+            <h3 className="text-body-sm font-medium text-text-primary">Related Developers</h3>
           </div>
           {relatedDevelopers.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {relatedDevelopers.map((dev) => (
                 <Link
                   key={dev.id}
                   href={`/developers/${dev.id}`}
-                  className="flex items-center justify-between p-2 rounded-md hover:bg-surface-elevated transition-colors group"
+                  className="flex items-center justify-between p-1.5 rounded hover:bg-surface-elevated transition-colors group"
                 >
-                  <span className="text-body text-text-primary group-hover:text-accent-blue transition-colors">
+                  <span className="text-body-sm text-text-primary group-hover:text-accent-blue transition-colors">
                     {dev.name}
                   </span>
-                  <span className="text-body-sm text-text-tertiary">
-                    {dev.shared_apps} shared game{dev.shared_apps !== 1 ? 's' : ''}
+                  <span className="text-caption text-text-tertiary">
+                    {dev.shared_apps} shared
                   </span>
                 </Link>
               ))}
             </div>
           ) : (
-            <p className="text-body-sm text-text-muted">No related developers found</p>
+            <p className="text-caption text-text-muted">No related developers found</p>
           )}
         </Card>
 
         {/* Similar Publishers */}
-        <Card padding="lg">
-          <div className="flex items-center gap-2 mb-4">
+        <Card padding="md">
+          <div className="flex items-center gap-2 mb-2">
             <Building2 className="h-4 w-4 text-text-tertiary" />
-            <h3 className="text-subheading text-text-primary">Similar Publishers</h3>
+            <h3 className="text-body-sm font-medium text-text-primary">Similar Publishers</h3>
           </div>
           {similarPublishers.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {similarPublishers.map((pub) => (
                 <Link
                   key={pub.id}
                   href={`/publishers/${pub.id}`}
-                  className="flex items-center justify-between p-2 rounded-md hover:bg-surface-elevated transition-colors group"
+                  className="flex items-center justify-between p-1.5 rounded hover:bg-surface-elevated transition-colors group"
                 >
-                  <span className="text-body text-text-primary group-hover:text-accent-blue transition-colors">
+                  <span className="text-body-sm text-text-primary group-hover:text-accent-blue transition-colors">
                     {pub.name}
                   </span>
-                  <span className="text-body-sm text-text-tertiary">
+                  <span className="text-caption text-text-tertiary">
                     {pub.game_count} games
                   </span>
                 </Link>
               ))}
             </div>
           ) : (
-            <p className="text-body-sm text-text-muted">No similar publishers found</p>
+            <p className="text-caption text-text-muted">No similar publishers found</p>
           )}
         </Card>
       </div>
