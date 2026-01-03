@@ -415,39 +415,78 @@ export async function getPICSSyncState(
 
 /**
  * Get PICS data completion statistics
- * Uses RPC function to get all counts in a single query
- * @param sharedTotalApps Optional pre-fetched total apps count (ignored when using RPC)
+ * Uses RPC function to get all counts in a single query, with fallback to direct queries
+ * @param sharedTotalApps Optional pre-fetched total apps count for fallback
  */
 export async function getPICSDataStats(
   supabase: SupabaseClient<Database>,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   sharedTotalApps?: number
 ): Promise<PICSDataStats> {
-  // Use RPC to get all PICS stats in a single query
+  // Try RPC first
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)('get_pics_data_stats');
 
-  if (error || !data || data.length === 0) {
-    // Fallback to default values if RPC fails
-    return {
-      totalApps: 0,
-      withPicsSync: 0,
-      withCategories: 0,
-      withGenres: 0,
-      withTags: 0,
-      withFranchises: 0,
-      withParentApp: 0,
+  if (!error && data && data.length > 0) {
+    const row = data[0];
+    const result = {
+      totalApps: Number(row.total_apps ?? 0),
+      withPicsSync: Number(row.with_pics_sync ?? 0),
+      withCategories: Number(row.with_categories ?? 0),
+      withGenres: Number(row.with_genres ?? 0),
+      withTags: Number(row.with_tags ?? 0),
+      withFranchises: Number(row.with_franchises ?? 0),
+      withParentApp: Number(row.with_parent_app ?? 0),
     };
+    // Only return RPC result if it looks valid (totalApps > 0 means RPC worked)
+    if (result.totalApps > 0) {
+      return result;
+    }
   }
 
-  const row = data[0];
+  // Fallback to direct queries if RPC fails or returns invalid data
+  const totalApps = sharedTotalApps ?? (await supabase
+    .from('sync_status')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_syncable', true)).count ?? 0;
+
+  const [
+    withPicsSync,
+    withCategories,
+    withGenres,
+    withTags,
+    withFranchises,
+    withParentApp,
+  ] = await Promise.all([
+    supabase
+      .from('sync_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true)
+      .not('last_pics_sync', 'is', null),
+    supabase
+      .from('app_categories')
+      .select('appid', { count: 'exact', head: true }),
+    supabase
+      .from('app_genres')
+      .select('appid', { count: 'exact', head: true }),
+    supabase
+      .from('app_steam_tags')
+      .select('appid', { count: 'exact', head: true }),
+    supabase
+      .from('app_franchises')
+      .select('appid', { count: 'exact', head: true }),
+    supabase
+      .from('apps')
+      .select('*', { count: 'exact', head: true })
+      .not('parent_appid', 'is', null),
+  ]);
+
   return {
-    totalApps: Number(row.total_apps ?? 0),
-    withPicsSync: Number(row.with_pics_sync ?? 0),
-    withCategories: Number(row.with_categories ?? 0),
-    withGenres: Number(row.with_genres ?? 0),
-    withTags: Number(row.with_tags ?? 0),
-    withFranchises: Number(row.with_franchises ?? 0),
-    withParentApp: Number(row.with_parent_app ?? 0),
+    totalApps,
+    withPicsSync: withPicsSync.count ?? 0,
+    withCategories: withCategories.count ?? 0,
+    withGenres: withGenres.count ?? 0,
+    withTags: withTags.count ?? 0,
+    withFranchises: withFranchises.count ?? 0,
+    withParentApp: withParentApp.count ?? 0,
   };
 }
