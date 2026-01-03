@@ -207,12 +207,40 @@ async function getReviewHistogram(appid: number): Promise<ReviewHistogram[]> {
     .from('review_histogram')
     .select('month_start, recommendations_up, recommendations_down')
     .eq('appid', appid)
-    .order('month_start', { ascending: false })
-    .limit(24);
+    .order('month_start', { ascending: false });
 
-  // Validate ISO date format (YYYY-MM-DD or YYYY-MM) and filter out malformed entries
+  if (!data) return [];
+
+  // Validate ISO date format (YYYY-MM-DD or YYYY-MM)
   const isoDatePattern = /^\d{4}-\d{2}(?:-\d{2})?$/;
-  return (data ?? []).filter(h => isoDatePattern.test(h.month_start));
+
+  // Aggregate by month to handle duplicate entries for the same month
+  const monthMap = new Map<string, { up: number; down: number }>();
+
+  for (const h of data) {
+    // Skip entries with invalid month_start format
+    if (!isoDatePattern.test(h.month_start)) {
+      continue;
+    }
+
+    // Normalize to YYYY-MM for grouping
+    const monthKey = h.month_start.substring(0, 7);
+    const existing = monthMap.get(monthKey) ?? { up: 0, down: 0 };
+
+    existing.up += h.recommendations_up;
+    existing.down += h.recommendations_down;
+
+    monthMap.set(monthKey, existing);
+  }
+
+  return [...monthMap.entries()]
+    .map(([month_start, { up, down }]) => ({
+      month_start,
+      recommendations_up: up,
+      recommendations_down: down,
+    }))
+    .sort((a, b) => b.month_start.localeCompare(a.month_start))
+    .slice(0, 24);
 }
 
 async function getTrends(appid: number): Promise<AppTrends | null> {
