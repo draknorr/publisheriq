@@ -211,7 +211,7 @@ async function getRelatedDevelopers(publisherId: number): Promise<RelatedDevelop
     .slice(0, 10);
 }
 
-async function getPublisherTags(publisherId: number): Promise<{ tag: string; vote_count: number }[]> {
+async function getPublisherTags(publisherId: number): Promise<{ tag: string; count: number }[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
 
@@ -225,23 +225,26 @@ async function getPublisherTags(publisherId: number): Promise<{ tag: string; vot
 
   const appIds = appLinks.map(a => a.appid);
 
-  // Get all tags for those apps
-  const { data: tags } = await supabase
-    .from('app_tags')
-    .select('tag, vote_count')
+  // Get all tags for those apps from PICS data (app_steam_tags joined with steam_tags)
+  const { data: tagData } = await supabase
+    .from('app_steam_tags')
+    .select('appid, steam_tags(name)')
     .in('appid', appIds);
 
-  if (!tags) return [];
+  if (!tagData) return [];
 
-  // Aggregate vote counts by tag
+  // Aggregate: count how many apps have each tag
   const tagCounts = new Map<string, number>();
-  for (const t of tags) {
-    tagCounts.set(t.tag, (tagCounts.get(t.tag) ?? 0) + (t.vote_count ?? 0));
+  for (const t of tagData) {
+    const tagName = (t.steam_tags as { name: string } | null)?.name;
+    if (tagName) {
+      tagCounts.set(tagName, (tagCounts.get(tagName) ?? 0) + 1);
+    }
   }
 
   return [...tagCounts.entries()]
-    .map(([tag, vote_count]) => ({ tag, vote_count }))
-    .sort((a, b) => b.vote_count - a.vote_count)
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
     .slice(0, 20);
 }
 
@@ -330,11 +333,21 @@ async function getSimilarPublishers(publisherId: number, topTags: string[]): Pro
   if (!isSupabaseConfigured() || topTags.length === 0) return [];
   const supabase = getSupabase();
 
-  // Get apps that have these top tags
+  // First, get tag_ids for the tag names from steam_tags
+  const { data: steamTags } = await supabase
+    .from('steam_tags')
+    .select('tag_id')
+    .in('name', topTags.slice(0, 5));
+
+  if (!steamTags || steamTags.length === 0) return [];
+
+  const tagIds = steamTags.map(t => t.tag_id);
+
+  // Get apps that have these top tags from PICS data
   const { data: taggedApps } = await supabase
-    .from('app_tags')
+    .from('app_steam_tags')
     .select('appid')
-    .in('tag', topTags.slice(0, 5));
+    .in('tag_id', tagIds);
 
   if (!taggedApps || taggedApps.length === 0) return [];
 

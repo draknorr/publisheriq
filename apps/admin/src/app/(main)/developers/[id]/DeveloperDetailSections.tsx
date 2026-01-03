@@ -72,7 +72,7 @@ interface DeveloperDetailSectionsProps {
   developer: Developer;
   apps: DeveloperApp[];
   relatedPublishers: RelatedPublisher[];
-  tags: { tag: string; vote_count: number }[];
+  tags: { tag: string; count: number }[];
   histogram: ReviewHistogram[];
   similarDevelopers: SimilarDeveloper[];
   picsData: PortfolioPICSData | null;
@@ -269,7 +269,7 @@ function SummarySection({
 }: {
   id: string;
   developer: Developer;
-  tags: { tag: string; vote_count: number }[];
+  tags: { tag: string; count: number }[];
   picsData: PortfolioPICSData | null;
   totalGames: number;
 }) {
@@ -317,14 +317,14 @@ function SummarySection({
             {tags.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-caption text-text-tertiary mr-1">Top Tags:</span>
-                {displayedTags.map(({ tag, vote_count }) => (
+                {displayedTags.map(({ tag, count }) => (
                   <span
                     key={tag}
                     className="px-2 py-0.5 rounded bg-surface-elevated border border-border-subtle text-caption text-text-secondary hover:border-border-muted transition-colors"
-                    title={`${vote_count.toLocaleString()} votes`}
+                    title={`${count} game${count !== 1 ? 's' : ''}`}
                   >
                     {tag}
-                    <span className="ml-1.5 text-text-muted">{vote_count.toLocaleString()}</span>
+                    <span className="ml-1.5 text-text-muted">{count}</span>
                   </span>
                 ))}
                 {tags.length > TAG_LIMIT && (
