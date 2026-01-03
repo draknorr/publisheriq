@@ -822,9 +822,52 @@ function MetricsSection({
             </div>
           </div>
 
-          {/* Metrics table - compact, 5 days */}
+          {/* Metrics - mobile card view, desktop table */}
           <div className="rounded-md border border-border-subtle overflow-hidden">
-            <table className="w-full">
+            {/* Mobile: Card view */}
+            <div className="sm:hidden divide-y divide-border-subtle">
+              {metrics.slice(0, 5).map((m) => (
+                <div key={m.metric_date} className="p-3 bg-surface-raised">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-body-sm text-text-primary font-medium">{formatDate(m.metric_date)}</span>
+                    <span className={`text-caption font-medium ${
+                      m.review_score_desc?.includes('Positive') ? 'text-accent-green' :
+                      m.review_score_desc?.includes('Negative') ? 'text-accent-red' :
+                      m.review_score_desc === 'Mixed' ? 'text-accent-yellow' : 'text-text-muted'
+                    }`}>
+                      {m.review_score_desc ?? '—'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-caption">
+                    <div>
+                      <span className="text-text-tertiary">Reviews: </span>
+                      <span className="text-accent-green">{formatNumber(m.positive_reviews)}</span>
+                      <span className="text-text-muted">/</span>
+                      <span className="text-accent-red">{formatNumber(m.negative_reviews)}</span>
+                    </div>
+                    <div>
+                      <span className="text-text-tertiary">CCU: </span>
+                      <span className="text-text-secondary">{formatNumber(m.ccu_peak)}</span>
+                    </div>
+                    <div>
+                      <span className="text-text-tertiary">Total: </span>
+                      <span className="text-text-secondary">{formatNumber(m.total_reviews)}</span>
+                    </div>
+                    <div>
+                      <span className="text-text-tertiary">Price: </span>
+                      <span className="text-text-secondary">
+                        {m.price_cents !== null ? `$${(m.price_cents / 100).toFixed(2)}` : '—'}
+                        {m.discount_percent && m.discount_percent > 0 && (
+                          <span className="ml-1 text-accent-green">-{m.discount_percent}%</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop: Table view */}
+            <table className="w-full hidden sm:table">
               <thead className="bg-surface-elevated">
                 <tr>
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Date</th>
@@ -906,9 +949,32 @@ function ReviewsSection({
             />
           </div>
 
-          {/* Table - compact, 4 months */}
+          {/* Reviews - mobile card view, desktop table */}
           <div className="rounded-md border border-border-subtle overflow-hidden">
-            <table className="w-full">
+            {/* Mobile: Card view */}
+            <div className="sm:hidden divide-y divide-border-subtle">
+              {histogram.slice(0, 4).map((h) => {
+                const total = h.recommendations_up + h.recommendations_down;
+                const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
+                return (
+                  <div key={h.month_start} className="p-3 bg-surface-raised">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-body-sm text-text-primary font-medium">{formatMonthLabel(h.month_start)}</span>
+                      <span className="text-caption text-text-secondary">{ratio.toFixed(0)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-caption mb-2">
+                      <span className="text-accent-green">{h.recommendations_up.toLocaleString()}</span>
+                      <span className="text-text-muted">/</span>
+                      <span className="text-accent-red">{h.recommendations_down.toLocaleString()}</span>
+                      <span className="text-text-muted">({total.toLocaleString()} total)</span>
+                    </div>
+                    <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop: Table view */}
+            <table className="w-full hidden sm:table">
               <thead className="bg-surface-elevated">
                 <tr>
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Month</th>

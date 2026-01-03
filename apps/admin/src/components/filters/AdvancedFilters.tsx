@@ -62,23 +62,26 @@ export function AdvancedFilters({ filters, basePath }: AdvancedFiltersProps) {
         )}
       </button>
       {isExpanded && (
-        <div className="px-4 pb-4 flex flex-wrap gap-4 border-t border-border-subtle pt-4">
-          {filters.map((filter) => (
-            <div key={filter.name} className="flex flex-col gap-1">
-              <label className="text-caption text-text-tertiary">{filter.label}</label>
-              <select
-                value={searchParams.get(filter.name) ?? ''}
-                onChange={(e) => handleChange(filter.name, e.target.value)}
-                className="h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary"
-              >
-                {filter.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
+        <div className="px-4 pb-4 border-t border-border-subtle pt-4">
+          {/* Mobile: Full-width stacked filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap gap-3 sm:gap-4">
+            {filters.map((filter) => (
+              <div key={filter.name} className="flex flex-col gap-1 md:min-w-[140px]">
+                <label className="text-caption text-text-tertiary">{filter.label}</label>
+                <select
+                  value={searchParams.get(filter.name) ?? ''}
+                  onChange={(e) => handleChange(filter.name, e.target.value)}
+                  className="h-10 sm:h-9 px-3 rounded-md bg-surface-raised border border-border-muted text-body-sm text-text-primary w-full"
+                >
+                  {filter.options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

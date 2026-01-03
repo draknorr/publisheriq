@@ -293,18 +293,18 @@ function SummarySection({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Quick Facts Card */}
           <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="flex flex-col items-center text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col sm:items-center text-left sm:text-center">
                 <Calendar className="h-4 w-4 text-text-tertiary mb-1" />
                 <p className="text-caption text-text-tertiary">First Release</p>
                 <p className="text-body-sm font-medium text-text-primary">{formatDate(developer.first_game_release_date)}</p>
               </div>
-              <div className="flex flex-col items-center text-center">
+              <div className="flex flex-col sm:items-center text-left sm:text-center">
                 <FileText className="h-4 w-4 text-text-tertiary mb-1" />
                 <p className="text-caption text-text-tertiary">Page Created</p>
                 <p className="text-body-sm font-medium text-text-primary">{formatDate(developer.first_page_creation_date)}</p>
               </div>
-              <div className="flex flex-col items-center text-center">
+              <div className="flex flex-col sm:items-center text-left sm:text-center">
                 <Gamepad2 className="h-4 w-4 text-text-tertiary mb-1" />
                 <p className="text-caption text-text-tertiary">Total Games</p>
                 <p className="text-body-sm font-medium text-text-primary">{developer.game_count}</p>
@@ -513,8 +513,8 @@ function GenreBarChart({ genres, totalGames }: GenreBarChartProps) {
         {genres.slice(0, 8).map((genre, i) => {
           const percentage = Math.round((genre.game_count / totalGames) * 100);
           return (
-            <div key={genre.genre_id} className="flex items-center gap-3">
-              <div className="w-24 text-caption text-text-secondary truncate" title={genre.name}>
+            <div key={genre.genre_id} className="flex items-center gap-2 sm:gap-3">
+              <div className="w-16 sm:w-24 text-caption text-text-secondary truncate" title={genre.name}>
                 {genre.name}
               </div>
               <div className="flex-1 h-5 bg-surface-elevated rounded overflow-hidden">
@@ -525,9 +525,9 @@ function GenreBarChart({ genres, totalGames }: GenreBarChartProps) {
                   transition={{ duration: 0.5, delay: i * 0.05 }}
                 />
               </div>
-              <div className="w-20 text-caption text-text-muted text-right">
+              <div className="w-12 sm:w-20 text-caption text-text-muted text-right">
                 {percentage}%
-                <span className="text-text-tertiary ml-1">({genre.game_count})</span>
+                <span className="text-text-tertiary ml-1 hidden sm:inline">({genre.game_count})</span>
               </div>
             </div>
           );
@@ -831,7 +831,48 @@ function GamesSection({
             <h3 className="text-body-sm font-medium text-text-primary">All Games</h3>
             <span className="text-caption text-text-tertiary">{sortedApps.length} games</span>
           </div>
-          <div className="overflow-x-auto scrollbar-thin">
+          {/* Mobile: Card view */}
+          <div className="md:hidden divide-y divide-border-subtle">
+            {sortedApps.map((app) => (
+              <Link
+                key={app.appid}
+                href={`/apps/${app.appid}`}
+                className="block p-3 bg-surface-raised hover:bg-surface-elevated transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-body-sm font-medium text-text-primary">{app.name}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <TypeBadge type={app.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video'} />
+                      {app.is_delisted && (
+                        <span className="px-1 py-0.5 rounded text-caption-sm bg-accent-red/15 text-accent-red">
+                          Delisted
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {app.total_reviews && app.total_reviews > 0 && (
+                    <ReviewScoreBadge
+                      score={Math.round((app.positive_reviews ?? 0) / app.total_reviews * 100)}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-caption text-text-secondary">
+                  <span>{formatNumber(app.total_reviews)} reviews</span>
+                  <span>{formatOwners(app.owners_min, app.owners_max)}</span>
+                  {app.trend_30d_direction && (
+                    <TrendIndicator
+                      direction={app.trend_30d_direction as 'up' | 'down' | 'stable'}
+                      value={app.trend_30d_change_pct ?? undefined}
+                      size="sm"
+                    />
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+          {/* Desktop: Table view */}
+          <div className="hidden md:block overflow-x-auto scrollbar-thin">
             <table className="w-full">
               <thead className="bg-surface-elevated">
                 <tr>

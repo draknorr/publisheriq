@@ -208,8 +208,8 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         }}
       >
         <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
-          {/* Single row with sync state and data coverage */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          {/* Mobile-friendly grid: 2 cols base, scales up on larger screens */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {/* Sync State */}
             <div>
               <div className="text-caption text-text-tertiary">Change Number</div>
@@ -257,7 +257,28 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
             <span className="text-body-sm">No sync errors</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Mobile: Card view */}
+            <div className="sm:hidden space-y-2">
+            {data.appsWithErrors.slice(0, 10).map((app) => (
+              <div key={app.appid} className="p-2 rounded border border-border-subtle bg-surface-raised">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="text-text-primary font-medium text-body-sm truncate">{app.name}</div>
+                  <span className="px-1.5 py-0.5 rounded text-caption bg-accent-red/15 text-accent-red shrink-0">
+                    {app.consecutive_errors}x
+                  </span>
+                </div>
+                <div className="text-caption text-text-muted mb-1">
+                  {app.last_error_source ?? 'Unknown'} • {formatRelativeTime(app.last_error_at)}
+                </div>
+                <div className="text-caption text-text-secondary line-clamp-2" title={app.last_error_message ?? ''}>
+                  {app.last_error_message ?? '-'}
+                </div>
+              </div>
+            ))}
+            </div>
+            {/* Desktop: Table view */}
+            <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-body-sm">
               <thead>
                 <tr className="border-b border-border-subtle">
@@ -290,12 +311,13 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
                 ))}
               </tbody>
             </table>
-            {data.appsWithErrors.length > 10 && (
-              <div className="mt-2 text-caption text-text-muted">
-                +{data.appsWithErrors.length - 10} more errors
-              </div>
-            )}
-          </div>
+              {data.appsWithErrors.length > 10 && (
+                <div className="mt-2 text-caption text-text-muted">
+                  +{data.appsWithErrors.length - 10} more errors
+                </div>
+              )}
+            </div>
+          </>
         )}
       </CollapsibleSection>
 
@@ -404,22 +426,24 @@ function JobRow({
     <div className="border border-border-subtle rounded overflow-hidden">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-surface-elevated/50 transition-colors text-left"
+        className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between px-2 py-2 sm:py-1.5 hover:bg-surface-elevated/50 transition-colors text-left gap-1 sm:gap-0"
       >
+        {/* Job info - always visible */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span
-            className={`px-1.5 py-0.5 rounded text-caption border ${
+            className={`px-1.5 py-0.5 rounded text-caption border shrink-0 ${
               jobStatusColors[job.status] ?? 'bg-surface-elevated text-text-secondary'
             }`}
           >
             {job.status}
           </span>
-          <span className="text-body-sm font-medium text-text-primary">{job.job_type}</span>
+          <span className="text-body-sm font-medium text-text-primary truncate">{job.job_type}</span>
           {job.batch_size && (
-            <span className="text-caption text-text-muted">({job.batch_size})</span>
+            <span className="text-caption text-text-muted shrink-0">({job.batch_size})</span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-caption text-text-secondary">
+        {/* Stats - wrap on mobile */}
+        <div className="flex items-center gap-2 sm:gap-3 text-caption text-text-secondary flex-wrap">
           <span className="text-accent-green">{job.items_succeeded ?? 0}</span>
           <span className="text-text-muted">/</span>
           <span>{job.items_processed ?? 0}</span>
@@ -427,7 +451,7 @@ function JobRow({
             <span className="text-accent-red">({job.items_failed} failed)</span>
           )}
           <span className="text-text-muted">{duration}</span>
-          <span className="text-text-muted">{formatRelativeTime(job.started_at)}</span>
+          <span className="text-text-muted hidden sm:inline">{formatRelativeTime(job.started_at)}</span>
         </div>
       </button>
       {isExpanded && (
@@ -531,61 +555,88 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
         </div>
       </div>
 
-      {/* Logs Table */}
+      {/* Logs */}
       {logs.length === 0 ? (
         <div className="flex items-center gap-2 py-2 text-text-secondary">
           <MessageSquare className="h-4 w-4" />
           <span className="text-body-sm">No chat logs yet</span>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-body-sm">
-            <thead>
-              <tr className="border-b border-border-subtle">
-                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Query</th>
-                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Tools</th>
-                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Time</th>
-                <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">When</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-subtle">
-              {logs.slice(0, 10).map((log) => (
-                <tr key={log.id} className="hover:bg-surface-elevated/50">
-                  <td className="py-1.5">
-                    <div className="text-text-primary truncate max-w-[300px]" title={log.query_text}>
-                      {log.query_text}
-                    </div>
-                  </td>
-                  <td className="py-1.5">
-                    <div className="flex flex-wrap gap-1">
-                      {log.tool_names.slice(0, 3).map((tool) => (
-                        <span
-                          key={tool}
-                          className="px-1.5 py-0.5 rounded text-caption bg-accent-primary/15 text-accent-primary"
-                        >
-                          {tool}
-                        </span>
-                      ))}
-                      {log.tool_names.length > 3 && (
-                        <span className="text-caption text-text-muted">+{log.tool_names.length - 3}</span>
-                      )}
-                      {log.tool_names.length === 0 && (
-                        <span className="text-caption text-text-muted">-</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-1.5 text-text-secondary">{formatMs(log.timing_total_ms)}</td>
-                  <td className="py-1.5 text-text-muted">{formatRelativeTime(log.created_at)}</td>
+        <>
+          {/* Mobile: Card view */}
+          <div className="sm:hidden space-y-2">
+            {logs.slice(0, 10).map((log) => (
+              <div key={log.id} className="p-2 rounded border border-border-subtle bg-surface-raised">
+                <div className="text-body-sm text-text-primary line-clamp-2 mb-1.5">{log.query_text}</div>
+                <div className="flex items-center justify-between text-caption">
+                  <div className="flex flex-wrap gap-1">
+                    {log.tool_names.slice(0, 2).map((tool) => (
+                      <span key={tool} className="px-1.5 py-0.5 rounded bg-accent-primary/15 text-accent-primary">
+                        {tool}
+                      </span>
+                    ))}
+                    {log.tool_names.length > 2 && (
+                      <span className="text-text-muted">+{log.tool_names.length - 2}</span>
+                    )}
+                  </div>
+                  <div className="text-text-muted">{formatMs(log.timing_total_ms)}</div>
+                </div>
+              </div>
+            ))}
+            {logs.length > 10 && (
+              <div className="text-caption text-text-muted text-center">+{logs.length - 10} more</div>
+            )}
+          </div>
+          {/* Desktop: Table view */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-body-sm">
+              <thead>
+                <tr className="border-b border-border-subtle">
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Query</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Tools</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Time</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">When</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {logs.length > 10 && (
-            <div className="mt-2 text-caption text-text-muted">
-              +{logs.length - 10} more logs
-            </div>
-          )}
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {logs.slice(0, 10).map((log) => (
+                  <tr key={log.id} className="hover:bg-surface-elevated/50">
+                    <td className="py-1.5">
+                      <div className="text-text-primary truncate max-w-[300px]" title={log.query_text}>
+                        {log.query_text}
+                      </div>
+                    </td>
+                    <td className="py-1.5">
+                      <div className="flex flex-wrap gap-1">
+                        {log.tool_names.slice(0, 3).map((tool) => (
+                          <span
+                            key={tool}
+                            className="px-1.5 py-0.5 rounded text-caption bg-accent-primary/15 text-accent-primary"
+                          >
+                            {tool}
+                          </span>
+                        ))}
+                        {log.tool_names.length > 3 && (
+                          <span className="text-caption text-text-muted">+{log.tool_names.length - 3}</span>
+                        )}
+                        {log.tool_names.length === 0 && (
+                          <span className="text-caption text-text-muted">-</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-1.5 text-text-secondary">{formatMs(log.timing_total_ms)}</td>
+                    <td className="py-1.5 text-text-muted">{formatRelativeTime(log.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {logs.length > 10 && (
+              <div className="mt-2 text-caption text-text-muted">
+                +{logs.length - 10} more logs
+              </div>
+            )}
+          </div>
+        </>
       )}
     </CollapsibleSection>
   );
