@@ -158,8 +158,8 @@ export function SimilaritySection({
           </p>
         </Card>
       ) : compact ? (
-        <div className="relative overflow-hidden">
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+        <div className="relative overflow-hidden w-full">
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin w-full">
             {results.map((entity) => (
               <CompactSimilarityCard
                 key={entity.id}
