@@ -2,8 +2,7 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
-import { Card } from '@/components/ui';
-import { MetricCard, TypeBadge, ReviewScoreBadge, RatioBar } from '@/components/data-display';
+import { TypeBadge, ReviewScoreBadge, RatioBar } from '@/components/data-display';
 import { ExternalLink } from 'lucide-react';
 import { AppDetailSections } from './AppDetailSections';
 
@@ -460,10 +459,10 @@ export default async function AppDetailPage({
         </span>
       </div>
 
-      {/* Key metrics row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
-        <Card className="col-span-2 p-4">
-          <div className="flex items-center justify-between mb-2">
+      {/* Key metrics row - compact */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
+        <div className="col-span-3 md:col-span-2 p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <div className="flex items-center gap-2 mb-1.5">
             {latestMetrics && latestMetrics.total_reviews && latestMetrics.total_reviews > 0 ? (
               <ReviewScoreBadge
                 score={Math.round((latestMetrics.positive_reviews ?? 0) / latestMetrics.total_reviews * 100)}
@@ -473,39 +472,29 @@ export default async function AppDetailPage({
               <span className="text-text-muted text-body-sm">No reviews</span>
             )}
           </div>
-          <div className="text-body-sm text-text-secondary">
-            {formatNumber(latestMetrics?.positive_reviews ?? null)} positive / {formatNumber(latestMetrics?.negative_reviews ?? null)} negative
+          <div className="text-caption text-text-secondary mb-1.5">
+            {formatNumber(latestMetrics?.positive_reviews ?? null)} pos / {formatNumber(latestMetrics?.negative_reviews ?? null)} neg
           </div>
           {latestMetrics && latestMetrics.positive_reviews !== null && latestMetrics.negative_reviews !== null && (
-            <RatioBar
-              positive={latestMetrics.positive_reviews}
-              negative={latestMetrics.negative_reviews}
-              className="mt-2"
-            />
+            <RatioBar positive={latestMetrics.positive_reviews} negative={latestMetrics.negative_reviews} />
           )}
-        </Card>
-        <MetricCard
-          label="Owners"
-          value={formatOwners(latestMetrics?.owners_min ?? null, latestMetrics?.owners_max ?? null)}
-          variant="compact"
-        />
-        <MetricCard
-          label="Peak CCU"
-          value={formatNumber(latestMetrics?.ccu_peak ?? null)}
-          variant="compact"
-        />
-        <MetricCard
-          label="Avg Playtime"
-          value={formatPlaytime(latestMetrics?.average_playtime_forever ?? null)}
-          suffix="all-time"
-          variant="compact"
-        />
-        <MetricCard
-          label="Recent Play"
-          value={formatPlaytime(latestMetrics?.average_playtime_2weeks ?? null)}
-          suffix="2 weeks"
-          variant="compact"
-        />
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Owners</p>
+          <p className="text-body font-semibold text-text-primary">{formatOwners(latestMetrics?.owners_min ?? null, latestMetrics?.owners_max ?? null)}</p>
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Peak CCU</p>
+          <p className="text-body font-semibold text-text-primary">{formatNumber(latestMetrics?.ccu_peak ?? null)}</p>
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Avg Playtime</p>
+          <p className="text-body font-semibold text-text-primary">{formatPlaytime(latestMetrics?.average_playtime_forever ?? null)}</p>
+        </div>
+        <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <p className="text-caption text-text-tertiary">Recent 2w</p>
+          <p className="text-body font-semibold text-text-primary">{formatPlaytime(latestMetrics?.average_playtime_2weeks ?? null)}</p>
+        </div>
       </div>
 
       {/* All sections */}

@@ -2,7 +2,7 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout';
-import { MetricCard, TrendIndicator, TypeBadge, TierBadge, ReviewScoreBadge } from '@/components/data-display';
+import { MetricCard, TrendIndicator, ReviewScoreBadge } from '@/components/data-display';
 import { Card } from '@/components/ui';
 import { TrendingUp, AlertCircle, MessageSquare, ExternalLink } from 'lucide-react';
 
@@ -368,20 +368,6 @@ function formatNumber(n: number | null): string {
   return n.toLocaleString();
 }
 
-function timeAgo(dateStr: string | null): string {
-  if (!dateStr) return 'Never';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffHours < 1) return 'Just now';
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
-
 function SortHeader({
   field,
   label,
@@ -400,10 +386,10 @@ function SortHeader({
   const arrow = isActive ? (currentOrder === 'asc' ? ' ↑' : ' ↓') : '';
 
   return (
-    <th className={`px-4 py-3 text-left text-caption font-medium text-text-secondary ${className}`}>
+    <th className={`px-3 py-2 text-left text-caption font-medium text-text-tertiary ${className}`}>
       <Link
         href={`?sort=${field}&order=${nextOrder}`}
-        className={`hover:text-text-primary transition-colors ${isActive ? 'text-accent-blue' : ''}`}
+        className={`hover:text-text-primary transition-colors ${isActive ? 'text-accent-primary' : ''}`}
       >
         {label}{arrow}
       </Link>
@@ -534,21 +520,23 @@ export default async function AppsPage({
       ) : (
         <>
           {/* Mobile Card View */}
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-2">
             {apps.map((app) => (
               <Link key={app.appid} href={`/apps/${app.appid}`}>
-                <Card variant="interactive" className="p-4">
-                  <div className="flex items-start justify-between gap-3 mb-3">
+                <Card variant="interactive" padding="sm">
+                  <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-body font-medium text-text-primary truncate">
-                          {app.name}
-                        </span>
-                        <TypeBadge type={app.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video'} />
-                      </div>
-                      <span className="text-caption text-text-tertiary font-mono">
-                        #{app.appid}
+                      <span className="text-body-sm font-medium text-text-primary line-clamp-1">
+                        {app.name}
                       </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {app.genres.length > 0 && (
+                          <span className="text-caption text-text-tertiary">{app.genres[0].name}</span>
+                        )}
+                        {app.developers.length > 0 && (
+                          <span className="text-caption text-text-muted">• {app.developers[0]}</span>
+                        )}
+                      </div>
                     </div>
                     {app.trend_30d_direction && (
                       <TrendIndicator
@@ -559,23 +547,14 @@ export default async function AppsPage({
                       />
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-caption text-text-tertiary">Reviews</p>
-                      <p className="text-body-sm text-text-primary mt-0.5">
-                        {app.total_reviews && app.total_reviews > 0 ? (
-                          <ReviewScoreBadge score={Math.round((app.positive_reviews ?? 0) / app.total_reviews * 100)} />
-                        ) : (
-                          '—'
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-caption text-text-tertiary">Owners</p>
-                      <p className="text-body-sm text-text-primary mt-0.5">
-                        {formatOwners(app.owners_min, app.owners_max)}
-                      </p>
-                    </div>
+                  <div className="flex items-center gap-3 text-caption">
+                    {app.total_reviews && app.total_reviews > 0 ? (
+                      <ReviewScoreBadge score={Math.round((app.positive_reviews ?? 0) / app.total_reviews * 100)} />
+                    ) : (
+                      <span className="text-text-muted">No reviews</span>
+                    )}
+                    <span className="text-text-tertiary">{formatNumber(app.total_reviews)} reviews</span>
+                    <span className="text-text-tertiary">{formatOwners(app.owners_min, app.owners_max)}</span>
                   </div>
                 </Card>
               </Link>
@@ -584,100 +563,61 @@ export default async function AppsPage({
 
           {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto scrollbar-thin rounded-lg border border-border-subtle">
-            <table className="w-full min-w-[1200px]">
+            <table className="w-full">
               <thead className="bg-surface-elevated sticky top-0 z-10">
                 <tr>
-                  <SortHeader field="appid" label="App ID" currentSort={sort} currentOrder={order} />
-                  <SortHeader field="name" label="Name" currentSort={sort} currentOrder={order} className="min-w-[200px]" />
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Type</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Genres</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Deck</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">MC</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Developer</th>
+                  <SortHeader field="name" label="App Name" currentSort={sort} currentOrder={order} className="min-w-[250px]" />
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Genres</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">MC</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Developer</th>
                   <SortHeader field="review_score" label="Reviews" currentSort={sort} currentOrder={order} />
                   <SortHeader field="total_reviews" label="Count" currentSort={sort} currentOrder={order} />
                   <SortHeader field="owners_max" label="Owners" currentSort={sort} currentOrder={order} />
-                  <SortHeader field="ccu_peak" label="CCU Peak" currentSort={sort} currentOrder={order} />
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">30d Trend</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Tier</th>
-                  <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Last Sync</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">30d Trend</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {apps.map((app) => (
                   <tr key={app.appid} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/apps/${app.appid}`}
-                        className="text-body-sm font-mono text-accent-blue hover:text-accent-blue/80 transition-colors"
-                      >
-                        {app.appid}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/apps/${app.appid}`}
-                          className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+                          className="text-body-sm font-medium text-text-primary hover:text-accent-primary transition-colors truncate max-w-[220px]"
+                          title={app.name}
                         >
                           {app.name}
                         </Link>
                         {app.is_delisted && (
-                          <span className="px-1.5 py-0.5 rounded text-caption bg-accent-red/15 text-accent-red">
+                          <span className="px-1 py-0.5 rounded text-caption-sm bg-accent-red/15 text-accent-red shrink-0">
                             Delisted
                           </span>
                         )}
                         {app.consecutive_errors && app.consecutive_errors > 0 && (
                           <span
-                            className="px-1.5 py-0.5 rounded text-caption bg-accent-orange/15 text-accent-orange"
+                            className="px-1 py-0.5 rounded text-caption-sm bg-accent-orange/15 text-accent-orange shrink-0"
                             title={app.last_error_message ?? ''}
                           >
-                            {app.consecutive_errors} err
+                            {app.consecutive_errors}err
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <TypeBadge type={app.type as 'game' | 'dlc' | 'demo' | 'mod' | 'video'} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1 max-w-[150px]">
-                        {app.genres.slice(0, 2).map((genre) => (
-                          <span
-                            key={genre.id}
-                            className={`px-1.5 py-0.5 rounded text-caption ${
-                              genre.is_primary
-                                ? 'bg-accent-purple/20 text-accent-purple font-medium'
-                                : 'bg-accent-purple/10 text-accent-purple'
-                            }`}
-                            title={genre.is_primary ? 'Primary genre' : undefined}
-                          >
-                            {genre.is_primary && '★ '}
-                            {genre.name}
+                    <td className="px-3 py-2">
+                      {app.genres.length > 0 ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-body-sm text-text-secondary truncate max-w-[100px]">
+                            {app.genres[0].name}
                           </span>
-                        ))}
-                        {app.genres.length === 0 && (
-                          <span className="text-text-muted">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {app.steam_deck_category ? (
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium ${
-                          app.steam_deck_category === 'verified' ? 'bg-accent-green/15 text-accent-green' :
-                          app.steam_deck_category === 'playable' ? 'bg-accent-yellow/15 text-accent-yellow' :
-                          app.steam_deck_category === 'unsupported' ? 'bg-accent-red/15 text-accent-red' :
-                          'bg-surface-elevated text-text-muted'
-                        }`}>
-                          {app.steam_deck_category === 'verified' ? 'OK' :
-                           app.steam_deck_category === 'playable' ? '~' :
-                           app.steam_deck_category === 'unsupported' ? 'X' : '?'}
-                        </span>
+                          {app.genres.length > 1 && (
+                            <span className="text-caption text-text-muted">+{app.genres.length - 1}</span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {app.metacritic_score !== null ? (
                         <span className={`text-body-sm font-medium ${
                           app.metacritic_score >= 75 ? 'text-accent-green' :
@@ -689,35 +629,31 @@ export default async function AppsPage({
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="text-body-sm">
-                        {app.developers.length > 0 ? (
-                          <span className="text-text-secondary">{app.developers[0]}</span>
-                        ) : (
-                          <span className="text-text-muted">—</span>
-                        )}
-                      </div>
+                    <td className="px-3 py-2">
+                      {app.developers.length > 0 ? (
+                        <span className="text-body-sm text-text-secondary truncate max-w-[120px] block">
+                          {app.developers[0]}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {app.total_reviews && app.total_reviews > 0 ? (
                         <ReviewScoreBadge
                           score={Math.round((app.positive_reviews ?? 0) / app.total_reviews * 100)}
-                          description={app.review_score_desc ?? undefined}
                         />
                       ) : (
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-body-sm text-text-secondary">
+                    <td className="px-3 py-2 text-body-sm text-text-secondary">
                       {formatNumber(app.total_reviews)}
                     </td>
-                    <td className="px-4 py-3 text-body-sm text-text-secondary">
+                    <td className="px-3 py-2 text-body-sm text-text-secondary">
                       {formatOwners(app.owners_min, app.owners_max)}
                     </td>
-                    <td className="px-4 py-3 text-body-sm text-text-secondary">
-                      {formatNumber(app.ccu_peak)}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {app.trend_30d_direction ? (
                         <TrendIndicator
                           direction={app.trend_30d_direction as 'up' | 'down' | 'stable'}
@@ -727,16 +663,6 @@ export default async function AppsPage({
                       ) : (
                         <span className="text-text-muted">—</span>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {app.refresh_tier ? (
-                        <TierBadge tier={app.refresh_tier as 'active' | 'moderate' | 'dormant' | 'dead'} />
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-body-sm text-text-tertiary">
-                      {timeAgo(app.last_reviews_sync)}
                     </td>
                   </tr>
                 ))}

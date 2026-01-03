@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Card } from '@/components/ui';
-import { Grid } from '@/components/layout';
 import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar } from '@/components/data-display';
 import { SimilaritySection } from '@/components/similarity';
-import { Calendar, Wrench, CheckCircle2, XCircle, AlertTriangle, Clock, ChevronRight, ExternalLink } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, ChevronRight } from 'lucide-react';
 
 interface AppDetails {
   appid: number;
@@ -156,11 +154,6 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return 'Never';
-  return new Date(dateStr).toLocaleString();
-}
-
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return 'Never';
   const date = new Date(dateStr);
@@ -286,7 +279,7 @@ export function AppDetailSections({
       </div>
 
       {/* All sections in scrollable view */}
-      <div className="space-y-12">
+      <div className="space-y-8">
         <OverviewSection
           id="overview"
           app={app}
@@ -358,234 +351,181 @@ function OverviewSection({
   return (
     <section>
       <SectionHeader title="Overview" id={id} />
-      <div className="space-y-6">
-        {/* Trends */}
+      <div className="space-y-4">
+        {/* Trends - compact inline row */}
         {trends && (
-          <div className="mb-6">
-            <h3 className="text-subheading text-text-primary mb-4">Trends</h3>
-            <Grid cols={4} gap="md">
-              <TrendBadge
-                direction={(trends.trend_30d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
-                value={trends.trend_30d_change_pct ?? undefined}
-                label="30 Day Trend"
-              />
-              <TrendBadge
-                direction={(trends.trend_90d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
-                value={trends.trend_90d_change_pct ?? undefined}
-                label="90 Day Trend"
-              />
-              <Card className="p-4">
-                <p className="text-heading text-text-primary">
-                  {trends.review_velocity_7d?.toFixed(1) ?? '—'}
-                </p>
-                <p className="text-body-sm text-text-secondary">Reviews/day (7d)</p>
-              </Card>
-              <Card className="p-4">
-                <p className="text-heading text-text-primary">
-                  {trends.review_velocity_30d?.toFixed(1) ?? '—'}
-                </p>
-                <p className="text-body-sm text-text-secondary">Reviews/day (30d)</p>
-              </Card>
-            </Grid>
+          <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
+            <TrendBadge
+              direction={(trends.trend_30d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
+              value={trends.trend_30d_change_pct ?? undefined}
+              label="30d"
+            />
+            <TrendBadge
+              direction={(trends.trend_90d_direction as 'up' | 'down' | 'stable') ?? 'stable'}
+              value={trends.trend_90d_change_pct ?? undefined}
+              label="90d"
+            />
+            <span className="text-border-subtle">|</span>
+            <span className="text-caption text-text-tertiary">Reviews/day:</span>
+            <span className="text-body-sm font-medium text-text-primary">{trends.review_velocity_7d?.toFixed(1) ?? '—'} <span className="text-text-muted">(7d)</span></span>
+            <span className="text-body-sm font-medium text-text-primary">{trends.review_velocity_30d?.toFixed(1) ?? '—'} <span className="text-text-muted">(30d)</span></span>
           </div>
         )}
 
-        {/* Developer / Publisher */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Developers</h3>
+        {/* Developer / Publisher - inline row */}
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-caption text-text-tertiary">Dev:</span>
             {developers.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {developers.map((dev) => (
                   <Link
                     key={dev.id}
                     href={`/developers/${dev.id}`}
-                    className="px-3 py-1.5 rounded-md bg-surface-overlay text-body-sm text-text-secondary hover:bg-surface-elevated hover:text-accent-blue transition-colors"
+                    className="px-2 py-0.5 rounded text-body-sm text-accent-blue bg-accent-blue/10 hover:bg-accent-blue/20 transition-colors"
                   >
                     {dev.name}
                   </Link>
                 ))}
               </div>
             ) : (
-              <p className="text-text-muted text-body-sm">No developers linked</p>
+              <span className="text-text-muted text-body-sm">—</span>
             )}
-          </Card>
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Publishers</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-caption text-text-tertiary">Pub:</span>
             {publishers.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {publishers.map((pub) => (
                   <Link
                     key={pub.id}
                     href={`/publishers/${pub.id}`}
-                    className="px-3 py-1.5 rounded-md bg-surface-overlay text-body-sm text-text-secondary hover:bg-surface-elevated hover:text-accent-blue transition-colors"
+                    className="px-2 py-0.5 rounded text-body-sm text-accent-cyan bg-accent-cyan/10 hover:bg-accent-cyan/20 transition-colors"
                   >
                     {pub.name}
                   </Link>
                 ))}
               </div>
             ) : (
-              <p className="text-text-muted text-body-sm">No publishers linked</p>
+              <span className="text-text-muted text-body-sm">—</span>
             )}
-          </Card>
+          </div>
         </div>
 
-        {/* Genres & Franchises */}
+        {/* Genres & Franchises - inline tags */}
         {(genres.length > 0 || franchises.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex flex-wrap items-center gap-3">
             {genres.length > 0 && (
-              <Card padding="lg">
-                <h3 className="text-subheading text-text-primary mb-4">Genres</h3>
-                <div className="flex flex-wrap gap-2">
-                  {genres.map((genre) => (
-                    <span
-                      key={genre.id}
-                      className={`px-3 py-1.5 rounded-md text-body-sm ${
-                        genre.is_primary
-                          ? 'bg-accent-purple/20 text-accent-purple font-medium border border-accent-purple/30'
-                          : 'bg-accent-purple/10 text-accent-purple'
-                      }`}
-                    >
-                      {genre.is_primary && <span className="mr-1">★</span>}
-                      {genre.name}
-                    </span>
-                  ))}
-                </div>
-              </Card>
+              <div className="flex items-center gap-1.5">
+                <span className="text-caption text-text-tertiary">Genres:</span>
+                {genres.map((genre) => (
+                  <span
+                    key={genre.id}
+                    className={`px-2 py-0.5 rounded text-body-sm ${
+                      genre.is_primary
+                        ? 'bg-accent-purple/20 text-accent-purple font-medium'
+                        : 'bg-accent-purple/10 text-accent-purple'
+                    }`}
+                  >
+                    {genre.is_primary && '★ '}{genre.name}
+                  </span>
+                ))}
+              </div>
             )}
             {franchises.length > 0 && (
-              <Card padding="lg">
-                <h3 className="text-subheading text-text-primary mb-4">Franchises</h3>
-                <div className="flex flex-wrap gap-2">
-                  {franchises.map((franchise) => (
-                    <span
-                      key={franchise.id}
-                      className="px-3 py-1.5 rounded-md bg-accent-cyan/10 text-body-sm text-accent-cyan"
-                    >
-                      {franchise.name}
-                    </span>
-                  ))}
-                </div>
-              </Card>
+              <div className="flex items-center gap-1.5">
+                <span className="text-caption text-text-tertiary">Franchise:</span>
+                {franchises.map((franchise) => (
+                  <span
+                    key={franchise.id}
+                    className="px-2 py-0.5 rounded text-body-sm bg-accent-cyan/10 text-accent-cyan"
+                  >
+                    {franchise.name}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         )}
 
-        {/* PICS Steam Tags (ranked) */}
+        {/* PICS Steam Tags (ranked) - compact */}
         {steamTags.length > 0 && (() => {
-          // Filter out placeholder tags (ones that start with "Tag ")
           const namedTags = steamTags.filter(t => !t.name.startsWith('Tag '));
           const unnamedCount = steamTags.length - namedTags.length;
-          const displayTags = namedTags.slice(0, 15);
-          const remainingCount = (namedTags.length > 15 ? namedTags.length - 15 : 0) + unnamedCount;
+          const displayTags = namedTags.slice(0, 12);
+          const remainingCount = (namedTags.length > 12 ? namedTags.length - 12 : 0) + unnamedCount;
 
           return namedTags.length > 0 ? (
-            <div>
-              <h3 className="text-subheading text-text-primary mb-4">Steam Tags</h3>
-              <div className="flex flex-wrap gap-2">
-                {displayTags.map((tag) => (
-                  <a
-                    key={tag.id}
-                    href={`https://store.steampowered.com/search/?tags=${tag.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-blue/10 border border-accent-blue/20 text-body-sm text-accent-blue hover:bg-accent-blue/20 transition-colors"
-                    title={`Rank #${tag.rank} - View on Steam`}
-                  >
-                    {tag.name}
-                    <ExternalLink className="w-3 h-3 opacity-50" />
-                  </a>
-                ))}
-                {remainingCount > 0 && (
-                  <span className="px-3 py-1.5 text-body-sm text-text-muted">
-                    +{remainingCount} more
-                  </span>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-caption text-text-tertiary mr-1">Tags:</span>
+              {displayTags.map((tag) => (
+                <a
+                  key={tag.id}
+                  href={`https://store.steampowered.com/search/?tags=${tag.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors"
+                  title={`Rank #${tag.rank}`}
+                >
+                  {tag.name}
+                </a>
+              ))}
+              {remainingCount > 0 && (
+                <span className="text-caption text-text-muted">+{remainingCount}</span>
+              )}
             </div>
           ) : null;
         })()}
 
-        {/* SteamSpy Tags (vote-based) - shown if no PICS tags or as secondary */}
+        {/* SteamSpy Tags - shown if no PICS tags */}
         {tags.length > 0 && steamTags.length === 0 && (
-          <div>
-            <h3 className="text-subheading text-text-primary mb-4">Tags</h3>
-            <div className="flex flex-wrap gap-2">
-              {tags.slice(0, 15).map(({ tag, vote_count }) => (
-                <span
-                  key={tag}
-                  className="px-3 py-1.5 rounded-md bg-surface-elevated border border-border-subtle text-body-sm text-text-secondary"
-                  title={`${vote_count.toLocaleString()} votes`}
-                >
-                  {tag}
-                  <span className="ml-2 text-text-muted">{vote_count.toLocaleString()}</span>
-                </span>
-              ))}
-              {tags.length > 15 && (
-                <span className="px-3 py-1.5 text-body-sm text-text-muted">
-                  +{tags.length - 15} more
-                </span>
-              )}
-            </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-caption text-text-tertiary mr-1">Tags:</span>
+            {tags.slice(0, 12).map(({ tag }) => (
+              <span
+                key={tag}
+                className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary"
+              >
+                {tag}
+              </span>
+            ))}
+            {tags.length > 12 && (
+              <span className="text-caption text-text-muted">+{tags.length - 12}</span>
+            )}
           </div>
         )}
 
-        {/* App Details */}
-        <Card padding="lg">
-          <h3 className="text-subheading text-text-primary mb-4">App Details</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            <div className="flex items-start gap-3">
-              <Calendar className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">Release Date</p>
-                <p className="text-body text-text-primary">{app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Calendar className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">Page Created</p>
-                <p className="text-body text-text-primary">{formatDate(app.page_creation_date)}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Wrench className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">Workshop</p>
-                <p className={`text-body ${app.has_workshop ? 'text-accent-green' : 'text-text-muted'}`}>
-                  {app.has_workshop ? 'Enabled' : 'Disabled'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              {app.has_developer_info ? (
-                <CheckCircle2 className="h-4 w-4 text-accent-green mt-0.5" />
-              ) : (
-                <Clock className="h-4 w-4 text-accent-yellow mt-0.5" />
-              )}
-              <div>
-                <p className="text-caption text-text-tertiary">Developer Info</p>
-                <p className={`text-body ${app.has_developer_info ? 'text-accent-green' : 'text-accent-yellow'}`}>
-                  {app.has_developer_info ? 'Complete' : 'Pending'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Clock className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">First Seen</p>
-                <p className="text-body text-text-primary">{formatDateTime(app.created_at)}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Clock className="h-4 w-4 text-text-tertiary mt-0.5" />
-              <div>
-                <p className="text-caption text-text-tertiary">Last Updated</p>
-                <p className="text-body text-text-primary">{formatDateTime(app.updated_at)}</p>
-              </div>
-            </div>
+        {/* App Details - compact 6-col grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
+          <div>
+            <p className="text-caption text-text-tertiary">Release</p>
+            <p className="text-body-sm text-text-primary">{app.release_date ? formatDate(app.release_date) : app.release_date_raw ?? '—'}</p>
           </div>
-        </Card>
+          <div>
+            <p className="text-caption text-text-tertiary">Page Created</p>
+            <p className="text-body-sm text-text-primary">{formatDate(app.page_creation_date)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary">Workshop</p>
+            <p className={`text-body-sm ${app.has_workshop ? 'text-accent-green' : 'text-text-muted'}`}>
+              {app.has_workshop ? 'Yes' : 'No'}
+            </p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary">Dev Info</p>
+            <p className={`text-body-sm ${app.has_developer_info ? 'text-accent-green' : 'text-accent-yellow'}`}>
+              {app.has_developer_info ? 'Complete' : 'Pending'}
+            </p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary">First Seen</p>
+            <p className="text-body-sm text-text-primary">{formatDate(app.created_at)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-text-tertiary">Updated</p>
+            <p className="text-body-sm text-text-primary">{formatDate(app.updated_at)}</p>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -606,18 +546,19 @@ function PICSSection({
 }) {
   const hasPICSData = steamDeck || categories.length > 0 || app.controller_support || app.platforms || app.metacritic_score || app.parent_appid || app.languages || dlcs.length > 0 || app.pics_review_score;
   const contentDescriptors = parseContentDescriptors(app.content_descriptors);
+  const [showAllDLCs, setShowAllDLCs] = useState(false);
 
   return (
     <section>
       <SectionHeader title="PICS Data" id={id} />
       {hasPICSData ? (
-        <div className="space-y-6">
-          {/* Steam Deck Compatibility */}
-          {steamDeck && (
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">Steam Deck Compatibility</h3>
-              <div className="flex items-center gap-4 mb-4">
-                <span className={`px-3 py-1.5 rounded-md text-body font-medium ${
+        <div className="space-y-4">
+          {/* Steam Deck + Features row */}
+          <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
+            {steamDeck && (
+              <>
+                <span className="text-caption text-text-tertiary">Deck:</span>
+                <span className={`px-2 py-0.5 rounded text-body-sm font-medium ${
                   steamDeck.category === 'verified' ? 'bg-accent-green/15 text-accent-green' :
                   steamDeck.category === 'playable' ? 'bg-accent-yellow/15 text-accent-yellow' :
                   steamDeck.category === 'unsupported' ? 'bg-accent-red/15 text-accent-red' :
@@ -627,222 +568,176 @@ function PICSSection({
                    steamDeck.category === 'playable' ? 'Playable' :
                    steamDeck.category === 'unsupported' ? 'Unsupported' : 'Unknown'}
                 </span>
-              </div>
-              {(steamDeck.tests_passed && steamDeck.tests_passed.length > 0) && (
-                <div className="mb-3">
-                  <p className="text-caption text-text-tertiary mb-2">Tests Passed</p>
-                  <div className="flex flex-wrap gap-2">
-                    {steamDeck.tests_passed.map((test) => (
-                      <span key={test} className="px-2 py-1 rounded text-caption bg-accent-green/10 text-accent-green flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" />
-                        {test}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {(steamDeck.tests_failed && steamDeck.tests_failed.length > 0) && (
-                <div>
-                  <p className="text-caption text-text-tertiary mb-2">Tests Failed</p>
-                  <div className="flex flex-wrap gap-2">
-                    {steamDeck.tests_failed.map((test) => (
-                      <span key={test} className="px-2 py-1 rounded text-caption bg-accent-red/10 text-accent-red flex items-center gap-1">
-                        <XCircle className="h-3 w-3" />
-                        {test}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </Card>
-          )}
-
-          {/* Categories (Features) */}
-          {categories.length > 0 && (
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">Features</h3>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((category) => (
-                  <span
-                    key={category.id}
-                    className="px-3 py-1.5 rounded-md bg-surface-elevated border border-border-subtle text-body-sm text-text-secondary"
-                  >
+                {(steamDeck.tests_passed || steamDeck.tests_failed) && (
+                  <span className="text-caption text-text-muted">
+                    ({steamDeck.tests_passed?.length ?? 0} passed, {steamDeck.tests_failed?.length ?? 0} failed)
+                  </span>
+                )}
+              </>
+            )}
+            {categories.length > 0 && (
+              <>
+                {steamDeck && <span className="text-border-subtle">|</span>}
+                <span className="text-caption text-text-tertiary">Features:</span>
+                {categories.slice(0, 6).map((category) => (
+                  <span key={category.id} className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary">
                     {category.name}
                   </span>
                 ))}
+                {categories.length > 6 && <span className="text-caption text-text-muted">+{categories.length - 6}</span>}
+              </>
+            )}
+          </div>
+
+          {/* PICS Metadata - 6 col dense grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
+            {app.pics_review_score !== null && (
+              <div>
+                <p className="text-caption text-text-tertiary">Review Score</p>
+                <p className={`text-body-sm font-medium ${
+                  app.pics_review_score >= 7 ? 'text-accent-green' :
+                  app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
+                }`}>
+                  {app.pics_review_score} ({getPICSReviewScoreDescription(app.pics_review_score).split(' ').slice(-1)[0]})
+                </p>
               </div>
-            </Card>
-          )}
+            )}
+            {app.pics_review_percentage !== null && (
+              <div>
+                <p className="text-caption text-text-tertiary">Review %</p>
+                <p className="text-body-sm text-text-primary">{app.pics_review_percentage}%</p>
+              </div>
+            )}
+            {app.metacritic_score !== null && (
+              <div>
+                <p className="text-caption text-text-tertiary">Metacritic</p>
+                <p className={`text-body-sm font-medium ${
+                  app.metacritic_score >= 75 ? 'text-accent-green' :
+                  app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
+                }`}>{app.metacritic_score}</p>
+              </div>
+            )}
+            {app.platforms && (
+              <div>
+                <p className="text-caption text-text-tertiary">Platforms</p>
+                <p className="text-body-sm text-text-primary capitalize">{app.platforms.replace(/,/g, ', ')}</p>
+              </div>
+            )}
+            {app.controller_support && (
+              <div>
+                <p className="text-caption text-text-tertiary">Controller</p>
+                <p className="text-body-sm text-text-primary capitalize">{app.controller_support}</p>
+              </div>
+            )}
+            {app.parent_appid !== null && (
+              <div>
+                <p className="text-caption text-text-tertiary">Parent</p>
+                <Link href={`/apps/${app.parent_appid}`} className="text-body-sm text-accent-blue hover:underline">
+                  {app.parent_appid}
+                </Link>
+              </div>
+            )}
+            {app.release_state && (
+              <div>
+                <p className="text-caption text-text-tertiary">Release State</p>
+                <p className="text-body-sm text-text-primary capitalize">{app.release_state}</p>
+              </div>
+            )}
+            {app.app_state && (
+              <div>
+                <p className="text-caption text-text-tertiary">App State</p>
+                <p className="text-body-sm text-text-primary">{app.app_state}</p>
+              </div>
+            )}
+            {app.last_content_update && (
+              <div>
+                <p className="text-caption text-text-tertiary">Content Update</p>
+                <p className="text-body-sm text-text-primary">{formatDate(app.last_content_update)}</p>
+              </div>
+            )}
+            {app.current_build_id && (
+              <div>
+                <p className="text-caption text-text-tertiary">Build ID</p>
+                <p className="text-body-sm text-text-primary font-mono">{app.current_build_id}</p>
+              </div>
+            )}
+            {app.homepage_url && (
+              <div className="col-span-2">
+                <p className="text-caption text-text-tertiary">Homepage</p>
+                <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body-sm text-accent-blue hover:underline truncate block">
+                  {app.homepage_url.replace(/^https?:\/\//, '')}
+                </a>
+              </div>
+            )}
+          </div>
 
-          {/* PICS Metadata */}
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">PICS Metadata</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {app.pics_review_score !== null && (
-                <div>
-                  <p className="text-caption text-text-tertiary">PICS Review Score</p>
-                  <p className={`text-body font-medium ${
-                    app.pics_review_score >= 7 ? 'text-accent-green' :
-                    app.pics_review_score >= 5 ? 'text-accent-yellow' : 'text-accent-red'
-                  }`}>
-                    {app.pics_review_score} - {getPICSReviewScoreDescription(app.pics_review_score)}
-                  </p>
-                </div>
-              )}
-              {app.pics_review_percentage !== null && (
-                <div>
-                  <p className="text-caption text-text-tertiary">PICS Review %</p>
-                  <p className="text-body text-text-primary">{app.pics_review_percentage}%</p>
-                </div>
-              )}
-              {app.metacritic_score !== null && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Metacritic</p>
-                  {app.metacritic_url ? (
-                    <a
-                      href={app.metacritic_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`text-body font-medium hover:underline ${
-                        app.metacritic_score >= 75 ? 'text-accent-green' :
-                        app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
-                      }`}
-                    >
-                      {app.metacritic_score}
-                    </a>
-                  ) : (
-                    <p className={`text-body font-medium ${
-                      app.metacritic_score >= 75 ? 'text-accent-green' :
-                      app.metacritic_score >= 50 ? 'text-accent-yellow' : 'text-accent-red'
-                    }`}>
-                      {app.metacritic_score}
-                    </p>
-                  )}
-                </div>
-              )}
-              {app.platforms && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Platforms</p>
-                  <p className="text-body text-text-primary capitalize">{app.platforms.replace(/,/g, ', ')}</p>
-                </div>
-              )}
-              {app.controller_support && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Controller Support</p>
-                  <p className="text-body text-text-primary capitalize">{app.controller_support}</p>
-                </div>
-              )}
-              {app.parent_appid !== null && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Parent App</p>
-                  <Link href={`/apps/${app.parent_appid}`} className="text-body text-accent-blue hover:underline">
-                    {app.parent_appid}
-                  </Link>
-                </div>
-              )}
-              {app.release_state && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Release State</p>
-                  <p className="text-body text-text-primary capitalize">{app.release_state}</p>
-                </div>
-              )}
-              {app.app_state && (
-                <div>
-                  <p className="text-caption text-text-tertiary">App State</p>
-                  <p className="text-body text-text-primary">{app.app_state}</p>
-                </div>
-              )}
-              {app.last_content_update && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Last Content Update</p>
-                  <p className="text-body text-text-primary">{formatDateTime(app.last_content_update)}</p>
-                </div>
-              )}
-              {app.current_build_id && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Build ID</p>
-                  <p className="text-body text-text-primary font-mono text-body-sm">{app.current_build_id}</p>
-                </div>
-              )}
-              {app.homepage_url && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Homepage</p>
-                  <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body text-accent-blue hover:underline truncate block">
-                    {app.homepage_url.replace(/^https?:\/\//, '')}
-                  </a>
-                </div>
-              )}
-              {app.is_free && (
-                <div>
-                  <p className="text-caption text-text-tertiary">Pricing</p>
-                  <p className="text-body text-accent-green font-medium">Free to Play</p>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Content Descriptors (Mature Content) */}
+          {/* Content Descriptors (inline) */}
           {contentDescriptors.length > 0 && (
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">Content Warnings</h3>
-              <div className="flex flex-wrap gap-2">
-                {contentDescriptors.map((descriptor) => (
-                  <span
-                    key={descriptor.id}
-                    className={`px-3 py-1.5 rounded-md text-body-sm font-medium ${
-                      descriptor.severity === 'high'
-                        ? 'bg-accent-red/15 text-accent-red border border-accent-red/30'
-                        : 'bg-accent-orange/15 text-accent-orange border border-accent-orange/30'
-                    }`}
-                  >
-                    {descriptor.label}
-                  </span>
-                ))}
-              </div>
-            </Card>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-caption text-text-tertiary">Warnings:</span>
+              {contentDescriptors.map((descriptor) => (
+                <span
+                  key={descriptor.id}
+                  className={`px-2 py-0.5 rounded text-caption font-medium ${
+                    descriptor.severity === 'high'
+                      ? 'bg-accent-red/15 text-accent-red'
+                      : 'bg-accent-orange/15 text-accent-orange'
+                  }`}
+                >
+                  {descriptor.label}
+                </span>
+              ))}
+            </div>
           )}
 
-          {/* DLC List */}
+          {/* DLC List - compact collapsible */}
           {dlcs.length > 0 && (
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">DLC ({dlcs.length})</h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {dlcs.map((dlc) => (
+            <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-body-sm font-medium text-text-primary">DLC ({dlcs.length})</span>
+                {dlcs.length > 5 && (
+                  <button onClick={() => setShowAllDLCs(!showAllDLCs)} className="text-caption text-accent-blue hover:underline">
+                    {showAllDLCs ? 'Show less' : `Show all`}
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(showAllDLCs ? dlcs : dlcs.slice(0, 5)).map((dlc) => (
                   <Link
                     key={dlc.appid}
                     href={`/apps/${dlc.appid}`}
-                    className="flex items-center justify-between p-2 rounded-md hover:bg-surface-elevated transition-colors"
+                    className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors truncate max-w-48"
+                    title={dlc.name}
                   >
-                    <span className="text-body-sm text-text-primary">{dlc.name}</span>
-                    <span className="text-caption text-text-muted font-mono">{dlc.appid}</span>
+                    {dlc.name}
                   </Link>
                 ))}
+                {!showAllDLCs && dlcs.length > 5 && (
+                  <span className="text-caption text-text-muted">+{dlcs.length - 5} more</span>
+                )}
               </div>
-            </Card>
+            </div>
           )}
 
-          {/* Languages */}
+          {/* Languages - inline */}
           {app.languages && Object.keys(app.languages).length > 0 && (
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">Supported Languages</h3>
-              <div className="flex flex-wrap gap-2">
-                {Object.keys(app.languages).map((lang) => (
-                  <span
-                    key={lang}
-                    className="px-2 py-1 rounded text-caption bg-surface-elevated text-text-secondary"
-                  >
-                    {lang}
-                  </span>
-                ))}
-              </div>
-            </Card>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-caption text-text-tertiary mr-1">Languages:</span>
+              {Object.keys(app.languages).slice(0, 10).map((lang) => (
+                <span key={lang} className="px-2 py-0.5 rounded text-caption bg-surface-elevated text-text-secondary">
+                  {lang}
+                </span>
+              ))}
+              {Object.keys(app.languages).length > 10 && (
+                <span className="text-caption text-text-muted">+{Object.keys(app.languages).length - 10}</span>
+              )}
+            </div>
           )}
         </div>
       ) : (
-        <Card className="p-12 text-center">
-          <p className="text-text-muted">No PICS data available for this app</p>
-          <p className="text-caption text-text-tertiary mt-2">PICS data is synced from Steam&apos;s Product Info Cache Server</p>
-        </Card>
+        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
+          No PICS data available
+        </p>
       )}
     </section>
   );
@@ -867,85 +762,82 @@ function MetricsSection({
     <section>
       <SectionHeader title="Metrics" id={id} />
       {chartData.length > 0 ? (
-        <div className="space-y-6">
-          {/* Charts side by side on desktop */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">Total Reviews Over Time</h3>
+        <div className="space-y-4">
+          {/* Charts - compact */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+              <h3 className="text-body-sm font-medium text-text-primary mb-2">Reviews</h3>
               <AreaChartComponent
                 data={chartData}
                 xKey="date"
                 yKey="reviews"
-                height={200}
+                height={140}
                 color="blue"
                 formatYAxis={(val) => val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val.toString()}
               />
-            </Card>
-            <Card padding="lg">
-              <h3 className="text-subheading text-text-primary mb-4">Peak CCU Over Time</h3>
+            </div>
+            <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+              <h3 className="text-body-sm font-medium text-text-primary mb-2">Peak CCU</h3>
               <AreaChartComponent
                 data={chartData}
                 xKey="date"
                 yKey="ccu"
-                height={200}
+                height={140}
                 color="cyan"
                 formatYAxis={(val) => val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val.toString()}
               />
-            </Card>
+            </div>
           </div>
 
-          {/* Metrics table */}
-          <Card padding="none">
-            <div className="px-4 py-3 border-b border-border-subtle">
-              <h3 className="text-subheading text-text-primary">Daily Metrics History</h3>
-            </div>
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full min-w-[700px]">
-                <thead className="bg-surface-elevated">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Date</th>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Score</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Total</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Positive</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Negative</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Peak CCU</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Price</th>
+          {/* Metrics table - compact, 5 days */}
+          <div className="rounded-md border border-border-subtle overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-surface-elevated">
+                <tr>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Date</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Score</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Total</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">+/-</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">CCU</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Price</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {metrics.slice(0, 5).map((m) => (
+                  <tr key={m.metric_date} className="bg-surface-raised">
+                    <td className="px-3 py-2 text-caption text-text-primary">{formatDate(m.metric_date)}</td>
+                    <td className="px-3 py-2">
+                      <span className={`text-caption ${
+                        m.review_score_desc?.includes('Positive') ? 'text-accent-green' :
+                        m.review_score_desc?.includes('Negative') ? 'text-accent-red' :
+                        m.review_score_desc === 'Mixed' ? 'text-accent-yellow' : 'text-text-muted'
+                      }`}>
+                        {m.review_score_desc ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-caption text-text-secondary">{formatNumber(m.total_reviews)}</td>
+                    <td className="px-3 py-2 text-right text-caption">
+                      <span className="text-accent-green">{formatNumber(m.positive_reviews)}</span>
+                      <span className="text-text-muted">/</span>
+                      <span className="text-accent-red">{formatNumber(m.negative_reviews)}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-caption text-text-secondary">{formatNumber(m.ccu_peak)}</td>
+                    <td className="px-3 py-2 text-right text-caption text-text-secondary">
+                      {m.price_cents !== null ? `$${(m.price_cents / 100).toFixed(2)}` : '—'}
+                      {m.discount_percent && m.discount_percent > 0 && (
+                        <span className="ml-1 text-accent-green">-{m.discount_percent}%</span>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle">
-                  {metrics.slice(0, 10).map((m) => (
-                    <tr key={m.metric_date} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
-                      <td className="px-4 py-3 text-body-sm text-text-primary">{formatDate(m.metric_date)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-body-sm ${
-                          m.review_score_desc?.includes('Positive') ? 'text-accent-green' :
-                          m.review_score_desc?.includes('Negative') ? 'text-accent-red' :
-                          m.review_score_desc === 'Mixed' ? 'text-accent-yellow' : 'text-text-muted'
-                        }`}>
-                          {m.review_score_desc ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-body-sm text-text-secondary">{formatNumber(m.total_reviews)}</td>
-                      <td className="px-4 py-3 text-right text-body-sm text-accent-green">{formatNumber(m.positive_reviews)}</td>
-                      <td className="px-4 py-3 text-right text-body-sm text-accent-red">{formatNumber(m.negative_reviews)}</td>
-                      <td className="px-4 py-3 text-right text-body-sm text-text-secondary">{formatNumber(m.ccu_peak)}</td>
-                      <td className="px-4 py-3 text-right text-body-sm text-text-secondary">
-                        {m.price_cents !== null ? `$${(m.price_cents / 100).toFixed(2)}` : '—'}
-                        {m.discount_percent && m.discount_percent > 0 && (
-                          <span className="ml-1 text-accent-green text-caption">-{m.discount_percent}%</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
-        <Card className="p-12 text-center">
-          <p className="text-text-muted">No metrics data available</p>
-        </Card>
+        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
+          No metrics data available
+        </p>
       )}
     </section>
   );
@@ -968,62 +860,61 @@ function ReviewsSection({
     <section>
       <SectionHeader title="Reviews" id={id} />
       {histogram.length > 0 ? (
-        <div className="space-y-6">
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Monthly Review Distribution</h3>
+        <div className="space-y-4">
+          {/* Chart - compact */}
+          <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
+            <h3 className="text-body-sm font-medium text-text-primary mb-2">Monthly Distribution</h3>
             <StackedBarChart
               data={histogramData}
               xKey="month"
               positiveKey="positive"
               negativeKey="negative"
-              height={250}
+              height={180}
             />
-          </Card>
+          </div>
 
-          <Card padding="none">
-            <div className="px-4 py-3 border-b border-border-subtle">
-              <h3 className="text-subheading text-text-primary">Monthly Breakdown</h3>
-            </div>
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full min-w-[600px]">
-                <thead className="bg-surface-elevated">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">Month</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Positive</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Negative</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Total</th>
-                    <th className="px-4 py-3 text-right text-caption font-medium text-text-secondary">Ratio</th>
-                    <th className="px-4 py-3 w-32 text-caption font-medium text-text-secondary">Distribution</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle">
-                  {histogram.slice(0, 6).map((h) => {
-                    const total = h.recommendations_up + h.recommendations_down;
-                    const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
-                    return (
-                      <tr key={h.month_start} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
-                        <td className="px-4 py-3 text-body-sm text-text-primary">
-                          {new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                        </td>
-                        <td className="px-4 py-3 text-right text-body-sm text-accent-green">{h.recommendations_up.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-body-sm text-accent-red">{h.recommendations_down.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-body-sm text-text-secondary">{total.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-body-sm text-text-secondary">{ratio.toFixed(0)}%</td>
-                        <td className="px-4 py-3">
-                          <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          {/* Table - compact, 4 months */}
+          <div className="rounded-md border border-border-subtle overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-surface-elevated">
+                <tr>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Month</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">+/-</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Total</th>
+                  <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">%</th>
+                  <th className="px-3 py-2 w-24 text-caption font-medium text-text-tertiary">Ratio</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {histogram.slice(0, 4).map((h) => {
+                  const total = h.recommendations_up + h.recommendations_down;
+                  const ratio = total > 0 ? (h.recommendations_up / total * 100) : 0;
+                  return (
+                    <tr key={h.month_start} className="bg-surface-raised">
+                      <td className="px-3 py-2 text-caption text-text-primary">
+                        {new Date(h.month_start).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
+                      </td>
+                      <td className="px-3 py-2 text-right text-caption">
+                        <span className="text-accent-green">{h.recommendations_up.toLocaleString()}</span>
+                        <span className="text-text-muted">/</span>
+                        <span className="text-accent-red">{h.recommendations_down.toLocaleString()}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-caption text-text-secondary">{total.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right text-caption text-text-secondary">{ratio.toFixed(0)}%</td>
+                      <td className="px-3 py-2">
+                        <RatioBar positive={h.recommendations_up} negative={h.recommendations_down} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
-        <Card className="p-12 text-center">
-          <p className="text-text-muted">No review histogram data available</p>
-        </Card>
+        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
+          No review histogram data available
+        </p>
       )}
     </section>
   );
@@ -1040,86 +931,68 @@ function SyncSection({
     return (
       <section>
         <SectionHeader title="Sync Status" id={id} />
-        <Card className="p-12 text-center">
-          <p className="text-text-muted">No sync status available</p>
-        </Card>
+        <p className="text-body-sm text-text-muted p-3 rounded-md border border-border-subtle bg-surface-raised">
+          No sync status available
+        </p>
       </section>
     );
   }
 
-  const syncItems = [
-    { label: 'Storefront', date: syncStatus.last_storefront_sync },
-    { label: 'Reviews', date: syncStatus.last_reviews_sync },
-    { label: 'SteamSpy', date: syncStatus.last_steamspy_sync },
-    { label: 'Histogram', date: syncStatus.last_histogram_sync },
-    { label: 'Page Scrape', date: syncStatus.last_page_creation_scrape },
-    { label: 'Last Activity', date: syncStatus.last_activity_at },
-  ];
-
   return (
     <section>
       <SectionHeader title="Sync Status" id={id} />
-      <div className="space-y-6">
-        {/* Status badges */}
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="space-y-4">
+        {/* Status + Sync times in single row */}
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
           {syncStatus.refresh_tier && (
             <TierBadge tier={syncStatus.refresh_tier as 'active' | 'moderate' | 'dormant' | 'dead'} />
           )}
           {syncStatus.is_syncable ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-accent-green/10 text-accent-green text-body-sm font-medium">
-              <CheckCircle2 className="h-3.5 w-3.5" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-accent-green/10 text-accent-green text-caption font-medium">
+              <CheckCircle2 className="h-3 w-3" />
               Syncable
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-accent-red/10 text-accent-red text-body-sm font-medium">
-              <XCircle className="h-3.5 w-3.5" />
-              Sync Disabled
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-accent-red/10 text-accent-red text-caption font-medium">
+              <XCircle className="h-3 w-3" />
+              Disabled
             </span>
           )}
           {syncStatus.priority_score !== null && (
-            <span className="text-body-sm text-text-tertiary">
+            <span className="text-caption text-text-tertiary">
               Priority: <span className="text-text-secondary font-medium">{syncStatus.priority_score}</span>
             </span>
           )}
+          <span className="text-border-subtle">|</span>
+          <span className="text-caption text-text-tertiary">Store:</span>
+          <span className="text-caption text-text-primary">{timeAgo(syncStatus.last_storefront_sync)}</span>
+          <span className="text-caption text-text-tertiary">Reviews:</span>
+          <span className="text-caption text-text-primary">{timeAgo(syncStatus.last_reviews_sync)}</span>
+          <span className="text-caption text-text-tertiary">SteamSpy:</span>
+          <span className="text-caption text-text-primary">{timeAgo(syncStatus.last_steamspy_sync)}</span>
+          <span className="text-caption text-text-tertiary">Histogram:</span>
+          <span className="text-caption text-text-primary">{timeAgo(syncStatus.last_histogram_sync)}</span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Sync times */}
-          <Card padding="lg">
-            <h3 className="text-subheading text-text-primary mb-4">Sync History</h3>
-            <div className="space-y-1">
-              {syncItems.map((item) => (
-                <div key={item.label} className="flex justify-between py-2 border-b border-border-subtle last:border-0">
-                  <span className="text-body-sm text-text-secondary">{item.label}</span>
-                  <span className="text-body-sm text-text-primary">{timeAgo(item.date)}</span>
-                </div>
-              ))}
+        {/* Errors - only show if there are errors */}
+        {syncStatus.consecutive_errors !== null && syncStatus.consecutive_errors > 0 && (
+          <div className="flex items-start gap-2 p-3 rounded-md border border-accent-red/20 bg-accent-red/5">
+            <AlertTriangle className="h-4 w-4 text-accent-red mt-0.5 flex-shrink-0" />
+            <div>
+              <span className="text-body-sm font-medium text-accent-red">
+                {syncStatus.consecutive_errors} error{syncStatus.consecutive_errors > 1 ? 's' : ''}
+              </span>
+              {syncStatus.last_error_message && (
+                <span className="text-body-sm text-accent-red/80 ml-2">{syncStatus.last_error_message}</span>
+              )}
+              {syncStatus.last_error_at && (
+                <span className="text-caption text-accent-red/60 ml-2">
+                  ({timeAgo(syncStatus.last_error_at)}{syncStatus.last_error_source && `, ${syncStatus.last_error_source}`})
+                </span>
+              )}
             </div>
-          </Card>
-
-          {/* Errors */}
-          {syncStatus.consecutive_errors !== null && syncStatus.consecutive_errors > 0 && (
-            <Card className="p-6 border-accent-red/20 bg-accent-red/5">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-accent-red mt-0.5" />
-                <div>
-                  <p className="text-body font-medium text-accent-red">
-                    {syncStatus.consecutive_errors} consecutive error{syncStatus.consecutive_errors > 1 ? 's' : ''}
-                  </p>
-                  {syncStatus.last_error_message && (
-                    <p className="text-body-sm text-accent-red/80 mt-1">{syncStatus.last_error_message}</p>
-                  )}
-                  {syncStatus.last_error_at && (
-                    <p className="text-caption text-accent-red/60 mt-2">
-                      Last error: {formatDateTime(syncStatus.last_error_at)}
-                      {syncStatus.last_error_source && ` (${syncStatus.last_error_source})`}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </Card>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );
