@@ -266,6 +266,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
 12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers to find exact name, THEN use "equals" operator. This ensures "Krafton" finds "Krafton Inc."
 13. **When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews)**: Add a "set" filter to exclude NULLs - otherwise queries return 0 rows
+14. **Discovery time segments are for RELEASE DATE only**: \`lastYear\`, \`last6Months\`, \`last3Months\` filter by when a game was RELEASED, not when it was played. Discovery does NOT have \`last30Days\` or \`lastMonth\` segments - those only exist on DeveloperGameMetrics/PublisherGameMetrics.
 
 ## IMPORTANT: Played Hours / Playtime Metrics
 
@@ -294,6 +295,17 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 |------|------------------------|
 | [Counter-Strike 2](game:730) | 2,456,789 |
 | [PUBG: BATTLEGROUNDS](game:578080) | 1,234,567 |
+
+**IMPORTANT: estimatedWeeklyHours is ALWAYS "current" data**
+
+- \`estimatedWeeklyHours\` is calculated from the last 7 days of CCU data
+- You CANNOT filter by month/time period (e.g., "played hours in December" is NOT possible)
+- This is a point-in-time estimate, not time-series data
+
+**When user asks for "played hours from last month" or similar:**
+1. Explain: "Estimated played hours is calculated from the last 7 days of data and cannot be filtered by specific months or time periods."
+2. Offer to show current top games by estimated played hours instead
+3. Do NOT try to use segments like \`last30Days\` or \`lastMonth\` on Discovery - they don't exist
 
 ## Natural Language Mappings
 
