@@ -154,6 +154,12 @@ cube('PublisherMetrics', {
       sql: `unique_developers`,
       type: 'number',
     },
+    estimatedWeeklyHours: {
+      sql: `estimated_weekly_hours`,
+      type: 'number',
+      title: 'Estimated Weekly Played Hours',
+      description: 'ESTIMATE based on 7-day CCU × avg playtime. Not actual Steam data.',
+    },
   },
 
   measures: {
@@ -197,7 +203,7 @@ cube('PublisherMetrics', {
   preAggregations: {
     // Full metrics for list view (sorted by various fields)
     metricsListByOwners: {
-      dimensions: [publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, revenueEstimateDollars, isTrending],
+      dimensions: [publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, revenueEstimateDollars, isTrending, estimatedWeeklyHours],
       refreshKey: {
         every: '6 hours',
       },

@@ -126,7 +126,7 @@ Measures: count, avgPrice, avgReviewPercentage, sumOwners (aggregation only), su
 Segments: released, free, paid, onSale (currently discounted), highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), lastYear, last6Months, last3Months, vrGame, roguelike, roguelite, multiplayer, singleplayer, coop, openWorld
 
 ### PublisherMetrics (standalone - ALL-TIME stats)
-Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
+Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, estimatedWeeklyHours, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
 Measures: count, sumOwners, sumCcu, sumRevenue, avgScore, trendingCount
 Segments: trending, highRevenue (>$1M), highOwners (>100K)
 **IMPORTANT**: Always include publisherId in dimensions to enable linking
@@ -145,7 +145,7 @@ Segments: lastYear, last6Months, last3Months, last30Days
 **ORDERING**: Sort by dimensions (owners, totalReviews) - NOT measures (sumOwners, avgReviewScore)
 
 ### DeveloperMetrics (standalone - ALL-TIME stats)
-Dimensions: developerId, developerName, gameCount, totalOwners, totalCcu, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending
+Dimensions: developerId, developerName, gameCount, totalOwners, totalCcu, estimatedWeeklyHours, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending
 Measures: count, sumOwners, sumCcu, sumRevenue, avgScore, trendingCount
 Segments: trending, highRevenue (>$100K), highOwners (>50K)
 **IMPORTANT**: Always include developerId in dimensions to enable linking
@@ -267,6 +267,27 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers to find exact name, THEN use "equals" operator. This ensures "Krafton" finds "Krafton Inc."
 13. **When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews)**: Add a "set" filter to exclude NULLs - otherwise queries return 0 rows
 
+## IMPORTANT: Played Hours / Playtime Metrics
+
+**Steam does NOT provide actual "total played hours" data.** We have an ESTIMATED metric:
+
+- **estimatedWeeklyHours** (PublisherMetrics, DeveloperMetrics) - ESTIMATED weekly played hours based on CCU × avg playtime
+- **totalCcu** is concurrent users (NOT played hours) - do NOT use for "played hours" queries
+
+**When user asks about "played hours", "hours played", or "playtime":**
+1. Use \`estimatedWeeklyHours\` dimension (NOT totalCcu)
+2. Label the column as **"Estimated Played Hours"** (not just "Played Hours")
+3. Add this footnote to your response: *"Note: This is an estimate based on concurrent user data and average playtime. Steam does not provide actual total played hours."*
+
+**Example query for "top publishers by played hours":**
+\`\`\`json
+{"cube":"PublisherMetrics","dimensions":["PublisherMetrics.publisherId","PublisherMetrics.publisherName","PublisherMetrics.estimatedWeeklyHours"],"order":{"PublisherMetrics.estimatedWeeklyHours":"desc"},"limit":10}
+\`\`\`
+
+**Example table header:**
+| Publisher | Estimated Played Hours |
+| [Valve](/publishers/123) | 1,123,667 |
+
 ## Natural Language Mappings
 
 **For Discovery (games):**
@@ -283,6 +304,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "prolific developers" → filter: gameCount gte 5
 - "trending" → segment: trending
 - "top publishers/developers" → order by totalOwners desc
+- **"played hours" / "hours played" / "playtime"** → use estimatedWeeklyHours dimension (NOT totalCcu), label as "Estimated Played Hours", add footnote about estimate
 
 **For DeveloperYearMetrics/PublisherYearMetrics (YEAR-FILTERED):**
 - "developers in 2025" / "developers with 2025 releases" → DeveloperYearMetrics with filter: releaseYear equals [2025]
