@@ -765,6 +765,48 @@ export type Database = {
           },
         ];
       };
+      dashboard_stats_cache: {
+        Row: {
+          id: string;
+          apps_count: number;
+          publishers_count: number;
+          developers_count: number;
+          pics_synced: number;
+          categories_count: number;
+          genres_count: number;
+          tags_count: number;
+          franchises_count: number;
+          parent_app_count: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          apps_count?: number;
+          publishers_count?: number;
+          developers_count?: number;
+          pics_synced?: number;
+          categories_count?: number;
+          genres_count?: number;
+          tags_count?: number;
+          franchises_count?: number;
+          parent_app_count?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          apps_count?: number;
+          publishers_count?: number;
+          developers_count?: number;
+          pics_synced?: number;
+          categories_count?: number;
+          genres_count?: number;
+          tags_count?: number;
+          franchises_count?: number;
+          parent_app_count?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

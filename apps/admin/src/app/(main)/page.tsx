@@ -17,6 +17,24 @@ async function getStats() {
     return null;
   }
   const supabase = getSupabase();
+
+  // Query the pre-computed stats cache (single row, instant response)
+  // This avoids expensive COUNT queries that can timeout on cold start
+  const { data: cached } = await supabase
+    .from('dashboard_stats_cache')
+    .select('apps_count, publishers_count, developers_count')
+    .eq('id', 'main')
+    .single();
+
+  if (cached && (cached.apps_count ?? 0) > 0) {
+    return {
+      appCount: cached.apps_count ?? 0,
+      publisherCount: cached.publishers_count ?? 0,
+      developerCount: cached.developers_count ?? 0,
+    };
+  }
+
+  // Fallback to direct queries only if cache table is empty/missing
   const [appsResult, publishersResult, developersResult] = await Promise.all([
     supabase.from('apps').select('*', { count: 'exact', head: true }),
     supabase.from('publishers').select('*', { count: 'exact', head: true }),
