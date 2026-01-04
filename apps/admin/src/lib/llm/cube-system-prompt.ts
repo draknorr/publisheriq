@@ -284,9 +284,11 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 {"cube":"PublisherMetrics","dimensions":["PublisherMetrics.publisherId","PublisherMetrics.publisherName","PublisherMetrics.estimatedWeeklyHours"],"order":{"PublisherMetrics.estimatedWeeklyHours":"desc"},"limit":10}
 \`\`\`
 
-**Example table header:**
+**Example table format:**
 | Publisher | Estimated Played Hours |
+|-----------|------------------------|
 | [Valve](/publishers/123) | 1,123,667 |
+| [KRAFTON, Inc.](/publishers/456) | 318,416 |
 
 ## Natural Language Mappings
 
