@@ -219,6 +219,10 @@ class PICSDatabase:
                 for franchise in franchises:
                     self._upsert_franchise_link(app.appid, franchise.name)
 
+                # DLC relationships (from listofdlc field)
+                if app.dlc_appids:
+                    self._sync_dlc_relationships(app.appid, app.dlc_appids)
+
                 # Mark as successfully processed
                 processed_appids.append(app.appid)
 
@@ -345,6 +349,24 @@ class PICSDatabase:
         except Exception as e:
             logger.error(f"Failed to link franchise {franchise_name} to {appid}: {e}")
 
+    def _sync_dlc_relationships(self, parent_appid: int, dlc_appids: List[int]):
+        """Sync DLC relationships from PICS listofdlc field to junction table."""
+        if not dlc_appids:
+            return
+
+        try:
+            records = [
+                {"parent_appid": parent_appid, "dlc_appid": dlc_id, "source": "pics"}
+                for dlc_id in dlc_appids
+            ]
+            self._db.client.table("app_dlc").upsert(
+                records,
+                on_conflict="parent_appid,dlc_appid",
+            ).execute()
+            logger.debug(f"Synced {len(dlc_appids)} DLC relationships for app {parent_appid}")
+        except Exception as e:
+            logger.error(f"Failed to sync DLC relationships for {parent_appid}: {e}")
+
     def _update_sync_status(self, appid: int):
         """Update sync status for an app."""
         try:
@@ -389,10 +411,13 @@ class PICSDatabase:
             "demo": "demo",
             "mod": "mod",
             "video": "video",
-            "tool": "game",
-            "application": "game",
+            "tool": "tool",
+            "application": "application",
             "hardware": "hardware",
             "music": "music",
+            "episode": "episode",
+            "series": "series",
+            "advertising": "advertising",
         }
         return type_map.get(pics_type.lower(), "game")
 

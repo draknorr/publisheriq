@@ -314,7 +314,13 @@ export function isWorthEmbedding(game: GameEmbeddingData): boolean {
   // Must have name
   if (!game.name) return false;
 
-  // Must have at least 3 tags OR 1 genre
+  // DLC/demos/mods can have less metadata - be more lenient
+  if (game.type !== 'game') {
+    // Non-games just need at least 1 tag or 1 genre
+    return game.tags.length >= 1 || game.genres.length >= 1;
+  }
+
+  // Games must have at least 3 tags OR 1 genre
   if (game.tags.length < 3 && game.genres.length < 1) return false;
 
   return true;

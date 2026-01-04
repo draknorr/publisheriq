@@ -8,9 +8,22 @@
  */
 
 import { getServiceClient } from '@publisheriq/database';
-import { logger, BATCH_SIZES } from '@publisheriq/shared';
+import { logger, BATCH_SIZES, APP_TYPES, AppType } from '@publisheriq/shared';
 import pLimit from 'p-limit';
 import { fetchStorefrontAppDetails } from '../apis/storefront.js';
+
+// Set of valid app types for quick lookup
+const VALID_APP_TYPES = new Set<string>(APP_TYPES);
+
+/**
+ * Normalize app type from Steam API to a valid database enum value.
+ * Falls back to 'game' for unknown types to prevent database errors.
+ */
+function normalizeAppType(type: string | undefined): AppType {
+  if (!type) return 'game';
+  const lower = type.toLowerCase();
+  return VALID_APP_TYPES.has(lower) ? (lower as AppType) : 'game';
+}
 
 const log = logger.child({ worker: 'storefront-sync' });
 
@@ -89,7 +102,7 @@ async function processApp(
     const { error: upsertError } = await supabase.rpc('upsert_storefront_app', {
       p_appid: appid,
       p_name: details.name,
-      p_type: details.type,
+      p_type: normalizeAppType(details.type),
       p_is_free: details.isFree,
       p_release_date: details.releaseDate,
       p_release_date_raw: details.releaseDateRaw,
@@ -99,6 +112,7 @@ async function processApp(
       p_is_released: !details.comingSoon,
       p_developers: details.developers,
       p_publishers: details.publishers,
+      p_dlc_appids: details.dlcAppids.length > 0 ? details.dlcAppids : null,
     });
 
     if (upsertError) {

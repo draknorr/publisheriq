@@ -149,6 +149,7 @@ export interface ParsedStorefrontApp {
   };
   metacriticScore: number | null;
   totalRecommendations: number | null;
+  dlcAppids: number[];
 }
 
 /**
@@ -232,6 +233,7 @@ function parseStorefrontResponse(
     platforms: data.platforms || { windows: false, mac: false, linux: false },
     metacriticScore: data.metacritic?.score ?? null,
     totalRecommendations: data.recommendations?.total ?? null,
+    dlcAppids: data.dlc || [],
   };
 }
 

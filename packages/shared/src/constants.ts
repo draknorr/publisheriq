@@ -140,6 +140,11 @@ export const APP_TYPES = [
   'video',
   'hardware',
   'music',
+  'episode',
+  'tool',
+  'application',
+  'series',
+  'advertising',
 ] as const;
 
 export type AppType = (typeof APP_TYPES)[number];
