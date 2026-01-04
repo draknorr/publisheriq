@@ -105,3 +105,98 @@ cube('MonthlyGameMetrics', {
     },
   },
 });
+
+/**
+ * Monthly Publisher Metrics Cube - Time-series estimated played hours by publisher
+ *
+ * Provides estimated played hours per publisher per month.
+ * Use this cube when filtering publisher stats by specific months.
+ *
+ * IMPORTANT: estimatedMonthlyHours is an ESTIMATE - Steam does not
+ * provide actual "total played hours" data.
+ */
+cube('MonthlyPublisherMetrics', {
+  sql: `SELECT * FROM monthly_publisher_metrics`,
+
+  dimensions: {
+    publisherId: {
+      sql: `publisher_id`,
+      type: 'number',
+      primaryKey: true,
+    },
+    publisherName: {
+      sql: `publisher_name`,
+      type: 'string',
+    },
+    month: {
+      sql: `month`,
+      type: 'time',
+      primaryKey: true,
+    },
+    year: {
+      sql: `year`,
+      type: 'number',
+    },
+    monthNum: {
+      sql: `month_num`,
+      type: 'number',
+    },
+    gameCount: {
+      sql: `game_count`,
+      type: 'number',
+    },
+    estimatedMonthlyHours: {
+      sql: `estimated_monthly_hours`,
+      type: 'number',
+      title: 'Estimated Monthly Played Hours',
+      description: 'ESTIMATE based on sum of game monthly hours. Not actual Steam data.',
+    },
+  },
+
+  measures: {
+    count: {
+      type: 'count',
+    },
+    sumEstimatedHours: {
+      sql: `estimated_monthly_hours`,
+      type: 'sum',
+    },
+    publisherCount: {
+      type: 'countDistinct',
+      sql: `publisher_id`,
+    },
+  },
+
+  segments: {
+    currentMonth: {
+      sql: `${CUBE}.month = DATE_TRUNC('month', CURRENT_DATE)`,
+    },
+    lastMonth: {
+      sql: `${CUBE}.month = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')`,
+    },
+    last3Months: {
+      sql: `${CUBE}.month >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '3 months')`,
+    },
+    last6Months: {
+      sql: `${CUBE}.month >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '6 months')`,
+    },
+    last12Months: {
+      sql: `${CUBE}.month >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '12 months')`,
+    },
+    year2025: {
+      sql: `${CUBE}.year = 2025`,
+    },
+    year2024: {
+      sql: `${CUBE}.year = 2024`,
+    },
+  },
+
+  preAggregations: {
+    monthlyByPublisher: {
+      dimensions: [publisherId, publisherName, month, year, monthNum, gameCount, estimatedMonthlyHours],
+      refreshKey: {
+        every: '6 hours',
+      },
+    },
+  },
+});

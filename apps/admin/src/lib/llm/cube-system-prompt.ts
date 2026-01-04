@@ -167,12 +167,18 @@ Segments: lastYear, last6Months, last3Months, last30Days
 Dimensions: appid, metricDate, ownersMin, ownersMax, ownersMidpoint, ccuPeak, totalReviews, positiveReviews, reviewScore, priceCents
 Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
 
-### MonthlyGameMetrics (monthly estimated played hours)
+### MonthlyGameMetrics (monthly estimated played hours - GAMES)
 Dimensions: appid, gameName, month (time), year (number), monthNum (1-12), monthlyCcuSum, estimatedMonthlyHours
 Measures: count, sumEstimatedHours, sumMonthlyCcu, gameCount
 Segments: currentMonth, lastMonth, last3Months, last6Months, last12Months, year2025, year2024
-**USE THIS** for "played hours in December", "played hours last month", "top games by playtime in 2025"
-**NOTE**: estimatedMonthlyHours is an ESTIMATE - Steam does not provide actual played hours data
+**USE THIS** for "top games by played hours in December", "games by playtime last month"
+
+### MonthlyPublisherMetrics (monthly estimated played hours - PUBLISHERS)
+Dimensions: publisherId, publisherName, month (time), year (number), monthNum (1-12), gameCount, estimatedMonthlyHours
+Measures: count, sumEstimatedHours, publisherCount
+Segments: currentMonth, lastMonth, last3Months, last6Months, last12Months, year2025, year2024
+**USE THIS** for "top publishers by played hours in December", "publishers by playtime last month"
+**NOTE**: Always include publisherId for linking
 
 ## Query Format
 
@@ -310,7 +316,9 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 | "Top games by played hours" (current) | Discovery | estimatedWeeklyHours |
 | "Top games by played hours last month" | MonthlyGameMetrics | estimatedMonthlyHours |
 | "Top games by playtime in December 2025" | MonthlyGameMetrics | estimatedMonthlyHours |
-| "Top publishers by played hours" | PublisherMetrics | estimatedWeeklyHours |
+| "Top publishers by played hours" (current) | PublisherMetrics | estimatedWeeklyHours |
+| "Top publishers by played hours last month" | MonthlyPublisherMetrics | estimatedMonthlyHours |
+| "Top publishers by playtime in December 2025" | MonthlyPublisherMetrics | estimatedMonthlyHours |
 
 **Example query for "top games by played hours last month":**
 \`\`\`json
@@ -320,6 +328,11 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 **Example query for "top games by played hours in December 2025":**
 \`\`\`json
 {"cube":"MonthlyGameMetrics","dimensions":["MonthlyGameMetrics.appid","MonthlyGameMetrics.gameName","MonthlyGameMetrics.estimatedMonthlyHours"],"filters":[{"member":"MonthlyGameMetrics.year","operator":"equals","values":[2025]},{"member":"MonthlyGameMetrics.monthNum","operator":"equals","values":[12]}],"order":{"MonthlyGameMetrics.estimatedMonthlyHours":"desc"},"limit":10}
+\`\`\`
+
+**Example query for "top publishers by played hours in December 2025":**
+\`\`\`json
+{"cube":"MonthlyPublisherMetrics","dimensions":["MonthlyPublisherMetrics.publisherId","MonthlyPublisherMetrics.publisherName","MonthlyPublisherMetrics.estimatedMonthlyHours"],"filters":[{"member":"MonthlyPublisherMetrics.year","operator":"equals","values":[2025]},{"member":"MonthlyPublisherMetrics.monthNum","operator":"equals","values":[12]}],"order":{"MonthlyPublisherMetrics.estimatedMonthlyHours":"desc"},"limit":10}
 \`\`\`
 
 ## Natural Language Mappings
