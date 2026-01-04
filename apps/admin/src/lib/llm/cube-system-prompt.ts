@@ -121,6 +121,8 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 Dimensions: appid, name, isFree, priceCents, priceDollars, discountPercent (0-100 current discount %), platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint (use for sorting by owners), ccuPeak (use for sorting by CCU), totalReviews (use for sorting by reviews), reviewPercentage (best available Steam %), positivePercentage, metacriticScore (0-100), trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time)
 Measures: count, avgPrice, avgReviewPercentage, sumOwners (aggregation only), sumCcu (aggregation only)
 **ORDERING**: To sort games, use dimensions like ownersMidpoint, totalReviews, ccuPeak, discountPercent - NOT measures
+**IMPORTANT: When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews), add a "set" filter to exclude NULLs:**
+\`{"member":"Discovery.ownersMidpoint","operator":"set"}\` - games without metrics data will otherwise cause 0 results
 Segments: released, free, paid, onSale (currently discounted), highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), lastYear, last6Months, last3Months, vrGame, roguelike, roguelite, multiplayer, singleplayer, coop, openWorld
 
 ### PublisherMetrics (standalone - ALL-TIME stats)
@@ -170,6 +172,11 @@ Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
 **Game queries (Discovery):**
 \`\`\`json
 {"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name","Discovery.reviewPercentage"],"segments":["Discovery.veryPositive"],"order":{"Discovery.totalReviews":"desc"},"limit":20}
+\`\`\`
+
+**Sorting by metrics (MUST include "set" filter to exclude NULLs):**
+\`\`\`json
+{"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name","Discovery.ownersMidpoint"],"filters":[{"member":"Discovery.ownersMidpoint","operator":"set"}],"order":{"Discovery.ownersMidpoint":"desc"},"limit":10}
 \`\`\`
 
 **Developer/Publisher queries (use developerId/publisherId for links):**
@@ -258,6 +265,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
 12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers to find exact name, THEN use "equals" operator. This ensures "Krafton" finds "Krafton Inc."
+13. **When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews)**: Add a "set" filter to exclude NULLs - otherwise queries return 0 rows
 
 ## Natural Language Mappings
 
