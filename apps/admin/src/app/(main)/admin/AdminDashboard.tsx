@@ -10,7 +10,7 @@ import {
   type PriorityDistribution,
 } from '@/lib/sync-queries';
 import type { AdminDashboardData, SyncJob, ChatQueryLog } from './page';
-import { CheckCircle2, MessageSquare } from 'lucide-react';
+import { CheckCircle2, MessageSquare, Search, Copy } from 'lucide-react';
 
 // Source configuration
 const sourceConfig: Record<string, { label: string; icon: string }> = {
@@ -579,7 +579,25 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
                       <span className="text-text-muted">+{log.tool_names.length - 2}</span>
                     )}
                   </div>
-                  <div className="text-text-muted">{formatMs(log.timing_total_ms)}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-text-muted">{formatMs(log.timing_total_ms)}</span>
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={`/chat?q=${encodeURIComponent(log.query_text)}`}
+                        className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                        title="Search this query"
+                      >
+                        <Search className="h-3.5 w-3.5" />
+                      </a>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(log.query_text)}
+                        className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                        title="Copy to clipboard"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -596,13 +614,14 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
                   <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Tools</th>
                   <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Time</th>
                   <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">When</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {logs.slice(0, 10).map((log) => (
                   <tr key={log.id} className="hover:bg-surface-elevated/50">
                     <td className="py-1.5">
-                      <div className="text-text-primary truncate max-w-[300px]" title={log.query_text}>
+                      <div className="text-text-primary truncate xl:whitespace-normal max-w-[300px] xl:max-w-none" title={log.query_text}>
                         {log.query_text}
                       </div>
                     </td>
@@ -626,6 +645,24 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
                     </td>
                     <td className="py-1.5 text-text-secondary">{formatMs(log.timing_total_ms)}</td>
                     <td className="py-1.5 text-text-muted">{formatRelativeTime(log.created_at)}</td>
+                    <td className="py-1.5">
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={`/chat?q=${encodeURIComponent(log.query_text)}`}
+                          className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                          title="Search this query"
+                        >
+                          <Search className="h-3.5 w-3.5" />
+                        </a>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(log.query_text)}
+                          className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                          title="Copy to clipboard"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
