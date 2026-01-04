@@ -167,6 +167,13 @@ Segments: lastYear, last6Months, last3Months, last30Days
 Dimensions: appid, metricDate, ownersMin, ownersMax, ownersMidpoint, ccuPeak, totalReviews, positiveReviews, reviewScore, priceCents
 Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
 
+### MonthlyGameMetrics (monthly estimated played hours)
+Dimensions: appid, gameName, month (time), year (number), monthNum (1-12), monthlyCcuSum, estimatedMonthlyHours
+Measures: count, sumEstimatedHours, sumMonthlyCcu, gameCount
+Segments: currentMonth, lastMonth, last3Months, last6Months, last12Months, year2025, year2024
+**USE THIS** for "played hours in December", "played hours last month", "top games by playtime in 2025"
+**NOTE**: estimatedMonthlyHours is an ESTIMATE - Steam does not provide actual played hours data
+
 ## Query Format
 
 **Game queries (Discovery):**
@@ -266,7 +273,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
 12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers to find exact name, THEN use "equals" operator. This ensures "Krafton" finds "Krafton Inc."
 13. **When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews)**: Add a "set" filter to exclude NULLs - otherwise queries return 0 rows
-14. **Discovery time segments are for RELEASE DATE only**: \`lastYear\`, \`last6Months\`, \`last3Months\` filter by when a game was RELEASED, not when it was played. Discovery does NOT have \`last30Days\` or \`lastMonth\` segments - those only exist on DeveloperGameMetrics/PublisherGameMetrics.
+14. **Discovery time segments are for RELEASE DATE only**: \`lastYear\`, \`last6Months\`, \`last3Months\` filter by when a game was RELEASED, not when it was played. For played hours by month, use MonthlyGameMetrics cube instead.
 
 ## IMPORTANT: Played Hours / Playtime Metrics
 
@@ -296,16 +303,24 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 | [Counter-Strike 2](game:730) | 2,456,789 |
 | [PUBG: BATTLEGROUNDS](game:578080) | 1,234,567 |
 
-**IMPORTANT: estimatedWeeklyHours is ALWAYS "current" data**
+**Choosing the right cube for played hours queries:**
 
-- \`estimatedWeeklyHours\` is calculated from the last 7 days of CCU data
-- You CANNOT filter by month/time period (e.g., "played hours in December" is NOT possible)
-- This is a point-in-time estimate, not time-series data
+| Query Type | Cube to Use | Dimension |
+|------------|-------------|-----------|
+| "Top games by played hours" (current) | Discovery | estimatedWeeklyHours |
+| "Top games by played hours last month" | MonthlyGameMetrics | estimatedMonthlyHours |
+| "Top games by playtime in December 2025" | MonthlyGameMetrics | estimatedMonthlyHours |
+| "Top publishers by played hours" | PublisherMetrics | estimatedWeeklyHours |
 
-**When user asks for "played hours from last month" or similar:**
-1. Explain: "Estimated played hours is calculated from the last 7 days of data and cannot be filtered by specific months or time periods."
-2. Offer to show current top games by estimated played hours instead
-3. Do NOT try to use segments like \`last30Days\` or \`lastMonth\` on Discovery - they don't exist
+**Example query for "top games by played hours last month":**
+\`\`\`json
+{"cube":"MonthlyGameMetrics","dimensions":["MonthlyGameMetrics.appid","MonthlyGameMetrics.gameName","MonthlyGameMetrics.estimatedMonthlyHours"],"segments":["MonthlyGameMetrics.lastMonth"],"order":{"MonthlyGameMetrics.estimatedMonthlyHours":"desc"},"limit":10}
+\`\`\`
+
+**Example query for "top games by played hours in December 2025":**
+\`\`\`json
+{"cube":"MonthlyGameMetrics","dimensions":["MonthlyGameMetrics.appid","MonthlyGameMetrics.gameName","MonthlyGameMetrics.estimatedMonthlyHours"],"filters":[{"member":"MonthlyGameMetrics.year","operator":"equals","values":[2025]},{"member":"MonthlyGameMetrics.monthNum","operator":"equals","values":[12]}],"order":{"MonthlyGameMetrics.estimatedMonthlyHours":"desc"},"limit":10}
+\`\`\`
 
 ## Natural Language Mappings
 
