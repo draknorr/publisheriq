@@ -8,6 +8,21 @@
 import { getSupabase } from '@/lib/supabase';
 
 /**
+ * Common tag/category name normalizations
+ * Maps user input variants to canonical database names
+ */
+const TAG_NORMALIZATIONS: Record<string, string> = {
+  'coop': 'co-op',
+  'coops': 'co-op',
+  'cooperative': 'co-op',
+};
+
+function normalizeSearchTerm(term: string): string {
+  const lower = term.toLowerCase();
+  return TAG_NORMALIZATIONS[lower] || term;
+}
+
+/**
  * Arguments for search_games tool
  */
 export interface SearchGamesArgs {
@@ -156,11 +171,24 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     let candidateAppids: number[] | null = null;
 
     if (tags && tags.length > 0) {
-      // Get appids matching ALL specified tags
-      debug.steps.push(`Filtering by ${tags.length} tags: ${tags.join(', ')}`);
-      const tagAppids = await getAppidsMatchingTags(supabase, tags);
+      // Normalize tag names for common variants (e.g., "coop" -> "co-op")
+      const normalizedTags = tags.map(normalizeSearchTerm);
+      debug.steps.push(`Filtering by ${normalizedTags.length} tags: ${normalizedTags.join(', ')}`);
+      let tagAppids = await getAppidsMatchingTags(supabase, normalizedTags);
       debug.tag_candidates = tagAppids.length;
       debug.steps.push(`Tags filter returned ${tagAppids.length} candidate appids`);
+
+      // Fallback: if tags returned nothing, try the same terms as categories
+      if (tagAppids.length === 0) {
+        debug.steps.push('Tags returned 0, trying as categories fallback');
+        const categoryFallback = await getAppidsMatchingCategories(supabase, normalizedTags);
+        if (categoryFallback.length > 0) {
+          debug.steps.push(`Category fallback found ${categoryFallback.length} results`);
+          tagAppids = categoryFallback;
+          debug.tag_candidates = categoryFallback.length;
+        }
+      }
+
       candidateAppids = tagAppids;
     }
 
