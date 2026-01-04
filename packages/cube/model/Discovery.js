@@ -34,6 +34,7 @@ cube('Discovery', {
       ldm.positive_reviews,
       ldm.review_score,
       ldm.positive_percentage,
+      ldm.estimated_weekly_hours,
       -- Trends
       at.trend_30d_direction,
       at.trend_30d_change_pct,
@@ -172,6 +173,12 @@ cube('Discovery', {
       sql: `trend_30d_direction = 'up'`,
       type: 'boolean',
     },
+    estimatedWeeklyHours: {
+      sql: `estimated_weekly_hours`,
+      type: 'number',
+      title: 'Estimated Weekly Played Hours',
+      description: 'ESTIMATE based on 7-day CCU × avg playtime. Not actual Steam data.',
+    },
   },
 
   measures: {
@@ -292,7 +299,7 @@ cube('Discovery', {
       dimensions: [
         appid, name, isFree, priceDollars, platforms, steamDeckCategory,
         ownersMidpoint, ccuPeak, totalReviews, positivePercentage,
-        trend30dDirection, trend30dChangePct
+        trend30dDirection, trend30dChangePct, estimatedWeeklyHours
       ],
       refreshKey: {
         every: '6 hours',

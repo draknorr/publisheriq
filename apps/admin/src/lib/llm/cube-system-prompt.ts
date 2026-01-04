@@ -118,7 +118,7 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 ## Cubes
 
 ### Discovery (games + metrics)
-Dimensions: appid, name, isFree, priceCents, priceDollars, discountPercent (0-100 current discount %), platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint (use for sorting by owners), ccuPeak (use for sorting by CCU), totalReviews (use for sorting by reviews), reviewPercentage (best available Steam %), positivePercentage, metacriticScore (0-100), trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time)
+Dimensions: appid, name, isFree, priceCents, priceDollars, discountPercent (0-100 current discount %), platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint (use for sorting by owners), ccuPeak (use for sorting by CCU), totalReviews (use for sorting by reviews), reviewPercentage (best available Steam %), positivePercentage, metacriticScore (0-100), trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time), estimatedWeeklyHours (ESTIMATED weekly played hours - use for "top games by played hours")
 Measures: count, avgPrice, avgReviewPercentage, sumOwners (aggregation only), sumCcu (aggregation only)
 **ORDERING**: To sort games, use dimensions like ownersMidpoint, totalReviews, ccuPeak, discountPercent - NOT measures
 **IMPORTANT: When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews), add a "set" filter to exclude NULLs:**
@@ -271,7 +271,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 
 **Steam does NOT provide actual "total played hours" data.** We have an ESTIMATED metric:
 
-- **estimatedWeeklyHours** (PublisherMetrics, DeveloperMetrics) - ESTIMATED weekly played hours based on CCU × avg playtime
+- **estimatedWeeklyHours** (Discovery, PublisherMetrics, DeveloperMetrics) - ESTIMATED weekly played hours based on CCU × avg playtime
 - **totalCcu** is concurrent users (NOT played hours) - do NOT use for "played hours" queries
 
 **When user asks about "played hours", "hours played", or "playtime":**
@@ -279,16 +279,21 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 2. Label the column as **"Estimated Played Hours"** (not just "Played Hours")
 3. Add this footnote to your response: *"Note: This is an estimate based on concurrent user data and average playtime. Steam does not provide actual total played hours."*
 
+**Example query for "top games by played hours":**
+\`\`\`json
+{"cube":"Discovery","dimensions":["Discovery.appid","Discovery.name","Discovery.estimatedWeeklyHours"],"filters":[{"member":"Discovery.estimatedWeeklyHours","operator":"set"}],"order":{"Discovery.estimatedWeeklyHours":"desc"},"limit":10}
+\`\`\`
+
 **Example query for "top publishers by played hours":**
 \`\`\`json
 {"cube":"PublisherMetrics","dimensions":["PublisherMetrics.publisherId","PublisherMetrics.publisherName","PublisherMetrics.estimatedWeeklyHours"],"order":{"PublisherMetrics.estimatedWeeklyHours":"desc"},"limit":10}
 \`\`\`
 
 **Example table format:**
-| Publisher | Estimated Played Hours |
-|-----------|------------------------|
-| [Valve](/publishers/123) | 1,123,667 |
-| [KRAFTON, Inc.](/publishers/456) | 318,416 |
+| Game | Estimated Played Hours |
+|------|------------------------|
+| [Counter-Strike 2](game:730) | 2,456,789 |
+| [PUBG: BATTLEGROUNDS](game:578080) | 1,234,567 |
 
 ## Natural Language Mappings
 
@@ -296,6 +301,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "indie" → segment: indie
 - "well reviewed" / "good reviews" → filter: reviewPercentage gte 70
 - "highly rated" → segment: highlyRated
+- **"played hours" / "hours played" / "playtime"** → use estimatedWeeklyHours dimension (NOT ccuPeak), label as "Estimated Played Hours", add footnote about estimate, include "set" filter to exclude NULLs
 - "very positive" → segment: veryPositive
 - "overwhelmingly positive" → segment: overwhelminglyPositive
 - "metacritic" / "critic score" → filter: metacriticScore gte [value]
