@@ -110,14 +110,14 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
 
       {/* Input area */}
       <div className="border-t border-border-subtle p-4 bg-surface-raised">
-        <div className="flex gap-2">
+        <div className="flex gap-3 items-end">
           <div className="flex-1">
             <ChatInput onSend={handleSend} disabled={isStreaming} />
           </div>
           {isStreaming && (
             <button
               onClick={stopStreaming}
-              className="px-3 py-2 rounded-lg bg-accent-red/10 hover:bg-accent-red/20 border border-accent-red/20 text-accent-red transition-colors flex items-center gap-2"
+              className="h-10 px-4 rounded-lg bg-accent-red/10 hover:bg-accent-red/20 border border-accent-red/20 text-accent-red transition-colors flex items-center gap-2 shrink-0"
               title="Stop generating"
             >
               <StopCircle className="w-4 h-4" />
