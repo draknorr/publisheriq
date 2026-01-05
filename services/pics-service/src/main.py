@@ -21,12 +21,12 @@ def setup_logging():
     if settings.log_json:
         # JSON format for Railway
         import json
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         class JsonFormatter(logging.Formatter):
             def format(self, record):
                 log_obj = {
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                     "level": record.levelname,
                     "logger": record.name,
                     "message": record.getMessage(),
