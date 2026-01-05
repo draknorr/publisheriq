@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import httpx
 
@@ -121,36 +121,97 @@ class PICSDatabase:
         """
         Upsert a batch of apps with their relationships.
 
-        Returns stats dict with created/updated/failed counts.
+        Only processes apps that already exist in the database (from applist-worker).
+        This prevents FK violations when change_monitor receives notifications for
+        apps that haven't been synced yet.
+
+        Returns stats dict with created/updated/failed/skipped counts.
         """
-        stats = {"created": 0, "updated": 0, "failed": 0}
+        stats = {"created": 0, "updated": 0, "failed": 0, "skipped": 0}
+
+        if not apps:
+            return stats
+
+        # Get existing appids from database - only process apps that exist
+        all_appids = [app.appid for app in apps]
+        existing_appids = set(self._get_existing_appids(all_appids))
+
+        # Filter to only apps that exist in database
+        apps_to_process = [app for app in apps if app.appid in existing_appids]
+        skipped_apps = [app for app in apps if app.appid not in existing_appids]
+        stats["skipped"] = len(skipped_apps)
+
+        if skipped_apps:
+            skipped_sample = [a.appid for a in skipped_apps[:10]]
+            logger.warning(
+                f"Skipping {len(skipped_apps)} apps not in database: {skipped_sample}"
+                + ("..." if len(skipped_apps) > 10 else "")
+            )
+
+        if not apps_to_process:
+            logger.info("No apps to process after filtering - all apps not in database")
+            return stats
 
         # Prepare app records
         app_records = []
+        appid_to_app = {}  # Track which apps we're processing
         build_failures = 0
-        for app in apps:
+        for app in apps_to_process:
             record = self._build_app_record(app)
             if record:
                 app_records.append(record)
+                appid_to_app[app.appid] = app
             else:
                 build_failures += 1
 
-        logger.info(f"Built {len(app_records)} records from {len(apps)} apps ({build_failures} build failures)")
+        logger.info(
+            f"Built {len(app_records)} records from {len(apps_to_process)} apps "
+            f"({build_failures} build failures, {stats['skipped']} skipped)"
+        )
+
+        # Track successfully upserted appids
+        successful_appids = set()
 
         # Upsert apps in batches
         for i in range(0, len(app_records), self.UPSERT_BATCH_SIZE):
             batch = app_records[i : i + self.UPSERT_BATCH_SIZE]
+            batch_appids = {r["appid"] for r in batch}
             try:
                 self._db.client.table("apps").upsert(batch, on_conflict="appid").execute()
                 stats["updated"] += len(batch)
+                successful_appids.update(batch_appids)
             except Exception as e:
                 logger.error(f"Failed to upsert app batch: {e}")
                 stats["failed"] += len(batch)
 
-        # Process relationships
-        self._sync_relationships(apps)
+        # Process relationships only for successfully upserted apps
+        successful_apps = [appid_to_app[appid] for appid in successful_appids if appid in appid_to_app]
+        self._sync_relationships(successful_apps, successful_appids)
 
         return stats
+
+    def _get_existing_appids(self, appids: List[int]) -> List[int]:
+        """Check which appids already exist in the apps table."""
+        if not appids:
+            return []
+
+        existing = []
+        batch_size = 1000  # Supabase limit
+
+        for i in range(0, len(appids), batch_size):
+            batch = appids[i : i + batch_size]
+            try:
+                result = (
+                    self._db.client.table("apps")
+                    .select("appid")
+                    .in_("appid", batch)
+                    .execute()
+                )
+                existing.extend([r["appid"] for r in result.data])
+            except Exception as e:
+                logger.error(f"Failed to check existing appids: {e}")
+
+        return existing
 
     def _build_app_record(self, app: ExtractedPICSData) -> Optional[Dict[str, Any]]:
         """Build a database record from extracted PICS data."""
@@ -192,11 +253,19 @@ class PICSDatabase:
             logger.error(f"Failed to build record for app {app.appid}: {e}")
             return None
 
-    def _sync_relationships(self, apps: List[ExtractedPICSData]):
-        """Sync developer/publisher/tag/genre/category/franchise relationships."""
+    def _sync_relationships(self, apps: List[ExtractedPICSData], successful_appids: Set[int]):
+        """Sync developer/publisher/tag/genre/category/franchise relationships.
+
+        Only processes apps in the successful_appids set to avoid FK violations
+        when updating sync_status for apps that failed to upsert.
+        """
         processed_appids = []
 
         for app in apps:
+            # Only process apps that were successfully upserted
+            if app.appid not in successful_appids:
+                continue
+
             try:
                 # Steam Deck compatibility
                 if app.steam_deck:
@@ -229,7 +298,7 @@ class PICSDatabase:
             except Exception as e:
                 logger.error(f"Failed to sync relationships for app {app.appid}: {e}")
 
-        # Batch update sync status for all processed apps
+        # Batch update sync status only for successfully processed apps
         if processed_appids:
             self._batch_update_sync_status(processed_appids)
 
@@ -350,7 +419,12 @@ class PICSDatabase:
             logger.error(f"Failed to link franchise {franchise_name} to {appid}: {e}")
 
     def _sync_dlc_relationships(self, parent_appid: int, dlc_appids: List[int]):
-        """Sync DLC relationships from PICS listofdlc field to junction table."""
+        """Sync DLC relationships from PICS listofdlc field to junction table.
+
+        Note: FK constraints have been removed from app_dlc table to allow
+        relationships to be stored even when DLC apps don't exist yet.
+        This handles the case where processing order is unpredictable.
+        """
         if not dlc_appids:
             return
 
@@ -363,7 +437,7 @@ class PICSDatabase:
                 records,
                 on_conflict="parent_appid,dlc_appid",
             ).execute()
-            logger.debug(f"Synced {len(dlc_appids)} DLC relationships for app {parent_appid}")
+            logger.info(f"Synced {len(dlc_appids)} DLC relationships for app {parent_appid}")
         except Exception as e:
             logger.error(f"Failed to sync DLC relationships for {parent_appid}: {e}")
 
