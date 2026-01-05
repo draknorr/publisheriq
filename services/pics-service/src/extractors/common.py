@@ -95,7 +95,15 @@ class PICSExtractor:
         else:
             appinfo = raw_data
 
-        common = appinfo.get("common", {})
+        common = appinfo.get("common", {}) if isinstance(appinfo, dict) else {}
+
+        # Debug logging to diagnose type extraction issues
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"[{appid}] Raw keys: {list(raw_data.keys())[:5]}")
+            if isinstance(appinfo, dict):
+                logger.debug(f"[{appid}] appinfo keys: {list(appinfo.keys())[:5]}")
+            logger.debug(f"[{appid}] common keys: {list(common.keys())[:10] if common else 'EMPTY'}")
+            logger.debug(f"[{appid}] common.type = {common.get('type')}")
         extended = appinfo.get("extended", {})
         config = appinfo.get("config", {})
         depots = appinfo.get("depots", {})

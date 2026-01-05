@@ -216,11 +216,15 @@ class PICSDatabase:
     def _build_app_record(self, app: ExtractedPICSData) -> Optional[Dict[str, Any]]:
         """Build a database record from extracted PICS data."""
         try:
+            # Use PICS type if available, otherwise infer from other data
+            app_type = app.type if app.type else self._infer_type(app)
+
             return {
                 "appid": app.appid,
-                # Only update name/type if they exist (don't overwrite with None)
+                # Only update name if it exists (don't overwrite with None)
                 **({"name": app.name} if app.name else {}),
-                **({"type": self._map_app_type(app.type)} if app.type else {}),
+                # Always set type - either from PICS or inferred
+                "type": self._map_app_type(app_type),
                 # PICS-specific fields
                 "pics_review_score": app.review_score,
                 "pics_review_percentage": app.review_percentage,
@@ -474,6 +478,47 @@ class PICSDatabase:
                 # Fallback to individual updates for this batch
                 for appid in batch:
                     self._update_sync_status(appid)
+
+    def _infer_type(self, app: ExtractedPICSData) -> str:
+        """Infer app type when PICS doesn't provide it.
+
+        Uses heuristics based on available data:
+        - parent_appid set → DLC
+        - Name contains "Demo" → demo
+        - Name contains "Soundtrack" → music
+        - Name contains "SDK" → tool
+        """
+        # DLC: Has parent_appid set (most reliable indicator)
+        if app.parent_appid is not None:
+            return "dlc"
+
+        # Infer from name patterns
+        if app.name:
+            name_lower = app.name.lower()
+
+            # Demo patterns (but not "Demon", "Democracy", etc.)
+            if (
+                " demo" in name_lower
+                or name_lower.endswith(" demo")
+                or "(demo)" in name_lower
+                or "[demo]" in name_lower
+            ):
+                if not any(x in name_lower for x in ["demon", "democracy", "demolition"]):
+                    return "demo"
+
+            # Music/Soundtrack patterns
+            if any(x in name_lower for x in ["soundtrack", " ost", "original score", "music pack"]):
+                return "music"
+
+            # Tool patterns
+            if any(x in name_lower for x in [" sdk", "dedicated server", "level editor", "modding tool"]):
+                return "tool"
+
+            # Video patterns
+            if any(x in name_lower for x in ["trailer", "- video", "making of", "behind the scenes"]):
+                return "video"
+
+        return "game"  # Default fallback
 
     def _map_app_type(self, pics_type: Optional[str]) -> str:
         """Map PICS type to database enum."""
