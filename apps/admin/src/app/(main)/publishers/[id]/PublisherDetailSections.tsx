@@ -544,7 +544,7 @@ function GenreBarChart({ genres, totalGames }: GenreBarChartProps) {
 // ============================================================================
 
 interface FranchisesCardProps {
-  franchises: { id: number; name: string; game_count: number }[];
+  franchises: { id: number; name: string; game_count: number | null }[];
 }
 
 function FranchisesCard({ franchises }: FranchisesCardProps) {

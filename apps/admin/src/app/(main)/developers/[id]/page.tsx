@@ -388,10 +388,10 @@ async function getSimilarDevelopers(developerId: number, topTags: string[]): Pro
   if (!developers) return [];
 
   return developers
-    .map((dev: { id: number; name: string; game_count: number }) => ({
+    .map((dev: { id: number; name: string; game_count: number | null }) => ({
       id: dev.id,
       name: dev.name,
-      game_count: dev.game_count,
+      game_count: dev.game_count ?? 0,
       shared_tags: devCounts.get(dev.id) ?? 0,
     }))
     .sort((a, b) => b.shared_tags - a.shared_tags)

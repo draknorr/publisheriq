@@ -210,10 +210,10 @@ async function getRelatedDevelopers(publisherId: number): Promise<RelatedDevelop
   if (!developers) return [];
 
   return developers
-    .map((dev: { id: number; name: string; game_count: number }) => ({
+    .map((dev: { id: number; name: string; game_count: number | null }) => ({
       id: dev.id,
       name: dev.name,
-      game_count: dev.game_count,
+      game_count: dev.game_count ?? 0,
       shared_apps: devCounts.get(dev.id) ?? 0,
     }))
     .sort((a, b) => b.shared_apps - a.shared_apps)
@@ -388,10 +388,10 @@ async function getSimilarPublishers(publisherId: number, topTags: string[]): Pro
   if (!publishers) return [];
 
   return publishers
-    .map((pub: { id: number; name: string; game_count: number }) => ({
+    .map((pub: { id: number; name: string; game_count: number | null }) => ({
       id: pub.id,
       name: pub.name,
-      game_count: pub.game_count,
+      game_count: pub.game_count ?? 0,
       shared_tags: pubCounts.get(pub.id) ?? 0,
     }))
     .sort((a, b) => b.shared_tags - a.shared_tags)
