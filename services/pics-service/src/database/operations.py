@@ -233,7 +233,8 @@ class PICSDatabase:
                 "metacritic_url": app.metacritic_url,
                 "platforms": ",".join(app.platforms) if app.platforms else None,
                 "release_state": app.release_state,
-                "parent_appid": app.parent_appid,
+                # NOTE: parent_appid removed - PICS common.parent is unreliable (contains garbage)
+                # Parent relationships are now only set via Storefront API's fullgame field
                 "homepage_url": app.homepage_url,
                 "app_state": app.app_state,
                 "last_content_update": (
@@ -483,15 +484,13 @@ class PICSDatabase:
         """Infer app type when PICS doesn't provide it.
 
         Uses heuristics based on available data:
-        - parent_appid set → DLC
         - Name contains "Demo" → demo
         - Name contains "Soundtrack" → music
         - Name contains "SDK" → tool
-        """
-        # DLC: Has parent_appid set (most reliable indicator)
-        if app.parent_appid is not None:
-            return "dlc"
 
+        NOTE: DLC detection removed - PICS parent_appid is unreliable (contains garbage).
+        DLC type is now ONLY set via Storefront API's fullgame field.
+        """
         # Infer from name patterns
         if app.name:
             name_lower = app.name.lower()

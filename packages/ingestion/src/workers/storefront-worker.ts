@@ -113,6 +113,7 @@ async function processApp(
       p_developers: details.developers,
       p_publishers: details.publishers,
       p_dlc_appids: details.dlcAppids.length > 0 ? details.dlcAppids : null,
+      p_parent_appid: details.parentAppid, // For DLC, the base game from fullgame field
     });
 
     if (upsertError) {

@@ -121,6 +121,11 @@ export interface StorefrontAppDetails {
       ids: number[];
       notes: string;
     };
+    // For DLC items, fullgame contains the parent game info
+    fullgame?: {
+      appid: string;
+      name: string;
+    };
   };
 }
 
@@ -150,6 +155,7 @@ export interface ParsedStorefrontApp {
   metacriticScore: number | null;
   totalRecommendations: number | null;
   dlcAppids: number[];
+  parentAppid: number | null; // For DLC items, the base game appid from fullgame field
 }
 
 /**
@@ -234,6 +240,7 @@ function parseStorefrontResponse(
     metacriticScore: data.metacritic?.score ?? null,
     totalRecommendations: data.recommendations?.total ?? null,
     dlcAppids: data.dlc || [],
+    parentAppid: data.fullgame?.appid ? parseInt(data.fullgame.appid, 10) : null,
   };
 }
 
