@@ -51,7 +51,7 @@ export interface PortfolioContentDescriptor {
   descriptor_id: string;
   label: string;
   severity: 'high' | 'medium';
-  game_count: number | null;
+  game_count: number;
 }
 
 export interface PortfolioPICSData {
@@ -300,15 +300,14 @@ async function getPortfolioContentDescriptors(appIds: number[]): Promise<Portfol
     }
   }
 
-  return [...descriptorMap.entries()]
-    .map(([descriptor_id, game_count]) => {
-      const info = CONTENT_DESCRIPTOR_MAP[descriptor_id];
-      return info
-        ? { descriptor_id, label: info.label, severity: info.severity, game_count }
-        : null;
-    })
-    .filter((d): d is PortfolioContentDescriptor => d !== null)
-    .sort((a, b) => b.game_count - a.game_count);
+  const results: PortfolioContentDescriptor[] = [];
+  for (const [descriptor_id, game_count] of descriptorMap.entries()) {
+    const info = CONTENT_DESCRIPTOR_MAP[descriptor_id];
+    if (info) {
+      results.push({ descriptor_id, label: info.label, severity: info.severity, game_count });
+    }
+  }
+  return results.sort((a, b) => b.game_count - a.game_count);
 }
 
 // Main function to get all portfolio PICS data

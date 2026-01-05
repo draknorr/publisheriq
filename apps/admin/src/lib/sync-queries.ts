@@ -92,8 +92,8 @@ export async function getJobStats24h(supabase: SupabaseClient<Database>): Promis
 
   // Calculate average duration for completed jobs
   const durations = completed
-    .filter(j => j.completed_at)
-    .map(j => new Date(j.completed_at!).getTime() - new Date(j.started_at).getTime());
+    .filter(j => j.completed_at && j.started_at)
+    .map(j => new Date(j.completed_at!).getTime() - new Date(j.started_at!).getTime());
 
   const avgDurationMs = durations.length > 0
     ? durations.reduce((a, b) => a + b, 0) / durations.length

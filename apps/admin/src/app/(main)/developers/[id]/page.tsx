@@ -492,7 +492,7 @@ export default async function DeveloperDetailPage({
             </span>
           </>
         )}
-        {developer.game_count >= 5 && (
+        {(developer.game_count ?? 0) >= 5 && (
           <span className="px-2 py-0.5 rounded text-caption bg-accent-cyan/15 text-accent-cyan font-medium">
             Prolific Developer
           </span>

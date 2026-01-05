@@ -96,7 +96,7 @@ async function lookupEntityByName(
       return {
         id: data.appid,
         name: data.name,
-        type: data.type,
+        type: data.type ?? undefined,
         metrics: {
           review_percentage: data.pics_review_percentage,
           price_cents: data.current_price_cents,
@@ -119,7 +119,7 @@ async function lookupEntityByName(
       return {
         id: partial.appid,
         name: partial.name,
-        type: partial.type,
+        type: partial.type ?? undefined,
         metrics: {
           review_percentage: partial.pics_review_percentage,
           price_cents: partial.current_price_cents,

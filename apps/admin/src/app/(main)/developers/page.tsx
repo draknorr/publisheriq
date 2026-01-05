@@ -505,7 +505,7 @@ export default async function DevelopersPage({
                       {developer.name}
                     </span>
                     <div className="flex gap-1.5">
-                      {developer.game_count >= 5 && (
+                      {(developer.game_count ?? 0) >= 5 && (
                         <span className="px-1.5 py-0.5 rounded text-caption bg-accent-cyan/15 text-accent-cyan">
                           Prolific
                         </span>
@@ -568,7 +568,7 @@ export default async function DevelopersPage({
                         >
                           {developer.name}
                         </Link>
-                        {developer.game_count >= 5 && (
+                        {(developer.game_count ?? 0) >= 5 && (
                           <span className="px-1.5 py-0.5 rounded text-caption bg-accent-cyan/15 text-accent-cyan">
                             Prolific
                           </span>
@@ -579,7 +579,7 @@ export default async function DevelopersPage({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-body-sm text-text-secondary">
-                      {developer.game_count.toLocaleString()}
+                      {(developer.game_count ?? 0).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-body-sm text-text-secondary">
                       {formatOwners(developer.total_owners_min, developer.total_owners_max)}
