@@ -510,7 +510,7 @@ function GenreBarChart({ genres, totalGames }: GenreBarChartProps) {
       </div>
       <div className="space-y-2">
         {genres.slice(0, 8).map((genre, i) => {
-          const percentage = Math.round((genre.game_count / totalGames) * 100);
+          const percentage = Math.round(((genre.game_count ?? 0) / totalGames) * 100);
           return (
             <div key={genre.genre_id} className="flex items-center gap-2 sm:gap-3">
               <div className="w-16 sm:w-24 text-caption text-text-secondary truncate" title={genre.name}>

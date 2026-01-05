@@ -492,7 +492,7 @@ export default async function PublisherDetailPage({
             </span>
           </>
         )}
-        {publisher.game_count >= 10 && (
+        {(publisher.game_count ?? 0) >= 10 && (
           <span className="px-2 py-0.5 rounded text-caption bg-accent-purple/15 text-accent-purple font-medium">
             Major Publisher
           </span>

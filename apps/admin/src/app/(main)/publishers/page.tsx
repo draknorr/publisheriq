@@ -520,7 +520,7 @@ export default async function PublishersPage({
                       {publisher.name}
                     </span>
                     <div className="flex gap-1.5">
-                      {publisher.game_count >= 10 && (
+                      {(publisher.game_count ?? 0) >= 10 && (
                         <span className="px-1.5 py-0.5 rounded text-caption bg-accent-purple/15 text-accent-purple">
                           Major
                         </span>
@@ -584,7 +584,7 @@ export default async function PublishersPage({
                         >
                           {publisher.name}
                         </Link>
-                        {publisher.game_count >= 10 && (
+                        {(publisher.game_count ?? 0) >= 10 && (
                           <span className="px-1.5 py-0.5 rounded text-caption bg-accent-purple/15 text-accent-purple">
                             Major
                           </span>
@@ -595,7 +595,7 @@ export default async function PublishersPage({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-body-sm text-text-secondary">
-                      {publisher.game_count.toLocaleString()}
+                      {(publisher.game_count ?? 0).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-body-sm text-text-secondary">
                       {publisher.unique_developers > 0 ? (
