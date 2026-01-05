@@ -1,0 +1,1870 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
+  }
+  public: {
+    Tables: {
+      app_categories: {
+        Row: {
+          appid: number
+          category_id: number
+          created_at: string | null
+        }
+        Insert: {
+          appid: number
+          category_id: number
+          created_at?: string | null
+        }
+        Update: {
+          appid?: number
+          category_id?: number
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_categories_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_categories_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_categories_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "steam_categories"
+            referencedColumns: ["category_id"]
+          },
+        ]
+      }
+      app_developers: {
+        Row: {
+          appid: number
+          developer_id: number
+        }
+        Insert: {
+          appid: number
+          developer_id: number
+        }
+        Update: {
+          appid?: number
+          developer_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_developers_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_developers_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_developers_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_developers_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "developers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_dlc: {
+        Row: {
+          created_at: string | null
+          dlc_appid: number
+          parent_appid: number
+          source: string
+        }
+        Insert: {
+          created_at?: string | null
+          dlc_appid: number
+          parent_appid: number
+          source?: string
+        }
+        Update: {
+          created_at?: string | null
+          dlc_appid?: number
+          parent_appid?: number
+          source?: string
+        }
+        Relationships: []
+      }
+      app_franchises: {
+        Row: {
+          appid: number
+          created_at: string | null
+          franchise_id: number
+        }
+        Insert: {
+          appid: number
+          created_at?: string | null
+          franchise_id: number
+        }
+        Update: {
+          appid?: number
+          created_at?: string | null
+          franchise_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_franchises_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_franchises_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_franchises_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_franchises_franchise_id_fkey"
+            columns: ["franchise_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_genres: {
+        Row: {
+          appid: number
+          created_at: string | null
+          genre_id: number
+          is_primary: boolean | null
+        }
+        Insert: {
+          appid: number
+          created_at?: string | null
+          genre_id: number
+          is_primary?: boolean | null
+        }
+        Update: {
+          appid?: number
+          created_at?: string | null
+          genre_id?: number
+          is_primary?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_genres_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_genres_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_genres_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_genres_genre_id_fkey"
+            columns: ["genre_id"]
+            isOneToOne: false
+            referencedRelation: "steam_genres"
+            referencedColumns: ["genre_id"]
+          },
+        ]
+      }
+      app_publishers: {
+        Row: {
+          appid: number
+          publisher_id: number
+        }
+        Insert: {
+          appid: number
+          publisher_id: number
+        }
+        Update: {
+          appid?: number
+          publisher_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_publishers_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_publishers_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_publishers_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_publishers_publisher_id_fkey"
+            columns: ["publisher_id"]
+            isOneToOne: false
+            referencedRelation: "publishers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_steam_deck: {
+        Row: {
+          appid: number
+          category: Database["public"]["Enums"]["steam_deck_category"]
+          test_timestamp: string | null
+          tested_build_id: string | null
+          tests: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          appid: number
+          category?: Database["public"]["Enums"]["steam_deck_category"]
+          test_timestamp?: string | null
+          tested_build_id?: string | null
+          tests?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          appid?: number
+          category?: Database["public"]["Enums"]["steam_deck_category"]
+          test_timestamp?: string | null
+          tested_build_id?: string | null
+          tests?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_steam_deck_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_steam_deck_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_steam_deck_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      app_steam_tags: {
+        Row: {
+          appid: number
+          created_at: string | null
+          rank: number | null
+          tag_id: number
+        }
+        Insert: {
+          appid: number
+          created_at?: string | null
+          rank?: number | null
+          tag_id: number
+        }
+        Update: {
+          appid?: number
+          created_at?: string | null
+          rank?: number | null
+          tag_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_steam_tags_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_steam_tags_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_steam_tags_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_steam_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "steam_tags"
+            referencedColumns: ["tag_id"]
+          },
+        ]
+      }
+      app_tags: {
+        Row: {
+          appid: number
+          tag: string
+          vote_count: number | null
+        }
+        Insert: {
+          appid: number
+          tag: string
+          vote_count?: number | null
+        }
+        Update: {
+          appid?: number
+          tag?: string
+          vote_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_tags_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_tags_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_tags_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      app_trends: {
+        Row: {
+          appid: number
+          ccu_trend_7d_pct: number | null
+          current_positive_ratio: number | null
+          previous_positive_ratio: number | null
+          review_velocity_30d: number | null
+          review_velocity_7d: number | null
+          trend_30d_change_pct: number | null
+          trend_30d_direction:
+            | Database["public"]["Enums"]["trend_direction"]
+            | null
+          trend_90d_change_pct: number | null
+          trend_90d_direction:
+            | Database["public"]["Enums"]["trend_direction"]
+            | null
+          updated_at: string | null
+        }
+        Insert: {
+          appid: number
+          ccu_trend_7d_pct?: number | null
+          current_positive_ratio?: number | null
+          previous_positive_ratio?: number | null
+          review_velocity_30d?: number | null
+          review_velocity_7d?: number | null
+          trend_30d_change_pct?: number | null
+          trend_30d_direction?:
+            | Database["public"]["Enums"]["trend_direction"]
+            | null
+          trend_90d_change_pct?: number | null
+          trend_90d_direction?:
+            | Database["public"]["Enums"]["trend_direction"]
+            | null
+          updated_at?: string | null
+        }
+        Update: {
+          appid?: number
+          ccu_trend_7d_pct?: number | null
+          current_positive_ratio?: number | null
+          previous_positive_ratio?: number | null
+          review_velocity_30d?: number | null
+          review_velocity_7d?: number | null
+          trend_30d_change_pct?: number | null
+          trend_30d_direction?:
+            | Database["public"]["Enums"]["trend_direction"]
+            | null
+          trend_90d_change_pct?: number | null
+          trend_90d_direction?:
+            | Database["public"]["Enums"]["trend_direction"]
+            | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_trends_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_trends_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "app_trends_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      apps: {
+        Row: {
+          app_state: string | null
+          appid: number
+          content_descriptors: Json | null
+          controller_support: string | null
+          created_at: string | null
+          current_build_id: string | null
+          current_discount_percent: number | null
+          current_price_cents: number | null
+          has_developer_info: boolean | null
+          has_workshop: boolean | null
+          homepage_url: string | null
+          is_delisted: boolean | null
+          is_free: boolean | null
+          is_released: boolean | null
+          languages: Json | null
+          last_content_update: string | null
+          metacritic_score: number | null
+          metacritic_url: string | null
+          name: string
+          page_creation_date: string | null
+          page_creation_date_raw: string | null
+          parent_appid: number | null
+          pics_review_percentage: number | null
+          pics_review_score: number | null
+          platforms: string | null
+          release_date: string | null
+          release_date_raw: string | null
+          release_state: string | null
+          type: Database["public"]["Enums"]["app_type"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          app_state?: string | null
+          appid: number
+          content_descriptors?: Json | null
+          controller_support?: string | null
+          created_at?: string | null
+          current_build_id?: string | null
+          current_discount_percent?: number | null
+          current_price_cents?: number | null
+          has_developer_info?: boolean | null
+          has_workshop?: boolean | null
+          homepage_url?: string | null
+          is_delisted?: boolean | null
+          is_free?: boolean | null
+          is_released?: boolean | null
+          languages?: Json | null
+          last_content_update?: string | null
+          metacritic_score?: number | null
+          metacritic_url?: string | null
+          name: string
+          page_creation_date?: string | null
+          page_creation_date_raw?: string | null
+          parent_appid?: number | null
+          pics_review_percentage?: number | null
+          pics_review_score?: number | null
+          platforms?: string | null
+          release_date?: string | null
+          release_date_raw?: string | null
+          release_state?: string | null
+          type?: Database["public"]["Enums"]["app_type"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          app_state?: string | null
+          appid?: number
+          content_descriptors?: Json | null
+          controller_support?: string | null
+          created_at?: string | null
+          current_build_id?: string | null
+          current_discount_percent?: number | null
+          current_price_cents?: number | null
+          has_developer_info?: boolean | null
+          has_workshop?: boolean | null
+          homepage_url?: string | null
+          is_delisted?: boolean | null
+          is_free?: boolean | null
+          is_released?: boolean | null
+          languages?: Json | null
+          last_content_update?: string | null
+          metacritic_score?: number | null
+          metacritic_url?: string | null
+          name?: string
+          page_creation_date?: string | null
+          page_creation_date_raw?: string | null
+          parent_appid?: number | null
+          pics_review_percentage?: number | null
+          pics_review_score?: number | null
+          platforms?: string | null
+          release_date?: string | null
+          release_date_raw?: string | null
+          release_state?: string | null
+          type?: Database["public"]["Enums"]["app_type"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      chat_query_logs: {
+        Row: {
+          created_at: string | null
+          id: string
+          iteration_count: number | null
+          query_text: string
+          response_length: number | null
+          timing_llm_ms: number | null
+          timing_tools_ms: number | null
+          timing_total_ms: number | null
+          tool_count: number | null
+          tool_names: string[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          iteration_count?: number | null
+          query_text: string
+          response_length?: number | null
+          timing_llm_ms?: number | null
+          timing_tools_ms?: number | null
+          timing_total_ms?: number | null
+          tool_count?: number | null
+          tool_names?: string[] | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          iteration_count?: number | null
+          query_text?: string
+          response_length?: number | null
+          timing_llm_ms?: number | null
+          timing_tools_ms?: number | null
+          timing_total_ms?: number | null
+          tool_count?: number | null
+          tool_names?: string[] | null
+        }
+        Relationships: []
+      }
+      daily_metrics: {
+        Row: {
+          appid: number
+          average_playtime_2weeks: number | null
+          average_playtime_forever: number | null
+          ccu_peak: number | null
+          discount_percent: number | null
+          id: number
+          metric_date: string
+          negative_reviews: number | null
+          owners_max: number | null
+          owners_min: number | null
+          positive_reviews: number | null
+          price_cents: number | null
+          recent_negative: number | null
+          recent_positive: number | null
+          recent_score_desc: string | null
+          recent_total_reviews: number | null
+          review_score: number | null
+          review_score_desc: string | null
+          total_reviews: number | null
+        }
+        Insert: {
+          appid: number
+          average_playtime_2weeks?: number | null
+          average_playtime_forever?: number | null
+          ccu_peak?: number | null
+          discount_percent?: number | null
+          id?: number
+          metric_date: string
+          negative_reviews?: number | null
+          owners_max?: number | null
+          owners_min?: number | null
+          positive_reviews?: number | null
+          price_cents?: number | null
+          recent_negative?: number | null
+          recent_positive?: number | null
+          recent_score_desc?: string | null
+          recent_total_reviews?: number | null
+          review_score?: number | null
+          review_score_desc?: string | null
+          total_reviews?: number | null
+        }
+        Update: {
+          appid?: number
+          average_playtime_2weeks?: number | null
+          average_playtime_forever?: number | null
+          ccu_peak?: number | null
+          discount_percent?: number | null
+          id?: number
+          metric_date?: string
+          negative_reviews?: number | null
+          owners_max?: number | null
+          owners_min?: number | null
+          positive_reviews?: number | null
+          price_cents?: number | null
+          recent_negative?: number | null
+          recent_positive?: number | null
+          recent_score_desc?: string | null
+          recent_total_reviews?: number | null
+          review_score?: number | null
+          review_score_desc?: string | null
+          total_reviews?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      dashboard_stats_cache: {
+        Row: {
+          apps_count: number | null
+          categories_count: number | null
+          developers_count: number | null
+          franchises_count: number | null
+          genres_count: number | null
+          id: string
+          parent_app_count: number | null
+          pics_synced: number | null
+          publishers_count: number | null
+          tags_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          apps_count?: number | null
+          categories_count?: number | null
+          developers_count?: number | null
+          franchises_count?: number | null
+          genres_count?: number | null
+          id?: string
+          parent_app_count?: number | null
+          pics_synced?: number | null
+          publishers_count?: number | null
+          tags_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          apps_count?: number | null
+          categories_count?: number | null
+          developers_count?: number | null
+          franchises_count?: number | null
+          genres_count?: number | null
+          id?: string
+          parent_app_count?: number | null
+          pics_synced?: number | null
+          publishers_count?: number | null
+          tags_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      developers: {
+        Row: {
+          created_at: string | null
+          embedding_hash: string | null
+          first_game_release_date: string | null
+          first_page_creation_date: string | null
+          game_count: number | null
+          id: number
+          last_embedding_sync: string | null
+          name: string
+          normalized_name: string
+          steam_vanity_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding_hash?: string | null
+          first_game_release_date?: string | null
+          first_page_creation_date?: string | null
+          game_count?: number | null
+          id?: number
+          last_embedding_sync?: string | null
+          name: string
+          normalized_name: string
+          steam_vanity_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding_hash?: string | null
+          first_game_release_date?: string | null
+          first_page_creation_date?: string | null
+          game_count?: number | null
+          id?: number
+          last_embedding_sync?: string | null
+          name?: string
+          normalized_name?: string
+          steam_vanity_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      franchises: {
+        Row: {
+          created_at: string | null
+          id: number
+          name: string
+          normalized_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          name: string
+          normalized_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          name?: string
+          normalized_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pics_sync_state: {
+        Row: {
+          id: number
+          last_change_number: number
+          updated_at: string | null
+        }
+        Insert: {
+          id?: number
+          last_change_number?: number
+          updated_at?: string | null
+        }
+        Update: {
+          id?: number
+          last_change_number?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      publishers: {
+        Row: {
+          created_at: string | null
+          embedding_hash: string | null
+          first_game_release_date: string | null
+          first_page_creation_date: string | null
+          game_count: number | null
+          id: number
+          last_embedding_sync: string | null
+          name: string
+          normalized_name: string
+          steam_vanity_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding_hash?: string | null
+          first_game_release_date?: string | null
+          first_page_creation_date?: string | null
+          game_count?: number | null
+          id?: number
+          last_embedding_sync?: string | null
+          name: string
+          normalized_name: string
+          steam_vanity_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding_hash?: string | null
+          first_game_release_date?: string | null
+          first_page_creation_date?: string | null
+          game_count?: number | null
+          id?: number
+          last_embedding_sync?: string | null
+          name?: string
+          normalized_name?: string
+          steam_vanity_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      review_histogram: {
+        Row: {
+          appid: number
+          fetched_at: string | null
+          id: number
+          month_start: string
+          recommendations_down: number
+          recommendations_up: number
+        }
+        Insert: {
+          appid: number
+          fetched_at?: string | null
+          id?: number
+          month_start: string
+          recommendations_down: number
+          recommendations_up: number
+        }
+        Update: {
+          appid?: number
+          fetched_at?: string | null
+          id?: number
+          month_start?: string
+          recommendations_down?: number
+          recommendations_up?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_histogram_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "review_histogram_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "review_histogram_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      steam_categories: {
+        Row: {
+          category_id: number
+          created_at: string | null
+          description: string | null
+          name: string
+        }
+        Insert: {
+          category_id: number
+          created_at?: string | null
+          description?: string | null
+          name: string
+        }
+        Update: {
+          category_id?: number
+          created_at?: string | null
+          description?: string | null
+          name?: string
+        }
+        Relationships: []
+      }
+      steam_genres: {
+        Row: {
+          created_at: string | null
+          genre_id: number
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          genre_id: number
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          genre_id?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      steam_tags: {
+        Row: {
+          created_at: string | null
+          name: string
+          tag_id: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          name: string
+          tag_id: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          name?: string
+          tag_id?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sync_jobs: {
+        Row: {
+          batch_size: number | null
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          github_run_id: string | null
+          id: string
+          items_created: number | null
+          items_failed: number | null
+          items_processed: number | null
+          items_skipped: number | null
+          items_succeeded: number | null
+          items_updated: number | null
+          job_type: string
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          batch_size?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          github_run_id?: string | null
+          id?: string
+          items_created?: number | null
+          items_failed?: number | null
+          items_processed?: number | null
+          items_skipped?: number | null
+          items_succeeded?: number | null
+          items_updated?: number | null
+          job_type: string
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          batch_size?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          github_run_id?: string | null
+          id?: string
+          items_created?: number | null
+          items_failed?: number | null
+          items_processed?: number | null
+          items_skipped?: number | null
+          items_succeeded?: number | null
+          items_updated?: number | null
+          job_type?: string
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      sync_status: {
+        Row: {
+          appid: number
+          consecutive_errors: number | null
+          embedding_hash: string | null
+          is_syncable: boolean | null
+          last_activity_at: string | null
+          last_embedding_sync: string | null
+          last_error_at: string | null
+          last_error_message: string | null
+          last_error_source: Database["public"]["Enums"]["sync_source"] | null
+          last_histogram_sync: string | null
+          last_page_creation_scrape: string | null
+          last_pics_sync: string | null
+          last_price_sync: string | null
+          last_reviews_sync: string | null
+          last_steamspy_sync: string | null
+          last_storefront_sync: string | null
+          needs_page_creation_scrape: boolean | null
+          next_sync_after: string | null
+          pics_change_number: number | null
+          priority_calculated_at: string | null
+          priority_score: number | null
+          refresh_tier: Database["public"]["Enums"]["refresh_tier"] | null
+          steamspy_available: boolean | null
+          storefront_accessible: boolean | null
+          sync_interval_hours: number | null
+        }
+        Insert: {
+          appid: number
+          consecutive_errors?: number | null
+          embedding_hash?: string | null
+          is_syncable?: boolean | null
+          last_activity_at?: string | null
+          last_embedding_sync?: string | null
+          last_error_at?: string | null
+          last_error_message?: string | null
+          last_error_source?: Database["public"]["Enums"]["sync_source"] | null
+          last_histogram_sync?: string | null
+          last_page_creation_scrape?: string | null
+          last_pics_sync?: string | null
+          last_price_sync?: string | null
+          last_reviews_sync?: string | null
+          last_steamspy_sync?: string | null
+          last_storefront_sync?: string | null
+          needs_page_creation_scrape?: boolean | null
+          next_sync_after?: string | null
+          pics_change_number?: number | null
+          priority_calculated_at?: string | null
+          priority_score?: number | null
+          refresh_tier?: Database["public"]["Enums"]["refresh_tier"] | null
+          steamspy_available?: boolean | null
+          storefront_accessible?: boolean | null
+          sync_interval_hours?: number | null
+        }
+        Update: {
+          appid?: number
+          consecutive_errors?: number | null
+          embedding_hash?: string | null
+          is_syncable?: boolean | null
+          last_activity_at?: string | null
+          last_embedding_sync?: string | null
+          last_error_at?: string | null
+          last_error_message?: string | null
+          last_error_source?: Database["public"]["Enums"]["sync_source"] | null
+          last_histogram_sync?: string | null
+          last_page_creation_scrape?: string | null
+          last_pics_sync?: string | null
+          last_price_sync?: string | null
+          last_reviews_sync?: string | null
+          last_steamspy_sync?: string | null
+          last_storefront_sync?: string | null
+          needs_page_creation_scrape?: boolean | null
+          next_sync_after?: string | null
+          pics_change_number?: number | null
+          priority_calculated_at?: string | null
+          priority_score?: number | null
+          refresh_tier?: Database["public"]["Enums"]["refresh_tier"] | null
+          steamspy_available?: boolean | null
+          storefront_accessible?: boolean | null
+          sync_interval_hours?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_status_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "sync_status_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "sync_status_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+    }
+    Views: {
+      developer_game_metrics: {
+        Row: {
+          appid: number | null
+          ccu: number | null
+          current_price_cents: number | null
+          developer_id: number | null
+          developer_name: string | null
+          game_name: string | null
+          owners: number | null
+          positive_reviews: number | null
+          release_date: string | null
+          release_year: number | null
+          revenue_estimate_cents: number | null
+          review_score: number | null
+          total_reviews: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_developers_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "developers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      developer_metrics: {
+        Row: {
+          avg_review_score: number | null
+          computed_at: string | null
+          developer_id: number | null
+          developer_name: string | null
+          estimated_weekly_hours: number | null
+          game_count: number | null
+          games_released_last_year: number | null
+          games_trending_down: number | null
+          games_trending_stable: number | null
+          games_trending_up: number | null
+          is_trending: boolean | null
+          positive_reviews: number | null
+          revenue_estimate_cents: number | null
+          total_ccu: number | null
+          total_owners: number | null
+          total_reviews: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_developers_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "developers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      developer_year_metrics: {
+        Row: {
+          avg_review_score: number | null
+          developer_id: number | null
+          developer_name: string | null
+          earliest_release: string | null
+          game_count: number | null
+          latest_release: string | null
+          release_year: number | null
+          revenue_estimate_cents: number | null
+          total_ccu: number | null
+          total_owners: number | null
+          total_reviews: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_developers_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "developers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      latest_daily_metrics: {
+        Row: {
+          appid: number | null
+          ccu_peak: number | null
+          estimated_weekly_hours: number | null
+          metric_date: string | null
+          owners_max: number | null
+          owners_midpoint: number | null
+          owners_min: number | null
+          positive_percentage: number | null
+          positive_reviews: number | null
+          price_cents: number | null
+          review_score: number | null
+          total_reviews: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      monthly_game_metrics: {
+        Row: {
+          appid: number | null
+          estimated_monthly_hours: number | null
+          game_name: string | null
+          month: string | null
+          month_num: number | null
+          monthly_ccu_sum: number | null
+          year: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "daily_metrics_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      publisher_game_metrics: {
+        Row: {
+          appid: number | null
+          ccu: number | null
+          current_price_cents: number | null
+          game_name: string | null
+          owners: number | null
+          positive_reviews: number | null
+          publisher_id: number | null
+          publisher_name: string | null
+          release_date: string | null
+          release_year: number | null
+          revenue_estimate_cents: number | null
+          review_score: number | null
+          total_reviews: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_publishers_publisher_id_fkey"
+            columns: ["publisher_id"]
+            isOneToOne: false
+            referencedRelation: "publishers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      publisher_metrics: {
+        Row: {
+          avg_review_score: number | null
+          computed_at: string | null
+          estimated_weekly_hours: number | null
+          game_count: number | null
+          games_released_last_year: number | null
+          games_trending_down: number | null
+          games_trending_stable: number | null
+          games_trending_up: number | null
+          is_trending: boolean | null
+          positive_reviews: number | null
+          publisher_id: number | null
+          publisher_name: string | null
+          revenue_estimate_cents: number | null
+          total_ccu: number | null
+          total_owners: number | null
+          total_reviews: number | null
+          unique_developers: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_publishers_publisher_id_fkey"
+            columns: ["publisher_id"]
+            isOneToOne: false
+            referencedRelation: "publishers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      publisher_year_metrics: {
+        Row: {
+          avg_review_score: number | null
+          earliest_release: string | null
+          game_count: number | null
+          latest_release: string | null
+          publisher_id: number | null
+          publisher_name: string | null
+          release_year: number | null
+          revenue_estimate_cents: number | null
+          total_ccu: number | null
+          total_owners: number | null
+          total_reviews: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_publishers_publisher_id_fkey"
+            columns: ["publisher_id"]
+            isOneToOne: false
+            referencedRelation: "publishers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Functions: {
+      batch_update_prices: {
+        Args: { p_appids: number[]; p_discounts: number[]; p_prices: number[] }
+        Returns: number
+      }
+      cleanup_old_chat_logs: { Args: never; Returns: number }
+      execute_readonly_query: { Args: { query_text: string }; Returns: Json }
+      get_apps_for_embedding: {
+        Args: { p_limit?: number }
+        Returns: {
+          appid: number
+          categories: string[]
+          controller_support: string
+          current_price_cents: number
+          developer_ids: number[]
+          developers: string[]
+          franchise_ids: number[]
+          genres: string[]
+          is_delisted: boolean
+          is_free: boolean
+          is_released: boolean
+          name: string
+          pics_review_percentage: number
+          pics_review_score: number
+          platforms: string
+          publisher_ids: number[]
+          publishers: string[]
+          release_date: string
+          steam_deck_category: string
+          tags: string[]
+          type: string
+          updated_at: string
+        }[]
+      }
+      get_apps_for_embedding_by_ids: {
+        Args: { p_appids: number[] }
+        Returns: {
+          appid: number
+          categories: string[]
+          controller_support: string
+          current_price_cents: number
+          developer_ids: number[]
+          developers: string[]
+          franchise_ids: number[]
+          genres: string[]
+          is_delisted: boolean
+          is_free: boolean
+          is_released: boolean
+          name: string
+          pics_review_percentage: number
+          pics_review_score: number
+          platforms: string
+          publisher_ids: number[]
+          publishers: string[]
+          release_date: string
+          steam_deck_category: string
+          tags: string[]
+          type: string
+          updated_at: string
+        }[]
+      }
+      get_apps_for_sync: {
+        Args: {
+          p_limit?: number
+          p_source: Database["public"]["Enums"]["sync_source"]
+        }
+        Returns: {
+          appid: number
+          priority_score: number
+        }[]
+      }
+      get_apps_for_sync_partitioned: {
+        Args: {
+          p_limit: number
+          p_partition_count: number
+          p_partition_id: number
+          p_source: Database["public"]["Enums"]["sync_source"]
+        }
+        Returns: {
+          appid: number
+          priority_score: number
+        }[]
+      }
+      get_developer_stats: { Args: never; Returns: Json }
+      get_developers_for_embedding: {
+        Args: { p_limit?: number }
+        Returns: {
+          avg_review_percentage: number
+          first_game_release_date: string
+          game_count: number
+          id: number
+          is_indie: boolean
+          name: string
+          platforms_supported: string[]
+          top_game_appids: number[]
+          top_game_names: string[]
+          top_genres: string[]
+          top_tags: string[]
+          total_reviews: number
+        }[]
+      }
+      get_developers_needing_embedding: {
+        Args: { p_limit?: number }
+        Returns: {
+          avg_review_percentage: number
+          first_game_release_date: string
+          game_count: number
+          id: number
+          is_indie: boolean
+          name: string
+          platforms_supported: string[]
+          top_game_appids: number[]
+          top_game_names: string[]
+          top_genres: string[]
+          top_tags: string[]
+          total_reviews: number
+        }[]
+      }
+      get_developers_with_metrics: {
+        Args: {
+          p_limit?: number
+          p_min_ccu?: number
+          p_min_games?: number
+          p_min_owners?: number
+          p_min_score?: number
+          p_offset?: number
+          p_search?: string
+          p_sort_field?: string
+          p_sort_order?: string
+          p_status?: string
+        }
+        Returns: {
+          computed_at: string
+          estimated_revenue_usd: number
+          first_game_release_date: string
+          game_count: number
+          games_released_last_year: number
+          games_trending_down: number
+          games_trending_up: number
+          id: number
+          max_ccu_peak: number
+          name: string
+          normalized_name: string
+          steam_vanity_url: string
+          total_ccu_peak: number
+          total_owners_max: number
+          total_owners_min: number
+          total_reviews: number
+          weighted_review_score: number
+        }[]
+      }
+      get_pics_data_stats: {
+        Args: never
+        Returns: {
+          total_apps: number
+          with_categories: number
+          with_franchises: number
+          with_genres: number
+          with_parent_app: number
+          with_pics_sync: number
+          with_tags: number
+        }[]
+      }
+      get_priority_distribution: {
+        Args: never
+        Returns: {
+          high: number
+          low: number
+          medium: number
+          minimal: number
+          normal_priority: number
+        }[]
+      }
+      get_publisher_stats: { Args: never; Returns: Json }
+      get_publishers_for_embedding: {
+        Args: { p_limit?: number }
+        Returns: {
+          avg_review_percentage: number
+          first_game_release_date: string
+          game_count: number
+          id: number
+          name: string
+          platforms_supported: string[]
+          top_game_appids: number[]
+          top_game_names: string[]
+          top_genres: string[]
+          top_tags: string[]
+          total_reviews: number
+        }[]
+      }
+      get_publishers_needing_embedding: {
+        Args: { p_limit?: number }
+        Returns: {
+          avg_review_percentage: number
+          first_game_release_date: string
+          game_count: number
+          id: number
+          name: string
+          platforms_supported: string[]
+          top_game_appids: number[]
+          top_game_names: string[]
+          top_genres: string[]
+          top_tags: string[]
+          total_reviews: number
+        }[]
+      }
+      get_publishers_with_metrics: {
+        Args: {
+          p_limit?: number
+          p_min_ccu?: number
+          p_min_developers?: number
+          p_min_games?: number
+          p_min_owners?: number
+          p_min_score?: number
+          p_offset?: number
+          p_search?: string
+          p_sort_field?: string
+          p_sort_order?: string
+          p_status?: string
+        }
+        Returns: {
+          computed_at: string
+          estimated_revenue_usd: number
+          first_game_release_date: string
+          game_count: number
+          games_released_last_year: number
+          games_trending_down: number
+          games_trending_up: number
+          id: number
+          max_ccu_peak: number
+          name: string
+          normalized_name: string
+          steam_vanity_url: string
+          total_ccu_peak: number
+          total_owners_max: number
+          total_owners_min: number
+          total_reviews: number
+          unique_developers: number
+          weighted_review_score: number
+        }[]
+      }
+      get_queue_status: {
+        Args: never
+        Returns: {
+          due_in_1_hour: number
+          due_in_24_hours: number
+          due_in_6_hours: number
+          overdue: number
+        }[]
+      }
+      get_source_completion_stats: {
+        Args: never
+        Returns: {
+          source: string
+          stale_apps: number
+          synced_apps: number
+          total_apps: number
+        }[]
+      }
+      get_unsynced_app_ids: {
+        Args: never
+        Returns: {
+          appid: number
+        }[]
+      }
+      mark_apps_embedded: {
+        Args: { p_appids: number[]; p_hashes: string[] }
+        Returns: undefined
+      }
+      mark_developers_embedded: {
+        Args: { p_hashes: string[]; p_ids: number[] }
+        Returns: undefined
+      }
+      mark_publishers_embedded: {
+        Args: { p_hashes: string[]; p_ids: number[] }
+        Returns: undefined
+      }
+      refresh_all_metrics_views: { Args: never; Returns: undefined }
+      refresh_dashboard_stats: { Args: never; Returns: undefined }
+      refresh_entity_metrics: { Args: never; Returns: undefined }
+      refresh_latest_daily_metrics: { Args: never; Returns: undefined }
+      refresh_monthly_game_metrics: { Args: never; Returns: undefined }
+      upsert_developer: { Args: { p_name: string }; Returns: number }
+      upsert_franchise: { Args: { p_name: string }; Returns: number }
+      upsert_publisher: { Args: { p_name: string }; Returns: number }
+      upsert_steam_tag: {
+        Args: { p_name: string; p_tag_id: number }
+        Returns: number
+      }
+      upsert_storefront_app: {
+        Args: {
+          p_appid: number
+          p_current_discount_percent: number
+          p_current_price_cents: number
+          p_developers: string[]
+          p_dlc_appids?: number[]
+          p_has_workshop: boolean
+          p_is_free: boolean
+          p_is_released: boolean
+          p_name: string
+          p_parent_appid?: number
+          p_publishers: string[]
+          p_release_date: string
+          p_release_date_raw: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+    }
+    Enums: {
+      app_type:
+        | "game"
+        | "dlc"
+        | "demo"
+        | "mod"
+        | "video"
+        | "hardware"
+        | "music"
+        | "episode"
+        | "tool"
+        | "application"
+        | "series"
+        | "advertising"
+      refresh_tier: "active" | "moderate" | "dormant" | "dead"
+      steam_deck_category: "unknown" | "unsupported" | "playable" | "verified"
+      sync_source:
+        | "steamspy"
+        | "storefront"
+        | "reviews"
+        | "histogram"
+        | "scraper"
+        | "pics"
+      trend_direction: "up" | "down" | "stable"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      app_type: [
+        "game",
+        "dlc",
+        "demo",
+        "mod",
+        "video",
+        "hardware",
+        "music",
+        "episode",
+        "tool",
+        "application",
+        "series",
+        "advertising",
+      ],
+      refresh_tier: ["active", "moderate", "dormant", "dead"],
+      steam_deck_category: ["unknown", "unsupported", "playable", "verified"],
+      sync_source: [
+        "steamspy",
+        "storefront",
+        "reviews",
+        "histogram",
+        "scraper",
+        "pics",
+      ],
+      trend_direction: ["up", "down", "stable"],
+    },
+  },
+} as const
