@@ -163,6 +163,23 @@ async function main(): Promise<void> {
 
   const supabase = getServiceClient();
 
+  // Check if another storefront sync is already running (prevent concurrent runs)
+  const { data: runningJobs } = await supabase
+    .from('sync_jobs')
+    .select('id, github_run_id, started_at')
+    .eq('job_type', 'storefront')
+    .eq('status', 'running');
+
+  if (runningJobs && runningJobs.length > 0) {
+    const existingJob = runningJobs[0];
+    log.warn('Another storefront sync is already running, exiting to prevent duplicate work', {
+      existingJobId: existingJob.id,
+      existingGithubRunId: existingJob.github_run_id,
+      startedAt: existingJob.started_at,
+    });
+    return;
+  }
+
   // Create sync job record
   const { data: job, error: jobError } = await supabase
     .from('sync_jobs')
