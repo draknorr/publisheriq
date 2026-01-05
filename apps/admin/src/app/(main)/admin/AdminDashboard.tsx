@@ -418,7 +418,7 @@ function JobRow({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
-  const duration = job.completed_at
+  const duration = job.completed_at && job.started_at
     ? formatDuration(new Date(job.completed_at).getTime() - new Date(job.started_at).getTime())
     : 'Running...';
 
@@ -459,7 +459,7 @@ function JobRow({
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-caption">
             <div>
               <span className="text-text-muted">Started:</span>{' '}
-              <span className="text-text-secondary">{new Date(job.started_at).toLocaleString()}</span>
+              <span className="text-text-secondary">{job.started_at ? new Date(job.started_at).toLocaleString() : '-'}</span>
             </div>
             <div>
               <span className="text-text-muted">Completed:</span>{' '}

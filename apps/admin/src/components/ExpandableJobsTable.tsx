@@ -46,7 +46,7 @@ function formatDateTime(timestamp: string | null): string {
 }
 
 function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded: boolean; onToggle: () => void }) {
-  const duration = job.completed_at
+  const duration = job.completed_at && job.started_at
     ? formatDuration(new Date(job.completed_at).getTime() - new Date(job.started_at).getTime())
     : 'Running...';
 
