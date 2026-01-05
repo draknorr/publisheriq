@@ -62,18 +62,21 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile hamburger button */}
-      <button
-        onClick={toggle}
-        className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-surface-raised border border-border-subtle md:hidden"
-        aria-label={isOpen ? 'Close menu' : 'Open menu'}
-      >
-        {isOpen ? (
-          <X className="h-5 w-5 text-text-primary" />
-        ) : (
-          <Menu className="h-5 w-5 text-text-primary" />
-        )}
-      </button>
+      {/* Mobile header controls */}
+      <div className="fixed left-4 right-4 top-safe z-50 flex items-center justify-between md:hidden">
+        <button
+          onClick={toggle}
+          className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-raised border border-border-subtle"
+          aria-label={isOpen ? 'Close menu' : 'Open menu'}
+        >
+          {isOpen ? (
+            <X className="h-5 w-5 text-text-primary" />
+          ) : (
+            <Menu className="h-5 w-5 text-text-primary" />
+          )}
+        </button>
+        <ThemeToggle />
+      </div>
 
       {/* Mobile overlay */}
       {isOpen && (
@@ -87,7 +90,7 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed left-0 top-0 z-40 h-screen w-64 border-r border-border-subtle bg-surface-raised
+          fixed left-0 top-0 z-40 h-screen-safe w-64 border-r border-border-subtle bg-surface-raised
           transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0
