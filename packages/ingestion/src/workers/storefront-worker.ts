@@ -164,11 +164,14 @@ async function main(): Promise<void> {
   const supabase = getServiceClient();
 
   // Check if another storefront sync is already running (prevent concurrent runs)
+  // Only consider jobs running for less than 2 hours as truly running (ignore stale jobs)
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data: runningJobs } = await supabase
     .from('sync_jobs')
     .select('id, github_run_id, started_at')
     .eq('job_type', 'storefront')
-    .eq('status', 'running');
+    .eq('status', 'running')
+    .gt('started_at', twoHoursAgo);
 
   if (runningJobs && runningJobs.length > 0) {
     const existingJob = runningJobs[0];
@@ -179,6 +182,18 @@ async function main(): Promise<void> {
     });
     return;
   }
+
+  // Clean up stale running jobs (older than 2 hours)
+  await supabase
+    .from('sync_jobs')
+    .update({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      error_message: 'Job marked as failed - stale running status (exceeded 2 hour timeout)',
+    })
+    .eq('job_type', 'storefront')
+    .eq('status', 'running')
+    .lt('started_at', twoHoursAgo);
 
   // Create sync job record
   const { data: job, error: jobError } = await supabase
