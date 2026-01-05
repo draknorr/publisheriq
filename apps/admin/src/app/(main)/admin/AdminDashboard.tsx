@@ -432,10 +432,10 @@ function JobRow({
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span
             className={`px-1.5 py-0.5 rounded text-caption border shrink-0 ${
-              jobStatusColors[job.status] ?? 'bg-surface-elevated text-text-secondary'
+              jobStatusColors[job.status ?? 'unknown'] ?? 'bg-surface-elevated text-text-secondary'
             }`}
           >
-            {job.status}
+            {job.status ?? 'unknown'}
           </span>
           <span className="text-body-sm font-medium text-text-primary truncate">{job.job_type}</span>
           {job.batch_size && (
