@@ -24,7 +24,8 @@
     "scrape-creation-dates": "tsx src/workers/scraper-worker.ts",
     "calculate-trends": "tsx src/workers/trends-worker.ts",
     "update-priorities": "tsx src/workers/priority-worker.ts",
-    "embedding-sync": "tsx src/workers/embedding-worker.ts"
+    "embedding-sync": "tsx src/workers/embedding-worker.ts",
+    "price-sync": "tsx src/workers/price-sync-worker.ts"
   },
   "dependencies": {
     "@publisheriq/database": "workspace:*",

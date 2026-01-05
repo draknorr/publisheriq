@@ -9,8 +9,8 @@ export const RATE_LIMITS = {
   /** SteamSpy "all" endpoint - 1 request per 60 seconds */
   STEAMSPY_ALL: { requestsPerSecond: 1 / 60, burst: 1 },
 
-  /** Steam Storefront API - approximately 200 requests per 5 minutes */
-  STOREFRONT: { requestsPerSecond: 0.67, burst: 10 },
+  /** Steam Storefront API - 1 request per second with higher burst for parallel workers */
+  STOREFRONT: { requestsPerSecond: 1.0, burst: 15 },
 
   /** Steam Reviews API - approximately 20 requests per minute */
   REVIEWS: { requestsPerSecond: 0.33, burst: 5 },

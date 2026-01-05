@@ -1,15 +1,15 @@
-name: Storefront Details Sync
+name: Price Sync
 
 on:
   schedule:
-    # Run every 30 minutes for continuous sync
-    - cron: '0,30 * * * *'
+    # Run every 6 hours for high-priority price tracking
+    - cron: '15 0,6,12,18 * * *'
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Number of apps to process per partition'
+        description: 'Number of apps to process'
         required: false
-        default: '1500'
+        default: '3000'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -18,11 +18,7 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      matrix:
-        partition: [0, 1, 2]
-      fail-fast: false
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -40,10 +36,8 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run Storefront sync (partition ${{ matrix.partition }})
-        run: pnpm --filter @publisheriq/ingestion storefront-sync
+      - name: Run Price sync
+        run: pnpm --filter @publisheriq/ingestion price-sync
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '1500' }}
-          PARTITION_COUNT: 3
-          PARTITION_ID: ${{ matrix.partition }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '3000' }}
