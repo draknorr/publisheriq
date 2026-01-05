@@ -62,21 +62,19 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile header controls */}
-      <div className="fixed left-4 right-4 top-safe z-50 flex items-center justify-between md:hidden">
-        <button
-          onClick={toggle}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-raised border border-border-subtle"
-          aria-label={isOpen ? 'Close menu' : 'Open menu'}
-        >
-          {isOpen ? (
-            <X className="h-5 w-5 text-text-primary" />
-          ) : (
+      {/* Mobile header controls - only show hamburger when sidebar is closed */}
+      {!isOpen && (
+        <div className="fixed left-4 right-4 top-safe z-50 flex items-center justify-between md:hidden">
+          <button
+            onClick={toggle}
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-raised border border-border-subtle"
+            aria-label="Open menu"
+          >
             <Menu className="h-5 w-5 text-text-primary" />
-          )}
-        </button>
-        <ThemeToggle />
-      </div>
+          </button>
+          <ThemeToggle />
+        </div>
+      )}
 
       {/* Mobile overlay */}
       {isOpen && (
@@ -97,8 +95,8 @@ export function Sidebar() {
         `}
       >
         <div className="flex h-full flex-col">
-          {/* Logo */}
-          <div className="flex h-14 items-center border-b border-border-subtle px-5">
+          {/* Logo and mobile close button */}
+          <div className="flex h-14 items-center justify-between border-b border-border-subtle px-5">
             <Link
               href="/"
               className="flex items-center gap-2.5 text-text-primary transition-opacity hover:opacity-80"
@@ -108,6 +106,14 @@ export function Sidebar() {
               </div>
               <span className="text-subheading tracking-tight">PublisherIQ</span>
             </Link>
+            {/* Close button - mobile only */}
+            <button
+              onClick={close}
+              className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-elevated md:hidden"
+              aria-label="Close menu"
+            >
+              <X className="h-5 w-5 text-text-secondary" />
+            </button>
           </div>
 
           {/* Navigation */}
