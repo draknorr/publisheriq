@@ -1,0 +1,409 @@
+# Admin Dashboard Architecture
+
+This document describes the redesigned admin dashboard introduced in PublisherIQ v2.0.
+
+## Overview
+
+The admin dashboard provides a comprehensive view of system health, sync status, and data completion. Version 2.0 introduces:
+
+- **Single-page collapsible layout** (replaces tabbed interface)
+- **66% query reduction** (from ~40 queries to ~12)
+- **Optimized RPC functions** for aggregated data
+- **Chat logs integration** within the dashboard
+- **Mobile-responsive design**
+
+---
+
+## Architecture
+
+### Component Hierarchy
+
+```
+AdminDashboard
+├── StatusBar              # Top-level health indicators
+├── CollapsibleSection     # Data Completion
+│   └── SourceCompletionCard[] (6 sources)
+├── CollapsibleSection     # Sync Queue
+│   ├── Priority Distribution
+│   └── Queue Status (QueueMetric[])
+├── CollapsibleSection     # PICS Service
+│   └── PICSMetric[]
+├── CollapsibleSection     # Sync Errors
+│   └── Error table/cards
+├── CollapsibleSection     # Recent Jobs
+│   └── JobRow[]
+├── CollapsibleSection     # Last Sync Times
+│   └── LastSyncItem[]
+└── ChatLogsSection        # Chat query logs
+    └── Log table/cards
+```
+
+### Data Flow
+
+```
+page.tsx (Server Component)
+    │
+    ├── Parallel data fetching
+    │   ├── supabase.rpc('get_priority_distribution')
+    │   ├── supabase.rpc('get_queue_status')
+    │   ├── supabase.rpc('get_source_completion_stats')
+    │   ├── supabase.rpc('get_pics_data_stats')
+    │   ├── supabase.from('sync_jobs').select(...)
+    │   └── supabase.from('chat_query_logs').select(...)
+    │
+    └── AdminDashboard (Client Component)
+        └── Renders all sections
+```
+
+---
+
+## Performance Optimizations
+
+### Query Reduction
+
+**Before v2.0:** ~40 separate database queries
+**After v2.0:** ~12 queries using RPC functions
+
+| Old Approach | New Approach | Savings |
+|--------------|--------------|---------|
+| 5 priority tier counts | 1 RPC call | 80% |
+| 4 queue status counts | 1 RPC call | 75% |
+| 11 source completion counts | 1 RPC call | 91% |
+| 7 PICS data counts | 1 RPC call | 86% |
+
+### RPC Functions
+
+Four new PostgreSQL functions consolidate counting operations:
+
+#### get_priority_distribution()
+
+Returns count of apps by priority tier in a single query.
+
+```sql
+CREATE FUNCTION get_priority_distribution()
+RETURNS TABLE(
+  high BIGINT,
+  medium BIGINT,
+  normal_priority BIGINT,
+  low BIGINT,
+  minimal BIGINT
+)
+```
+
+**Usage:**
+```ts
+const { data } = await supabase.rpc('get_priority_distribution');
+// Returns: { high: 150, medium: 500, normal_priority: 2000, low: 5000, minimal: 10000 }
+```
+
+#### get_queue_status()
+
+Returns count of apps due for sync at different intervals.
+
+```sql
+CREATE FUNCTION get_queue_status()
+RETURNS TABLE(
+  overdue BIGINT,
+  due_in_1_hour BIGINT,
+  due_in_6_hours BIGINT,
+  due_in_24_hours BIGINT
+)
+```
+
+**Usage:**
+```ts
+const { data } = await supabase.rpc('get_queue_status');
+// Returns: { overdue: 50, due_in_1_hour: 200, due_in_6_hours: 1500, due_in_24_hours: 5000 }
+```
+
+#### get_source_completion_stats()
+
+Returns sync completion stats for all data sources.
+
+```sql
+CREATE FUNCTION get_source_completion_stats()
+RETURNS TABLE(
+  source TEXT,
+  total_apps BIGINT,
+  synced_apps BIGINT,
+  stale_apps BIGINT
+)
+```
+
+**Returns rows for:** steamspy, storefront, reviews, histogram, page_creation
+
+#### get_pics_data_stats()
+
+Returns PICS data completion statistics.
+
+```sql
+CREATE FUNCTION get_pics_data_stats()
+RETURNS TABLE(
+  total_apps BIGINT,
+  with_pics_sync BIGINT,
+  with_categories BIGINT,
+  with_genres BIGINT,
+  with_tags BIGINT,
+  with_franchises BIGINT,
+  with_parent_app BIGINT
+)
+```
+
+---
+
+## UI Components
+
+### StatusBar
+
+Top-level status indicator showing key health metrics.
+
+```tsx
+<StatusBar
+  metrics={[
+    { label: 'Running', value: 3, status: 'info' },
+    { label: 'Jobs (24h)', value: 45, status: 'neutral' },
+    { label: 'Success', value: '98.5%', status: 'success' },
+    { label: 'Overdue', value: 12, status: 'warning' },
+    { label: 'Errors', value: 0, status: 'success' },
+    { label: 'PICS', value: '#1,234,567', status: 'info' },
+  ]}
+/>
+```
+
+**Status Colors:**
+| Status | Color | Usage |
+|--------|-------|-------|
+| `success` | Green | Good state |
+| `warning` | Yellow | Needs attention |
+| `error` | Red | Critical issue |
+| `info` | Teal/Cyan | Informational |
+| `neutral` | Gray | No status |
+
+### CollapsibleSection
+
+Expandable section with badge and optional header content.
+
+```tsx
+<CollapsibleSection
+  title="Data Completion"
+  badge={{ value: '85%', variant: 'success' }}
+  headerExtra={<span>1,234 / 1,500 complete</span>}
+  defaultOpen={true}
+>
+  {/* Section content */}
+</CollapsibleSection>
+```
+
+**Badge Variants:**
+- `default` - Gray
+- `success` - Green
+- `warning` - Yellow
+- `error` - Red
+- `info` - Blue
+
+### SourceCompletionCard
+
+Displays sync completion for a data source.
+
+```tsx
+<SourceCompletionCard
+  source="SteamSpy"
+  icon="📊"
+  synced={8500}
+  total={10000}
+  lastSync="2 hours ago"
+/>
+```
+
+Features:
+- Progress bar with percentage
+- Last sync timestamp
+- Source icon
+
+### JobRow
+
+Expandable row showing sync job details.
+
+```tsx
+<JobRow
+  job={job}
+  isExpanded={expandedJobIds.has(job.id)}
+  onToggle={() => toggleJobExpanded(job.id)}
+/>
+```
+
+Displays:
+- Job status (running/completed/failed)
+- Job type and batch size
+- Success/processed/failed counts
+- Duration
+- Expandable details with timestamps and error messages
+
+---
+
+## Dashboard Sections
+
+### Data Completion
+
+Shows sync completion percentage for each data source:
+
+| Source | Description |
+|--------|-------------|
+| SteamSpy | Player metrics and ownership data |
+| Storefront | Game store page data |
+| Reviews | Review counts and scores |
+| Histogram | Review timeline data |
+| Page Creation | Steam page creation dates |
+| PICS | Real-time PICS data |
+
+### Sync Queue
+
+Displays priority distribution and queue status:
+
+**Priority Tiers:**
+| Tier | Score Range | Update Interval |
+|------|-------------|-----------------|
+| High | ≥150 | 6 hours |
+| Medium | 100-149 | 12 hours |
+| Normal | 50-99 | 24 hours |
+| Low | 25-49 | 48 hours |
+| Minimal | <25 | 7 days |
+
+**Queue Status:**
+- Overdue (past due time)
+- Due in 1 hour
+- Due in 6 hours
+- Due in 24 hours
+
+### PICS Service
+
+Shows PICS sync state and data coverage:
+
+- Change number (latest processed)
+- Last update time
+- Apps with PICS sync
+- Coverage: tags, categories, genres, franchises, parent apps
+
+### Sync Errors
+
+Lists apps with consecutive sync errors:
+
+- App name and ID
+- Error count
+- Error source
+- Last error message
+- Time since error
+
+### Recent Jobs
+
+Shows the 15 most recent sync jobs with:
+
+- Status badge (running/completed/failed)
+- Job type
+- Batch size
+- Success/processed counts
+- Duration
+- Expandable details
+
+### Last Sync Times
+
+Quick view of when each source was last synced.
+
+### Chat Logs
+
+Integrated chat query logs with:
+
+- Query statistics (total, avg response time, avg tools)
+- Recent queries with tools used
+- Action buttons (Search, Copy)
+- 7-day retention
+
+---
+
+## File Locations
+
+| File | Purpose |
+|------|---------|
+| `apps/admin/src/app/(main)/admin/page.tsx` | Server component, data fetching |
+| `apps/admin/src/app/(main)/admin/AdminDashboard.tsx` | Client component, UI |
+| `apps/admin/src/lib/sync-queries.ts` | Query helpers and formatters |
+| `supabase/migrations/20260103000001_add_admin_dashboard_rpcs.sql` | RPC functions |
+
+---
+
+## Mobile Responsiveness
+
+The dashboard adapts to mobile screens:
+
+- **StatusBar**: Wraps metrics to multiple rows
+- **SourceCompletionCards**: 2 columns on mobile, 6 on desktop
+- **Tables**: Switch to card layout on mobile
+- **JobRow**: Stack info vertically on mobile
+- **Collapsible sections**: All sections work on touch
+
+---
+
+## Data Types
+
+### AdminDashboardData
+
+```ts
+interface AdminDashboardData {
+  // Health metrics
+  syncHealth: SyncHealthData;
+
+  // Priority distribution
+  priorityDistribution: PriorityDistribution;
+
+  // Queue status
+  queueStatus: QueueStatus;
+
+  // Completion stats per source
+  completionStats: SourceCompletionStats[];
+
+  // PICS data
+  picsDataStats: PICSDataStats;
+  picsSyncState: PICSyncState;
+
+  // Jobs
+  runningJobs: SyncJob[];
+  allJobs: SyncJob[];
+
+  // Errors
+  appsWithErrors: AppError[];
+
+  // Chat logs
+  chatLogs: ChatQueryLog[];
+
+  // Counts
+  fullyCompletedCount: number;
+}
+```
+
+### SyncJob
+
+```ts
+interface SyncJob {
+  id: string;
+  job_type: string;
+  status: 'running' | 'completed' | 'failed';
+  started_at: string;
+  completed_at: string | null;
+  batch_size: number | null;
+  items_processed: number | null;
+  items_succeeded: number | null;
+  items_failed: number | null;
+  items_created: number | null;
+  items_updated: number | null;
+  error_message: string | null;
+  github_run_id: string | null;
+}
+```
+
+---
+
+## Related Documentation
+
+- [Design System Architecture](./design-system.md) - UI components and theming
+- [Chat Interface Guide](../guides/chat-interface.md) - Chat system documentation
+- [v2.0 Release Notes](../releases/v2.0-new-design.md) - Complete changelog

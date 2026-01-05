@@ -11,6 +11,20 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 | [Deployment](deployment/) | Vercel, Railway, GitHub Actions, Supabase |
 | [Guides](guides/) | User guides and tutorials |
 | [Reference](reference/) | API specs, data dictionaries, rate limits |
+| [Releases](releases/) | Version release notes and changelogs |
+
+---
+
+## Latest Release
+
+**[v2.0 - New Design](releases/v2.0-new-design.md)** (January 2026)
+
+Major visual and functional overhaul including:
+- Complete design system with dual light/dark themes
+- 66% query reduction in admin dashboard
+- New estimated played hours metrics
+- Enhanced chat/LLM capabilities
+- Mobile-responsive layouts
 
 ---
 
@@ -30,6 +44,8 @@ New to PublisherIQ? Start here:
 Understand how PublisherIQ works:
 
 - **[System Overview](architecture/overview.md)** - High-level architecture and component diagram
+- **[Design System](architecture/design-system.md)** - Theme system, color palette, typography, components
+- **[Admin Dashboard](architecture/admin-dashboard.md)** - Dashboard architecture and RPC optimizations
 - **[Chat Data System](architecture/chat-data-system.md)** - Complete chat/LLM architecture, Cube.js schemas, and tools
 - **[Data Sources](architecture/data-sources.md)** - Steam APIs, SteamSpy, PICS service
 - **[Database Schema](architecture/database-schema.md)** - Tables, relationships, SQL patterns
@@ -52,6 +68,7 @@ Deploy PublisherIQ to production:
 
 How-to guides for common tasks:
 
+- **[Theming](guides/theming.md)** - Using and customizing light/dark themes
 - **[Chat Interface](guides/chat-interface.md)** - Natural language queries via Cube.js with entity linking
 - **[Admin: Chat Logs](guides/admin-chat-logs.md)** - Analytics and debugging for chat queries
 - **[Running Workers](guides/running-workers.md)** - Manual worker execution
@@ -64,6 +81,7 @@ How-to guides for common tasks:
 
 Technical reference documentation:
 
+- **[New Metrics](reference/new-metrics.md)** - Estimated played hours and monthly metrics
 - **[API Endpoints](reference/api-endpoints.md)** - Steam API specifications
 - **[PICS Data Fields](reference/pics-data-fields.md)** - PICS field reference
 - **[Rate Limits](reference/rate-limits.md)** - All API rate limits
