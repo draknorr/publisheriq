@@ -210,10 +210,10 @@ async function getRelatedPublishers(developerId: number): Promise<RelatedPublish
   if (!publishers) return [];
 
   return publishers
-    .map((pub: { id: number; name: string; game_count: number }) => ({
+    .map((pub: { id: number; name: string; game_count: number | null }) => ({
       id: pub.id,
       name: pub.name,
-      game_count: pub.game_count,
+      game_count: pub.game_count ?? 0,
       shared_apps: pubCounts.get(pub.id) ?? 0,
     }))
     .sort((a, b) => b.shared_apps - a.shared_apps)
