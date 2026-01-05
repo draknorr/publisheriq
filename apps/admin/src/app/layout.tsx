@@ -17,6 +17,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
 };
 
 // Script to prevent theme flash on load (light mode default)
@@ -45,7 +46,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-screen bg-surface font-sans antialiased">
+      <body className="min-h-screen-safe bg-surface font-sans antialiased">
         <ThemeProvider>
           {children}
         </ThemeProvider>
