@@ -6,17 +6,18 @@ import Link from 'next/link';
 export interface SyncJobDetail {
   id: string;
   job_type: string;
-  status: string;
+  status: string | null;
   items_processed: number | null;
   items_succeeded: number | null;
   items_failed: number | null;
   items_created: number | null;
   items_updated: number | null;
-  started_at: string;
+  started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
   github_run_id: string | null;
   batch_size: number | null;
+  created_at: string | null;
 }
 
 function formatDuration(ms: number): string {
