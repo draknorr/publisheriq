@@ -181,7 +181,7 @@ async function getPublishers(appid: number): Promise<{ id: number; name: string 
     .filter((pub): pub is { id: number; name: string } => pub !== null);
 }
 
-async function getTags(appid: number): Promise<{ tag: string; vote_count: number }[]> {
+async function getTags(appid: number): Promise<{ tag: string; vote_count: number | null }[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
 

@@ -129,7 +129,7 @@ interface AppDetailSectionsProps {
   app: AppDetails;
   developers: { id: number; name: string }[];
   publishers: { id: number; name: string }[];
-  tags: { tag: string; vote_count: number }[];
+  tags: { tag: string; vote_count: number | null }[];
   metrics: DailyMetric[];
   histogram: ReviewHistogram[];
   trends: AppTrends | null;
@@ -409,7 +409,7 @@ function SummarySection({
   app: AppDetails;
   developers: { id: number; name: string }[];
   publishers: { id: number; name: string }[];
-  tags: { tag: string; vote_count: number }[];
+  tags: { tag: string; vote_count: number | null }[];
   steamTags: SteamTag[];
   trends: AppTrends | null;
   genres: Genre[];
