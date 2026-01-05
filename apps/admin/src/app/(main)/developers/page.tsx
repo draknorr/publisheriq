@@ -23,7 +23,7 @@ interface DeveloperWithMetrics {
   normalized_name: string;
   steam_vanity_url: string | null;
   first_game_release_date: string | null;
-  game_count: number;
+  game_count: number | null;
   total_owners_min: number;
   total_owners_max: number;
   total_ccu_peak: number;

@@ -6,14 +6,14 @@ export type EntityType = 'developer' | 'publisher';
 export interface PortfolioGenre {
   genre_id: number;
   name: string;
-  game_count: number;
+  game_count: number | null;
   is_primary_count: number;
 }
 
 export interface PortfolioCategory {
   category_id: number;
   name: string;
-  game_count: number;
+  game_count: number | null;
 }
 
 export interface PortfolioPlatformStats {
@@ -39,19 +39,19 @@ export interface PortfolioPlatformStats {
 export interface PortfolioFranchise {
   id: number;
   name: string;
-  game_count: number;
+  game_count: number | null;
 }
 
 export interface PortfolioLanguage {
   language: string;
-  game_count: number;
+  game_count: number | null;
 }
 
 export interface PortfolioContentDescriptor {
   descriptor_id: string;
   label: string;
   severity: 'high' | 'medium';
-  game_count: number;
+  game_count: number | null;
 }
 
 export interface PortfolioPICSData {

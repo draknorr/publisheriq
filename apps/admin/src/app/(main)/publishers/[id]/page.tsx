@@ -25,7 +25,7 @@ interface Publisher {
   steam_vanity_url: string | null;
   first_game_release_date: string | null;
   first_page_creation_date: string | null;
-  game_count: number;
+  game_count: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -53,14 +53,14 @@ interface PublisherApp {
 interface RelatedDeveloper {
   id: number;
   name: string;
-  game_count: number;
+  game_count: number | null;
   shared_apps: number;
 }
 
 interface SimilarPublisher {
   id: number;
   name: string;
-  game_count: number;
+  game_count: number | null;
   shared_tags: number;
 }
 
