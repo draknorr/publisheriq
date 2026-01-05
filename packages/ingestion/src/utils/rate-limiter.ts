@@ -135,7 +135,8 @@ export class RateLimiter {
 export const rateLimiters = {
   steamspyGeneral: new RateLimiter({ requestsPerSecond: 1, burst: 1 }),
   steamspyAll: new RateLimiter({ requestsPerSecond: 1 / 60, burst: 1 }),
-  storefront: new RateLimiter({ requestsPerSecond: 1.0, burst: 15 }),
+  // With 3 parallel workers, 0.33 req/sec each = ~1 req/sec total to avoid 429s
+  storefront: new RateLimiter({ requestsPerSecond: 0.33, burst: 3 }),
   reviews: new RateLimiter({ requestsPerSecond: 0.33, burst: 5 }),
   histogram: new RateLimiter({ requestsPerSecond: 1, burst: 5 }),
   communityScrape: new RateLimiter({ requestsPerSecond: 0.67, burst: 1 }),
