@@ -285,28 +285,14 @@ export async function getQueueStatus(supabase: SupabaseClient<Database>): Promis
     };
   }
 
-  // Fallback to direct queries if RPC fails
-  const now = new Date().toISOString();
-  const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-  const sixHoursFromNow = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
-  const twentyFourHoursFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-  const [overdue, dueIn1Hour, dueIn6Hours, dueIn24Hours] = await Promise.all([
-    supabase.from('sync_status').select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true).lt('next_sync_after', now),
-    supabase.from('sync_status').select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true).gte('next_sync_after', now).lt('next_sync_after', oneHourFromNow),
-    supabase.from('sync_status').select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true).gte('next_sync_after', now).lt('next_sync_after', sixHoursFromNow),
-    supabase.from('sync_status').select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true).gte('next_sync_after', now).lt('next_sync_after', twentyFourHoursFromNow),
-  ]);
-
+  // Fallback: RPC failed, return zeros (can't easily calculate interval-based due dates via REST API)
+  // The RPC should work after migration is applied
+  console.warn('get_queue_status RPC failed, returning zeros:', error);
   return {
-    overdue: overdue.count ?? 0,
-    dueIn1Hour: dueIn1Hour.count ?? 0,
-    dueIn6Hours: dueIn6Hours.count ?? 0,
-    dueIn24Hours: dueIn24Hours.count ?? 0,
+    overdue: 0,
+    dueIn1Hour: 0,
+    dueIn6Hours: 0,
+    dueIn24Hours: 0,
   };
 }
 
