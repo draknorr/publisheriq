@@ -343,11 +343,13 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
     // Review percentage - filter at DB level using pics_review_percentage
     // This is a first-pass filter; we'll refine with latest_daily_metrics in post-processing
+    // IMPORTANT: Allow NULLs through since latest_daily_metrics may have the review data
     if (review_percentage?.gte !== undefined) {
       // Use a slightly lower threshold at DB level since latest_daily_metrics might have higher values
       const dbThreshold = Math.max(0, review_percentage.gte - 5);
-      queryBuilder = queryBuilder.gte('pics_review_percentage', dbThreshold);
-      debug.steps.push(`Adding DB-level review % >= ${dbThreshold} filter (target: ${review_percentage.gte})`);
+      // Allow rows where pics_review_percentage >= threshold OR is NULL (post-filter will check latest_daily_metrics)
+      queryBuilder = queryBuilder.or(`pics_review_percentage.gte.${dbThreshold},pics_review_percentage.is.null`);
+      debug.steps.push(`Adding DB-level review % >= ${dbThreshold} OR NULL filter (target: ${review_percentage.gte})`);
     }
 
     // Determine fetch limit based on filtering needs
