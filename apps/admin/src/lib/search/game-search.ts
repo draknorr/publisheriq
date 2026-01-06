@@ -293,7 +293,11 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     // Apply appid filter if we have candidates from tag/genre/category
     if (candidateAppids !== null) {
       // Limit candidates to prevent oversized IN clause
-      const limitedCandidates = candidateAppids.slice(0, 1000);
+      // Use higher limit (3000) since DB-level filters will reduce the result set
+      const limitedCandidates = candidateAppids.slice(0, 3000);
+      if (candidateAppids.length > 3000) {
+        debug.steps.push(`Warning: truncated ${candidateAppids.length} candidates to 3000`);
+      }
       queryBuilder = queryBuilder.in('appid', limitedCandidates);
     }
 
@@ -337,8 +341,38 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       queryBuilder = queryBuilder.gte('metacritic_score', metacritic_score.gte);
     }
 
+    // Review percentage - filter at DB level using pics_review_percentage
+    // This is a first-pass filter; we'll refine with latest_daily_metrics in post-processing
+    if (review_percentage?.gte !== undefined) {
+      // Use a slightly lower threshold at DB level since latest_daily_metrics might have higher values
+      const dbThreshold = Math.max(0, review_percentage.gte - 5);
+      queryBuilder = queryBuilder.gte('pics_review_percentage', dbThreshold);
+      debug.steps.push(`Adding DB-level review % >= ${dbThreshold} filter (target: ${review_percentage.gte})`);
+    }
+
+    // Determine fetch limit based on filtering needs
+    // If we have post-filters that can't be fully pushed to DB, fetch more rows
+    const hasPostFilters = review_percentage?.gte !== undefined;
+    const fetchMultiplier = hasPostFilters ? 5 : 2;
+    const fetchLimit = actualLimit * fetchMultiplier;
+
+    // Add ordering at DB level to get best candidates first
+    // This ensures we fetch the most relevant rows before hitting the limit
+    switch (order_by) {
+      case 'score':
+        queryBuilder = queryBuilder.order('pics_review_percentage', { ascending: false, nullsFirst: false });
+        break;
+      case 'release_date':
+        queryBuilder = queryBuilder.order('release_date', { ascending: false, nullsFirst: false });
+        break;
+      // For 'reviews' and 'owners', we can't order at DB level (requires join data)
+      // Fall back to release_date to get newer games first
+      default:
+        queryBuilder = queryBuilder.order('release_date', { ascending: false, nullsFirst: false });
+    }
+
     // Execute query
-    const { data, error } = await queryBuilder.limit(actualLimit * 2); // Get extra for filtering
+    const { data, error } = await queryBuilder.limit(fetchLimit);
 
     if (error) {
       debug.steps.push(`Query error: ${error.message}`);
