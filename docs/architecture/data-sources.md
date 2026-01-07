@@ -2,6 +2,8 @@
 
 PublisherIQ collects data from multiple sources organized into tiers based on reliability and coverage.
 
+**Last Updated:** January 7, 2026
+
 ## Data Source Hierarchy
 
 ```

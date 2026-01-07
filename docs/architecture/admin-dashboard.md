@@ -2,6 +2,8 @@
 
 This document describes the redesigned admin dashboard introduced in PublisherIQ v2.0.
 
+**Last Updated:** January 7, 2026
+
 ## Overview
 
 The admin dashboard provides a comprehensive view of system health, sync status, and data completion. Version 2.0 introduces:

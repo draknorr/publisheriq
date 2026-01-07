@@ -2,6 +2,8 @@
 
 This guide covers how to use and customize the PublisherIQ theme system.
 
+**Last Updated:** January 7, 2026
+
 ## Quick Start
 
 ### Using the ThemeProvider

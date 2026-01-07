@@ -2,6 +2,8 @@
 
 This document describes the new analytics metrics introduced in PublisherIQ v2.0.
 
+**Last Updated:** January 7, 2026
+
 ## Estimated Weekly Played Hours
 
 ### Overview

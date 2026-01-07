@@ -4,6 +4,8 @@
 
 **Database**: PostgreSQL (Supabase)
 
+**Last Updated:** January 7, 2026
+
 **Semantic Layer**: Cube.js provides type-safe queries over these tables. See [Chat Data System](chat-data-system.md) for Cube schema documentation.
 
 ---

@@ -2,6 +2,8 @@
 
 A natural language interface for querying the Steam database. Ask questions in plain English and get instant answers with data tables, charts, and clickable game links.
 
+**Last Updated:** January 7, 2026
+
 > For technical implementation details, see [Chat Data System Architecture](../architecture/chat-data-system.md).
 
 ## Getting Started

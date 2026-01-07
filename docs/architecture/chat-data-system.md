@@ -2,6 +2,16 @@
 
 This document provides a complete reference for the PublisherIQ chat system's data handling architecture, including all cubes, dimensions, measures, segments, and tools. Use this as a guide for understanding the system and planning future expansions.
 
+**Last Updated:** January 7, 2026
+
+## Recent Improvements
+
+- **Retry Logic**: 3 retries with exponential backoff (500ms-4s) for Cube.js 502/503/504 errors
+- **30s Timeout**: AbortController timeout prevents hanging queries
+- **Tag Normalization**: "coop" automatically converts to "co-op"
+- **Category Fallback**: Falls back to category search when tags return 0 results
+- **NULL Handling**: Improved game search with NULL review percentage support
+
 ---
 
 ## Table of Contents

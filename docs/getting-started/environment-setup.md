@@ -58,6 +58,28 @@ LLM_PROVIDER=anthropic
 - Anthropic: Claude 3.5 Haiku (`claude-3-5-haiku-latest`)
 - OpenAI: GPT-4o Mini (`gpt-4o-mini`)
 
+### Cube.js Semantic Layer
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `CUBE_API_URL` | Yes | Cube.js API endpoint (e.g., `https://your-app.fly.dev/cubejs-api/v1`) |
+| `CUBE_API_SECRET` | Yes | Secret for JWT token signing |
+
+### Qdrant Cloud (Vector Search)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `QDRANT_URL` | Yes | Qdrant cluster URL (e.g., `https://xxx.aws.cloud.qdrant.io:6333`) |
+| `QDRANT_API_KEY` | Yes | Qdrant API key |
+
+### OpenAI Embeddings
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | OpenAI API key for embeddings |
+
+**Embedding Model:** text-embedding-3-small (1536 dimensions)
+
 ---
 
 ## PICS Service Variables
@@ -134,6 +156,10 @@ For dashboard deployment, add these in Vercel project settings:
 | `SUPABASE_SERVICE_KEY` | Your service role key |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `LLM_PROVIDER` | `anthropic` |
+| `CUBE_API_URL` | Cube.js API endpoint |
+| `CUBE_API_SECRET` | Cube.js JWT secret |
+| `QDRANT_URL` | Qdrant cluster URL |
+| `QDRANT_API_KEY` | Qdrant API key |
 
 ---
 
@@ -163,20 +189,40 @@ SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 # Steam
 STEAM_API_KEY=ABCD1234EFGH5678
 
-# LLM
+# LLM (for chat)
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-api03-...
+
+# Cube.js (semantic layer)
+CUBE_API_URL=https://publisheriq-cube.fly.dev/cubejs-api/v1
+CUBE_API_SECRET=your-cube-api-secret
+
+# Qdrant (vector search)
+QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io:6333
+QDRANT_API_KEY=your-qdrant-api-key
+
+# OpenAI (embeddings)
+OPENAI_API_KEY=sk-...
 ```
 
 ### `apps/admin/.env.local`
 
 ```bash
-# Same values for client-side access
+# Database
 SUPABASE_URL=https://abcdefgh.supabase.co
 SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
+# LLM (for chat)
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-api03-...
+
+# Cube.js (semantic layer)
+CUBE_API_URL=https://publisheriq-cube.fly.dev/cubejs-api/v1
+CUBE_API_SECRET=your-cube-api-secret
+
+# Qdrant (vector search)
+QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io:6333
+QDRANT_API_KEY=your-qdrant-api-key
 ```
 
 ### `services/pics-service/.env`

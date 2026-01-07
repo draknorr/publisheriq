@@ -45,14 +45,26 @@ cd ../.. && pnpm install
 
 Navigate to **Settings > Environment Variables** and add:
 
+**Required:**
+
 | Variable | Value | Environment |
 |----------|-------|-------------|
 | `SUPABASE_URL` | `https://xxx.supabase.co` | All |
 | `SUPABASE_SERVICE_KEY` | `eyJ...` | All |
+| `CUBE_API_URL` | `https://publisheriq-cube.fly.dev/cubejs-api/v1` | All |
+| `CUBE_API_SECRET` | Your Cube.js JWT secret | All |
+| `QDRANT_URL` | `https://xxx.aws.cloud.qdrant.io:6333` | All |
+| `QDRANT_API_KEY` | Your Qdrant API key | All |
+
+**LLM Provider (choose one):**
+
+| Variable | Value | Environment |
+|----------|-------|-------------|
 | `LLM_PROVIDER` | `anthropic` | All |
 | `ANTHROPIC_API_KEY` | `sk-ant-...` | All |
 
 Or if using OpenAI:
+
 | Variable | Value | Environment |
 |----------|-------|-------------|
 | `LLM_PROVIDER` | `openai` | All |

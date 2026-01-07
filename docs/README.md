@@ -23,8 +23,15 @@ Major visual and functional overhaul including:
 - Complete design system with dual light/dark themes
 - 66% query reduction in admin dashboard
 - New estimated played hours metrics
-- Enhanced chat/LLM capabilities
+- Enhanced chat/LLM capabilities with Cube.js semantic layer
 - Mobile-responsive layouts
+- Vector similarity search via Qdrant Cloud
+
+**Recent Updates (January 7, 2026):**
+- Improved game search with NULL review percentage handling
+- Sync job concurrency protection with 2-hour timeout detection
+- Complete Steam category mappings (70 categories)
+- iPad scrollbar fixes and theme toggle improvements
 
 ---
 
@@ -58,6 +65,7 @@ Understand how PublisherIQ works:
 Deploy PublisherIQ to production:
 
 - **[Vercel](deployment/vercel.md)** - Deploy the admin dashboard
+- **[Fly.io](deployment/flyio.md)** - Deploy the Cube.js semantic layer
 - **[Railway](deployment/railway.md)** - Deploy the PICS service
 - **[GitHub Actions](deployment/github-actions.md)** - Configure scheduled sync jobs
 - **[Supabase](deployment/supabase.md)** - Set up the database
@@ -93,17 +101,26 @@ Technical reference documentation:
 
 ```
 publisheriq/
-├── apps/admin/           # Next.js admin dashboard
+├── apps/admin/           # Next.js 15 admin dashboard (Vercel)
 ├── packages/
-│   ├── cube/             # Cube.js semantic layer models
+│   ├── cube/             # Cube.js semantic layer models (Fly.io)
 │   ├── database/         # Supabase client + types
 │   ├── ingestion/        # Data collection workers + embedding sync
-│   ├── qdrant/           # Vector database client for similarity search
+│   ├── qdrant/           # Vector database client (Qdrant Cloud)
 │   └── shared/           # Utilities and constants
-├── services/pics-service/# Python PICS microservice
-├── supabase/migrations/  # Database schema
-└── .github/workflows/    # Scheduled sync jobs
+├── services/pics-service/# Python PICS microservice (Railway)
+├── supabase/migrations/  # Database schema (Supabase)
+├── docs/                 # This documentation
+└── .github/workflows/    # Scheduled sync jobs (GitHub Actions)
 ```
+
+**Deployment Architecture:**
+- **Dashboard**: Vercel (Next.js 15)
+- **Semantic Layer**: Fly.io (Cube.js)
+- **Database**: Supabase (PostgreSQL)
+- **Vector Search**: Qdrant Cloud
+- **PICS Service**: Railway (Python)
+- **Scheduled Syncs**: GitHub Actions
 
 See individual package READMEs for more details:
 - [apps/admin/README.md](../apps/admin/README.md)

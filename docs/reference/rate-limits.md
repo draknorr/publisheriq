@@ -2,6 +2,8 @@
 
 Complete reference for all API rate limits in PublisherIQ.
 
+**Last Updated:** January 7, 2026
+
 ## Summary Table
 
 | API | Rate Limit | Effective Rate | Notes |

@@ -1,6 +1,8 @@
 # System Architecture Overview
 
-PublisherIQ is a Steam data acquisition platform that collects, stores, and analyzes game metadata, publisher information, and review trends. This document describes the high-level architecture.
+PublisherIQ is a comprehensive Steam data acquisition and analytics platform that collects, stores, analyzes, and presents game metadata, publisher information, player engagement trends, and semantic similarity search. This document describes the high-level architecture.
+
+**Last Updated:** January 7, 2026
 
 ## System Diagram
 

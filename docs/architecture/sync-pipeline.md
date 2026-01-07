@@ -2,6 +2,15 @@
 
 This document describes how data flows through PublisherIQ, from external APIs to the database.
 
+**Last Updated:** January 7, 2026
+
+## Recent Improvements
+
+- **Concurrency Protection**: Sync jobs now detect stale running jobs after 2 hours
+- **Rate Limit Optimization**: Storefront sync optimized for 3 parallel workers
+- **Error Handling**: Improved duplicate dev/pub name handling during upserts
+- **NULL Safety**: Better handling of nullable fields (game_count, vote_count, started_at)
+
 ## Pipeline Overview
 
 ```

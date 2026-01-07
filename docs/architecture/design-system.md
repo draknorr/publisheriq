@@ -2,6 +2,13 @@
 
 This document describes the design system introduced in PublisherIQ v2.0, including the theme system, color palette, typography, and component library.
 
+**Last Updated:** January 7, 2026
+
+## Recent Fixes
+
+- **iPad Scrollbar Issues**: Fixed scrollbar styling for iPad Safari
+- **Theme Toggle Visibility**: Improved visibility of theme toggle button
+
 ## Overview
 
 The design system provides:

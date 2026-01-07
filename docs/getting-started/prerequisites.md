@@ -56,6 +56,26 @@ The chat interface requires an LLM provider. Choose one:
 2. Generate an API key
 3. Uses GPT-4o-mini by default
 
+### 4. OpenAI API Key (for Embeddings)
+
+Required for vector similarity search:
+1. Create account at [platform.openai.com](https://platform.openai.com)
+2. Generate an API key
+3. Used for text-embedding-3-small model (1536 dimensions)
+
+### 5. Qdrant Cloud (for Similarity Search)
+
+Vector database for game/publisher/developer similarity:
+1. Create account at [cloud.qdrant.io](https://cloud.qdrant.io)
+2. Create a cluster
+3. Get your cluster URL and API key
+
+### 6. Cube.js Cloud or Fly.io (for Analytics)
+
+Semantic layer for structured queries:
+- **Option A: Cube Cloud** - [cube.dev/cloud](https://cube.dev/cloud)
+- **Option B: Self-hosted on Fly.io** - Deploy `packages/cube`
+
 ## Optional Services
 
 ### GitHub Account

@@ -2,6 +2,8 @@
 
 Common issues and solutions for PublisherIQ.
 
+**Last Updated:** January 7, 2026
+
 ## Database Connection Issues
 
 ### "SUPABASE_URL is not defined"
@@ -103,6 +105,42 @@ LIMIT 20;
 
 ---
 
+## Cube.js / Analytics Issues
+
+### 502 Gateway Errors
+
+**Cause:** Cube.js machine cold start or query timeout.
+
+**Solution:**
+1. The dashboard has built-in retry logic (3 retries with exponential backoff)
+2. Ensure `min_machines_running = 1` in Fly.io config
+3. Increase machine memory if queries are complex
+4. Check Fly.io logs: `fly logs --app publisheriq-cube`
+
+### "Query failed" in Chat
+
+**Cause:** Cube.js schema mismatch or invalid filter.
+
+**Solution:**
+1. Expand Query Details panel to see the actual query
+2. Check filter operators are valid (use `gte` not `>=`)
+3. Verify cube names match schema (e.g., `Discovery`, not `discovery`)
+4. Check Cube.js logs for detailed error
+
+### Stale Data in Queries
+
+**Cause:** Materialized views not refreshed.
+
+**Solution:**
+```sql
+-- Refresh materialized views
+REFRESH MATERIALIZED VIEW CONCURRENTLY publisher_metrics;
+REFRESH MATERIALIZED VIEW CONCURRENTLY developer_metrics;
+REFRESH MATERIALIZED VIEW CONCURRENTLY latest_daily_metrics;
+```
+
+---
+
 ## Chat Interface Issues
 
 ### "Chat not responding"
@@ -183,6 +221,44 @@ rm -rf node_modules apps/*/node_modules packages/*/node_modules
 pnpm install
 pnpm build
 ```
+
+---
+
+## Qdrant / Similarity Search Issues
+
+### "No similar games found"
+
+**Cause:** Embeddings not synced or Qdrant connection issue.
+
+**Solution:**
+1. Check if embeddings have been generated:
+   ```sql
+   SELECT COUNT(*) FROM sync_status WHERE last_embedding_sync IS NOT NULL;
+   ```
+2. Verify Qdrant credentials in environment
+3. Run embedding sync manually:
+   ```bash
+   pnpm --filter ingestion run sync:embeddings
+   ```
+
+### Similarity Search Slow
+
+**Cause:** Large Qdrant collection or complex filters.
+
+**Solution:**
+1. Ensure Qdrant collection has proper indexes
+2. Reduce the `limit` parameter in queries
+3. Use more specific filters to narrow search space
+
+### "Embedding sync failed"
+
+**Cause:** OpenAI API rate limit or Qdrant write error.
+
+**Solution:**
+1. Check OpenAI API quota
+2. Verify Qdrant cluster is online
+3. Check batch size in embedding worker
+4. Review logs for specific error
 
 ---
 
