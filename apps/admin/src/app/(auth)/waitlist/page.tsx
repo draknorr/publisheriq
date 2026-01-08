@@ -41,7 +41,7 @@ export default function WaitlistPage() {
             full_name: formData.fullName,
             organization: formData.organization || null,
             how_i_plan_to_use: formData.howIPlanToUse || null,
-            status: 'pending',
+            status: 'pending' as const,
           },
           {
             onConflict: 'email',
