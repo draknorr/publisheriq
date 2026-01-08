@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { getUserWithProfile, createServerClient } from '@/lib/supabase';
+import { getUserWithProfile, createServerClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
 import { Coins, History, User } from 'lucide-react';
 import { SignOutButton } from './SignOutButton';

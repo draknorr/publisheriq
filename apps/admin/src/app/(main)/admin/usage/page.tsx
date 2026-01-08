@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase';
+import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
 import { BarChart3, Coins, MessageSquare, Users } from 'lucide-react';
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase';
+import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
 import { Clock, CheckCircle, XCircle } from 'lucide-react';
 import { WaitlistTable } from './WaitlistTable';
