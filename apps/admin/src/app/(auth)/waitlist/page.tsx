@@ -33,15 +33,15 @@ export default function WaitlistPage() {
       const supabase = createBrowserClient();
 
       // Check if email already exists and update, or insert new
-      const { error: upsertError } = await supabase
-        .from('waitlist')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: upsertError } = await (supabase.from('waitlist') as any)
         .upsert(
           {
             email: formData.email,
             full_name: formData.fullName,
             organization: formData.organization || null,
             how_i_plan_to_use: formData.howIPlanToUse || null,
-            status: 'pending' as const,
+            status: 'pending',
           },
           {
             onConflict: 'email',
