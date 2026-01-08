@@ -65,12 +65,13 @@ export function UsersTable({ users, currentUserId }: UsersTableProps) {
     try {
       const supabase = createBrowserClient();
 
-      const { data, error: rpcError } = await supabase.rpc('admin_adjust_credits', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error: rpcError } = await (supabase.rpc as any)('admin_adjust_credits', {
         p_admin_id: currentUserId,
         p_user_id: selectedUser.id,
         p_amount: amount,
         p_description: creditReason,
-      });
+      }) as { data: Array<{ success: boolean; new_balance?: number }> | null; error: Error | null };
 
       if (rpcError) {
         setError(rpcError.message);
@@ -150,7 +151,7 @@ export function UsersTable({ users, currentUserId }: UsersTableProps) {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge variant={user.role === 'admin' ? 'accent' : 'default'}>
+                  <Badge variant={user.role === 'admin' ? 'primary' : 'default'}>
                     {user.role}
                   </Badge>
                 </td>

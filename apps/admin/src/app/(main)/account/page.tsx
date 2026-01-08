@@ -11,11 +11,20 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-async function getRecentTransactions(userId: string) {
+interface CreditTransaction {
+  id: string;
+  user_id: string;
+  transaction_type: string;
+  amount: number;
+  description: string | null;
+  created_at: string;
+}
+
+async function getRecentTransactions(userId: string): Promise<CreditTransaction[]> {
   const supabase = await createServerClient();
 
-  const { data: transactions } = await supabase
-    .from('credit_transactions')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: transactions } = await (supabase.from('credit_transactions') as any)
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })

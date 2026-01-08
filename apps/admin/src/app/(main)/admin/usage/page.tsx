@@ -23,9 +23,11 @@ async function getUsageStats() {
   const supabase = await createServerClient();
 
   // Get aggregate stats
-  const { data: profiles } = await supabase
-    .from('user_profiles')
-    .select('credit_balance, total_credits_used, total_messages_sent');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profiles } = await (supabase.from('user_profiles') as any)
+    .select('credit_balance, total_credits_used, total_messages_sent') as {
+      data: Array<{ credit_balance: number; total_credits_used: number; total_messages_sent: number }> | null
+    };
 
   const totalCreditsInSystem = profiles?.reduce((sum, p) => sum + p.credit_balance, 0) ?? 0;
   const totalCreditsUsed = profiles?.reduce((sum, p) => sum + p.total_credits_used, 0) ?? 0;
@@ -56,8 +58,8 @@ async function getUsageStats() {
 async function getTopUsers(): Promise<UserUsage[]> {
   const supabase = await createServerClient();
 
-  const { data: users } = await supabase
-    .from('user_profiles')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: users } = await (supabase.from('user_profiles') as any)
     .select('id, email, full_name, credit_balance, total_credits_used, total_messages_sent')
     .order('total_credits_used', { ascending: false })
     .limit(10);

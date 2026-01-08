@@ -72,11 +72,11 @@ async function handleSupabaseAuth(request: NextRequest): Promise<NextResponse> {
   // Check admin access for admin paths
   if (isAdminPath(pathname)) {
     // Fetch user profile to check role
-    const { data: profile } = await supabase
-      .from('user_profiles')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profile } = await (supabase.from('user_profiles') as any)
       .select('role')
       .eq('id', user.id)
-      .single();
+      .single() as { data: { role: string } | null };
 
     if (!profile || profile.role !== 'admin') {
       // Non-admin trying to access admin routes - redirect to home

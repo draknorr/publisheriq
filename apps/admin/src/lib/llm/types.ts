@@ -52,12 +52,17 @@ export interface LLMProvider {
 
 // Chunk types from LLM provider streaming
 export interface StreamChunk {
-  type: 'text' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'done';
+  type: 'text' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'done' | 'usage';
   text?: string;
   toolCall?: {
     id: string;
     name: string;
     arguments: Record<string, unknown>;
+  };
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
   };
 }
 

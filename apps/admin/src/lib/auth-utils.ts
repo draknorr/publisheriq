@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createServerClient, getUserWithProfile, type UserProfile } from './supabase';
+import { createServerClient, getUserWithProfile, type UserProfile } from './supabase/server';
 import type { User } from '@supabase/supabase-js';
 
 export class AuthenticationError extends Error {

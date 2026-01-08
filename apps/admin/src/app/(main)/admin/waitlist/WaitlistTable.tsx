@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Tabs } from '@/components/ui/Tabs';
+import { UnderlineTabs } from '@/components/ui/Tabs';
 import { CheckCircle, XCircle, Mail, X } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -37,14 +37,14 @@ function formatDate(dateString: string): string {
   });
 }
 
-function getStatusBadgeVariant(status: string): 'default' | 'accent' | 'positive' | 'negative' {
+function getStatusBadgeVariant(status: string): 'default' | 'primary' | 'success' | 'error' {
   switch (status) {
     case 'pending':
       return 'default';
     case 'approved':
-      return 'positive';
+      return 'success';
     case 'rejected':
-      return 'negative';
+      return 'error';
     default:
       return 'default';
   }
@@ -77,8 +77,8 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
       const supabase = createBrowserClient();
 
       // Update waitlist status
-      const { error: updateError } = await supabase
-        .from('waitlist')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: updateError } = await (supabase.from('waitlist') as any)
         .update({
           status: 'approved',
           reviewed_by: adminId,
@@ -105,8 +105,8 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
         // Update invite_sent_at to null to indicate no invite was sent
       } else {
         // Mark invite as sent
-        await supabase
-          .from('waitlist')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('waitlist') as any)
           .update({ invite_sent_at: new Date().toISOString() })
           .eq('id', selectedEntry.id);
       }
@@ -126,8 +126,8 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
     try {
       const supabase = createBrowserClient();
 
-      const { error: updateError } = await supabase
-        .from('waitlist')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: updateError } = await (supabase.from('waitlist') as any)
         .update({
           status: 'rejected',
           reviewed_by: adminId,
@@ -158,10 +158,10 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
     <>
       {/* Tabs */}
       <div className="p-4 border-b border-border-subtle">
-        <Tabs
+        <UnderlineTabs
           tabs={tabs}
           activeTab={activeTab}
-          onChange={(id) => setActiveTab(id as typeof activeTab)}
+          onChange={(id: string) => setActiveTab(id as typeof activeTab)}
         />
       </div>
 

@@ -37,7 +37,26 @@ export type ReviewHistogramInsert = Tables['review_histogram']['Insert'];
 export type SyncStatusInsert = Tables['sync_status']['Insert'];
 export type SyncJobInsert = Tables['sync_jobs']['Insert'];
 
+// User system row types
+export type UserProfile = Tables['user_profiles']['Row'];
+export type CreditTransaction = Tables['credit_transactions']['Row'];
+export type CreditReservation = Tables['credit_reservations']['Row'];
+export type Waitlist = Tables['waitlist']['Row'];
+export type RateLimitState = Tables['rate_limit_state']['Row'];
+
+// User system insert types
+export type UserProfileInsert = Tables['user_profiles']['Insert'];
+export type CreditTransactionInsert = Tables['credit_transactions']['Insert'];
+export type CreditReservationInsert = Tables['credit_reservations']['Insert'];
+export type WaitlistInsert = Tables['waitlist']['Insert'];
+
 // Enum types
 export type AppType = Enums['app_type'];
 export type SyncSource = Enums['sync_source'];
 export type TrendDirection = Enums['trend_direction'];
+
+// User system enum types
+export type UserRole = Enums['user_role'];
+export type WaitlistStatus = Enums['waitlist_status'];
+export type CreditTransactionType = Enums['credit_transaction_type'];
+export type CreditReservationStatus = Enums['credit_reservation_status'];

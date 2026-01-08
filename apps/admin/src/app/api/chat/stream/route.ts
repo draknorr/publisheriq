@@ -115,11 +115,11 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // Check credits if enabled
     if (CREDITS_ENABLED) {
-      const { data: profile } = await supabase
-        .from('user_profiles')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: profile } = await (supabase.from('user_profiles') as any)
         .select('credit_balance')
         .eq('id', user.id)
-        .single();
+        .single() as { data: { credit_balance: number } | null };
 
       if (!profile || profile.credit_balance < MINIMUM_CHARGE) {
         return new Response(
@@ -133,9 +133,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
 
       // Check rate limit
-      const { data: rateLimitResult } = await supabase.rpc('check_and_increment_rate_limit', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: rateLimitResult } = await (supabase.rpc as any)('check_and_increment_rate_limit', {
         p_user_id: user.id,
-      });
+      }) as { data: Array<{ allowed: boolean; retry_after_seconds: number }> | null };
 
       if (rateLimitResult && !rateLimitResult[0]?.allowed) {
         const retryAfter = rateLimitResult[0]?.retry_after_seconds ?? 60;
@@ -156,10 +157,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
 
       // Reserve credits upfront
-      const { data: reserveResult } = await supabase.rpc('reserve_credits', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: reserveResult } = await (supabase.rpc as any)('reserve_credits', {
         p_user_id: user.id,
         p_amount: DEFAULT_RESERVATION,
-      });
+      }) as { data: string | null };
 
       if (!reserveResult) {
         return new Response(
@@ -340,7 +342,8 @@ export async function POST(request: NextRequest): Promise<Response> {
           // Finalize credits (charge actual, refund excess)
           const breakdown = getCreditBreakdown(allToolNames, totalInputTokens, totalOutputTokens);
 
-          await supabase.rpc('finalize_credits', {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.rpc as any)('finalize_credits', {
             p_reservation_id: reservationId,
             p_actual_amount: creditsCharged,
             p_description: `Chat: ${debugStats.toolCallCount} tools, ${totalInputTokens}/${totalOutputTokens} tokens`,
@@ -397,7 +400,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Refund credits on server error
         if (CREDITS_ENABLED && reservationId && supabase) {
           try {
-            await supabase.rpc('refund_reservation', { p_reservation_id: reservationId });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.rpc as any)('refund_reservation', { p_reservation_id: reservationId });
           } catch (refundError) {
             console.error('Failed to refund credits:', refundError);
           }
