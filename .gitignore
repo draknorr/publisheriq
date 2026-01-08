@@ -7,11 +7,11 @@ dist
 .next
 out
 build
+*.tsbuildinfo
 
 # Environment
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 
 # IDE
 .idea
@@ -39,3 +39,6 @@ coverage
 # Supabase
 supabase/.branches
 supabase/.temp
+
+# Claude
+claude.md
