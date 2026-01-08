@@ -32,7 +32,7 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
-  { href: '/', label: 'Home', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/apps', label: 'Apps', icon: Gamepad2 },
   { href: '/publishers', label: 'Publishers', icon: Building2 },
@@ -46,8 +46,6 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/usage', label: 'Usage', icon: BarChart3 },
 ];
 
-const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE || 'password';
-
 export function Sidebar() {
   const pathname = usePathname();
   const { isOpen, toggle, close } = useSidebar();
@@ -59,8 +57,8 @@ export function Sidebar() {
   const [adminExpanded, setAdminExpanded] = useState(false);
 
   const isActive = (href: string) => {
-    if (href === '/') {
-      return pathname === '/';
+    if (href === '/dashboard') {
+      return pathname === '/dashboard';
     }
     // For admin routes, only match exact or child paths
     if (href === '/admin') {
@@ -71,10 +69,8 @@ export function Sidebar() {
 
   const isAdminSection = pathname.startsWith('/admin');
 
-  // Fetch user profile if using Supabase auth
+  // Fetch user profile
   useEffect(() => {
-    if (AUTH_MODE !== 'supabase') return;
-
     const fetchProfile = async () => {
       try {
         const supabase = createBrowserClient();
@@ -131,7 +127,7 @@ export function Sidebar() {
     };
   }, [isOpen]);
 
-  const isAdmin = AUTH_MODE === 'password' || userProfile?.role === 'admin';
+  const isAdmin = userProfile?.role === 'admin';
 
   return (
     <>
@@ -173,7 +169,7 @@ export function Sidebar() {
           {/* Logo */}
           <div className="flex h-14 items-center border-b border-border-subtle px-5">
             <Link
-              href="/"
+              href="/dashboard"
               className="flex items-center gap-2.5 text-text-primary transition-opacity hover:opacity-80"
             >
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent-primary">
@@ -219,33 +215,31 @@ export function Sidebar() {
               })}
             </div>
 
-            {/* Account link (Supabase auth only) */}
-            {AUTH_MODE === 'supabase' && (
-              <div className="mt-4 pt-4 border-t border-border-subtle">
-                <Link
-                  href="/account"
-                  className={`
-                    group relative flex items-center gap-3 rounded-lg px-3 py-2
-                    text-body font-medium transition-all duration-150
-                    ${
-                      isActive('/account')
-                        ? 'bg-surface-elevated text-text-primary'
-                        : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
-                    }
-                  `}
-                >
-                  {isActive('/account') && (
-                    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-accent-primary" />
-                  )}
-                  <User
-                    className={`h-4 w-4 flex-shrink-0 ${
-                      isActive('/account') ? 'text-accent-primary' : 'text-text-tertiary group-hover:text-text-secondary'
-                    }`}
-                  />
-                  Account
-                </Link>
-              </div>
-            )}
+            {/* Account link */}
+            <div className="mt-4 pt-4 border-t border-border-subtle">
+              <Link
+                href="/account"
+                className={`
+                  group relative flex items-center gap-3 rounded-lg px-3 py-2
+                  text-body font-medium transition-all duration-150
+                  ${
+                    isActive('/account')
+                      ? 'bg-surface-elevated text-text-primary'
+                      : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                  }
+                `}
+              >
+                {isActive('/account') && (
+                  <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-accent-primary" />
+                )}
+                <User
+                  className={`h-4 w-4 flex-shrink-0 ${
+                    isActive('/account') ? 'text-accent-primary' : 'text-text-tertiary group-hover:text-text-secondary'
+                  }`}
+                />
+                Account
+              </Link>
+            </div>
 
             {/* Admin section */}
             {isAdmin && (
@@ -300,8 +294,8 @@ export function Sidebar() {
 
           {/* Footer */}
           <div className="border-t border-border-subtle p-4">
-            {/* Credit balance (Supabase auth only) */}
-            {AUTH_MODE === 'supabase' && userProfile && (
+            {/* Credit balance */}
+            {userProfile && (
               <div className="mb-3 flex items-center gap-2 px-1">
                 <Coins className="h-4 w-4 text-accent-green" />
                 <span className="text-body-sm text-text-secondary">

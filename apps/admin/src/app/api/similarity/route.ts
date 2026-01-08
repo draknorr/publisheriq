@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
 import type { PopularityComparison, ReviewComparison } from '@publisheriq/qdrant';
+import { createServerClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    // Auth check (defense-in-depth, middleware also checks)
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'unauthorized', message: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const searchParams = request.nextUrl.searchParams;
 
     const entityType = searchParams.get('entity_type') as 'game' | 'publisher' | 'developer' | null;

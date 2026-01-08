@@ -37,7 +37,6 @@ import type {
 
 const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
 const CREDITS_ENABLED = process.env.CREDITS_ENABLED === 'true';
-const AUTH_MODE = process.env.AUTH_MODE || 'password';
 const MAX_TOOL_ITERATIONS = 5;
 
 interface QueryAnalyticsArgs {
@@ -94,88 +93,82 @@ export async function POST(request: NextRequest): Promise<Response> {
   const requestStart = performance.now();
   const encoder = new TextEncoder();
 
-  // Auth and credit state
-  let userId: string | null = null;
+  // Auth check (always required)
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return new Response(
+      JSON.stringify({ error: 'unauthorized', message: 'Authentication required' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const userId = user.id;
   let reservationId: string | null = null;
-  let supabase: Awaited<ReturnType<typeof createServerClient>> | null = null;
 
-  // Check auth and credits if Supabase auth is enabled
-  if (AUTH_MODE === 'supabase') {
-    supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+  // Check credits if enabled
+  if (CREDITS_ENABLED) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profile } = await (supabase.from('user_profiles') as any)
+      .select('credit_balance')
+      .eq('id', user.id)
+      .single() as { data: { credit_balance: number } | null };
 
-    if (!user) {
+    if (!profile || profile.credit_balance < MINIMUM_CHARGE) {
       return new Response(
-        JSON.stringify({ error: 'unauthorized', message: 'Authentication required' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: 'insufficient_credits',
+          message: "You don't have enough credits to use chat. Please contact your administrator.",
+          balance: profile?.credit_balance ?? 0,
+        }),
+        { status: 402, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    userId = user.id;
+    // Check rate limit
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: rateLimitResult } = await (supabase.rpc as any)('check_and_increment_rate_limit', {
+      p_user_id: user.id,
+    }) as { data: Array<{ allowed: boolean; retry_after_seconds: number }> | null };
 
-    // Check credits if enabled
-    if (CREDITS_ENABLED) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profile } = await (supabase.from('user_profiles') as any)
-        .select('credit_balance')
-        .eq('id', user.id)
-        .single() as { data: { credit_balance: number } | null };
-
-      if (!profile || profile.credit_balance < MINIMUM_CHARGE) {
-        return new Response(
-          JSON.stringify({
-            error: 'insufficient_credits',
-            message: "You don't have enough credits to use chat. Please contact your administrator.",
-            balance: profile?.credit_balance ?? 0,
-          }),
-          { status: 402, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Check rate limit
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: rateLimitResult } = await (supabase.rpc as any)('check_and_increment_rate_limit', {
-        p_user_id: user.id,
-      }) as { data: Array<{ allowed: boolean; retry_after_seconds: number }> | null };
-
-      if (rateLimitResult && !rateLimitResult[0]?.allowed) {
-        const retryAfter = rateLimitResult[0]?.retry_after_seconds ?? 60;
-        return new Response(
-          JSON.stringify({
-            error: 'rate_limited',
-            message: 'Too many requests. Please try again later.',
-            retry_after: retryAfter,
-          }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              'Retry-After': String(retryAfter),
-            },
-          }
-        );
-      }
-
-      // Reserve credits upfront
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: reserveResult } = await (supabase.rpc as any)('reserve_credits', {
-        p_user_id: user.id,
-        p_amount: DEFAULT_RESERVATION,
-      }) as { data: string | null };
-
-      if (!reserveResult) {
-        return new Response(
-          JSON.stringify({
-            error: 'insufficient_credits',
-            message: "Failed to reserve credits. You may not have enough credits.",
-            balance: profile.credit_balance,
-          }),
-          { status: 402, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
-      reservationId = reserveResult;
+    if (rateLimitResult && !rateLimitResult[0]?.allowed) {
+      const retryAfter = rateLimitResult[0]?.retry_after_seconds ?? 60;
+      return new Response(
+        JSON.stringify({
+          error: 'rate_limited',
+          message: 'Too many requests. Please try again later.',
+          retry_after: retryAfter,
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter),
+          },
+        }
+      );
     }
+
+    // Reserve credits upfront
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: reserveResult } = await (supabase.rpc as any)('reserve_credits', {
+      p_user_id: user.id,
+      p_amount: DEFAULT_RESERVATION,
+    }) as { data: string | null };
+
+    if (!reserveResult) {
+      return new Response(
+        JSON.stringify({
+          error: 'insufficient_credits',
+          message: "Failed to reserve credits. You may not have enough credits.",
+          balance: profile.credit_balance,
+        }),
+        { status: 402, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    reservationId = reserveResult;
   }
 
   const stream = new ReadableStream({
@@ -332,7 +325,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
 
         // Calculate credits if enabled
-        if (CREDITS_ENABLED && reservationId && supabase) {
+        if (CREDITS_ENABLED && reservationId) {
           creditsCharged = calculateTotalCredits(
             allToolNames,
             totalInputTokens,
@@ -398,7 +391,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         controller.enqueue(encoder.encode(formatSSE(errorEvent)));
 
         // Refund credits on server error
-        if (CREDITS_ENABLED && reservationId && supabase) {
+        if (CREDITS_ENABLED && reservationId) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase.rpc as any)('refund_reservation', { p_reservation_id: reservationId });

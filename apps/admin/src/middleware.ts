@@ -2,17 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
-// Auth mode: 'password' (legacy) or 'supabase' (new)
-const AUTH_MODE = process.env.AUTH_MODE || 'password';
-
-// Legacy password auth cookie
-const PASSWORD_COOKIE_NAME = 'publisheriq_auth';
-
 // Public paths - no auth required
-const PUBLIC_PATHS_PASSWORD = ['/password', '/api/auth'];
-const PUBLIC_PATHS_SUPABASE = ['/login', '/waitlist', '/auth/callback', '/api/auth/callback'];
+const PUBLIC_PATHS = ['/login', '/waitlist', '/auth/callback', '/api/auth/callback'];
 
-// Admin-only paths (requires admin role in Supabase mode)
+// Admin-only paths (requires admin role)
 const ADMIN_PATHS = ['/admin'];
 
 // Static asset patterns to skip
@@ -27,43 +20,57 @@ function isStaticAsset(pathname: string): boolean {
   return STATIC_PATTERNS.some((pattern) => pathname.startsWith(pattern));
 }
 
-function isPublicPath(pathname: string, authMode: string): boolean {
-  const publicPaths = authMode === 'supabase' ? PUBLIC_PATHS_SUPABASE : PUBLIC_PATHS_PASSWORD;
-  return publicPaths.some((path) => pathname.startsWith(path));
+function isPublicPath(pathname: string): boolean {
+  // Landing page is public (exact match only)
+  if (pathname === '/') {
+    return true;
+  }
+  return PUBLIC_PATHS.some((path) => pathname.startsWith(path));
 }
 
 function isAdminPath(pathname: string): boolean {
   return ADMIN_PATHS.some((path) => pathname.startsWith(path));
 }
 
-/**
- * Legacy password-based authentication middleware.
- */
-function handlePasswordAuth(request: NextRequest): NextResponse {
-  const authCookie = request.cookies.get(PASSWORD_COOKIE_NAME);
-
-  if (!authCookie || authCookie.value !== 'authenticated') {
-    const passwordUrl = new URL('/password', request.url);
-    return NextResponse.redirect(passwordUrl);
-  }
-
-  return NextResponse.next();
+function isApiPath(pathname: string): boolean {
+  return pathname.startsWith('/api/');
 }
 
-/**
- * Supabase authentication middleware.
- */
-async function handleSupabaseAuth(request: NextRequest): Promise<NextResponse> {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Update session (refresh tokens if needed)
+  // Skip static assets
+  if (isStaticAsset(pathname)) {
+    return NextResponse.next();
+  }
+
+  // For public paths, still update session but don't require auth
+  if (isPublicPath(pathname)) {
+    try {
+      const { response } = await updateSession(request);
+      return response;
+    } catch {
+      return NextResponse.next();
+    }
+  }
+
+  // Protected routes - require Supabase auth
   const { user, response, supabase } = await updateSession(request);
 
-  // Not authenticated - redirect to login
+  // Not authenticated
   if (!user) {
+    // API routes get 401 JSON response (not redirect)
+    if (isApiPath(pathname)) {
+      return new Response(
+        JSON.stringify({ error: 'unauthorized', message: 'Authentication required' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Web routes get redirect to login
     const loginUrl = new URL('/login', request.url);
     // Preserve the intended destination
-    if (pathname !== '/') {
+    if (pathname !== '/dashboard') {
       loginUrl.searchParams.set('redirect', pathname);
     }
     return NextResponse.redirect(loginUrl);
@@ -79,43 +86,13 @@ async function handleSupabaseAuth(request: NextRequest): Promise<NextResponse> {
       .single() as { data: { role: string } | null };
 
     if (!profile || profile.role !== 'admin') {
-      // Non-admin trying to access admin routes - redirect to home
-      const homeUrl = new URL('/', request.url);
-      return NextResponse.redirect(homeUrl);
+      // Non-admin trying to access admin routes - redirect to dashboard
+      const dashboardUrl = new URL('/dashboard', request.url);
+      return NextResponse.redirect(dashboardUrl);
     }
   }
 
   return response;
-}
-
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Skip static assets
-  if (isStaticAsset(pathname)) {
-    return NextResponse.next();
-  }
-
-  // Skip public paths
-  if (isPublicPath(pathname, AUTH_MODE)) {
-    // For Supabase mode, still need to update session on public paths
-    if (AUTH_MODE === 'supabase') {
-      try {
-        const { response } = await updateSession(request);
-        return response;
-      } catch {
-        return NextResponse.next();
-      }
-    }
-    return NextResponse.next();
-  }
-
-  // Handle authentication based on mode
-  if (AUTH_MODE === 'supabase') {
-    return handleSupabaseAuth(request);
-  } else {
-    return handlePasswordAuth(request);
-  }
 }
 
 export const config = {
