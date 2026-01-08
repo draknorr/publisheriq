@@ -19,10 +19,22 @@ interface AppForPriority {
   review_velocity_30d: number | null;
   trend_30d_change_pct: number | null;
   total_reviews: number | null;
+  // Sync timestamps to determine if app has ever been synced
+  last_reviews_sync: string | null;
+  last_steamspy_sync: string | null;
 }
 
 function calculatePriorityScore(app: AppForPriority): number {
   let priority = 0;
+
+  // Check if app has never been synced for metrics data
+  // Never-synced apps should get a moderate base priority to ensure they get synced
+  const neverSynced = !app.last_reviews_sync && !app.last_steamspy_sync;
+  if (neverSynced) {
+    // Give never-synced apps a base priority of 25 (moderate tier)
+    // This ensures they get synced within 48 hours instead of being marked dead
+    priority = 25;
+  }
 
   // CCU-based priority (popular games get updated more often)
   const ccu = app.ccu_peak ?? 0;
@@ -62,8 +74,9 @@ function calculatePriorityScore(app: AppForPriority): number {
     priority += 5;
   }
 
-  // Dead game penalty
-  if (ccu === 0 && velocity7d < 0.1) {
+  // Dead game penalty - ONLY apply to apps that have been synced at least once
+  // Apps with no metrics data shouldn't be penalized - they just need to be synced
+  if (!neverSynced && ccu === 0 && velocity7d < 0.1) {
     priority -= 50;
   }
 
@@ -137,10 +150,10 @@ async function main(): Promise<void> {
     let offset = 0;
 
     while (offset < totalApps) {
-      // Get batch of app IDs
+      // Get batch of app IDs with sync timestamps
       const { data: syncStatusBatch } = await supabase
         .from('sync_status')
-        .select('appid')
+        .select('appid, last_reviews_sync, last_steamspy_sync')
         .range(offset, offset + batchSize - 1);
 
       if (!syncStatusBatch || syncStatusBatch.length === 0) {
@@ -148,6 +161,18 @@ async function main(): Promise<void> {
       }
 
       const appids = syncStatusBatch.map((s) => s.appid);
+
+      // Build sync status lookup map
+      const syncStatusMap = new Map<
+        number,
+        { last_reviews_sync: string | null; last_steamspy_sync: string | null }
+      >();
+      for (const s of syncStatusBatch) {
+        syncStatusMap.set(s.appid, {
+          last_reviews_sync: s.last_reviews_sync,
+          last_steamspy_sync: s.last_steamspy_sync,
+        });
+      }
 
       // Get latest metrics for these apps
       const { data: metricsData } = await supabase
@@ -205,11 +230,16 @@ async function main(): Promise<void> {
           review_velocity_30d: null,
           trend_30d_change_pct: null,
         };
+        const syncStatus = syncStatusMap.get(appid) ?? {
+          last_reviews_sync: null,
+          last_steamspy_sync: null,
+        };
 
         const app: AppForPriority = {
           appid,
           ...metrics,
           ...trends,
+          ...syncStatus,
         };
 
         const priority = calculatePriorityScore(app);

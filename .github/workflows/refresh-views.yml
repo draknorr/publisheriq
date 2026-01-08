@@ -1,0 +1,58 @@
+name: Refresh Materialized Views
+
+on:
+  schedule:
+    # Run at 5:00 AM UTC daily (after steamspy-sync at 2:15 AM and histogram-sync at 4:15 AM)
+    - cron: '0 5 * * *'
+  workflow_dispatch: # Allow manual trigger
+  workflow_run:
+    workflows: ["SteamSpy Sync"]
+    types:
+      - completed
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Only run if the triggering workflow succeeded (or if manually triggered/scheduled)
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Refresh materialized views
+        run: |
+          echo "Refreshing materialized views..."
+
+          # Refresh views in dependency order with 5 minute timeout each
+          VIEWS=(
+            "latest_daily_metrics"
+            "publisher_metrics"
+            "developer_metrics"
+            "publisher_year_metrics"
+            "developer_year_metrics"
+            "publisher_game_metrics"
+            "developer_game_metrics"
+            "monthly_game_metrics"
+          )
+
+          for view in "${VIEWS[@]}"; do
+            echo "Refreshing $view..."
+            start_time=$(date +%s)
+
+            # Try concurrent refresh first, fall back to regular if it fails
+            if ! psql "$DATABASE_URL" -c "SET statement_timeout = '300000'; REFRESH MATERIALIZED VIEW CONCURRENTLY $view;" 2>/dev/null; then
+              echo "Concurrent refresh failed for $view, trying regular refresh..."
+              psql "$DATABASE_URL" -c "SET statement_timeout = '300000'; REFRESH MATERIALIZED VIEW $view;"
+            fi
+
+            end_time=$(date +%s)
+            duration=$((end_time - start_time))
+            echo "Refreshed $view in ${duration}s"
+          done
+
+          echo "All views refreshed successfully!"

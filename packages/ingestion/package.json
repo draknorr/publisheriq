@@ -25,7 +25,8 @@
     "calculate-trends": "tsx src/workers/trends-worker.ts",
     "update-priorities": "tsx src/workers/priority-worker.ts",
     "embedding-sync": "tsx src/workers/embedding-worker.ts",
-    "price-sync": "tsx src/workers/price-sync-worker.ts"
+    "price-sync": "tsx src/workers/price-sync-worker.ts",
+    "refresh-views": "tsx src/workers/refresh-views-worker.ts"
   },
   "dependencies": {
     "@publisheriq/database": "workspace:*",
