@@ -4,6 +4,25 @@
 
 ---
 
+## ❓ When Uncertain, Ask
+
+**Don't assume - ask questions using AskUserQuestion with clear options.**
+
+Ask before:
+- Choosing between multiple valid implementation approaches
+- Making architectural decisions (new files, patterns, dependencies)
+- Changing existing behavior that might be intentional
+- Any destructive or hard-to-reverse operations
+
+Example scenarios:
+- "Should I add this to the existing file or create a new module?"
+- "This could use Redis or in-memory caching - which fits your infrastructure?"
+- "I found 3 places this could go - which matches your conventions?"
+
+**Always provide 2-4 concrete options** with brief explanations of trade-offs.
+
+---
+
 ## ⛔ Database Safety Rules
 
 **NEVER apply database changes automatically, even if auto-accept is enabled.**
