@@ -79,6 +79,8 @@ export class OpenAIProvider extends BaseLLMProvider {
       messages: openaiMessages,
       temperature: 0.1,
       stream: true,
+      // Enable usage tracking in stream response
+      stream_options: { include_usage: true },
     };
 
     if (tools && tools.length > 0) {
@@ -155,6 +157,19 @@ export class OpenAIProvider extends BaseLLMProvider {
 
           try {
             const parsed = JSON.parse(data);
+
+            // Handle usage data (returned with stream_options.include_usage)
+            if (parsed.usage) {
+              yield {
+                type: 'usage',
+                usage: {
+                  inputTokens: parsed.usage.prompt_tokens ?? 0,
+                  outputTokens: parsed.usage.completion_tokens ?? 0,
+                  totalTokens: parsed.usage.total_tokens ?? 0,
+                },
+              };
+            }
+
             const delta = parsed.choices?.[0]?.delta;
 
             if (!delta) continue;

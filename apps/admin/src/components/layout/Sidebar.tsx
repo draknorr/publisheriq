@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -12,36 +12,107 @@ import {
   X,
   MessageSquare,
   Shield,
+  User,
+  Coins,
+  ClipboardList,
+  BarChart3,
+  ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
 import { ThemeToggle } from '@/components/ui';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  adminOnly?: boolean;
+  children?: NavItem[];
 }
 
-const navItems: NavItem[] = [
+const mainNavItems: NavItem[] = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/apps', label: 'Apps', icon: Gamepad2 },
   { href: '/publishers', label: 'Publishers', icon: Building2 },
   { href: '/developers', label: 'Developers', icon: Users },
-  { href: '/admin', label: 'Admin Dashboard', icon: Shield },
 ];
+
+const adminNavItems: NavItem[] = [
+  { href: '/admin', label: 'System Status', icon: Shield },
+  { href: '/admin/users', label: 'Users', icon: Users },
+  { href: '/admin/waitlist', label: 'Waitlist', icon: ClipboardList },
+  { href: '/admin/usage', label: 'Usage', icon: BarChart3 },
+];
+
+const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE || 'password';
 
 export function Sidebar() {
   const pathname = usePathname();
   const { isOpen, toggle, close } = useSidebar();
+  const [userProfile, setUserProfile] = useState<{
+    email: string;
+    role: 'user' | 'admin';
+    credit_balance: number;
+  } | null>(null);
+  const [adminExpanded, setAdminExpanded] = useState(false);
 
   const isActive = (href: string) => {
     if (href === '/') {
       return pathname === '/';
     }
+    // For admin routes, only match exact or child paths
+    if (href === '/admin') {
+      return pathname === '/admin';
+    }
     return pathname.startsWith(href);
   };
+
+  const isAdminSection = pathname.startsWith('/admin');
+
+  // Fetch user profile if using Supabase auth
+  useEffect(() => {
+    if (AUTH_MODE !== 'supabase') return;
+
+    const fetchProfile = async () => {
+      try {
+        const supabase = createBrowserClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: profile } = await supabase
+            .from('user_profiles')
+            .select('email, role, credit_balance')
+            .eq('id', user.id)
+            .single();
+
+          if (profile) {
+            setUserProfile(profile);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+      }
+    };
+
+    fetchProfile();
+
+    // Subscribe to auth changes
+    const supabase = createBrowserClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      fetchProfile();
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Auto-expand admin section when on admin pages
+  useEffect(() => {
+    if (isAdminSection) {
+      setAdminExpanded(true);
+    }
+  }, [isAdminSection]);
 
   // Close sidebar on route change (mobile)
   useEffect(() => {
@@ -59,6 +130,8 @@ export function Sidebar() {
       document.body.style.overflow = '';
     };
   }, [isOpen]);
+
+  const isAdmin = AUTH_MODE === 'password' || userProfile?.role === 'admin';
 
   return (
     <>
@@ -112,8 +185,9 @@ export function Sidebar() {
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">
+            {/* Main nav items */}
             <div className="space-y-1">
-              {navItems.map((item) => {
+              {mainNavItems.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
 
@@ -131,7 +205,6 @@ export function Sidebar() {
                       }
                     `}
                   >
-                    {/* Active indicator */}
                     {active && (
                       <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-accent-primary" />
                     )}
@@ -145,10 +218,98 @@ export function Sidebar() {
                 );
               })}
             </div>
+
+            {/* Account link (Supabase auth only) */}
+            {AUTH_MODE === 'supabase' && (
+              <div className="mt-4 pt-4 border-t border-border-subtle">
+                <Link
+                  href="/account"
+                  className={`
+                    group relative flex items-center gap-3 rounded-lg px-3 py-2
+                    text-body font-medium transition-all duration-150
+                    ${
+                      isActive('/account')
+                        ? 'bg-surface-elevated text-text-primary'
+                        : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                    }
+                  `}
+                >
+                  {isActive('/account') && (
+                    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-accent-primary" />
+                  )}
+                  <User
+                    className={`h-4 w-4 flex-shrink-0 ${
+                      isActive('/account') ? 'text-accent-primary' : 'text-text-tertiary group-hover:text-text-secondary'
+                    }`}
+                  />
+                  Account
+                </Link>
+              </div>
+            )}
+
+            {/* Admin section */}
+            {isAdmin && (
+              <div className="mt-4 pt-4 border-t border-border-subtle">
+                <button
+                  onClick={() => setAdminExpanded(!adminExpanded)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-body-sm font-medium text-text-secondary"
+                >
+                  <span>Admin</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${adminExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {adminExpanded && (
+                  <div className="space-y-1 mt-1">
+                    {adminNavItems.map((item) => {
+                      const active = isActive(item.href);
+                      const Icon = item.icon;
+
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`
+                            group relative flex items-center gap-3 rounded-lg px-3 py-2 ml-2
+                            text-body font-medium transition-all duration-150
+                            ${
+                              active
+                                ? 'bg-surface-elevated text-text-primary'
+                                : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                            }
+                          `}
+                        >
+                          {active && (
+                            <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-accent-primary" />
+                          )}
+                          <Icon
+                            className={`h-4 w-4 flex-shrink-0 ${
+                              active ? 'text-accent-primary' : 'text-text-tertiary group-hover:text-text-secondary'
+                            }`}
+                          />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
 
           {/* Footer */}
           <div className="border-t border-border-subtle p-4">
+            {/* Credit balance (Supabase auth only) */}
+            {AUTH_MODE === 'supabase' && userProfile && (
+              <div className="mb-3 flex items-center gap-2 px-1">
+                <Coins className="h-4 w-4 text-accent-green" />
+                <span className="text-body-sm text-text-secondary">
+                  {userProfile.credit_balance.toLocaleString()} credits
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-accent-green animate-pulse-subtle" />

@@ -585,40 +585,164 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          input_tokens: number | null
           iteration_count: number | null
+          output_tokens: number | null
           query_text: string
+          reservation_id: string | null
           response_length: number | null
           timing_llm_ms: number | null
           timing_tools_ms: number | null
           timing_total_ms: number | null
           tool_count: number | null
+          tool_credits_used: number | null
           tool_names: string[] | null
+          total_credits_charged: number | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
+          input_tokens?: number | null
           iteration_count?: number | null
+          output_tokens?: number | null
           query_text: string
+          reservation_id?: string | null
           response_length?: number | null
           timing_llm_ms?: number | null
           timing_tools_ms?: number | null
           timing_total_ms?: number | null
           tool_count?: number | null
+          tool_credits_used?: number | null
           tool_names?: string[] | null
+          total_credits_charged?: number | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
+          input_tokens?: number | null
           iteration_count?: number | null
+          output_tokens?: number | null
           query_text?: string
+          reservation_id?: string | null
           response_length?: number | null
           timing_llm_ms?: number | null
           timing_tools_ms?: number | null
           timing_total_ms?: number | null
           tool_count?: number | null
+          tool_credits_used?: number | null
           tool_names?: string[] | null
+          total_credits_charged?: number | null
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_query_logs_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "credit_reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_query_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_reservations: {
+        Row: {
+          actual_amount: number | null
+          created_at: string
+          finalized_at: string | null
+          id: string
+          reserved_amount: number
+          status: Database["public"]["Enums"]["credit_reservation_status"]
+          user_id: string
+        }
+        Insert: {
+          actual_amount?: number | null
+          created_at?: string
+          finalized_at?: string | null
+          id?: string
+          reserved_amount: number
+          status?: Database["public"]["Enums"]["credit_reservation_status"]
+          user_id: string
+        }
+        Update: {
+          actual_amount?: number | null
+          created_at?: string
+          finalized_at?: string | null
+          id?: string
+          reserved_amount?: number
+          status?: Database["public"]["Enums"]["credit_reservation_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_reservations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_transactions: {
+        Row: {
+          admin_user_id: string | null
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          input_tokens: number | null
+          output_tokens: number | null
+          reservation_id: string | null
+          tool_credits: number | null
+          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          admin_user_id?: string | null
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          reservation_id?: string | null
+          tool_credits?: number | null
+          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+          user_id: string
+        }
+        Update: {
+          admin_user_id?: string | null
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          reservation_id?: string | null
+          tool_credits?: number | null
+          transaction_type?: Database["public"]["Enums"]["credit_transaction_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       daily_metrics: {
         Row: {
@@ -875,6 +999,41 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      rate_limit_state: {
+        Row: {
+          hour_window_start: string
+          minute_window_start: string
+          requests_this_hour: number
+          requests_this_minute: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          hour_window_start?: string
+          minute_window_start?: string
+          requests_this_hour?: number
+          requests_this_minute?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          hour_window_start?: string
+          minute_window_start?: string
+          requests_this_hour?: number
+          requests_this_minute?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_limit_state_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       review_histogram: {
         Row: {
@@ -1145,6 +1304,84 @@ export type Database = {
           },
         ]
       }
+      user_profiles: {
+        Row: {
+          created_at: string
+          credit_balance: number
+          email: string
+          full_name: string | null
+          id: string
+          organization: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          total_credits_used: number
+          total_messages_sent: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credit_balance?: number
+          email: string
+          full_name?: string | null
+          id: string
+          organization?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          total_credits_used?: number
+          total_messages_sent?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credit_balance?: number
+          email?: string
+          full_name?: string | null
+          id?: string
+          organization?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          total_credits_used?: number
+          total_messages_sent?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      waitlist: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          how_i_plan_to_use: string | null
+          id: string
+          invite_sent_at: string | null
+          organization: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["waitlist_status"]
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          how_i_plan_to_use?: string | null
+          id?: string
+          invite_sent_at?: string | null
+          organization?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["waitlist_status"]
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          how_i_plan_to_use?: string | null
+          id?: string
+          invite_sent_at?: string | null
+          organization?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["waitlist_status"]
+        }
+        Relationships: []
+      }
     }
     Views: {
       developer_game_metrics: {
@@ -1381,12 +1618,47 @@ export type Database = {
       }
     }
     Functions: {
+      admin_adjust_credits: {
+        Args: {
+          p_admin_id: string
+          p_amount: number
+          p_description: string
+          p_user_id: string
+        }
+        Returns: {
+          new_balance: number
+          success: boolean
+        }[]
+      }
       batch_update_prices: {
         Args: { p_appids: number[]; p_discounts: number[]; p_prices: number[] }
         Returns: number
       }
+      check_and_increment_rate_limit: {
+        Args: { p_user_id: string }
+        Returns: {
+          allowed: boolean
+          retry_after_seconds: number
+        }[]
+      }
       cleanup_old_chat_logs: { Args: never; Returns: number }
+      cleanup_stale_reservations: { Args: never; Returns: number }
       execute_readonly_query: { Args: { query_text: string }; Returns: Json }
+      finalize_credits: {
+        Args: {
+          p_actual_amount: number
+          p_description?: string
+          p_input_tokens?: number
+          p_output_tokens?: number
+          p_reservation_id: string
+          p_tool_credits?: number
+        }
+        Returns: {
+          new_balance: number
+          refunded: number
+          success: boolean
+        }[]
+      }
       get_apps_for_embedding: {
         Args: { p_limit?: number }
         Returns: {
@@ -1463,6 +1735,7 @@ export type Database = {
           priority_score: number
         }[]
       }
+      get_credit_balance: { Args: { p_user_id: string }; Returns: number }
       get_developer_stats: { Args: never; Returns: Json }
       get_developers_for_embedding: {
         Args: { p_limit?: number }
@@ -1662,6 +1935,18 @@ export type Database = {
       refresh_entity_metrics: { Args: never; Returns: undefined }
       refresh_latest_daily_metrics: { Args: never; Returns: undefined }
       refresh_monthly_game_metrics: { Args: never; Returns: undefined }
+      refund_reservation: {
+        Args: { p_reservation_id: string }
+        Returns: {
+          new_balance: number
+          refunded: number
+          success: boolean
+        }[]
+      }
+      reserve_credits: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: string
+      }
       upsert_developer: { Args: { p_name: string }; Returns: number }
       upsert_franchise: { Args: { p_name: string }; Returns: number }
       upsert_publisher: { Args: { p_name: string }; Returns: number }
@@ -1703,6 +1988,13 @@ export type Database = {
         | "application"
         | "series"
         | "advertising"
+      credit_reservation_status: "pending" | "finalized" | "refunded"
+      credit_transaction_type:
+        | "signup_bonus"
+        | "admin_grant"
+        | "admin_deduct"
+        | "chat_usage"
+        | "refund"
       refresh_tier: "active" | "moderate" | "dormant" | "dead"
       steam_deck_category: "unknown" | "unsupported" | "playable" | "verified"
       sync_source:
@@ -1713,6 +2005,8 @@ export type Database = {
         | "scraper"
         | "pics"
       trend_direction: "up" | "down" | "stable"
+      user_role: "user" | "admin"
+      waitlist_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1854,6 +2148,14 @@ export const Constants = {
         "series",
         "advertising",
       ],
+      credit_reservation_status: ["pending", "finalized", "refunded"],
+      credit_transaction_type: [
+        "signup_bonus",
+        "admin_grant",
+        "admin_deduct",
+        "chat_usage",
+        "refund",
+      ],
       refresh_tier: ["active", "moderate", "dormant", "dead"],
       steam_deck_category: ["unknown", "unsupported", "playable", "verified"],
       sync_source: [
@@ -1865,6 +2167,8 @@ export const Constants = {
         "pics",
       ],
       trend_direction: ["up", "down", "stable"],
+      user_role: ["user", "admin"],
+      waitlist_status: ["pending", "approved", "rejected"],
     },
   },
 } as const

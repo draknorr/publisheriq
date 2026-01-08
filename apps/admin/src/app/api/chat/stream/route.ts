@@ -17,10 +17,28 @@ import {
 } from '@/lib/search/publisher-lookup';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import { logChatQuery } from '@/lib/chat-query-logger';
+import { createServerClient } from '@/lib/supabase/server';
+import {
+  calculateTotalCredits,
+  MINIMUM_CHARGE,
+  DEFAULT_RESERVATION,
+  getCreditBreakdown,
+} from '@/lib/credits';
 import type { Message, ChatRequest, Tool, QueryResult, SimilarityResult, ToolCall } from '@/lib/llm/types';
-import type { StreamEvent, TextDeltaEvent, ToolStartEvent, ToolResultEvent, MessageEndEvent, ErrorEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
+import type {
+  StreamEvent,
+  TextDeltaEvent,
+  ToolStartEvent,
+  ToolResultEvent,
+  MessageEndEvent,
+  ErrorEvent,
+  StreamDebugInfo,
+  TokenUsage,
+} from '@/lib/llm/streaming-types';
 
 const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
+const CREDITS_ENABLED = process.env.CREDITS_ENABLED === 'true';
+const AUTH_MODE = process.env.AUTH_MODE || 'password';
 const MAX_TOOL_ITERATIONS = 5;
 
 interface QueryAnalyticsArgs {
@@ -77,8 +95,96 @@ export async function POST(request: NextRequest): Promise<Response> {
   const requestStart = performance.now();
   const encoder = new TextEncoder();
 
+  // Auth and credit state
+  let userId: string | null = null;
+  let reservationId: string | null = null;
+  let supabase: Awaited<ReturnType<typeof createServerClient>> | null = null;
+
+  // Check auth and credits if Supabase auth is enabled
+  if (AUTH_MODE === 'supabase') {
+    supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'unauthorized', message: 'Authentication required' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    userId = user.id;
+
+    // Check credits if enabled
+    if (CREDITS_ENABLED) {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('credit_balance')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile || profile.credit_balance < MINIMUM_CHARGE) {
+        return new Response(
+          JSON.stringify({
+            error: 'insufficient_credits',
+            message: "You don't have enough credits to use chat. Please contact your administrator.",
+            balance: profile?.credit_balance ?? 0,
+          }),
+          { status: 402, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check rate limit
+      const { data: rateLimitResult } = await supabase.rpc('check_and_increment_rate_limit', {
+        p_user_id: user.id,
+      });
+
+      if (rateLimitResult && !rateLimitResult[0]?.allowed) {
+        const retryAfter = rateLimitResult[0]?.retry_after_seconds ?? 60;
+        return new Response(
+          JSON.stringify({
+            error: 'rate_limited',
+            message: 'Too many requests. Please try again later.',
+            retry_after: retryAfter,
+          }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': String(retryAfter),
+            },
+          }
+        );
+      }
+
+      // Reserve credits upfront
+      const { data: reserveResult } = await supabase.rpc('reserve_credits', {
+        p_user_id: user.id,
+        p_amount: DEFAULT_RESERVATION,
+      });
+
+      if (!reserveResult) {
+        return new Response(
+          JSON.stringify({
+            error: 'insufficient_credits',
+            message: "Failed to reserve credits. You may not have enough credits.",
+            balance: profile.credit_balance,
+          }),
+          { status: 402, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      reservationId = reserveResult;
+    }
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
+      // Track token usage across all iterations
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      let creditsCharged = 0;
+      let serverError = false;
+
       try {
         const body = (await request.json()) as ChatRequest;
 
@@ -157,6 +263,12 @@ export async function POST(request: NextRequest): Promise<Response> {
                 arguments: chunk.toolCall.arguments,
               });
             }
+
+            // Track token usage from stream
+            if (chunk.type === 'usage' && chunk.usage) {
+              totalInputTokens += chunk.usage.inputTokens;
+              totalOutputTokens += chunk.usage.outputTokens;
+            }
           }
 
           totalLlmMs += performance.now() - llmStart;
@@ -219,6 +331,27 @@ export async function POST(request: NextRequest): Promise<Response> {
           debugStats.totalChars = fallbackText.length;
         }
 
+        // Calculate credits if enabled
+        if (CREDITS_ENABLED && reservationId && supabase) {
+          creditsCharged = calculateTotalCredits(
+            allToolNames,
+            totalInputTokens,
+            totalOutputTokens
+          );
+
+          // Finalize credits (charge actual, refund excess)
+          const breakdown = getCreditBreakdown(allToolNames, totalInputTokens, totalOutputTokens);
+
+          await supabase.rpc('finalize_credits', {
+            p_reservation_id: reservationId,
+            p_actual_amount: creditsCharged,
+            p_description: `Chat: ${debugStats.toolCallCount} tools, ${totalInputTokens}/${totalOutputTokens} tokens`,
+            p_input_tokens: totalInputTokens,
+            p_output_tokens: totalOutputTokens,
+            p_tool_credits: breakdown.toolCredits,
+          });
+        }
+
         // Send completion event with debug info
         const endEvent: MessageEndEvent = {
           type: 'message_end',
@@ -228,6 +361,11 @@ export async function POST(request: NextRequest): Promise<Response> {
             totalMs: Math.round(performance.now() - requestStart),
           },
           debug: debugStats,
+          usage: {
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+          },
+          creditsCharged: CREDITS_ENABLED ? creditsCharged : undefined,
         };
         controller.enqueue(encoder.encode(formatSSE(endEvent)));
 
@@ -243,14 +381,30 @@ export async function POST(request: NextRequest): Promise<Response> {
             timing_llm_ms: Math.round(totalLlmMs),
             timing_tools_ms: Math.round(totalToolsMs),
             timing_total_ms: Math.round(performance.now() - requestStart),
+            // New fields for credit tracking
+            user_id: userId ?? undefined,
+            input_tokens: totalInputTokens > 0 ? totalInputTokens : undefined,
+            output_tokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
+            tool_credits_used: CREDITS_ENABLED ? getCreditBreakdown(allToolNames, 0, 0).toolCredits : undefined,
+            total_credits_charged: CREDITS_ENABLED ? creditsCharged : undefined,
           });
         }
 
       } catch (error) {
+        serverError = true;
         console.error('Streaming chat error:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
         const errorEvent: ErrorEvent = { type: 'error', message: errorMessage };
         controller.enqueue(encoder.encode(formatSSE(errorEvent)));
+
+        // Refund credits on server error
+        if (CREDITS_ENABLED && reservationId && supabase) {
+          try {
+            await supabase.rpc('refund_reservation', { p_reservation_id: reservationId });
+          } catch (refundError) {
+            console.error('Failed to refund credits:', refundError);
+          }
+        }
       } finally {
         controller.close();
       }

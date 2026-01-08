@@ -10,6 +10,12 @@ export interface ChatQueryLogEntry {
   timing_llm_ms: number | null;
   timing_tools_ms: number | null;
   timing_total_ms: number | null;
+  // Credit tracking fields (added in user system migration)
+  user_id?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  tool_credits_used?: number;
+  total_credits_charged?: number;
 }
 
 /**

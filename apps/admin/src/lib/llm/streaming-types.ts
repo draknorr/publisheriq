@@ -46,6 +46,11 @@ export interface MessageEndEvent extends BaseStreamEvent {
   type: 'message_end';
   timing: ChatTiming;
   debug?: StreamDebugInfo;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+  creditsCharged?: number;
 }
 
 export interface ErrorEvent extends BaseStreamEvent {
@@ -60,13 +65,21 @@ export type StreamEvent =
   | MessageEndEvent
   | ErrorEvent;
 
+// Token usage from LLM provider
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 // Chunk types from LLM provider streaming
 export interface StreamChunk {
-  type: 'text' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'done';
+  type: 'text' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'done' | 'usage';
   text?: string;
   toolCall?: {
     id: string;
     name: string;
     arguments: Record<string, unknown>;
   };
+  usage?: TokenUsage;
 }
