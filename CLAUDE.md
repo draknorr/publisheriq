@@ -47,21 +47,57 @@ Before ANY write operation, STOP and explain:
 
 | Tool | Use For |
 |------|---------|
-| `supabase` | DB queries, migrations, schema dumps, type generation |
+| `supabase` | Migrations, schema inspection, type generation |
+| `psql` | Direct SQL queries against the database |
 | `vercel` | Environment variables, deployment status |
-```bash
-# Database inspection (safe)
-supabase db execute --sql "SELECT ..."
-supabase db dump --schema public
-supabase migration list
 
+```bash
 # Type generation (safe)
 supabase gen types typescript --linked > packages/database/src/types.ts
 
-# ⚠️ Schema changes (requires approval)
+# Database inspection (safe, no Docker required)
+supabase inspect db table-stats
+supabase inspect db db-stats
+supabase migration list
+
+# ⚠️ Schema changes (requires approval + Docker)
 supabase migration new <name>
 supabase db push
 ```
+
+---
+
+## Direct Database Access (psql)
+
+### Prerequisites
+PostgreSQL client is installed via Homebrew:
+```bash
+brew install libpq
+echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Running SQL Queries
+```bash
+# Load DATABASE_URL from .env and run interactive session
+source .env && psql "$DATABASE_URL"
+
+# Single query
+source .env && psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
+
+# Query with formatted output
+source .env && psql "$DATABASE_URL" -c "SELECT name, game_count FROM publishers ORDER BY game_count DESC LIMIT 10;"
+```
+
+### Supabase CLI Docker Requirements
+| Command | Docker Required? | Description |
+|---------|------------------|-------------|
+| `supabase inspect db *` | No | Database stats, table info, locks |
+| `supabase gen types --linked` | No | Generate TypeScript types |
+| `supabase migration list` | No | List applied migrations |
+| `supabase db dump` | **Yes** | Dump schema/data |
+| `supabase db push` | **Yes** | Apply migrations |
+| `supabase start` | **Yes** | Local development |
 
 ## Project Overview
 
