@@ -39,6 +39,3 @@ coverage
 # Supabase
 supabase/.branches
 supabase/.temp
-
-# Claude
-claude.md
