@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { createServerClient, getUserWithProfile } from '@/lib/supabase';
 import { Card } from '@/components/ui';
-import { Users, Search } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { UsersTable } from './UsersTable';
 
 export const metadata: Metadata = {

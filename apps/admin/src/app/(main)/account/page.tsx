@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getUserWithProfile, createServerClient } from '@/lib/supabase';
 import { Card } from '@/components/ui';
-import { Coins, History, LogOut, User } from 'lucide-react';
+import { Coins, History, User } from 'lucide-react';
 import { SignOutButton } from './SignOutButton';
 
 export const metadata: Metadata = {

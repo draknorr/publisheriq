@@ -33,7 +33,6 @@ import type {
   MessageEndEvent,
   ErrorEvent,
   StreamDebugInfo,
-  TokenUsage,
 } from '@/lib/llm/streaming-types';
 
 const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
@@ -183,7 +182,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
       let creditsCharged = 0;
-      let serverError = false;
 
       try {
         const body = (await request.json()) as ChatRequest;
@@ -391,7 +389,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
 
       } catch (error) {
-        serverError = true;
         console.error('Streaming chat error:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
         const errorEvent: ErrorEvent = { type: 'error', message: errorMessage };
