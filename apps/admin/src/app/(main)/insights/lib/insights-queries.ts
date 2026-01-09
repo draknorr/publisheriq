@@ -27,6 +27,131 @@ interface CCUTierAssignmentRow {
   recent_peak_ccu: number | null;
 }
 
+// Type for latest daily metrics
+interface LatestMetricsRow {
+  appid: number;
+  total_reviews: number | null;
+  positive_reviews: number | null;
+  price_cents: number | null;
+  discount_percent: number | null;
+  average_playtime_forever: number | null;
+}
+
+// Type for app trends
+interface AppTrendsRow {
+  appid: number;
+  review_velocity_7d: number | null;
+}
+
+/**
+ * Downsamples CCU data points to target count, preserving peaks
+ */
+function downsampleToPoints(
+  points: { time: Date; ccu: number }[],
+  targetCount: number
+): number[] {
+  if (points.length === 0) return [];
+  if (points.length <= targetCount) return points.map(p => p.ccu);
+
+  const step = points.length / targetCount;
+  const result: number[] = [];
+
+  for (let i = 0; i < targetCount; i++) {
+    const startIdx = Math.floor(i * step);
+    const endIdx = Math.floor((i + 1) * step);
+    const bucket = points.slice(startIdx, endIdx);
+    // Take max CCU in each bucket (preserves peaks)
+    const maxCcu = Math.max(...bucket.map(p => p.ccu));
+    result.push(maxCcu);
+  }
+
+  return result;
+}
+
+/**
+ * Calculates trend direction from sparkline data
+ */
+function calculateTrend(dataPoints: number[]): 'up' | 'down' | 'stable' {
+  if (dataPoints.length < 2) return 'stable';
+
+  const midpoint = Math.floor(dataPoints.length / 2);
+  const firstHalf = dataPoints.slice(0, midpoint);
+  const secondHalf = dataPoints.slice(midpoint);
+
+  const avgFirst = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
+  const avgSecond = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
+
+  if (avgFirst === 0) return 'stable';
+  const changePercent = ((avgSecond - avgFirst) / avgFirst) * 100;
+
+  if (changePercent > 5) return 'up';
+  if (changePercent < -5) return 'down';
+  return 'stable';
+}
+
+/**
+ * Batch fetch sparkline data for multiple apps
+ */
+async function getCCUSparklinesBatch(
+  appIds: number[],
+  timeRange: TimeRange
+): Promise<Map<number, { dataPoints: number[]; trend: 'up' | 'down' | 'stable' }>> {
+  const supabase = getSupabase();
+
+  // Calculate cutoff time
+  const cutoffTime = new Date();
+  if (timeRange === '24h') {
+    cutoffTime.setHours(cutoffTime.getHours() - 24);
+  } else if (timeRange === '7d') {
+    cutoffTime.setDate(cutoffTime.getDate() - 7);
+  } else {
+    cutoffTime.setDate(cutoffTime.getDate() - 30);
+  }
+
+  // Target points: 12 for 24h, 14 for 7d, 15 for 30d
+  const targetPoints = timeRange === '24h' ? 12 : timeRange === '7d' ? 14 : 15;
+
+  // Fetch all snapshots for all apps in one query
+  const { data } = await (supabase as any)
+    .from('ccu_snapshots')
+    .select('appid, snapshot_time, player_count')
+    .in('appid', appIds)
+    .gte('snapshot_time', cutoffTime.toISOString())
+    .order('snapshot_time', { ascending: true }) as {
+      data: { appid: number; snapshot_time: string; player_count: number }[] | null;
+    };
+
+  const result = new Map<number, { dataPoints: number[]; trend: 'up' | 'down' | 'stable' }>();
+
+  if (!data) {
+    // Return empty sparklines for all apps
+    for (const appid of appIds) {
+      result.set(appid, { dataPoints: [], trend: 'stable' });
+    }
+    return result;
+  }
+
+  // Group by appid
+  const byApp = new Map<number, { time: Date; ccu: number }[]>();
+  for (const row of data) {
+    if (!byApp.has(row.appid)) byApp.set(row.appid, []);
+    byApp.get(row.appid)!.push({
+      time: new Date(row.snapshot_time),
+      ccu: row.player_count,
+    });
+  }
+
+  // Downsample each app's data
+  for (const appid of appIds) {
+    const points = byApp.get(appid) ?? [];
+    const dataPoints = downsampleToPoints(points, targetPoints);
+    const trend = calculateTrend(dataPoints);
+    result.set(appid, { dataPoints, trend });
+  }
+
+  return result;
+}
+
 /**
  * Time range configurations
  */
@@ -102,33 +227,57 @@ export async function getTopGames(timeRange: TimeRange): Promise<GameInsight[]> 
 
   if (topAppIds.length === 0) return [];
 
-  // Get app details
-  const { data: apps, error: appsError } = await supabase
-    .from('apps')
-    .select('appid, name, release_date')
-    .in('appid', topAppIds);
+  // Fetch all additional data in parallel
+  const [appsResult, metricsResult, trendsResult, sparklineData] = await Promise.all([
+    // App details (name, is_free)
+    supabase
+      .from('apps')
+      .select('appid, name, release_date, is_free')
+      .in('appid', topAppIds),
 
-  if (appsError || !apps) {
-    console.error('Apps query error:', appsError);
+    // Latest metrics (reviews, price, playtime)
+    (supabase
+      .from('latest_daily_metrics')
+      .select('appid, total_reviews, positive_reviews, price_cents, discount_percent, average_playtime_forever')
+      .in('appid', topAppIds) as unknown) as Promise<{ data: LatestMetricsRow[] | null; error: Error | null }>,
+
+    // Review velocity from app_trends
+    (supabase
+      .from('app_trends')
+      .select('appid, review_velocity_7d')
+      .in('appid', topAppIds) as unknown) as Promise<{ data: AppTrendsRow[] | null; error: Error | null }>,
+
+    // Sparkline data
+    getCCUSparklinesBatch(topAppIds, timeRange),
+  ]);
+
+  if (appsResult.error || !appsResult.data) {
+    console.error('Apps query error:', appsResult.error);
     return [];
   }
 
-  // Get tier assignments (using type assertion for new table)
-  const { data: tiers } = await (supabase as any)
-    .from('ccu_tier_assignments')
-    .select('appid, ccu_tier, tier_reason')
-    .in('appid', topAppIds) as {
-      data: Pick<CCUTierAssignmentRow, 'appid' | 'ccu_tier' | 'tier_reason'>[] | null;
-    };
-
-  const tierMap = new Map(tiers?.map(t => [t.appid, t]) ?? []);
-  const appMap = new Map(apps.map(a => [a.appid, a]));
+  const appMap = new Map(appsResult.data.map(a => [a.appid, a]));
+  const metricsMap = new Map(metricsResult.data?.map(m => [m.appid, m]) ?? []);
+  const trendsMap = new Map(trendsResult.data?.map(t => [t.appid, t]) ?? []);
 
   // Build results
   return topAppIds.map(appid => {
     const app = appMap.get(appid);
-    const tier = tierMap.get(appid);
+    const metrics = metricsMap.get(appid);
+    const trends = trendsMap.get(appid);
+    const sparkline = sparklineData.get(appid);
     const peakCcu = peakByApp.get(appid) ?? 0;
+
+    // Calculate positive percentage
+    let positivePercent: number | undefined;
+    if (metrics?.total_reviews && metrics.total_reviews > 0 && metrics.positive_reviews != null) {
+      positivePercent = Math.round((metrics.positive_reviews / metrics.total_reviews) * 100);
+    }
+
+    // Convert playtime from minutes to hours
+    const avgPlaytimeHours = metrics?.average_playtime_forever
+      ? Math.round(metrics.average_playtime_forever / 60)
+      : null;
 
     return {
       appid,
@@ -136,8 +285,19 @@ export async function getTopGames(timeRange: TimeRange): Promise<GameInsight[]> 
       releaseDate: app?.release_date ?? null,
       currentCcu: peakCcu,
       peakCcu,
-      ccuTier: tier?.ccu_tier as 1 | 2 | 3 | undefined,
-      tierReason: tier?.tier_reason ?? undefined,
+      // Sparkline data
+      ccuSparkline: sparkline?.dataPoints,
+      ccuTrend: sparkline?.trend,
+      // Review metrics
+      totalReviews: metrics?.total_reviews ?? undefined,
+      positivePercent,
+      reviewVelocity: trends?.review_velocity_7d ?? undefined,
+      // Price context
+      priceCents: metrics?.price_cents,
+      discountPercent: metrics?.discount_percent,
+      isFree: app?.is_free ?? false,
+      // Engagement
+      avgPlaytimeHours,
     };
   });
 }

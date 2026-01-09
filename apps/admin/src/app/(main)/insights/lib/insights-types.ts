@@ -22,6 +22,19 @@ export interface GameInsight {
   ccuTier?: 1 | 2 | 3;
   tierReason?: string;
   releaseRank?: number;
+  // Sparkline data
+  ccuSparkline?: number[];
+  ccuTrend?: 'up' | 'down' | 'stable';
+  // Review metrics
+  totalReviews?: number;
+  positivePercent?: number;
+  reviewVelocity?: number;
+  // Price context
+  priceCents?: number | null;
+  discountPercent?: number | null;
+  isFree?: boolean;
+  // Engagement
+  avgPlaytimeHours?: number | null;
 }
 
 /**

@@ -84,7 +84,7 @@ export function InsightsTabs({
       {/* Tab Content */}
       <div className={isPending ? 'opacity-60 pointer-events-none' : ''}>
         {activeTab === 'top' && (
-          isPending ? <InsightsSkeleton /> : <TopGamesTab games={initialData.topGames} />
+          isPending ? <InsightsSkeleton /> : <TopGamesTab games={initialData.topGames} timeRange={timeRange} />
         )}
         {activeTab === 'newest' && (
           isPending ? <InsightsSkeleton /> : <NewestGamesTab games={initialData.newestGames} />
