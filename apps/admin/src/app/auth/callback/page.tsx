@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
@@ -15,7 +15,7 @@ import { Loader2 } from 'lucide-react';
  *
  * The Supabase client automatically detects and processes hash fragments when initialized.
  */
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -133,5 +133,24 @@ export default function AuthCallbackPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+      <div className="bg-surface-raised rounded-lg shadow-lg p-6 max-w-sm w-full text-center">
+        <Loader2 className="w-12 h-12 mx-auto text-accent-blue animate-spin mb-4" />
+        <h2 className="text-heading text-text-primary mb-2">Loading...</h2>
+      </div>
+    </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
