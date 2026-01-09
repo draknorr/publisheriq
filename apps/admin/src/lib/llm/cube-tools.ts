@@ -14,10 +14,20 @@ export const QUERY_ANALYTICS_TOOL: Tool = {
     description: `Query game, publisher, and developer analytics using pre-defined semantic models.
 
 CUBES:
-- Discovery: Games with metrics (use for most game queries)
-- PublisherMetrics: Publisher portfolio analytics
-- DeveloperMetrics: Developer portfolio analytics
+- Discovery: Games with all metrics (default for game queries)
+- PublisherMetrics: Publisher ALL-TIME aggregations
+- PublisherYearMetrics: Publisher stats by release year
+- PublisherGameMetrics: Games by publisher with rolling periods (lastYear, last6Months, etc.)
+- DeveloperMetrics: Developer ALL-TIME aggregations
+- DeveloperYearMetrics: Developer stats by release year
+- DeveloperGameMetrics: Games by developer with rolling periods (lastYear, last6Months, etc.)
 - DailyMetrics: Historical time-series data
+- LatestMetrics: Current snapshot of metrics
+- MonthlyGameMetrics: Monthly estimated played hours per game (use for "top games by playtime last month")
+- MonthlyPublisherMetrics: Monthly estimated played hours per publisher
+
+DIMENSION PREFIXING REQUIRED: Always prefix dimensions with cube name.
+Example: "MonthlyGameMetrics.appid", "Discovery.name", NOT just "appid" or "name".
 
 IMPORTANT - USE SEGMENTS FOR COMMON FILTERS:
 - Trending games → segment "Discovery.trending" (NOT filter on isTrendingUp)
@@ -25,16 +35,30 @@ IMPORTANT - USE SEGMENTS FOR COMMON FILTERS:
 - Popular games → segment "Discovery.popular" (1000+ reviews)
 - Steam Deck → segment "Discovery.steamDeckVerified" or "Discovery.steamDeckPlayable"
 - Free games → segment "Discovery.free"
+- Monthly data → segments like "MonthlyGameMetrics.lastMonth", "MonthlyGameMetrics.last3Months"
+- Rolling periods → segments like "DeveloperGameMetrics.lastYear", "PublisherGameMetrics.last6Months"
 
 Only use filters for custom thresholds not covered by segments.
 
-ALWAYS include Discovery.appid and Discovery.name in dimensions for game lists.`,
+ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid, Discovery.name).`,
     parameters: {
       type: 'object',
       properties: {
         cube: {
           type: 'string',
-          enum: ['Discovery', 'PublisherMetrics', 'DeveloperMetrics', 'DailyMetrics'],
+          enum: [
+            'Discovery',
+            'PublisherMetrics',
+            'PublisherYearMetrics',
+            'PublisherGameMetrics',
+            'DeveloperMetrics',
+            'DeveloperYearMetrics',
+            'DeveloperGameMetrics',
+            'DailyMetrics',
+            'LatestMetrics',
+            'MonthlyGameMetrics',
+            'MonthlyPublisherMetrics',
+          ],
           description: 'The cube to query. Use Discovery for game queries.',
         },
         dimensions: {
