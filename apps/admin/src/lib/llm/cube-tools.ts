@@ -358,6 +358,35 @@ Returns matching developer names with their IDs for use in filters.`,
   },
 };
 
+export const LOOKUP_GAMES_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'lookup_games',
+    description: `Search for games by name in the database.
+
+Use this tool when users ask about a SPECIFIC game:
+- "ARC Raiders" → lookup_games("ARC Raiders") to find appid
+- "Elden Ring" → lookup_games("Elden Ring") to find appid
+- "What's the review score for Hades?" → lookup first
+
+Returns matching games with appid and name. Use the appid in subsequent query_analytics calls.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Game name to search for (partial match)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results (default 10, max 20)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+};
+
 // Export all tools for the chat interface
 export const CUBE_TOOLS: Tool[] = [
   QUERY_ANALYTICS_TOOL,
@@ -366,4 +395,5 @@ export const CUBE_TOOLS: Tool[] = [
   LOOKUP_TAGS_TOOL,
   LOOKUP_PUBLISHERS_TOOL,
   LOOKUP_DEVELOPERS_TOOL,
+  LOOKUP_GAMES_TOOL,
 ];

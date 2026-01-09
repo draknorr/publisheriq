@@ -77,9 +77,22 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 **query_analytics** - Query structured data (stats, rankings, lists, trends)
 **find_similar** - Semantic similarity search ("games like X", recommendations)
 **search_games** - Find games by tags, genres, categories, platforms, PICS data (use for tag-based discovery)
+**lookup_games** - Search game names (use FIRST when user asks about a specific game by name)
 **lookup_tags** - Search available tags, genres, or categories (use when unsure of tag names)
 **lookup_publishers** - Search publisher names (use BEFORE querying by publisher)
 **lookup_developers** - Search developer names (use BEFORE querying by developer)
+
+## CRITICAL: Specific Game Name Queries
+
+When user asks about a SPECIFIC game by name (not game types/categories):
+1. FIRST call lookup_games("game name") to find the appid
+2. THEN use query_analytics with Discovery cube, filtering by appid
+
+Example: "What are the reviews for ARC Raiders?"
+1. lookup_games("ARC Raiders") → returns [{appid: 1808500, name: "ARC Raiders"}]
+2. query_analytics with filter: \`{"member":"Discovery.appid","operator":"equals","values":[1808500]}\`
+
+**DO NOT use search_games for specific game lookups** - it's for tag-based discovery only.
 
 ## CRITICAL: Tag-Based Query Routing
 

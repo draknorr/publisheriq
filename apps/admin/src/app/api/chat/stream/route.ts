@@ -15,6 +15,7 @@ import {
   type LookupPublishersArgs,
   type LookupDevelopersArgs,
 } from '@/lib/search/publisher-lookup';
+import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import { logChatQuery } from '@/lib/chat-query-logger';
 import { createServerClient } from '@/lib/supabase/server';
@@ -81,6 +82,9 @@ async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; erro
   } else if (toolCall.name === 'lookup_developers') {
     const args = toolCall.arguments as unknown as LookupDevelopersArgs;
     return lookupDevelopers(args);
+  } else if (toolCall.name === 'lookup_games') {
+    const args = toolCall.arguments as unknown as LookupGamesArgs;
+    return lookupGames(args);
   }
   return { success: false, error: `Unknown tool: ${toolCall.name}` };
 }
