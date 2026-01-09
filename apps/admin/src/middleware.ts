@@ -41,7 +41,8 @@ export async function middleware(request: NextRequest) {
 
   // Redirect auth code to /api/auth/callback for server-side PKCE exchange
   // Supabase sometimes ignores emailRedirectTo and sends code to Site URL
-  if (request.nextUrl.searchParams.has('code')) {
+  // Don't redirect if already going to /api/auth/callback (avoid loop)
+  if (request.nextUrl.searchParams.has('code') && pathname !== '/api/auth/callback') {
     const url = request.nextUrl.clone();
     url.pathname = '/api/auth/callback';
     return NextResponse.redirect(url);
