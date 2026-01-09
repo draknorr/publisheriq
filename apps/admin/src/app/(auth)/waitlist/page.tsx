@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Gamepad2, Mail, User, Building2, FileText, CheckCircle } from 'lucide-react';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-export default function WaitlistPage() {
+function WaitlistForm() {
   const searchParams = useSearchParams();
 
   const [formData, setFormData] = useState({
@@ -26,6 +26,7 @@ export default function WaitlistPage() {
       setFormData((prev) => ({ ...prev, email: emailParam }));
     }
   }, [searchParams]);
+
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -181,5 +182,27 @@ export default function WaitlistPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function WaitlistPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+        <Card variant="elevated" padding="lg" className="w-full max-w-md">
+          <div className="flex flex-col items-center mb-6">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-blue mb-4">
+              <Gamepad2 className="h-6 w-6 text-white" />
+            </div>
+            <h1 className="text-heading text-text-primary">Join the Waitlist</h1>
+            <p className="text-body-sm text-text-secondary mt-1 text-center">
+              Loading...
+            </p>
+          </div>
+        </Card>
+      </div>
+    }>
+      <WaitlistForm />
+    </Suspense>
   );
 }
