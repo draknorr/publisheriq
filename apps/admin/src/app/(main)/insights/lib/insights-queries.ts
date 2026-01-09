@@ -390,7 +390,7 @@ export async function getNewestGames(
   const trendsMap = new Map(trendsResult.data?.map(t => [t.appid, t]) ?? []);
 
   // Build results
-  let results = filteredAppIds.map(appid => {
+  const results = filteredAppIds.map(appid => {
     const app = appMap.get(appid);
     const metrics = metricsMap.get(appid);
     const trends = trendsMap.get(appid);

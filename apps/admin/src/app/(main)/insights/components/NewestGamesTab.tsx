@@ -26,8 +26,8 @@ export function NewestGamesTab({ games, timeRange, sortBy, onSortChange }: Newes
   }
 
   // Calculate summary stats
-  const totalCcu = games.reduce((sum, g) => sum + g.currentCcu, 0);
-  const avgCcu = Math.round(totalCcu / games.length);
+  const _totalCcu = games.reduce((sum, g) => sum + g.currentCcu, 0);
+  void _totalCcu; // Reserved for future use
 
   // Calculate average positive review percentage
   const gamesWithReviews = games.filter(g => g.positivePercent !== undefined);
