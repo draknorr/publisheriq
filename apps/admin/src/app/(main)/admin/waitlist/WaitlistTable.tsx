@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { UnderlineTabs } from '@/components/ui/Tabs';
-import { CheckCircle, XCircle, Mail, X } from 'lucide-react';
+import { CheckCircle, XCircle, Mail, X, RefreshCw } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
@@ -56,10 +56,33 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
   const [initialCredits, setInitialCredits] = useState('1000');
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
 
   const filteredEntries = entries.filter((entry) => entry.status === activeTab);
+
+  // Send invite via server-side API route
+  const sendInvite = async (email: string, waitlistId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch('/api/admin/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, waitlistId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to send invite' };
+      }
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Network error' };
+    }
+  };
 
   const handleApprove = async () => {
     if (!selectedEntry) return;
@@ -76,7 +99,7 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
     try {
       const supabase = createBrowserClient();
 
-      // Update waitlist status
+      // Update waitlist status first
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: updateError } = await (supabase.from('waitlist') as any)
         .update({
@@ -91,24 +114,19 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
         return;
       }
 
-      // Send invite email via Supabase Auth
-      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-        selectedEntry.email,
-        {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        }
-      );
+      // Send invite via server-side API
+      const inviteResult = await sendInvite(selectedEntry.email, selectedEntry.id);
 
-      // Note: invite might fail if admin API is not available, but we still approve
-      if (inviteError) {
-        console.warn('Could not send invite email (admin API may not be enabled):', inviteError);
-        // Update invite_sent_at to null to indicate no invite was sent
-      } else {
-        // Mark invite as sent
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('waitlist') as any)
-          .update({ invite_sent_at: new Date().toISOString() })
-          .eq('id', selectedEntry.id);
+      if (!inviteResult.success) {
+        // Show error but don't block - user is still approved
+        setError(`User approved but invite failed: ${inviteResult.error}. You can resend the invite from the Approved tab.`);
+        // Still close modal after a delay so user can see the message
+        setTimeout(() => {
+          setSelectedEntry(null);
+          setError('');
+          router.refresh();
+        }, 3000);
+        return;
       }
 
       setSelectedEntry(null);
@@ -118,6 +136,27 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
     } finally {
       setIsApproving(false);
     }
+  };
+
+  const handleResendInvite = async (entry: WaitlistEntry) => {
+    setResendingId(entry.id);
+    setError('');
+    setSuccessMessage('');
+
+    const result = await sendInvite(entry.email, entry.id);
+
+    if (result.success) {
+      setSuccessMessage(`Invite sent to ${entry.email}`);
+      router.refresh();
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } else {
+      setError(result.error || 'Failed to send invite');
+      // Clear error after 5 seconds
+      setTimeout(() => setError(''), 5000);
+    }
+
+    setResendingId(null);
   };
 
   const handleReject = async (entry: WaitlistEntry) => {
@@ -154,6 +193,8 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
     { id: 'rejected', label: 'Rejected' },
   ];
 
+  const showActionsColumn = activeTab === 'pending' || activeTab === 'approved';
+
   return (
     <>
       {/* Tabs */}
@@ -161,9 +202,29 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
         <UnderlineTabs
           tabs={tabs}
           activeTab={activeTab}
-          onChange={(id: string) => setActiveTab(id as typeof activeTab)}
+          onChange={(id: string) => {
+            setActiveTab(id as typeof activeTab);
+            setError('');
+            setSuccessMessage('');
+          }}
         />
       </div>
+
+      {/* Status Messages */}
+      {(error || successMessage) && (
+        <div className="px-4 pt-4">
+          {error && (
+            <div className="p-3 rounded-lg bg-accent-red/10 text-accent-red text-body-sm">
+              {error}
+            </div>
+          )}
+          {successMessage && (
+            <div className="p-3 rounded-lg bg-accent-green/10 text-accent-green text-body-sm">
+              {successMessage}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -182,7 +243,7 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
               <th className="px-4 py-3 text-left text-caption text-text-secondary font-medium">
                 Status
               </th>
-              {activeTab === 'pending' && (
+              {showActionsColumn && (
                 <th className="px-4 py-3 text-right text-caption text-text-secondary font-medium">
                   Actions
                 </th>
@@ -217,9 +278,20 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge variant={getStatusBadgeVariant(entry.status)}>
-                    {entry.status}
-                  </Badge>
+                  <div className="flex flex-col gap-1">
+                    <Badge variant={getStatusBadgeVariant(entry.status)}>
+                      {entry.status}
+                    </Badge>
+                    {entry.status === 'approved' && (
+                      <span className="text-caption text-text-muted">
+                        {entry.invite_sent_at ? (
+                          <>Invite sent {formatDate(entry.invite_sent_at)}</>
+                        ) : (
+                          <span className="text-accent-orange">Invite not sent</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 {activeTab === 'pending' && (
                   <td className="px-4 py-3 text-right">
@@ -242,6 +314,20 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
                         Reject
                       </Button>
                     </div>
+                  </td>
+                )}
+                {activeTab === 'approved' && (
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleResendInvite(entry)}
+                      isLoading={resendingId === entry.id}
+                      disabled={resendingId !== null}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-1" />
+                      {entry.invite_sent_at ? 'Resend Invite' : 'Send Invite'}
+                    </Button>
                   </td>
                 )}
               </tr>

@@ -39,11 +39,11 @@ function isApiPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Redirect auth code from / to /auth/callback
+  // Redirect auth code to /api/auth/callback for server-side PKCE exchange
   // Supabase sometimes ignores emailRedirectTo and sends code to Site URL
-  if (pathname === '/' && request.nextUrl.searchParams.has('code')) {
+  if (request.nextUrl.searchParams.has('code')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/auth/callback';
+    url.pathname = '/api/auth/callback';
     return NextResponse.redirect(url);
   }
 
