@@ -32,7 +32,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .eq('email', normalizedEmail)
       .single();
 
-    if (waitlistEntry?.status === 'approved' && waitlistEntry?.invite_sent_at) {
+    if (waitlistEntry?.status === 'approved') {
       return NextResponse.json({ valid: true });
     }
 
