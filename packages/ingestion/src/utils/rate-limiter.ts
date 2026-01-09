@@ -1,4 +1,4 @@
-import { logger } from '@publisheriq/shared';
+import { logger, RATE_LIMITS } from '@publisheriq/shared';
 
 interface RateLimiterConfig {
   /** Requests per second allowed */
@@ -131,15 +131,15 @@ export class RateLimiter {
 
 /**
  * Pre-configured rate limiters for each Steam API
+ * Uses centralized rate limit configuration from shared constants
  */
 export const rateLimiters = {
-  steamspyGeneral: new RateLimiter({ requestsPerSecond: 1, burst: 1 }),
-  steamspyAll: new RateLimiter({ requestsPerSecond: 1 / 60, burst: 1 }),
-  // With 3 parallel workers, 0.33 req/sec each = ~1 req/sec total to avoid 429s
-  storefront: new RateLimiter({ requestsPerSecond: 0.33, burst: 3 }),
-  reviews: new RateLimiter({ requestsPerSecond: 0.33, burst: 5 }),
-  histogram: new RateLimiter({ requestsPerSecond: 1, burst: 5 }),
-  communityScrape: new RateLimiter({ requestsPerSecond: 0.67, burst: 1 }),
+  steamspyGeneral: new RateLimiter(RATE_LIMITS.STEAMSPY_GENERAL),
+  steamspyAll: new RateLimiter(RATE_LIMITS.STEAMSPY_ALL),
+  storefront: new RateLimiter(RATE_LIMITS.STOREFRONT),
+  reviews: new RateLimiter(RATE_LIMITS.REVIEWS),
+  histogram: new RateLimiter(RATE_LIMITS.HISTOGRAM),
+  communityScrape: new RateLimiter(RATE_LIMITS.COMMUNITY_SCRAPE),
 };
 
 /**
