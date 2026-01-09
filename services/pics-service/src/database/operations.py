@@ -192,12 +192,19 @@ class PICSDatabase:
             logger.info("No apps to process after filtering - all apps not in database")
             return stats
 
+        # Get apps that already have storefront release dates (authoritative)
+        # PICS should only set release_date as a fallback when storefront data is missing
+        appids_to_process = [app.appid for app in apps_to_process]
+        apps_with_storefront_dates = self._get_apps_with_storefront_dates(appids_to_process)
+        logger.info(f"{len(apps_with_storefront_dates)} apps have storefront release dates (will not overwrite)")
+
         # Prepare app records
         app_records = []
         appid_to_app = {}  # Track which apps we're processing
         build_failures = 0
         for app in apps_to_process:
-            record = self._build_app_record(app)
+            has_storefront = app.appid in apps_with_storefront_dates
+            record = self._build_app_record(app, has_storefront_date=has_storefront)
             if record:
                 app_records.append(record)
                 appid_to_app[app.appid] = app
@@ -253,7 +260,35 @@ class PICSDatabase:
 
         return existing
 
-    def _build_app_record(self, app: ExtractedPICSData) -> Optional[Dict[str, Any]]:
+    def _get_apps_with_storefront_dates(self, appids: List[int]) -> Set[int]:
+        """Get appids that have release_date_raw from storefront (authoritative).
+
+        The storefront API provides authoritative release dates. PICS should only
+        set release_date as a fallback when storefront data is not available.
+        """
+        if not appids:
+            return set()
+
+        has_raw_date: Set[int] = set()
+        batch_size = 1000
+
+        for i in range(0, len(appids), batch_size):
+            batch = appids[i : i + batch_size]
+            try:
+                result = (
+                    self._db.client.table("apps")
+                    .select("appid")
+                    .in_("appid", batch)
+                    .not_.is_("release_date_raw", "null")
+                    .execute()
+                )
+                has_raw_date.update(r["appid"] for r in result.data)
+            except Exception as e:
+                logger.error(f"Failed to check storefront dates: {e}")
+
+        return has_raw_date
+
+    def _build_app_record(self, app: ExtractedPICSData, has_storefront_date: bool = False) -> Optional[Dict[str, Any]]:
         """Build a database record from extracted PICS data."""
         try:
             # Use PICS type if available, otherwise infer from other data
@@ -285,10 +320,11 @@ class PICSDatabase:
                 "languages": app.languages if app.languages else None,
                 "has_workshop": app.has_workshop,
                 "is_free": app.is_free,
-                # Release date from PICS
+                # Release date from PICS - only as fallback when storefront data is missing
+                # Storefront API is authoritative for release dates
                 **(
                     {"release_date": app.steam_release_date.date().isoformat()}
-                    if app.steam_release_date
+                    if app.steam_release_date and not has_storefront_date
                     else {}
                 ),
                 "is_released": app.release_state == "released",
