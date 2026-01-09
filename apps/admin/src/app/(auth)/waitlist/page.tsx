@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Gamepad2, Mail, User, Building2, FileText, CheckCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -9,12 +10,22 @@ import { Button } from '@/components/ui/Button';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 export default function WaitlistPage() {
+  const searchParams = useSearchParams();
+
   const [formData, setFormData] = useState({
     email: '',
     fullName: '',
     organization: '',
     howIPlanToUse: '',
   });
+
+  // Pre-fill email from URL param (e.g., /waitlist?email=user@example.com)
+  useEffect(() => {
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setFormData((prev) => ({ ...prev, email: emailParam }));
+    }
+  }, [searchParams]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);

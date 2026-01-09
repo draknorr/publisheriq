@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
-import { Gamepad2, Mail, CheckCircle } from 'lucide-react';
+import { Gamepad2, Mail, CheckCircle, UserPlus, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -13,28 +13,53 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showWaitlistPrompt, setShowWaitlistPrompt] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setShowWaitlistPrompt(false);
     setIsLoading(true);
 
     try {
+      // Step 1: Validate email is approved
+      const validateResponse = await fetch('/api/auth/validate-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const validation = await validateResponse.json();
+
+      if (!validation.valid) {
+        if (validation.reason === 'not_approved') {
+          // Show friendly waitlist prompt instead of error
+          setShowWaitlistPrompt(true);
+        } else {
+          setError(validation.message || 'This email does not have access.');
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Step 2: Send magic link (only for approved emails)
       const supabase = createBrowserClient();
 
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
         options: {
+          shouldCreateUser: false,
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
       if (authError) {
-        // Don't reveal if email exists - always show success
         console.error('Auth error:', authError);
+        setError('Unable to send sign-in link. Please try again.');
+        setIsLoading(false);
+        return;
       }
 
-      // Always show success to prevent email enumeration
       setIsSuccess(true);
     } catch {
       setError('Something went wrong. Please try again.');
@@ -42,6 +67,45 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  if (showWaitlistPrompt) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+        <Card variant="elevated" padding="lg" className="w-full max-w-sm">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-orange/15 mb-4">
+              <UserPlus className="h-6 w-6 text-accent-orange" />
+            </div>
+            <h1 className="text-heading text-text-primary">Request Access</h1>
+            <p className="text-body-sm text-text-secondary mt-2">
+              <strong className="text-text-primary">{email}</strong> doesn&apos;t have access yet.
+            </p>
+            <p className="text-body-xs text-text-tertiary mt-2">
+              Join the waitlist to request access to PublisherIQ.
+            </p>
+            <div className="flex flex-col gap-3 mt-6 w-full">
+              <Link href={`/waitlist?email=${encodeURIComponent(email)}`}>
+                <Button variant="primary" size="lg" className="w-full">
+                  Join Waitlist
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowWaitlistPrompt(false);
+                  setEmail('');
+                }}
+              >
+                Try a different email
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (isSuccess) {
     return (
