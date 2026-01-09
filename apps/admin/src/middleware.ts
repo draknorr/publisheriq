@@ -39,19 +39,8 @@ function isApiPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Redirect auth code to /api/auth/callback for server-side PKCE exchange
-  // Supabase sometimes ignores emailRedirectTo and sends code to Site URL
-  // Don't redirect if already going to /api/auth/callback (avoid loop)
-  // Skip if server_failed=true (client-side fallback after server exchange failed)
-  if (
-    request.nextUrl.searchParams.has('code') &&
-    pathname !== '/api/auth/callback' &&
-    !request.nextUrl.searchParams.has('server_failed')
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/api/auth/callback';
-    return NextResponse.redirect(url);
-  }
+  // Note: Magic link auth uses implicit flow (tokens in URL hash, not ?code=)
+  // The ?code= parameter is only used for OAuth providers if configured
 
   // Redirect auth errors from / to /login with error params
   if (pathname === '/' && request.nextUrl.searchParams.has('error')) {

@@ -6,12 +6,11 @@ import { createBrowserClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 
 /**
- * Client-side auth callback handler.
+ * Client-side auth callback handler for implicit flow.
  *
- * This page handles authentication callbacks that use hash fragments (#access_token=...)
- * which are only visible client-side. This is necessary for mobile compatibility where
- * email apps (Gmail, Mail.app, Outlook) open links in Safari without the original
- * browser's cookies, breaking the PKCE flow.
+ * Magic links redirect here with tokens in the URL hash fragment (#access_token=...).
+ * This avoids the PKCE localStorage issue where email clients (Gmail, Outlook, etc.)
+ * open links in different browser contexts that don't have access to localStorage.
  *
  * The Supabase client automatically detects and processes hash fragments when initialized.
  */
@@ -31,8 +30,10 @@ function AuthCallbackContent() {
         const hash = window.location.hash;
 
         if (hash && hash.includes('access_token')) {
-          // Hash-based auth (implicit flow) - Supabase handles this automatically
-          // Just need to wait for the session to be established
+          // Implicit flow - Supabase handles hash parsing automatically
+          // Wait a moment for the session to be established
+          await new Promise(resolve => setTimeout(resolve, 100));
+
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
           if (sessionError) {
@@ -42,30 +43,14 @@ function AuthCallbackContent() {
           }
 
           if (session) {
+            // Clear the hash from URL for cleanliness
+            window.history.replaceState(null, '', window.location.pathname);
+
             // Success - redirect to intended destination
             const next = searchParams.get('next') || '/dashboard';
             router.replace(next);
             return;
           }
-        }
-
-        // Check for code parameter (PKCE flow - handled by route.ts)
-        const code = searchParams.get('code');
-        if (code) {
-          // Code-based auth should be handled by route.ts
-          // If we're here with a code, route.ts didn't catch it
-          // Try to exchange it client-side as fallback
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-          if (exchangeError) {
-            console.error('Code exchange error:', exchangeError);
-            setError('Authentication failed. Please try again.');
-            return;
-          }
-
-          const next = searchParams.get('next') || '/dashboard';
-          router.replace(next);
-          return;
         }
 
         // Check for error in URL

@@ -5,8 +5,11 @@ import type { NextRequest } from 'next/server';
 import type { Database } from '@publisheriq/database';
 
 /**
- * Server-side auth callback handler for PKCE code exchange.
- * This handles the ?code= parameter from Supabase magic links.
+ * Server-side auth callback handler for OAuth providers.
+ *
+ * Note: Magic links use implicit flow (tokens in URL hash) and don't use this route.
+ * This route is only needed if you add OAuth providers (Google, GitHub, etc.)
+ * that use PKCE code exchange.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
