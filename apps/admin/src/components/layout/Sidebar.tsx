@@ -16,6 +16,7 @@ import {
   ClipboardList,
   BarChart3,
   ChevronDown,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
@@ -33,6 +34,7 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
+  { href: '/insights', label: 'Insights', icon: TrendingUp },
   { href: '/apps', label: 'Apps', icon: Gamepad2 },
   { href: '/publishers', label: 'Publishers', icon: Building2 },
   { href: '/developers', label: 'Developers', icon: Users },

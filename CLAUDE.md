@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data acquisition platform with natural language chat interface. Last updated: January 8, 2026.
+> Steam data acquisition platform with natural language chat interface. Last updated: January 9, 2026.
 
 ---
 
@@ -127,7 +127,7 @@ publisheriq/
 │       ├── src/components/        # React components (theme, ui, data-display)
 │       └── src/lib/               # Utilities, LLM integration
 │           ├── llm/               # Chat system
-│           │   ├── cube-tools.ts           # Tool definitions (6 tools)
+│           │   ├── cube-tools.ts           # Tool definitions (7 tools)
 │           │   ├── cube-system-prompt.ts   # System prompt with Cube schemas
 │           │   ├── format-entity-links.ts  # Entity link pre-formatting
 │           │   └── streaming-types.ts      # SSE event types
@@ -141,7 +141,9 @@ publisheriq/
 │   │       ├── Publishers.js      # Publisher metrics (3 cubes)
 │   │       ├── Developers.js      # Developer metrics (3 cubes)
 │   │       ├── DailyMetrics.js    # Time-series metrics
-│   │       └── LatestMetrics.js   # Current snapshot
+│   │       ├── LatestMetrics.js   # Current snapshot
+│   │       ├── ReviewVelocity.js  # Velocity-based discovery (v2.1)
+│   │       └── ReviewDeltas.js    # Daily review deltas (v2.1)
 │   │
 │   ├── database/                  # Supabase client & types
 │   │   ├── src/client.ts          # createServiceClient()
@@ -152,7 +154,8 @@ publisheriq/
 │   │   │   ├── steam-web.ts       # Steam app list
 │   │   │   ├── storefront.ts      # Game metadata (AUTHORITATIVE for dev/pub)
 │   │   │   ├── reviews.ts         # Reviews + histogram
-│   │   │   └── steamspy.ts        # CCU, owners, tags
+│   │   │   ├── steamspy.ts        # CCU, owners, tags
+│   │   │   └── steam-ccu.ts       # Exact player counts (v2.2)
 │   │   ├── src/workers/           # Sync workers
 │   │   └── src/utils/             # Rate limiter (token bucket), retry
 │   │
@@ -208,6 +211,16 @@ pnpm --filter @publisheriq/ingestion histogram-sync
 pnpm --filter @publisheriq/ingestion trends-calculate
 pnpm --filter @publisheriq/ingestion priority-calculate
 pnpm --filter @publisheriq/ingestion embedding-sync
+
+# CCU tracking (v2.2)
+pnpm --filter @publisheriq/ingestion ccu-tiered-sync
+pnpm --filter @publisheriq/ingestion ccu-daily-sync
+
+# Velocity & view refresh (v2.1)
+pnpm --filter @publisheriq/ingestion calculate-velocity
+pnpm --filter @publisheriq/ingestion interpolate-reviews
+pnpm --filter @publisheriq/ingestion refresh-views
+pnpm --filter @publisheriq/ingestion price-sync
 ```
 
 ## Environment Variables
@@ -289,6 +302,10 @@ sync_source: 'steamspy', 'storefront', 'reviews', 'histogram', 'scraper', 'pics'
 trend_direction: 'up', 'down', 'stable'
 refresh_tier: 'active', 'moderate', 'dormant', 'dead'
 steam_deck_category: 'unknown', 'unsupported', 'playable', 'verified'
+ccu_tier: 'tier1', 'tier2', 'tier3'
+user_role: 'user', 'admin'
+waitlist_status: 'pending', 'approved', 'rejected'
+credit_transaction_type: 'signup_bonus', 'usage', 'refund', 'admin_adjustment'
 ```
 
 ### Core Tables
@@ -330,6 +347,7 @@ steam_deck_category: 'unknown', 'unsupported', 'playable', 'verified'
 | `developer_year_metrics` | Per-year developer stats | View (auto) |
 | `publisher_game_metrics` | Per-game publisher data | View (auto) |
 | `developer_game_metrics` | Per-game developer data | View (auto) |
+| `review_velocity_stats` | Velocity metrics per app | Daily via `refresh_mat_views()` |
 
 ### Operational
 | Table | Purpose |
@@ -339,9 +357,29 @@ steam_deck_category: 'unknown', 'unsupported', 'playable', 'verified'
 | `chat_query_logs` | Chat analytics (7-day retention, auto-cleanup) |
 | `pics_sync_state` | PICS change number tracking |
 
+### CCU Tracking (v2.2)
+| Table | Purpose |
+|-------|---------|
+| `ccu_snapshots` | Hourly CCU samples with 30-day retention |
+| `ccu_tier_assignments` | Tier assignment with reason tracking |
+
+### Velocity Tracking (v2.1)
+| Table | Purpose |
+|-------|---------|
+| `review_deltas` | Daily review changes with interpolation flag |
+
+### User System (v2.1)
+| Table | Purpose |
+|-------|---------|
+| `user_profiles` | User data with role, credit balance |
+| `waitlist` | Email signup queue with status |
+| `credit_transactions` | Immutable credit audit log |
+| `credit_reservations` | Deduct-at-start pattern for chat |
+| `rate_limit_state` | Per-user rate limiting |
+
 ## Chat System Architecture
 
-The chat uses Cube.js semantic layer (NOT raw SQL) with 6 LLM tools:
+The chat uses Cube.js semantic layer (NOT raw SQL) with 7 LLM tools:
 
 ### LLM Tools
 | Tool | Purpose |
@@ -352,6 +390,7 @@ The chat uses Cube.js semantic layer (NOT raw SQL) with 6 LLM tools:
 | `lookup_publishers` | Find exact publisher names (ILIKE) before filtering |
 | `lookup_developers` | Find exact developer names (ILIKE) before filtering |
 | `lookup_tags` | Discover available tags/genres/categories |
+| `lookup_games` | Find exact game names (ILIKE) before filtering |
 
 ### Cube.js Cubes
 | Cube | Data Source | Purpose |
@@ -365,6 +404,8 @@ The chat uses Cube.js semantic layer (NOT raw SQL) with 6 LLM tools:
 | `DeveloperGameMetrics` | developer_game_metrics | Per-game with rolling periods |
 | `DailyMetrics` | daily_metrics | Historical time-series |
 | `LatestMetrics` | latest_daily_metrics | Current snapshot |
+| `ReviewVelocity` | review_velocity_stats | Velocity-based discovery |
+| `ReviewDeltas` | review_deltas | Daily review delta analysis |
 
 ### Key Segments (Pre-computed Filters)
 ```
@@ -401,8 +442,9 @@ DeveloperMetrics: trending, highRevenue (>$100K), highOwners (>50K)
 |--------|------------|------|-------|
 | Steam GetAppList | 100k/day | All appIDs | Master list |
 | Steam Storefront | ~200/5min | Metadata, dev/pub | **AUTHORITATIVE for dev/pub** |
-| Steam Reviews | ~20/min | Review counts, scores | |
+| Steam Reviews | ~60/min | Review counts, scores | 3x throughput (v2.2) |
 | Steam Histogram | ~60/min | Monthly review buckets | |
+| Steam CCU API | 1/sec | Exact player counts | GetNumberOfCurrentPlayers (v2.2) |
 | SteamSpy | 1/sec | CCU, owners, tags | Has gaps, NOT authoritative for dev/pub |
 | PICS Service | ~200 apps/req | Tags, genres, Steam Deck | Real-time via SteamKit2 |
 
@@ -420,6 +462,33 @@ DeveloperMetrics: trending, highRevenue (>$100K), highOwners (>50K)
 - Review velocity > 10/day: +40 pts
 - Trending (>10% change): +25 pts
 - Dead game: -50 pts
+- Never-synced apps: +25 pts base (v2.2 fix)
+
+## Review Velocity Tiers (v2.1)
+
+Adaptive sync intervals based on 7-day review activity:
+
+| Tier | Reviews/Day | Sync Interval |
+|------|-------------|---------------|
+| High | ≥5 | 4 hours |
+| Medium | 1-5 | 12 hours |
+| Low | 0.1-1 | 24 hours |
+| Dormant | <0.1 | 72 hours |
+
+## CCU Tier System (v2.2)
+
+Three-tier polling with Steam API for exact player counts:
+
+| Tier | Criteria | Polling | Games |
+|------|----------|---------|-------|
+| 1 | Top 500 by 7-day peak CCU | Hourly | ~500 |
+| 2 | Top 1000 newest releases (past year) | Every 2h | ~1000 |
+| 3 | All other games | Daily | ~60,000+ |
+
+**Key Features:**
+- `ccu_source` column tracks provenance: `'steam_api'` vs `'steamspy'`
+- 30-day snapshot retention with weekly aggregation
+- Automatic tier reassignment via `recalculate_ccu_tiers()` RPC
 
 ## GitHub Actions Schedule (UTC)
 
@@ -429,8 +498,14 @@ DeveloperMetrics: trending, highRevenue (>$100K), highOwners (>50K)
 | steamspy-sync | 02:15 daily | CCU, owners, tags |
 | embedding-sync | 03:00 daily | Vector embeddings (games, publishers, developers) |
 | histogram-sync | 04:15 daily | Monthly review trends |
+| ccu-sync | :00 hourly | Tier 1+2 CCU polling |
+| ccu-daily-sync | 04:30 daily | Tier 3 CCU polling |
+| ccu-cleanup | Sunday 03:00 | Snapshot cleanup + aggregation |
 | storefront-sync | 06,10,14,18,22:00 | Game metadata |
 | reviews-sync | +30 min after storefront | Review counts |
+| velocity-calculation | 08:00, 16:00, 00:00 | Velocity tier calculation |
+| interpolation | 05:00 daily | Review delta interpolation |
+| refresh-views | 05:00 daily | Materialized view refresh |
 | trends-calculation | 22:00 daily | Trend metrics |
 | priority-calculation | 22:30 daily | Priority scores |
 | cleanup-chat-logs | 03:00 daily | 7-day log retention |
@@ -524,4 +599,6 @@ Full documentation in `/docs/`:
 - [Admin Dashboard](docs/architecture/admin-dashboard.md) - Dashboard architecture
 - [Data Sources](docs/architecture/data-sources.md) - API specifications
 - [Sync Pipeline](docs/architecture/sync-pipeline.md) - Data flow details
-- [v2.0 Release Notes](docs/releases/v2.0-new-design.md) - Latest changes
+- [v2.0 Release Notes](docs/releases/v2.0-new-design.md) - Design system, query optimization
+- [v2.1 Release Notes](docs/releases/v2.1-velocity-auth.md) - Velocity sync, authentication
+- [v2.2 Release Notes](docs/releases/v2.2-ccu-steamspy.md) - CCU tiers, SteamSpy improvements
