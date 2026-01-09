@@ -29,6 +29,7 @@
     "refresh-views": "tsx src/workers/refresh-views-worker.ts",
     "calculate-velocity": "tsx src/workers/velocity-calculator-worker.ts",
     "interpolate-reviews": "tsx src/workers/interpolation-worker.ts",
+    "ccu-sync": "tsx src/workers/ccu-worker.ts",
     "test-steamspy-individual": "tsx src/scripts/test-steamspy-individual.ts"
   },
   "dependencies": {

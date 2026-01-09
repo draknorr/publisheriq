@@ -1,15 +1,15 @@
-name: Reviews Sync
+name: CCU Sync (Steam API)
 
 on:
   schedule:
-    # Run every 2 hours for velocity-based sync scheduling
-    - cron: '15 */2 * * *'
+    # Run hourly at :45 (offset from other jobs)
+    - cron: '45 * * * *'
   workflow_dispatch:
     inputs:
-      batch_size:
-        description: 'Number of apps to process'
+      limit:
+        description: 'Number of games to poll'
         required: false
-        default: '2500'
+        default: '1000'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -18,7 +18,7 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +36,8 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run Reviews sync
-        run: pnpm --filter @publisheriq/ingestion reviews-sync
+      - name: Run CCU sync
+        run: pnpm --filter @publisheriq/ingestion ccu-sync
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '2500' }}
+          CCU_LIMIT: ${{ github.event.inputs.limit || '1000' }}

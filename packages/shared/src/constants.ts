@@ -20,6 +20,9 @@ export const RATE_LIMITS = {
 
   /** Community Hub scraping - conservative 1 request per 1.5 seconds */
   COMMUNITY_SCRAPE: { requestsPerSecond: 0.67, burst: 1 },
+
+  /** Steam CCU API (GetNumberOfCurrentPlayers) - conservative 1 req/sec */
+  STEAM_CCU: { requestsPerSecond: 1, burst: 5 },
 } as const;
 
 /**
@@ -42,8 +45,8 @@ export const BATCH_SIZES = {
   /** Number of apps to fetch from Storefront API per worker run */
   STOREFRONT_BATCH: 1500,
 
-  /** Number of apps to fetch reviews for per worker run */
-  REVIEWS_BATCH: 1200,
+  /** Number of apps to fetch reviews for per worker run (targets ~42min at 1 req/sec) */
+  REVIEWS_BATCH: 2500,
 
   /** Number of apps to fetch histograms for per worker run */
   HISTOGRAM_BATCH: 2000,
