@@ -39,11 +39,18 @@ cube('Discovery', {
       at.trend_30d_direction,
       at.trend_30d_change_pct,
       at.review_velocity_7d,
-      at.ccu_trend_7d_pct
+      at.ccu_trend_7d_pct,
+      -- Review velocity (from materialized view)
+      rvs.velocity_7d,
+      rvs.velocity_30d,
+      rvs.velocity_tier,
+      rvs.reviews_added_7d,
+      rvs.reviews_added_30d
     FROM apps a
     LEFT JOIN app_steam_deck asd ON a.appid = asd.appid
     LEFT JOIN app_trends at ON a.appid = at.appid
     LEFT JOIN latest_daily_metrics ldm ON a.appid = ldm.appid
+    LEFT JOIN review_velocity_stats rvs ON a.appid = rvs.appid
     WHERE a.type = 'game'
       AND a.is_delisted = false
   `,
@@ -173,6 +180,32 @@ cube('Discovery', {
       sql: `trend_30d_direction = 'up'`,
       type: 'boolean',
     },
+    // Review velocity (from review_velocity_stats)
+    velocity7d: {
+      sql: `velocity_7d`,
+      type: 'number',
+      description: 'Average reviews per day over last 7 days',
+    },
+    velocity30d: {
+      sql: `velocity_30d`,
+      type: 'number',
+      description: 'Average reviews per day over last 30 days',
+    },
+    velocityTier: {
+      sql: `velocity_tier`,
+      type: 'string',
+      description: 'Velocity tier: high (>=5/day), medium (1-5), low (0.1-1), dormant (<0.1)',
+    },
+    reviewsAdded7d: {
+      sql: `reviews_added_7d`,
+      type: 'number',
+      description: 'Total reviews added in last 7 days',
+    },
+    reviewsAdded30d: {
+      sql: `reviews_added_30d`,
+      type: 'number',
+      description: 'Total reviews added in last 30 days',
+    },
     estimatedWeeklyHours: {
       sql: `estimated_weekly_hours`,
       type: 'number',
@@ -291,6 +324,19 @@ cube('Discovery', {
     openWorld: {
       sql: `EXISTS (SELECT 1 FROM app_steam_tags ast JOIN steam_tags st ON ast.tag_id = st.tag_id WHERE ast.appid = ${CUBE}.appid AND st.name ILIKE '%open world%')`,
     },
+    // Velocity-based segments
+    activelyReviewed: {
+      sql: `${CUBE}.velocity_7d >= 1`,
+    },
+    highlyActive: {
+      sql: `${CUBE}.velocity_7d >= 5`,
+    },
+    acceleratingVelocity: {
+      sql: `${CUBE}.velocity_30d > 0 AND ${CUBE}.velocity_7d > ${CUBE}.velocity_30d * 1.2`,
+    },
+    deceleratingVelocity: {
+      sql: `${CUBE}.velocity_30d > 0 AND ${CUBE}.velocity_7d < ${CUBE}.velocity_30d * 0.8`,
+    },
   },
 
   preAggregations: {
@@ -299,7 +345,8 @@ cube('Discovery', {
       dimensions: [
         appid, name, isFree, priceDollars, platforms, steamDeckCategory,
         ownersMidpoint, ccuPeak, totalReviews, positivePercentage,
-        trend30dDirection, trend30dChangePct, estimatedWeeklyHours
+        trend30dDirection, trend30dChangePct, estimatedWeeklyHours,
+        velocity7d, velocityTier, reviewsAdded7d
       ],
       refreshKey: {
         every: '6 hours',
@@ -308,7 +355,7 @@ cube('Discovery', {
     // Count by filters (for filter UI counts)
     countsByFilters: {
       measures: [count],
-      dimensions: [isFree, steamDeckCategory, trend30dDirection],
+      dimensions: [isFree, steamDeckCategory, trend30dDirection, velocityTier],
       refreshKey: {
         every: '6 hours',
       },

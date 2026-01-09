@@ -26,7 +26,9 @@
     "update-priorities": "tsx src/workers/priority-worker.ts",
     "embedding-sync": "tsx src/workers/embedding-worker.ts",
     "price-sync": "tsx src/workers/price-sync-worker.ts",
-    "refresh-views": "tsx src/workers/refresh-views-worker.ts"
+    "refresh-views": "tsx src/workers/refresh-views-worker.ts",
+    "calculate-velocity": "tsx src/workers/velocity-calculator-worker.ts",
+    "interpolate-reviews": "tsx src/workers/interpolation-worker.ts"
   },
   "dependencies": {
     "@publisheriq/database": "workspace:*",

@@ -2,6 +2,7 @@
  * Reviews Sync Worker
  *
  * Fetches review summaries from Steam Reviews API for apps due for sync.
+ * Uses velocity-based scheduling to prioritize high-activity games.
  *
  * Run with: pnpm --filter @publisheriq/ingestion reviews-sync
  */
@@ -19,21 +20,47 @@ const CONCURRENCY = 8;
 
 interface SyncStats {
   appsProcessed: number;
-  appsCreated: number;  // First-time enrichment
-  appsUpdated: number;  // Refresh of existing data
+  appsCreated: number; // First-time enrichment
+  appsUpdated: number; // Refresh of existing data
   appsFailed: number;
+}
+
+interface PreviousSyncData {
+  totalReviews: number;
+  positiveReviews: number;
+  lastSync: Date | null;
+}
+
+interface VelocityTierResult {
+  tier: string;
+  intervalHours: number;
 }
 
 type SupabaseClient = ReturnType<typeof getServiceClient>;
 
 /**
- * Process a single app - fetch review summary and update database
+ * Calculate velocity tier based on daily review rate
+ */
+function calculateVelocityTier(dailyVelocity: number): VelocityTierResult {
+  if (dailyVelocity >= 5) {
+    return { tier: 'high', intervalHours: 4 }; // ~5+ reviews/day: sync every 4 hours
+  } else if (dailyVelocity >= 1) {
+    return { tier: 'medium', intervalHours: 12 }; // 1-5 reviews/day: sync every 12 hours
+  } else if (dailyVelocity >= 0.1) {
+    return { tier: 'low', intervalHours: 24 }; // 0.1-1 reviews/day: sync daily
+  } else {
+    return { tier: 'dormant', intervalHours: 72 }; // <0.1 reviews/day: sync every 3 days
+  }
+}
+
+/**
+ * Process a single app - fetch review summary, track delta, update database
  */
 async function processApp(
   appid: number,
   supabase: SupabaseClient,
   today: string,
-  previousReviewCounts: Map<number, number>,
+  previousSyncData: Map<number, PreviousSyncData>,
   neverSyncedSet: Set<number>,
   stats: SyncStats
 ): Promise<void> {
@@ -48,11 +75,53 @@ async function processApp(
       return;
     }
 
-    // Check if app has new reviews (indicates activity)
-    const previousCount = previousReviewCounts.get(appid) ?? 0;
-    const hasNewReviews = summary.totalReviews > previousCount;
+    const previous = previousSyncData.get(appid);
+    const previousTotal = previous?.totalReviews ?? 0;
+    const previousPositive = previous?.positiveReviews ?? 0;
+    const lastSyncTime = previous?.lastSync;
 
-    // Update daily metrics with review data
+    // Calculate deltas
+    const reviewsAdded = Math.max(0, summary.totalReviews - previousTotal);
+    const positiveAdded = Math.max(0, summary.positiveReviews - previousPositive);
+    const negativeAdded = Math.max(0, reviewsAdded - positiveAdded);
+
+    // Calculate hours since last sync
+    const hoursSinceLastSync = lastSyncTime
+      ? (Date.now() - lastSyncTime.getTime()) / (1000 * 60 * 60)
+      : null;
+
+    // Calculate daily velocity (normalized to 24h)
+    const dailyVelocity =
+      hoursSinceLastSync && hoursSinceLastSync > 0
+        ? (reviewsAdded * 24) / hoursSinceLastSync
+        : 0;
+
+    // Determine velocity tier and next sync interval
+    const { tier, intervalHours } = calculateVelocityTier(dailyVelocity);
+    const nextSync = new Date(Date.now() + intervalHours * 60 * 60 * 1000);
+
+    // Check if app has new reviews (indicates activity)
+    const hasNewReviews = reviewsAdded > 0;
+
+    // 1. Insert into review_deltas table (new tracking)
+    await supabase.from('review_deltas').upsert(
+      {
+        appid,
+        delta_date: today,
+        total_reviews: summary.totalReviews,
+        positive_reviews: summary.positiveReviews,
+        review_score: summary.reviewScore,
+        review_score_desc: summary.reviewScoreDesc,
+        reviews_added: reviewsAdded,
+        positive_added: positiveAdded,
+        negative_added: negativeAdded,
+        hours_since_last_sync: hoursSinceLastSync,
+        is_interpolated: false,
+      },
+      { onConflict: 'appid,delta_date' }
+    );
+
+    // 2. Update daily_metrics (existing behavior for backward compatibility)
     await supabase.from('daily_metrics').upsert(
       {
         appid,
@@ -66,9 +135,13 @@ async function processApp(
       { onConflict: 'appid,metric_date' }
     );
 
-    // Update sync status (include last_activity_at if new reviews detected)
+    // 3. Update sync_status with velocity info and next sync time
     const syncUpdate: Record<string, unknown> = {
       last_reviews_sync: new Date().toISOString(),
+      next_reviews_sync: nextSync.toISOString(),
+      reviews_interval_hours: intervalHours,
+      review_velocity_tier: tier,
+      last_known_total_reviews: summary.totalReviews,
       consecutive_errors: 0,
     };
 
@@ -119,11 +192,11 @@ async function main(): Promise<void> {
   };
 
   try {
-    // Get apps due for sync
-    const { data: appsToSync, error: fetchError } = await supabase.rpc('get_apps_for_sync', {
-      p_source: 'reviews',
-      p_limit: batchSize,
-    });
+    // Get apps due for sync using velocity-based scheduling
+    const { data: appsToSync, error: fetchError } = await supabase.rpc(
+      'get_apps_for_reviews_sync',
+      { p_limit: batchSize }
+    );
 
     if (fetchError) {
       throw new Error(`Failed to get apps for sync: ${fetchError.message}`);
@@ -150,22 +223,59 @@ async function main(): Promise<void> {
       return;
     }
 
-    log.info('Found apps to sync', { count: appsToSync.length });
+    // Log velocity tier breakdown
+    const tierCounts = appsToSync.reduce(
+      (acc: Record<string, number>, app: { velocity_tier: string }) => {
+        acc[app.velocity_tier] = (acc[app.velocity_tier] || 0) + 1;
+        return acc;
+      },
+      {}
+    );
+    log.info('Found apps to sync', { count: appsToSync.length, tierCounts });
+
     const today = new Date().toISOString().split('T')[0];
 
-    // Fetch previous review counts to detect activity
-    const appIds = appsToSync.map((a: { appid: number }) => a.appid);
+    // Fetch previous sync data including timestamps and review counts
+    const appIds = appsToSync.map(
+      (a: { appid: number; last_known_total_reviews: number | null }) => a.appid
+    );
+    const { data: syncStatuses } = await supabase
+      .from('sync_status')
+      .select('appid, last_reviews_sync, last_known_total_reviews')
+      .in('appid', appIds);
+
+    // Fetch positive reviews from daily_metrics for delta calculation
     const { data: previousMetrics } = await supabase
       .from('daily_metrics')
-      .select('appid, total_reviews')
+      .select('appid, total_reviews, positive_reviews')
       .in('appid', appIds)
       .order('metric_date', { ascending: false });
 
-    // Fetch sync status to determine which are first-time vs refresh
-    const { data: syncStatuses } = await supabase
-      .from('sync_status')
-      .select('appid, last_reviews_sync')
-      .in('appid', appIds);
+    // Build map of previous sync data
+    const previousSyncData = new Map<number, PreviousSyncData>();
+
+    // First, populate from sync_status (has last_known_total_reviews)
+    for (const s of syncStatuses || []) {
+      previousSyncData.set(s.appid, {
+        totalReviews: s.last_known_total_reviews ?? 0,
+        positiveReviews: 0, // Will be updated from daily_metrics
+        lastSync: s.last_reviews_sync ? new Date(s.last_reviews_sync) : null,
+      });
+    }
+
+    // Then, update with positive reviews from daily_metrics
+    if (previousMetrics) {
+      for (const m of previousMetrics) {
+        const existing = previousSyncData.get(m.appid);
+        if (existing && existing.positiveReviews === 0) {
+          existing.positiveReviews = m.positive_reviews ?? 0;
+          // Also use daily_metrics total if sync_status doesn't have it
+          if (existing.totalReviews === 0) {
+            existing.totalReviews = m.total_reviews ?? 0;
+          }
+        }
+      }
+    }
 
     // Build set of apps that have never been synced (first-time enrichment)
     const neverSyncedSet = new Set(
@@ -179,16 +289,6 @@ async function main(): Promise<void> {
       refresh: appsToSync.length - neverSyncedSet.size,
     });
 
-    // Build a map of previous review counts (most recent per app)
-    const previousReviewCounts = new Map<number, number>();
-    if (previousMetrics) {
-      for (const m of previousMetrics) {
-        if (!previousReviewCounts.has(m.appid)) {
-          previousReviewCounts.set(m.appid, m.total_reviews ?? 0);
-        }
-      }
-    }
-
     // Process apps with controlled concurrency
     // Rate limiter handles API throttling, p-limit controls parallelism
     const limit = pLimit(CONCURRENCY);
@@ -201,7 +301,9 @@ async function main(): Promise<void> {
     try {
       await Promise.all(
         appsToSync.map(({ appid }: { appid: number }) =>
-          limit(() => processApp(appid, supabase, today, previousReviewCounts, neverSyncedSet, stats))
+          limit(() =>
+            processApp(appid, supabase, today, previousSyncData, neverSyncedSet, stats)
+          )
         )
       );
     } finally {

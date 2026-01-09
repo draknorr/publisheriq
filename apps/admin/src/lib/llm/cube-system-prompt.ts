@@ -131,12 +131,12 @@ Example: "What are the reviews for ARC Raiders?"
 ## Cubes
 
 ### Discovery (games + metrics)
-Dimensions: appid, name, isFree, priceCents, priceDollars, discountPercent (0-100 current discount %), platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint (use for sorting by owners), ccuPeak (use for sorting by CCU), totalReviews (use for sorting by reviews), reviewPercentage (best available Steam %), positivePercentage, metacriticScore (0-100), trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time), estimatedWeeklyHours (ESTIMATED weekly played hours - use for "top games by played hours")
+Dimensions: appid, name, isFree, priceCents, priceDollars, discountPercent (0-100 current discount %), platforms, hasWindows/hasMac/hasLinux, controllerSupport, steamDeckCategory, isSteamDeckVerified, isSteamDeckPlayable, ownersMidpoint (use for sorting by owners), ccuPeak (use for sorting by CCU), totalReviews (use for sorting by reviews), reviewPercentage (best available Steam %), positivePercentage, metacriticScore (0-100), trend30dDirection, trend30dChangePct, isTrendingUp, releaseDate (time), releaseYear (number), lastContentUpdate (time), estimatedWeeklyHours (ESTIMATED weekly played hours), velocity7d (reviews/day 7-day avg), velocity30d (reviews/day 30-day avg), velocityTier (high/medium/low/dormant), reviewsAdded7d, reviewsAdded30d
 Measures: count, avgPrice, avgReviewPercentage, sumOwners (aggregation only), sumCcu (aggregation only)
 **ORDERING**: To sort games, use dimensions like ownersMidpoint, totalReviews, ccuPeak, discountPercent - NOT measures
 **IMPORTANT: When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews), add a "set" filter to exclude NULLs:**
 \`{"member":"Discovery.ownersMidpoint","operator":"set"}\` - games without metrics data will otherwise cause 0 results
-Segments: released, free, paid, onSale (currently discounted), highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), lastYear, last6Months, last3Months, vrGame, roguelike, roguelite, multiplayer, singleplayer, coop, openWorld
+Segments: released, free, paid, onSale (currently discounted), highlyRated (80%+), veryPositive (90%+), overwhelminglyPositive (95%+), hasMetacritic, highMetacritic (75+), steamDeckVerified, steamDeckPlayable, trending, popular (1000+ reviews), indie (<100K owners), mainstream (100K+), releasedThisYear, recentlyReleased (last 30 days), recentlyUpdated (content update in last 30 days), lastYear, last6Months, last3Months, vrGame, roguelike, roguelite, multiplayer, singleplayer, coop, openWorld, activelyReviewed (1+ reviews/day), highlyActive (5+ reviews/day), acceleratingVelocity (velocity increasing), deceleratingVelocity (velocity decreasing)
 
 ### PublisherMetrics (standalone - ALL-TIME stats)
 Dimensions: publisherId, publisherName, gameCount, totalOwners, totalCcu, estimatedWeeklyHours, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending, uniqueDevelopers
@@ -179,6 +179,18 @@ Segments: lastYear, last6Months, last3Months, last30Days
 ### DailyMetrics (time-series)
 Dimensions: appid, metricDate, ownersMin, ownersMax, ownersMidpoint, ccuPeak, totalReviews, positiveReviews, reviewScore, priceCents
 Measures: count, sumOwners, avgCcu, maxCcu, sumTotalReviews, avgReviewScore
+
+### ReviewDeltas (daily review changes - time-series)
+Dimensions: appid, deltaDate (time), totalReviews, positiveReviews, reviewScore, reviewScoreDesc, reviewsAdded, positiveAdded, negativeAdded, dailyVelocity (reviews/day), hoursSinceLastSync, isInterpolated (true if estimated, false if from API), positivePercentage, dataSource ("actual" or "interpolated")
+Measures: count, sumReviewsAdded, avgDailyVelocity, latestTotalReviews, actualSyncCount, interpolatedCount
+Segments: actualOnly (only real API syncs), interpolatedOnly (only estimates), hasActivity (non-zero reviews added), highVelocity (5+ reviews/day)
+**USE THIS** for per-game review trend charts, time-series analysis of review activity
+
+### ReviewVelocity (review velocity stats - latest snapshot)
+Dimensions: appid, velocity7d (reviews/day 7-day avg), velocity30d (30-day avg), reviewsAdded7d, reviewsAdded30d, velocityTier (high/medium/low/dormant), lastDeltaDate, actualSyncCount, velocityTrend (accelerating/stable/decelerating)
+Measures: count, avgVelocity7d, avgVelocity30d, sumReviewsAdded7d, highVelocityCount, mediumVelocityCount, lowVelocityCount, dormantCount
+Segments: highVelocity (5+/day), mediumVelocity (1-5/day), lowVelocity (0.1-1/day), dormant (<0.1/day), active (any recent reviews), accelerating (velocity increasing), decelerating (velocity decreasing)
+**USE THIS** for finding highly active games, discovering games with growing/declining interest
 
 ### MonthlyGameMetrics (monthly estimated played hours - GAMES)
 Dimensions: appid, gameName, month (time), year (number), monthNum (1-12), monthlyCcuSum, estimatedMonthlyHours

@@ -1035,6 +1035,79 @@ export type Database = {
           },
         ]
       }
+      review_deltas: {
+        Row: {
+          appid: number
+          created_at: string | null
+          daily_velocity: number | null
+          delta_date: string
+          hours_since_last_sync: number | null
+          id: number
+          is_interpolated: boolean
+          negative_added: number
+          positive_added: number
+          positive_reviews: number
+          review_score: number | null
+          review_score_desc: string | null
+          reviews_added: number
+          total_reviews: number
+        }
+        Insert: {
+          appid: number
+          created_at?: string | null
+          daily_velocity?: number | null
+          delta_date: string
+          hours_since_last_sync?: number | null
+          id?: number
+          is_interpolated?: boolean
+          negative_added?: number
+          positive_added?: number
+          positive_reviews: number
+          review_score?: number | null
+          review_score_desc?: string | null
+          reviews_added?: number
+          total_reviews: number
+        }
+        Update: {
+          appid?: number
+          created_at?: string | null
+          daily_velocity?: number | null
+          delta_date?: string
+          hours_since_last_sync?: number | null
+          id?: number
+          is_interpolated?: boolean
+          negative_added?: number
+          positive_added?: number
+          positive_reviews?: number
+          review_score?: number | null
+          review_score_desc?: string | null
+          reviews_added?: number
+          total_reviews?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_deltas_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "review_deltas_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "review_deltas_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
       review_histogram: {
         Row: {
           appid: number
@@ -1210,6 +1283,7 @@ export type Database = {
           last_error_message: string | null
           last_error_source: Database["public"]["Enums"]["sync_source"] | null
           last_histogram_sync: string | null
+          last_known_total_reviews: number | null
           last_page_creation_scrape: string | null
           last_pics_sync: string | null
           last_price_sync: string | null
@@ -1217,14 +1291,19 @@ export type Database = {
           last_steamspy_sync: string | null
           last_storefront_sync: string | null
           needs_page_creation_scrape: boolean | null
+          next_reviews_sync: string | null
           next_sync_after: string | null
           pics_change_number: number | null
           priority_calculated_at: string | null
           priority_score: number | null
           refresh_tier: Database["public"]["Enums"]["refresh_tier"] | null
+          review_velocity_tier: string | null
+          reviews_interval_hours: number | null
           steamspy_available: boolean | null
           storefront_accessible: boolean | null
           sync_interval_hours: number | null
+          velocity_7d: number | null
+          velocity_calculated_at: string | null
         }
         Insert: {
           appid: number
@@ -1237,6 +1316,7 @@ export type Database = {
           last_error_message?: string | null
           last_error_source?: Database["public"]["Enums"]["sync_source"] | null
           last_histogram_sync?: string | null
+          last_known_total_reviews?: number | null
           last_page_creation_scrape?: string | null
           last_pics_sync?: string | null
           last_price_sync?: string | null
@@ -1244,14 +1324,19 @@ export type Database = {
           last_steamspy_sync?: string | null
           last_storefront_sync?: string | null
           needs_page_creation_scrape?: boolean | null
+          next_reviews_sync?: string | null
           next_sync_after?: string | null
           pics_change_number?: number | null
           priority_calculated_at?: string | null
           priority_score?: number | null
           refresh_tier?: Database["public"]["Enums"]["refresh_tier"] | null
+          review_velocity_tier?: string | null
+          reviews_interval_hours?: number | null
           steamspy_available?: boolean | null
           storefront_accessible?: boolean | null
           sync_interval_hours?: number | null
+          velocity_7d?: number | null
+          velocity_calculated_at?: string | null
         }
         Update: {
           appid?: number
@@ -1264,6 +1349,7 @@ export type Database = {
           last_error_message?: string | null
           last_error_source?: Database["public"]["Enums"]["sync_source"] | null
           last_histogram_sync?: string | null
+          last_known_total_reviews?: number | null
           last_page_creation_scrape?: string | null
           last_pics_sync?: string | null
           last_price_sync?: string | null
@@ -1271,14 +1357,19 @@ export type Database = {
           last_steamspy_sync?: string | null
           last_storefront_sync?: string | null
           needs_page_creation_scrape?: boolean | null
+          next_reviews_sync?: string | null
           next_sync_after?: string | null
           pics_change_number?: number | null
           priority_calculated_at?: string | null
           priority_score?: number | null
           refresh_tier?: Database["public"]["Enums"]["refresh_tier"] | null
+          review_velocity_tier?: string | null
+          reviews_interval_hours?: number | null
           steamspy_available?: boolean | null
           storefront_accessible?: boolean | null
           sync_interval_hours?: number | null
+          velocity_7d?: number | null
+          velocity_calculated_at?: string | null
         }
         Relationships: [
           {
@@ -1616,6 +1707,41 @@ export type Database = {
           },
         ]
       }
+      review_velocity_stats: {
+        Row: {
+          actual_sync_count: number | null
+          appid: number | null
+          last_delta_date: string | null
+          reviews_added_30d: number | null
+          reviews_added_7d: number | null
+          velocity_30d: number | null
+          velocity_7d: number | null
+          velocity_tier: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_deltas_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "review_deltas_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "review_deltas_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
     }
     Functions: {
       admin_adjust_credits: {
@@ -1711,6 +1837,16 @@ export type Database = {
           tags: string[]
           type: string
           updated_at: string
+        }[]
+      }
+      get_apps_for_reviews_sync: {
+        Args: { p_limit?: number }
+        Returns: {
+          appid: number
+          hours_overdue: number
+          last_known_total_reviews: number
+          priority_score: number
+          velocity_tier: string
         }[]
       }
       get_apps_for_sync: {
@@ -1918,6 +2054,18 @@ export type Database = {
           appid: number
         }[]
       }
+      interpolate_all_review_deltas: {
+        Args: { p_end_date?: string; p_start_date?: string }
+        Returns: {
+          apps_processed: number
+          total_interpolated: number
+        }[]
+      }
+      interpolate_review_deltas: {
+        Args: { p_appid: number; p_end_date?: string; p_start_date?: string }
+        Returns: number
+      }
+      is_admin: { Args: never; Returns: boolean }
       mark_apps_embedded: {
         Args: { p_appids: number[]; p_hashes: string[] }
         Returns: undefined
@@ -1934,7 +2082,12 @@ export type Database = {
       refresh_dashboard_stats: { Args: never; Returns: undefined }
       refresh_entity_metrics: { Args: never; Returns: undefined }
       refresh_latest_daily_metrics: { Args: never; Returns: undefined }
+      refresh_materialized_view: {
+        Args: { view_name: string }
+        Returns: undefined
+      }
       refresh_monthly_game_metrics: { Args: never; Returns: undefined }
+      refresh_review_velocity_stats: { Args: never; Returns: undefined }
       refund_reservation: {
         Args: { p_reservation_id: string }
         Returns: {
@@ -1946,6 +2099,12 @@ export type Database = {
       reserve_credits: {
         Args: { p_amount: number; p_user_id: string }
         Returns: string
+      }
+      update_review_velocity_tiers: {
+        Args: never
+        Returns: {
+          count: number
+        }[]
       }
       upsert_developer: { Args: { p_name: string }; Returns: number }
       upsert_franchise: { Args: { p_name: string }; Returns: number }

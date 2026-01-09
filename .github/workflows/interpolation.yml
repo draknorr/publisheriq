@@ -1,24 +1,24 @@
-name: Reviews Sync
+name: Review Interpolation
 
 on:
   schedule:
-    # Run every 2 hours for velocity-based sync scheduling
-    - cron: '15 */2 * * *'
+    # Run once daily at 5 AM UTC
+    - cron: '0 5 * * *'
   workflow_dispatch:
     inputs:
-      batch_size:
-        description: 'Number of apps to process'
+      days_back:
+        description: 'Number of days to interpolate'
         required: false
-        default: '1200'
+        default: '30'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
   SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
 jobs:
-  sync:
+  interpolate:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +36,8 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run Reviews sync
-        run: pnpm --filter @publisheriq/ingestion reviews-sync
+      - name: Interpolate missing review data
+        run: pnpm --filter @publisheriq/ingestion interpolate-reviews
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '1200' }}
+          INTERPOLATION_DAYS: ${{ github.event.inputs.days_back || '30' }}

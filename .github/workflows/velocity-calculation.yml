@@ -1,24 +1,19 @@
-name: Reviews Sync
+name: Velocity Calculation
 
 on:
   schedule:
-    # Run every 2 hours for velocity-based sync scheduling
-    - cron: '15 */2 * * *'
+    # Run 3 times daily after review sync windows
+    - cron: '0 8,16,0 * * *'
   workflow_dispatch:
-    inputs:
-      batch_size:
-        description: 'Number of apps to process'
-        required: false
-        default: '1200'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
   SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
 jobs:
-  sync:
+  calculate:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +31,7 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run Reviews sync
-        run: pnpm --filter @publisheriq/ingestion reviews-sync
+      - name: Calculate velocity and update tiers
+        run: pnpm --filter @publisheriq/ingestion calculate-velocity
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '1200' }}
