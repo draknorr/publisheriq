@@ -2,14 +2,15 @@
 
 import { TrendingUp, ArrowUp, Flame } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
-import { GameInsightCard } from './GameInsightCard';
-import type { GameInsight } from '../lib/insights-types';
+import { TopGameCard } from './TopGameCard';
+import type { GameInsight, TimeRange } from '../lib/insights-types';
 
 interface TrendingGamesTabProps {
   games: GameInsight[];
+  timeRange: TimeRange;
 }
 
-export function TrendingGamesTab({ games }: TrendingGamesTabProps) {
+export function TrendingGamesTab({ games, timeRange }: TrendingGamesTabProps) {
   if (games.length === 0) {
     return (
       <div className="text-center py-12">
@@ -23,14 +24,17 @@ export function TrendingGamesTab({ games }: TrendingGamesTabProps) {
   }
 
   // Calculate summary stats
-  const avgGrowth = games.length > 0
-    ? Math.round(games.reduce((sum, g) => sum + (g.growthPct ?? 0), 0) / games.length * 10) / 10
-    : 0;
+  const avgGrowth =
+    games.length > 0
+      ? Math.round((games.reduce((sum, g) => sum + (g.growthPct ?? 0), 0) / games.length) * 10) / 10
+      : 0;
 
   const maxGrowth = Math.max(...games.map(g => g.growthPct ?? 0));
   const topGainer = games.find(g => g.growthPct === maxGrowth);
 
   const highGrowthCount = games.filter(g => (g.growthPct ?? 0) > 50).length;
+
+  const timeRangeLabel = timeRange === '24h' ? '24h' : timeRange === '7d' ? '7d' : '30d';
 
   return (
     <div className="space-y-6">
@@ -43,9 +47,7 @@ export function TrendingGamesTab({ games }: TrendingGamesTabProps) {
             </div>
             <div>
               <p className="text-caption text-text-muted">Avg Growth</p>
-              <p className="text-heading font-semibold text-accent-green">
-                +{avgGrowth}%
-              </p>
+              <p className="text-heading font-semibold text-accent-green">+{avgGrowth}%</p>
             </div>
           </div>
         </Card>
@@ -57,9 +59,7 @@ export function TrendingGamesTab({ games }: TrendingGamesTabProps) {
             </div>
             <div>
               <p className="text-caption text-text-muted">High Growth (&gt;50%)</p>
-              <p className="text-heading font-semibold text-text-primary">
-                {highGrowthCount}
-              </p>
+              <p className="text-heading font-semibold text-text-primary">{highGrowthCount}</p>
             </div>
           </div>
         </Card>
@@ -84,16 +84,20 @@ export function TrendingGamesTab({ games }: TrendingGamesTabProps) {
         <CardHeader className="px-4 pt-4 pb-0">
           <CardTitle>Fastest Growing Games</CardTitle>
         </CardHeader>
-        <CardContent className="p-4 pt-4">
-          <div className="space-y-2">
+        <CardContent className="p-4 pt-2">
+          {/* Column Headers */}
+          <div className="hidden sm:flex items-center gap-3 px-3 py-2 text-caption text-text-muted border-b border-border-subtle mb-1">
+            <div className="w-7" /> {/* Rank */}
+            <div className="flex-1">Game</div>
+            <div className="w-[160px] text-right">CCU ({timeRangeLabel})</div>
+            <div className="w-[100px] text-right hidden sm:block">Reviews</div>
+            <div className="w-[70px] text-right hidden md:block">Price</div>
+            <div className="w-[50px] text-right hidden lg:block">Playtime</div>
+          </div>
+
+          <div className="space-y-0.5">
             {games.map((game, index) => (
-              <GameInsightCard
-                key={game.appid}
-                game={game}
-                rank={index + 1}
-                showGrowth={true}
-                showTier={false}
-              />
+              <TopGameCard key={game.appid} game={game} rank={index + 1} />
             ))}
           </div>
         </CardContent>

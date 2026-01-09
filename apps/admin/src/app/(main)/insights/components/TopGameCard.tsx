@@ -7,6 +7,7 @@ import type { GameInsight } from '../lib/insights-types';
 interface TopGameCardProps {
   game: GameInsight;
   rank: number;
+  showReleaseDate?: boolean;
 }
 
 function formatCCU(value: number): string {
@@ -33,7 +34,12 @@ function getReviewColor(percent: number): string {
   return 'text-accent-red';
 }
 
-export function TopGameCard({ game, rank }: TopGameCardProps) {
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function TopGameCard({ game, rank, showReleaseDate = false }: TopGameCardProps) {
   // Calculate growth percentage from sparkline if available
   let growthPct: number | undefined;
   if (game.ccuSparkline && game.ccuSparkline.length >= 2) {
@@ -62,6 +68,9 @@ export function TopGameCard({ game, rank }: TopGameCardProps) {
         >
           {game.name}
         </Link>
+        {showReleaseDate && game.releaseDate && (
+          <div className="text-caption text-text-muted">{formatDate(game.releaseDate)}</div>
+        )}
       </div>
 
       {/* CCU with Sparkline */}

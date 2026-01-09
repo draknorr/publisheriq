@@ -8,7 +8,7 @@ import { TopGamesTab } from './components/TopGamesTab';
 import { NewestGamesTab } from './components/NewestGamesTab';
 import { TrendingGamesTab } from './components/TrendingGamesTab';
 import { InsightsSkeleton } from './components/InsightsSkeleton';
-import type { GameInsight, TimeRange, InsightsTab } from './lib/insights-types';
+import type { GameInsight, TimeRange, InsightsTab, NewestSortMode } from './lib/insights-types';
 
 interface InsightsTabsProps {
   initialData: {
@@ -18,12 +18,14 @@ interface InsightsTabsProps {
   };
   initialTimeRange: TimeRange;
   initialTab: InsightsTab;
+  initialNewestSort: NewestSortMode;
 }
 
 export function InsightsTabs({
   initialData,
   initialTimeRange,
   initialTab,
+  initialNewestSort,
 }: InsightsTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,11 +34,24 @@ export function InsightsTabs({
   // Local state (synced with URL)
   const [timeRange, setTimeRange] = useState<TimeRange>(initialTimeRange);
   const [activeTab, setActiveTab] = useState<InsightsTab>(initialTab);
+  const [newestSort, setNewestSort] = useState<NewestSortMode>(initialNewestSort);
 
-  const updateUrl = (newTimeRange: TimeRange, newTab: InsightsTab) => {
+  const updateUrl = (
+    newTimeRange: TimeRange,
+    newTab: InsightsTab,
+    newSort?: NewestSortMode
+  ) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('timeRange', newTimeRange);
     params.set('tab', newTab);
+
+    // Only include sort param when on newest tab
+    if (newTab === 'newest' && newSort) {
+      params.set('sort', newSort);
+    } else {
+      params.delete('sort');
+    }
+
     startTransition(() => {
       router.push(`/insights?${params.toString()}`);
     });
@@ -44,13 +59,18 @@ export function InsightsTabs({
 
   const handleTimeRangeChange = (newRange: TimeRange) => {
     setTimeRange(newRange);
-    updateUrl(newRange, activeTab);
+    updateUrl(newRange, activeTab, activeTab === 'newest' ? newestSort : undefined);
   };
 
   const handleTabChange = (tab: string) => {
     const newTab = tab as InsightsTab;
     setActiveTab(newTab);
-    updateUrl(timeRange, newTab);
+    updateUrl(timeRange, newTab, newTab === 'newest' ? newestSort : undefined);
+  };
+
+  const handleNewestSortChange = (sort: NewestSortMode) => {
+    setNewestSort(sort);
+    updateUrl(timeRange, activeTab, sort);
   };
 
   return (
@@ -69,9 +89,7 @@ export function InsightsTabs({
         {/* Time Range + Loading Indicator */}
         <div className="flex items-center gap-3">
           {isPending && (
-            <span className="text-caption text-text-muted animate-pulse">
-              Updating...
-            </span>
+            <span className="text-caption text-text-muted animate-pulse">Updating...</span>
           )}
           <TimeRangeSelector
             value={timeRange}
@@ -83,15 +101,29 @@ export function InsightsTabs({
 
       {/* Tab Content */}
       <div className={isPending ? 'opacity-60 pointer-events-none' : ''}>
-        {activeTab === 'top' && (
-          isPending ? <InsightsSkeleton /> : <TopGamesTab games={initialData.topGames} timeRange={timeRange} />
-        )}
-        {activeTab === 'newest' && (
-          isPending ? <InsightsSkeleton /> : <NewestGamesTab games={initialData.newestGames} />
-        )}
-        {activeTab === 'trending' && (
-          isPending ? <InsightsSkeleton /> : <TrendingGamesTab games={initialData.trendingGames} />
-        )}
+        {activeTab === 'top' &&
+          (isPending ? (
+            <InsightsSkeleton />
+          ) : (
+            <TopGamesTab games={initialData.topGames} timeRange={timeRange} />
+          ))}
+        {activeTab === 'newest' &&
+          (isPending ? (
+            <InsightsSkeleton />
+          ) : (
+            <NewestGamesTab
+              games={initialData.newestGames}
+              timeRange={timeRange}
+              sortBy={newestSort}
+              onSortChange={handleNewestSortChange}
+            />
+          ))}
+        {activeTab === 'trending' &&
+          (isPending ? (
+            <InsightsSkeleton />
+          ) : (
+            <TrendingGamesTab games={initialData.trendingGames} timeRange={timeRange} />
+          ))}
       </div>
     </div>
   );

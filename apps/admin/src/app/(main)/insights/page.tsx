@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout';
 import { InsightsTabs } from './InsightsTabs';
 import { InsightsSkeleton } from './components/InsightsSkeleton';
 import { getTopGames, getNewestGames, getTrendingGames } from './lib/insights-queries';
-import type { TimeRange, InsightsTab } from './lib/insights-types';
+import type { TimeRange, InsightsTab, NewestSortMode } from './lib/insights-types';
 
 export const metadata: Metadata = {
   title: 'Insights',
@@ -19,6 +19,7 @@ interface PageProps {
   searchParams: Promise<{
     timeRange?: string;
     tab?: string;
+    sort?: string;
   }>;
 }
 
@@ -38,10 +39,12 @@ export default async function InsightsPage({ searchParams }: PageProps) {
     ? (params.tab as InsightsTab)
     : 'top';
 
+  const newestSort: NewestSortMode = params.sort === 'growth' ? 'growth' : 'release';
+
   // Fetch data for all tabs in parallel
   const [topGames, newestGames, trendingGames] = await Promise.all([
     getTopGames(timeRange),
-    getNewestGames(timeRange),
+    getNewestGames(timeRange, newestSort),
     getTrendingGames(timeRange),
   ]);
 
@@ -61,6 +64,7 @@ export default async function InsightsPage({ searchParams }: PageProps) {
           }}
           initialTimeRange={timeRange}
           initialTab={tab}
+          initialNewestSort={newestSort}
         />
       </Suspense>
     </div>

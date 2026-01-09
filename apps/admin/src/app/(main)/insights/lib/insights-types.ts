@@ -7,6 +7,8 @@ export type TimeRange = '24h' | '7d' | '30d';
 
 export type InsightsTab = 'top' | 'newest' | 'trending';
 
+export type NewestSortMode = 'release' | 'growth';
+
 /**
  * Game data for insights display
  */
