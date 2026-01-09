@@ -12,7 +12,12 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger } from '@publisheriq/shared';
-import { fetchAllSteamSpyApps, parseOwnerEstimate, type SteamSpyAppSummary } from '../apis/steamspy.js';
+import {
+  fetchAllSteamSpyApps,
+  fetchSteamSpyAppDetails,
+  parseOwnerEstimate,
+  type SteamSpyAppSummary,
+} from '../apis/steamspy.js';
 
 const log = logger.child({ worker: 'steamspy-sync' });
 
@@ -88,6 +93,137 @@ async function processBatch(
   }
 }
 
+interface SupplementaryStats {
+  fetched: number;
+  found: number;
+  notFound: number;
+}
+
+/**
+ * Fetch SteamSpy data for individual apps that weren't in the pagination results.
+ * Uses the appdetails endpoint (1 req/sec) for apps with significant reviews.
+ */
+async function processSupplementaryFetches(
+  supabase: ReturnType<typeof getServiceClient>,
+  maxApps: number = 100
+): Promise<SupplementaryStats> {
+  const today = new Date().toISOString().split('T')[0];
+  const now = new Date().toISOString();
+  const stats: SupplementaryStats = { fetched: 0, found: 0, notFound: 0 };
+
+  // Get candidates from RPC function
+  const { data: candidates, error } = await supabase.rpc('get_steamspy_individual_fetch_candidates', {
+    p_limit: maxApps,
+    p_min_reviews: 1000,
+  });
+
+  if (error) {
+    log.error('Failed to get supplementary fetch candidates', { error: error.message });
+    return stats;
+  }
+
+  if (!candidates?.length) {
+    log.info('No candidates for supplementary SteamSpy fetch');
+    return stats;
+  }
+
+  log.info('Starting supplementary SteamSpy individual fetches', { count: candidates.length });
+
+  for (const candidate of candidates) {
+    stats.fetched++;
+    const details = await fetchSteamSpyAppDetails(candidate.appid);
+
+    if (details?.name) {
+      stats.found++;
+      const owners = parseOwnerEstimate(details.owners);
+
+      // Upsert daily_metrics
+      const { error: metricsError } = await supabase.from('daily_metrics').upsert(
+        {
+          appid: candidate.appid,
+          metric_date: today,
+          owners_min: owners.min,
+          owners_max: owners.max,
+          ccu_peak: details.ccu,
+          average_playtime_forever: details.average_forever,
+          average_playtime_2weeks: details.average_2weeks,
+          positive_reviews: details.positive,
+          negative_reviews: details.negative,
+          total_reviews: details.positive + details.negative,
+          price_cents: parseInt(details.price, 10) || null,
+          discount_percent: parseInt(details.discount, 10) || 0,
+        },
+        { onConflict: 'appid,metric_date' }
+      );
+
+      if (metricsError) {
+        log.error('Failed to upsert metrics for individual fetch', {
+          appid: candidate.appid,
+          error: metricsError.message,
+        });
+      }
+
+      // Update sync_status - mark as available via individual fetch
+      const { error: syncError } = await supabase
+        .from('sync_status')
+        .update({
+          steamspy_available: true,
+          last_steamspy_sync: now,
+          last_steamspy_individual_fetch: now,
+        })
+        .eq('appid', candidate.appid);
+
+      if (syncError) {
+        log.error('Failed to update sync_status for individual fetch', {
+          appid: candidate.appid,
+          error: syncError.message,
+        });
+      }
+
+      log.info('Found SteamSpy data via individual fetch', {
+        appid: candidate.appid,
+        name: details.name,
+        ccu: details.ccu,
+        owners: details.owners,
+      });
+    } else {
+      stats.notFound++;
+
+      // Mark as tried but not found
+      const { error: syncError } = await supabase
+        .from('sync_status')
+        .update({
+          last_steamspy_individual_fetch: now,
+          // Keep steamspy_available = false
+        })
+        .eq('appid', candidate.appid);
+
+      if (syncError) {
+        log.error('Failed to update sync_status for not found app', {
+          appid: candidate.appid,
+          error: syncError.message,
+        });
+      }
+
+      log.debug('No SteamSpy data found via individual fetch', {
+        appid: candidate.appid,
+        name: candidate.name,
+      });
+    }
+
+    // Progress logging every 10 apps
+    if (stats.fetched % 10 === 0) {
+      log.info('Supplementary fetch progress', {
+        fetched: stats.fetched,
+        found: stats.found,
+        notFound: stats.notFound,
+      });
+    }
+  }
+
+  return stats;
+}
+
 async function main(): Promise<void> {
   const startTime = Date.now();
   const githubRunId = process.env.GITHUB_RUN_ID;
@@ -138,6 +274,18 @@ async function main(): Promise<void> {
         .select('*', { count: 'exact', head: true });
 
       log.info('Marked apps as not in SteamSpy catalog', { count });
+
+      // Supplementary individual fetches for popular apps not in pagination
+      const supplementaryLimit = parseInt(process.env.SUPPLEMENTARY_LIMIT || '100', 10);
+      if (supplementaryLimit > 0) {
+        log.info('Starting supplementary SteamSpy fetches', { limit: supplementaryLimit });
+        const supplementaryStats = await processSupplementaryFetches(supabase, supplementaryLimit);
+        log.info('Supplementary SteamSpy fetches completed', {
+          fetched: supplementaryStats.fetched,
+          found: supplementaryStats.found,
+          notFound: supplementaryStats.notFound,
+        });
+      }
     }
 
     // Update sync job as completed

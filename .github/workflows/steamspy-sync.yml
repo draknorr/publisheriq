@@ -40,3 +40,4 @@ jobs:
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
           MAX_PAGES: ${{ github.event.inputs.max_pages || '0' }}
+          SUPPLEMENTARY_LIMIT: '100'
