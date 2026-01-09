@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui';
 import { TimeRangeSelector } from './components/TimeRangeSelector';
 import { TopGamesTab } from './components/TopGamesTab';
 import { NewestGamesTab } from './components/NewestGamesTab';
@@ -32,9 +32,6 @@ export function InsightsTabs({
   // Local state (synced with URL)
   const [timeRange, setTimeRange] = useState<TimeRange>(initialTimeRange);
   const [activeTab, setActiveTab] = useState<InsightsTab>(initialTab);
-
-  // Data from server (will update on navigation)
-  const [data, setData] = useState(initialData);
 
   const updateUrl = (newTimeRange: TimeRange, newTab: InsightsTab) => {
     const params = new URLSearchParams(searchParams.toString());
