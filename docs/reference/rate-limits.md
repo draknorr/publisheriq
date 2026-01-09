@@ -2,7 +2,7 @@
 
 Complete reference for all API rate limits in PublisherIQ.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 9, 2026
 
 ## Summary Table
 
@@ -10,8 +10,9 @@ Complete reference for all API rate limits in PublisherIQ.
 |-----|------------|----------------|-------|
 | Steam App List | 100k/day | Unlimited | Single daily call sufficient |
 | Steam Storefront | ~200/5min | 0.67/sec | Burst capacity 10 |
-| Steam Reviews | ~20/min | 0.33/sec | Burst capacity 5 |
+| Steam Reviews | ~60/min | 1/sec | Summary endpoint (v2.2) |
 | Steam Histogram | ~60/min | 1/sec | Burst capacity 5 |
+| Steam CCU | ~60/min | 1/sec | GetNumberOfCurrentPlayers (v2.2) |
 | SteamSpy All | 1/60sec | 1/min | Paginated bulk fetch |
 | SteamSpy Detail | 1/sec | 1/sec | Single app queries |
 | Community Scraping | 1/1.5sec | Conservative | Avoid detection |
@@ -49,20 +50,21 @@ const rateLimiter = new RateLimiter({
 
 ### Reviews API
 
-**Rate Limit:** ~20 requests per minute
+**Rate Limit:** ~60 requests per minute (v2.2: increased from ~20/min)
 
 **Implementation:**
 ```typescript
 const rateLimiter = new RateLimiter({
   tokensPerInterval: 5,
-  interval: 15_000,
+  interval: 5_000,
   maxTokens: 5
 });
 ```
 
 **Behavior:**
 - Initial burst of 5 requests
-- Then ~0.33 requests/second
+- Then ~1 request/second
+- Uses summary endpoint (`num_per_page=0`) for lightweight fetches
 
 ### Review Histogram API
 
@@ -80,6 +82,26 @@ const rateLimiter = new RateLimiter({
 **Behavior:**
 - Initial burst of 5 requests
 - Then ~1 request/second
+
+### CCU API (v2.2+)
+
+**Rate Limit:** ~60 requests per minute
+
+**Endpoint:** `ISteamUserStats/GetNumberOfCurrentPlayers/v1`
+
+**Implementation:**
+```typescript
+const rateLimiter = new RateLimiter({
+  tokensPerInterval: 1,
+  interval: 1_000,
+  maxTokens: 5
+});
+```
+
+**Behavior:**
+- Conservative 1 request/second
+- No authentication required
+- Returns exact current player count
 
 ---
 
@@ -160,8 +182,9 @@ class RateLimiter {
 | API | Rate | 24h Capacity | Notes |
 |-----|------|--------------|-------|
 | Storefront | 0.67/sec | ~58,000 | 5 runs × 10k each |
-| Reviews | 0.33/sec | ~28,000 | 5 runs × 5k each |
+| Reviews | 1/sec | ~86,400 | v2.2: 2500 apps per batch |
 | Histogram | 1/sec | ~86,400 | Full daily capacity |
+| Steam CCU | 1/sec | ~86,400 | Tiered: ~1500 hourly, ~50k daily |
 | SteamSpy | 1/min | ~1,400 | 75 pages × ~1000 apps |
 
 ### Sync Strategy

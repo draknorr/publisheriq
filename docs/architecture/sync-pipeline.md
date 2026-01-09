@@ -2,10 +2,14 @@
 
 This document describes how data flows through PublisherIQ, from external APIs to the database.
 
-**Last Updated:** January 8, 2026
+**Last Updated:** January 9, 2026
 
 ## Recent Improvements
 
+- **Tiered CCU Tracking**: Three-tier system with hourly, 2-hourly, and daily polling (v2.2)
+- **Exact CCU from Steam API**: GetNumberOfCurrentPlayers replaces SteamSpy estimates (v2.2)
+- **SteamSpy Supplementary Fetch**: Individual fetch for games missing from pagination (v2.2)
+- **3x Reviews Throughput**: Rate limit increased from 0.33 to 1 req/sec (v2.2)
 - **Velocity-Based Review Scheduling**: Review syncs now scheduled based on review activity (v2.1)
 - **Review Delta Tracking**: Daily review changes stored for trend visualization (v2.1)
 - **Interpolation**: Automatic gap-filling for continuous time-series data (v2.1)
@@ -38,13 +42,16 @@ All scheduled sync jobs run via GitHub Actions on UTC time:
 | embedding-sync | 03:00 daily | `embedding-worker.ts` | 100/200 | Vector embeddings |
 | histogram-sync | 04:15 daily | `histogram-worker.ts` | 300 | Monthly reviews |
 | storefront-sync | 06,10,14,18,22:00 | `storefront-worker.ts` | 200 | Game metadata |
-| reviews-sync | 06:30,10:30,14:30,18:30,22:30 | `reviews-worker.ts` | 200 | Review counts |
+| reviews-sync | :15 every 2h | `reviews-worker.ts` | 2500 | Review counts |
 | trends-calculation | 22:00 daily | `trends-worker.ts` | 500 | Trend metrics |
 | priority-calculation | 22:30 daily | `priority-worker.ts` | 1000 | Priority scores |
 | page-creation-scrape | 03:00 daily | `scraper-worker.ts` | 100 | Page dates |
 | velocity-calculation | 08,16,00:00 | `velocity-calculator-worker.ts` | - | Velocity stats (v2.1) |
 | interpolation | 05:00 daily | `interpolation-worker.ts` | - | Fill data gaps (v2.1) |
 | refresh-views | 05:00 daily | psql direct | - | Refresh materialized views (v2.1) |
+| ccu-sync | :00 hourly | `ccu-tiered-worker.ts` | ~1500 | Tier 1+2 CCU (v2.2) |
+| ccu-daily-sync | 04:30 daily | `ccu-daily-worker.ts` | 50000 | Tier 3 CCU (v2.2) |
+| ccu-cleanup | Sun 03:00 | psql direct | - | Aggregate + cleanup snapshots (v2.2) |
 
 ## Worker Architecture
 
@@ -191,6 +198,88 @@ Day 4: Actual sync → 1012 reviews (is_interpolated = FALSE)
 | `velocity_7d` | DECIMAL | 7-day velocity |
 | `velocity_calculated_at` | TIMESTAMPTZ | Last calculation time |
 
+## Tiered CCU Tracking System (v2.2+)
+
+CCU (concurrent user) data is collected via a three-tier system using Steam's native API.
+
+### CCU Tier Definitions
+
+| Tier | Criteria | Polling Frequency | Games |
+|------|----------|-------------------|-------|
+| **Tier 1** | Top 500 by 7-day peak CCU | Hourly | ~500 |
+| **Tier 2** | Top 1000 newest releases (past year) | Every 2 hours (even hours) | ~1000 |
+| **Tier 3** | All other games | Daily | ~60,000+ |
+
+### CCU Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Steam GetNumberOfCurrentPlayers API                          │
+│     - Returns exact current player count                         │
+│     - 1 req/sec rate limit                                       │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  2. CCU Tiered Worker (hourly)                                   │
+│     - Hour 0-23: Tier 1 games                                    │
+│     - Even hours (0,2,4...22): Tier 1 + Tier 2 games            │
+│     - Creates ccu_snapshots records                              │
+│     - Updates daily_metrics.ccu_peak                             │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  3. CCU Daily Worker (04:30 UTC)                                 │
+│     - Syncs Tier 3 games (~50k)                                  │
+│     - Creates daily_metrics with ccu_source='steam_api'          │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  4. Weekly Cleanup (Sunday 03:00 UTC)                            │
+│     - Aggregates yesterday's hourly peaks to daily_metrics       │
+│     - Deletes ccu_snapshots older than 30 days                   │
+│     - Maintains data retention policy                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Tier Recalculation
+
+At midnight UTC, the `recalculate_ccu_tiers()` function:
+1. Identifies top 500 games by 7-day peak CCU → Tier 1
+2. Identifies top 1000 newest releases → Tier 2
+3. All remaining games → Tier 3
+4. Records tier changes for monitoring
+
+### CCU Source Tracking
+
+The `daily_metrics.ccu_source` column tracks data provenance:
+- `'steam_api'` - Exact CCU from Steam's GetNumberOfCurrentPlayers
+- `'steamspy'` - Estimated CCU from SteamSpy
+- `NULL` - Legacy data (source unknown)
+
+---
+
+## SteamSpy Supplementary Fetch (v2.2+)
+
+SteamSpy's paginated "all" API misses some popular games. The supplementary fetch addresses this:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  During full SteamSpy sync:                                      │
+│  1. Identify candidates: steamspy_available = FALSE,             │
+│     total_reviews >= 1000, never individually fetched            │
+│  2. Fetch via appdetails endpoint (up to 100 games)              │
+│  3. Update daily_metrics and sync_status                         │
+│  4. Mark last_steamspy_individual_fetch                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Configuration**: `SUPPLEMENTARY_LIMIT` environment variable (default: 100)
+
+---
+
 ## Rate Limiting
 
 All API calls go through a token bucket rate limiter:
@@ -210,9 +299,10 @@ await rateLimiter.acquire();  // Blocks until token available
 | API | Tokens/Interval | Interval | Effective Rate |
 |-----|-----------------|----------|----------------|
 | Storefront | 10 | 30s | 0.33/sec |
-| Reviews | 5 | 15s | 0.33/sec |
+| Reviews | 1 | 1s | 1/sec (v2.2: increased from 0.33) |
 | Histogram | 5 | 5s | 1/sec |
 | SteamSpy | 1 | 1s | 1/sec |
+| Steam CCU | 1 | 1s | 1/sec (v2.2) |
 
 ## Data Flow by Worker
 
@@ -328,6 +418,51 @@ PostgreSQL tables → Materialized views (REFRESH CONCURRENTLY)
 - `review_velocity_stats`
 
 **Note**: Uses `psql` directly (not Supabase CLI) for reliable long-running queries.
+
+### 11. CCU Tiered Sync (v2.2+)
+
+```
+Steam GetNumberOfCurrentPlayers API → ccu_snapshots
+                                    → daily_metrics.ccu_peak
+                                    → daily_metrics.ccu_source = 'steam_api'
+```
+
+**Command**: `pnpm --filter @publisheriq/ingestion ccu-tiered-sync`
+
+**What it does**:
+1. Fetches tier assignments from `ccu_tier_assignments`
+2. Determines which tiers to poll based on current hour
+3. Calls Steam API for each game in the batch
+4. Creates `ccu_snapshots` record with exact player count
+5. Updates `daily_metrics.ccu_peak` if new value is higher
+6. At midnight: recalculates tier assignments
+
+### 12. CCU Daily Sync (v2.2+)
+
+```
+Steam GetNumberOfCurrentPlayers API → daily_metrics (Tier 3 games)
+```
+
+**Command**: `pnpm --filter @publisheriq/ingestion ccu-daily-sync`
+
+**What it does**:
+1. Fetches all Tier 3 games (not in Tier 1 or 2)
+2. Polls CCU for each game (up to `CCU_DAILY_LIMIT`, default 50k)
+3. Creates/updates `daily_metrics` with `ccu_source='steam_api'`
+
+### 13. CCU Cleanup (v2.2+)
+
+```
+ccu_snapshots → aggregate_daily_ccu_peaks() → daily_metrics
+             → cleanup_old_ccu_snapshots() → (deleted)
+```
+
+**Schedule**: Weekly on Sunday at 03:00 UTC
+
+**What it does**:
+1. Aggregates yesterday's hourly peaks to `daily_metrics`
+2. Deletes snapshots older than 30 days
+3. Maintains storage efficiency
 
 ## PICS Service Pipeline
 

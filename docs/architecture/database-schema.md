@@ -4,7 +4,7 @@
 
 **Database**: PostgreSQL (Supabase)
 
-**Last Updated:** January 8, 2026
+**Last Updated:** January 9, 2026
 
 **Semantic Layer**: Cube.js provides type-safe queries over these tables. See [Chat Data System](chat-data-system.md) for Cube schema documentation.
 
@@ -351,11 +351,13 @@ Daily snapshots of app metrics.
 | recent_score_desc | TEXT | YES | NULL | Recent review score description |
 | price_cents | INTEGER | YES | NULL | Price in cents at snapshot time |
 | discount_percent | SMALLINT | NO | 0 | Discount at snapshot time |
+| ccu_source | TEXT | YES | NULL | CCU data source: 'steam_api' (exact) or 'steamspy' (estimate) (v2.2+) |
 
 **Unique**: `(appid, metric_date)`
 **Indexes**:
 - `idx_daily_metrics_appid_date` on `(appid, metric_date DESC)`
 - `idx_daily_metrics_date` on `metric_date`
+- `idx_daily_metrics_ccu_source` on `ccu_source` WHERE `ccu_source IS NOT NULL`
 
 ---
 
@@ -432,6 +434,8 @@ Per-app sync tracking and scheduling.
 | review_velocity_tier | TEXT | YES | NULL | Velocity tier: 'high', 'medium', 'low', 'dormant' (v2.1+) |
 | velocity_7d | DECIMAL | YES | NULL | 7-day average reviews/day (v2.1+) |
 | velocity_calculated_at | TIMESTAMPTZ | YES | NULL | When velocity was last calculated (v2.1+) |
+| last_steamspy_individual_fetch | TIMESTAMPTZ | YES | NULL | Last SteamSpy individual fetch attempt (v2.2+) |
+| steamspy_available | BOOLEAN | YES | NULL | Whether SteamSpy has data for this app |
 
 **Indexes**:
 - `idx_sync_status_embedding_needed` on `(priority_score DESC, last_embedding_sync)` WHERE `is_syncable = TRUE`
@@ -632,6 +636,61 @@ Per-user rate limiting state.
 | updated_at | TIMESTAMPTZ | NO | NOW() | Last update |
 
 **Rate Limits**: 20 requests/minute, 200 requests/hour
+
+---
+
+### ccu_snapshots (v2.2+)
+
+Hourly/2-hourly CCU snapshots for Tier 1+2 games. 30-day retention.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | BIGSERIAL | NO | auto | Primary key |
+| appid | INTEGER | NO | - | FK to apps.appid |
+| snapshot_time | TIMESTAMPTZ | NO | - | Snapshot timestamp |
+| player_count | INTEGER | NO | - | Exact CCU from Steam API |
+| ccu_tier | SMALLINT | NO | - | Tier at snapshot time (1/2/3) |
+| created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
+
+**Indexes**:
+- `idx_ccu_snapshots_appid_time` on `(appid, snapshot_time DESC)`
+- `idx_ccu_snapshots_time` on `snapshot_time`
+- `idx_ccu_snapshots_tier_time` on `(ccu_tier, snapshot_time DESC)`
+
+**Retention**: Snapshots older than 30 days are aggregated to `daily_metrics` then deleted.
+
+---
+
+### ccu_tier_assignments (v2.2+)
+
+Current CCU tier assignment for each game. Recalculated hourly.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| appid | INTEGER | NO | - | Primary key, FK to apps.appid |
+| ccu_tier | SMALLINT | NO | 3 | Current tier (1/2/3) |
+| tier_reason | TEXT | YES | NULL | 'top_ccu', 'new_release', 'default' |
+| recent_peak_ccu | INTEGER | YES | NULL | 7-day peak CCU |
+| release_rank | INTEGER | YES | NULL | Rank by release date (for Tier 2) |
+| last_tier_change | TIMESTAMPTZ | YES | NULL | When tier last changed |
+| updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
+
+**Tier Definitions**:
+- **Tier 1**: Top 500 games by 7-day peak CCU → hourly polling
+- **Tier 2**: Top 1000 newest releases (past year) → every 2 hours
+- **Tier 3**: All other games → daily polling
+
+**Indexes**:
+- `idx_ccu_tier_assignments_tier` on `ccu_tier`
+- `idx_ccu_tier_assignments_tier1` on `appid` WHERE `ccu_tier = 1`
+- `idx_ccu_tier_assignments_tier2` on `appid` WHERE `ccu_tier = 2`
+
+**RPC Functions**:
+```sql
+recalculate_ccu_tiers()       -- Reassign tiers based on 7-day peak CCU
+cleanup_old_ccu_snapshots()   -- Delete snapshots > 30 days old
+aggregate_daily_ccu_peaks(target_date)  -- Roll up to daily_metrics
+```
 
 ---
 

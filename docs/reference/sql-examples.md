@@ -399,6 +399,107 @@ WHERE status = 'pending'
 ORDER BY created_at ASC;
 ```
 
+## CCU Tier Queries (v2.2+)
+
+### Games by CCU Tier
+
+```sql
+SELECT appid, ccu_tier, tier_reason, recent_peak_ccu
+FROM ccu_tier_assignments
+WHERE ccu_tier = 1
+ORDER BY recent_peak_ccu DESC
+LIMIT 20;
+```
+
+### Recent CCU Snapshots for a Game
+
+```sql
+SELECT snapshot_time, player_count, ccu_tier
+FROM ccu_snapshots
+WHERE appid = 730  -- Counter-Strike 2
+ORDER BY snapshot_time DESC
+LIMIT 24;  -- Last 24 snapshots
+```
+
+### Tier Distribution
+
+```sql
+SELECT ccu_tier,
+       COUNT(*) as game_count,
+       tier_reason
+FROM ccu_tier_assignments
+GROUP BY ccu_tier, tier_reason
+ORDER BY ccu_tier, tier_reason;
+```
+
+### CCU Source Breakdown
+
+```sql
+SELECT ccu_source,
+       COUNT(*) as records,
+       AVG(ccu) as avg_ccu
+FROM daily_metrics
+WHERE metric_date = CURRENT_DATE
+  AND ccu IS NOT NULL
+GROUP BY ccu_source;
+```
+
+### Games with Highest CCU Today
+
+```sql
+SELECT a.appid, a.name, dm.ccu, dm.ccu_source
+FROM apps a
+JOIN daily_metrics dm ON a.appid = dm.appid
+WHERE dm.metric_date = CURRENT_DATE
+  AND dm.ccu IS NOT NULL
+ORDER BY dm.ccu DESC
+LIMIT 20;
+```
+
+### CCU Peak vs Current Comparison
+
+```sql
+SELECT cs.appid, a.name,
+       cs.player_count as current_ccu,
+       cta.recent_peak_ccu as peak_ccu,
+       ROUND((cs.player_count::numeric / NULLIF(cta.recent_peak_ccu, 0)) * 100, 1) as pct_of_peak
+FROM ccu_snapshots cs
+JOIN apps a ON cs.appid = a.appid
+JOIN ccu_tier_assignments cta ON cs.appid = cta.appid
+WHERE cs.snapshot_time = (SELECT MAX(snapshot_time) FROM ccu_snapshots WHERE appid = cs.appid)
+  AND cta.ccu_tier = 1
+ORDER BY current_ccu DESC
+LIMIT 20;
+```
+
+### Tier 2 Games (New Releases)
+
+```sql
+SELECT cta.appid, a.name, a.release_date, cta.release_rank
+FROM ccu_tier_assignments cta
+JOIN apps a ON cta.appid = a.appid
+WHERE cta.ccu_tier = 2
+  AND cta.tier_reason = 'new_release'
+ORDER BY cta.release_rank
+LIMIT 20;
+```
+
+### CCU History for a Game (Last 7 Days)
+
+```sql
+SELECT DATE(snapshot_time) as date,
+       MIN(player_count) as min_ccu,
+       MAX(player_count) as max_ccu,
+       AVG(player_count)::integer as avg_ccu
+FROM ccu_snapshots
+WHERE appid = 730  -- Counter-Strike 2
+  AND snapshot_time >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY DATE(snapshot_time)
+ORDER BY date DESC;
+```
+
+---
+
 ## Related Documentation
 
 - [Database Schema](../architecture/database-schema.md) - Full schema reference

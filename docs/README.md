@@ -17,32 +17,40 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ## Latest Release
 
-**[v2.1 - Velocity & Auth](releases/v2.1-velocity-auth.md)** (January 8, 2026)
+**[v2.2 - CCU & SteamSpy Improvements](releases/v2.2-ccu-steamspy.md)** (January 9, 2026)
 
-Two major new features:
+Major improvements to CCU data accuracy and sync efficiency:
 
-**Velocity-Based Review Sync Scheduling**
-- Dynamic sync intervals based on review velocity (4h/12h/24h/72h)
-- New `review_deltas` table tracking daily review changes
-- `review_velocity_stats` materialized view for pre-computed metrics
-- New Cube.js cubes: ReviewVelocity, ReviewDeltas
-- Velocity tiers: high (≥5/day), medium (1-5/day), low (0.1-1/day), dormant (<0.1/day)
+**Tiered CCU Tracking System**
+- Three-tier polling strategy: Tier 1 (hourly), Tier 2 (2-hourly), Tier 3 (daily)
+- Exact CCU from Steam's GetNumberOfCurrentPlayers API (replaces SteamSpy estimates)
+- New `ccu_snapshots` table for hourly data with 30-day retention
+- New `ccu_tier_assignments` table with automatic tier recalculation
+- CCU source tracking via `daily_metrics.ccu_source`
 
-**User Authentication & Credits System**
-- Magic link authentication (passwordless via Supabase)
-- Invite-only waitlist with admin approval workflow
-- Credit-based usage tracking with reservation pattern
-- Per-user rate limits (20/minute, 200/hour)
-- New admin pages: `/admin/users`, `/admin/waitlist`, `/admin/usage`
+**SteamSpy Supplementary Fetch**
+- Fixes missing games in SteamSpy pagination (e.g., Arc Raiders with 120K reviews)
+- Individual app fetches for high-priority games missing from bulk API
 
-**Also in v2.1:**
-- New LLM tool: `lookup_games` for searching games by name
-- Cube.js model updates (11 cubes total)
-- New landing page at `/` with dashboard moved to `/dashboard`
+**Rate Limit & Batch Size Improvements**
+- Reviews API: 3x faster (0.33 → 1 req/sec)
+- Reviews batch size: 2x larger (1200 → 2500 apps)
+- Daily review capacity: ~30k apps (up from ~14k)
+
+**Also in v2.2:**
+- Priority calculation fix for never-synced apps
+- New CCU workflows: `ccu-sync.yml`, `ccu-daily-sync.yml`, `ccu-cleanup.yml`
 
 ---
 
 ## Previous Releases
+
+**[v2.1 - Velocity & Auth](releases/v2.1-velocity-auth.md)** (January 8, 2026)
+
+- Velocity-based review sync scheduling (4h/12h/24h/72h tiers)
+- User authentication with magic links
+- Credit-based usage tracking
+- New LLM tool: `lookup_games`
 
 **[v2.0 - New Design](releases/v2.0-new-design.md)** (January 2026)
 

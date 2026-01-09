@@ -41,6 +41,12 @@ pnpm --filter @publisheriq/ingestion calculate-velocity
 
 # Interpolate review data (v2.1)
 pnpm --filter @publisheriq/ingestion interpolate-reviews
+
+# CCU tiered sync - Tier 1+2 (v2.2)
+pnpm --filter @publisheriq/ingestion ccu-tiered-sync
+
+# CCU daily sync - Tier 3 (v2.2)
+pnpm --filter @publisheriq/ingestion ccu-daily-sync
 ```
 
 ## Worker Details
@@ -219,6 +225,60 @@ pnpm --filter @publisheriq/ingestion calculate-velocity
 **Duration:** ~1-2 minutes
 
 **Rate limit:** None (database operations only)
+
+---
+
+### CCU Tiered Sync (v2.2+)
+
+Syncs CCU data for high-priority games (Tier 1 + Tier 2).
+
+```bash
+pnpm --filter @publisheriq/ingestion ccu-tiered-sync
+```
+
+**What it does:**
+- Fetches exact CCU from Steam's GetNumberOfCurrentPlayers API
+- Syncs Tier 1 games (top 500 by 7-day peak CCU)
+- Syncs Tier 2 games (top 1000 newest releases)
+- Stores snapshots in `ccu_snapshots` table
+- Updates `daily_metrics.ccu` and `ccu_source`
+
+**Duration:** ~15-30 minutes
+
+**Rate limit:** 1 request per second (Steam API)
+
+**Tier Assignment:**
+| Tier | Criteria | Count |
+|------|----------|-------|
+| Tier 1 | Top 500 by 7-day peak CCU | ~500 |
+| Tier 2 | Top 1000 newest releases (past year) | ~1000 |
+
+---
+
+### CCU Daily Sync (v2.2+)
+
+Syncs CCU data for all remaining games (Tier 3).
+
+```bash
+# Default (50,000 apps)
+pnpm --filter @publisheriq/ingestion ccu-daily-sync
+
+# Custom limit
+LIMIT=10000 pnpm --filter @publisheriq/ingestion ccu-daily-sync
+```
+
+**What it does:**
+- Fetches CCU for Tier 3 games (all others)
+- Processes in batches with rate limiting
+- Updates `daily_metrics.ccu` and `ccu_source`
+- Skips apps with `storefront_accessible = false`
+
+**Duration:** ~3-4 hours for 50k apps
+
+**Rate limit:** 1 request per second (Steam API)
+
+**Environment Variables:**
+- `LIMIT` - Maximum apps to sync (default 50000)
 
 ---
 

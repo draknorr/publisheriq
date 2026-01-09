@@ -2,7 +2,7 @@
 
 PublisherIQ collects data from multiple sources organized into tiers based on reliability and coverage.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 9, 2026
 
 ## Data Source Hierarchy
 
@@ -11,10 +11,12 @@ TIER 1 - AUTHORITATIVE (100% coverage)
 ├── Steam IStoreService API    → Master list of all appIDs
 ├── Steam Storefront API       → Developers, publishers, release dates
 ├── Steam Reviews API          → Review counts, sentiment scores
-└── Steam Review Histogram     → Monthly review trends
+├── Steam Review Histogram     → Monthly review trends
+└── Steam CCU API (v2.2)       → Exact current player counts
 
 TIER 2 - ENRICHMENT (80-90% coverage)
-└── SteamSpy API               → CCU, owner estimates, playtime, tags
+└── SteamSpy API               → Owner estimates, playtime, tags
+    ⚠️ CCU now comes from Steam API (v2.2)
     ⚠️ NOT authoritative for publishers/developers
 
 TIER 3 - SPECIALIZED
@@ -148,7 +150,7 @@ GET https://store.steampowered.com/appreviews/{appid}?json=1&num_per_page=0
 | 3 | Negative | 10-19% |
 | 2 | Very Negative | 0-9% |
 
-**Rate Limit:** ~20 requests per minute
+**Rate Limit:** ~60 requests per minute (v2.2: increased from ~20/min for summary endpoint)
 
 **Implementation:** `packages/ingestion/src/apis/reviews.ts`
 
@@ -188,17 +190,61 @@ GET https://store.steampowered.com/appreviewhistogram/{appid}?l=english
 
 ---
 
+### Steam CCU API (v2.2+)
+
+**Purpose:** Exact current player counts (replaces SteamSpy CCU estimates)
+
+**Endpoint:**
+```
+GET https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/
+    ?appid={appid}
+```
+
+**Response:**
+```json
+{
+  "response": {
+    "player_count": 85432,
+    "result": 1
+  }
+}
+```
+
+**Result Codes:**
+| Code | Meaning |
+|------|---------|
+| 1 | Success |
+| 42 | Invalid appid / no data |
+
+**Key Benefits:**
+- **Exact data**: Real-time player counts, not estimates
+- **High coverage**: Works for all apps with active players
+- **No authentication**: Public endpoint, no API key required
+
+**Rate Limit:** ~60 requests per minute (conservative: 1 req/sec)
+
+**Implementation:** `packages/ingestion/src/apis/steam-ccu.ts`
+
+**Tiered Polling Strategy (v2.2):**
+| Tier | Games | Frequency |
+|------|-------|-----------|
+| Tier 1 | Top 500 by 7-day peak | Hourly |
+| Tier 2 | Top 1000 newest releases | Every 2 hours |
+| Tier 3 | All others | Daily |
+
+---
+
 ## Tier 2: Third-Party Services
 
 ### SteamSpy API
 
-**Purpose:** Player counts, owner estimates, playtime, tags
+**Purpose:** Owner estimates, playtime, tags (CCU now from Steam API v2.2)
 
 **Endpoints:**
 | Endpoint | Rate Limit | Use |
 |----------|------------|-----|
-| `?request=all&page={n}` | 1/60sec | Full catalog |
-| `?request=appdetails&appid={id}` | 1/sec | Single app |
+| `?request=all&page={n}` | 1/60sec | Full catalog (paginated) |
+| `?request=appdetails&appid={id}` | 1/sec | Single app (supplementary fetch v2.2) |
 
 **Response:**
 ```json
@@ -215,7 +261,17 @@ GET https://store.steampowered.com/appreviewhistogram/{appid}?l=english
 }
 ```
 
-**Important:** Do NOT use SteamSpy's `developer` and `publisher` fields - they have gaps. Use Steam Storefront API instead.
+**Important Notes:**
+- Do NOT use SteamSpy's `developer` and `publisher` fields - they have gaps. Use Steam Storefront API instead.
+- The paginated "all" endpoint misses some popular games. Use supplementary fetch via `appdetails` (v2.2).
+- CCU data is now sourced from Steam's GetNumberOfCurrentPlayers API for accuracy (v2.2).
+
+**Supplementary Fetch (v2.2):**
+
+SteamSpy's paginated API returns ~86k apps but misses some popular games (e.g., Arc Raiders). The supplementary fetch:
+1. Identifies games with 1000+ reviews but no SteamSpy data
+2. Fetches individual app details via `appdetails` endpoint
+3. Runs during full sync, up to 100 games per run
 
 **Implementation:** `packages/ingestion/src/apis/steamspy.ts`
 
@@ -269,9 +325,10 @@ The "Founded" date (when a Steam page was created) is only available by scraping
 |--------|------|----------|------------|------------------|
 | Steam App List | All app IDs | 100% | 100k/day | Daily |
 | Steam Storefront | Dev/Pub, metadata | 100% | ~200/5min | 5x daily |
-| Steam Reviews | Scores, counts | 100% | ~20/min | 5x daily |
+| Steam Reviews | Scores, counts | 100% | ~60/min | Every 2h |
 | Steam Histogram | Monthly trends | 100% | ~60/min | Daily |
-| SteamSpy | CCU, owners, tags | 80-90% | 1/sec | Daily |
+| Steam CCU (v2.2) | Exact player counts | 100% | ~60/min | Tiered (hourly/2h/daily) |
+| SteamSpy | Owners, playtime, tags | 80-90% | 1/sec | Daily |
 | PICS | Tags, genres, deck | 100% | Variable | Real-time |
 
 ## Related Documentation

@@ -2,7 +2,7 @@
 
 Common issues and solutions for PublisherIQ.
 
-**Last Updated:** January 8, 2026
+**Last Updated:** January 9, 2026
 
 ## Database Connection Issues
 
@@ -469,6 +469,93 @@ pnpm --filter @publisheriq/ingestion interpolate-reviews
 # Or directly
 source .env && psql "$DATABASE_URL" -c "SELECT interpolate_all_review_deltas(CURRENT_DATE - 30, CURRENT_DATE);"
 ```
+
+---
+
+## CCU Sync Issues (v2.2+)
+
+### CCU Not Updating for Popular Games
+
+**Cause:** Game may not be in Tier 1 or sync workflow not running.
+
+**Solution:**
+1. Check tier assignment:
+   ```sql
+   SELECT appid, ccu_tier, tier_reason, recent_peak_ccu
+   FROM ccu_tier_assignments
+   WHERE appid = 730;  -- Replace with your appid
+   ```
+2. Verify ccu-sync workflow is running (hourly at :00)
+3. Check for games that should be Tier 1 but aren't:
+   ```sql
+   SELECT a.appid, a.name, dm.ccu
+   FROM apps a
+   JOIN daily_metrics dm ON a.appid = dm.appid
+   LEFT JOIN ccu_tier_assignments cta ON a.appid = cta.appid
+   WHERE dm.ccu > 10000
+     AND (cta.ccu_tier IS NULL OR cta.ccu_tier > 1)
+     AND dm.metric_date = CURRENT_DATE;
+   ```
+
+### Tier 1 Games Missing CCU
+
+**Cause:** Steam API returning result code 42 (invalid appid).
+
+**Solution:**
+1. Verify game is still available on Steam
+2. Check for API errors in ccu_snapshots:
+   ```sql
+   SELECT snapshot_time, player_count
+   FROM ccu_snapshots
+   WHERE appid = 12345
+   ORDER BY snapshot_time DESC
+   LIMIT 10;
+   ```
+3. Manually test Steam API:
+   ```bash
+   curl "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=730"
+   ```
+
+### Old CCU Snapshots Not Cleaning Up
+
+**Cause:** CCU cleanup workflow not running (weekly Sunday 3 AM UTC).
+
+**Solution:**
+```bash
+# Run cleanup manually
+source .env && psql "$DATABASE_URL" -c "SELECT cleanup_old_ccu_snapshots();"
+```
+
+### CCU Source Shows 'steamspy' Instead of 'steam_api'
+
+**Cause:** Game not polled by tiered CCU sync yet.
+
+**Solution:**
+1. Check if game is in any tier:
+   ```sql
+   SELECT ccu_tier FROM ccu_tier_assignments WHERE appid = 12345;
+   ```
+2. Games without a tier assignment get CCU from SteamSpy during daily sync
+3. Force tier recalculation (runs daily at midnight UTC):
+   ```sql
+   SELECT recalculate_ccu_tiers();
+   ```
+
+### Tier Assignment Incorrect
+
+**Cause:** Tier recalculation not run recently.
+
+**Solution:**
+1. Check last tier change:
+   ```sql
+   SELECT appid, ccu_tier, tier_reason, last_tier_change
+   FROM ccu_tier_assignments
+   WHERE appid = 12345;
+   ```
+2. Run tier recalculation:
+   ```sql
+   SELECT recalculate_ccu_tiers();
+   ```
 
 ---
 
