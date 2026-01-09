@@ -1,10 +1,15 @@
-name: CCU Tiered Sync (Tier 1+2)
+name: CCU Daily Sync (Tier 3)
 
 on:
   schedule:
-    # Run hourly at :00
-    - cron: '0 * * * *'
+    # Run daily at 4:30 AM UTC (after tiered sync, before other jobs)
+    - cron: '30 4 * * *'
   workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max number of games to sync'
+        required: false
+        default: '50000'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -13,7 +18,7 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # ~1500 games at 1 req/sec = ~25 min + buffer
+    timeout-minutes: 360  # 6 hours - ~50k games at 1 req/sec takes ~14h but we batch
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +36,8 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run tiered CCU sync
-        run: pnpm --filter @publisheriq/ingestion ccu-tiered-sync
+      - name: Run daily CCU sync (Tier 3)
+        run: pnpm --filter @publisheriq/ingestion ccu-daily-sync
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
+          CCU_DAILY_LIMIT: ${{ github.event.inputs.limit || '50000' }}

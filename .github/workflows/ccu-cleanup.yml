@@ -1,0 +1,58 @@
+name: CCU Snapshots Cleanup
+
+on:
+  schedule:
+    # Run weekly on Sunday at 3:00 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Aggregate yesterday's CCU peaks
+        run: |
+          pnpm --filter @publisheriq/database tsx -e "
+            import { getServiceClient } from '@publisheriq/database';
+            const supabase = getServiceClient();
+            const { data, error } = await supabase.rpc('aggregate_daily_ccu_peaks');
+            if (error) {
+              console.error('Failed to aggregate CCU peaks:', error);
+              process.exit(1);
+            }
+            console.log('Aggregated CCU peaks for yesterday:', data);
+          "
+
+      - name: Cleanup old CCU snapshots (>30 days)
+        run: |
+          pnpm --filter @publisheriq/database tsx -e "
+            import { getServiceClient } from '@publisheriq/database';
+            const supabase = getServiceClient();
+            const { data, error } = await supabase.rpc('cleanup_old_ccu_snapshots');
+            if (error) {
+              console.error('Failed to cleanup old snapshots:', error);
+              process.exit(1);
+            }
+            console.log('Deleted old CCU snapshots:', data);
+          "
