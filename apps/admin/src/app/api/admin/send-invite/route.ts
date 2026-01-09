@@ -25,7 +25,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           getAll() {
             return cookieStore.getAll();
           },
-          setAll(cookies: { name: string; value: string; options: CookieOptions }[]) {
+          setAll(_cookies: { name: string; value: string; options: CookieOptions }[]) {
             // Read-only for this check
           },
         },
