@@ -124,6 +124,7 @@ publisheriq/
 ├── apps/
 │   └── admin/                     # Next.js 15 dashboard
 │       ├── src/app/               # App router pages
+│       │   └── (main)/insights/   # Insights dashboard (v2.2)
 │       ├── src/components/        # React components (theme, ui, data-display)
 │       └── src/lib/               # Utilities, LLM integration
 │           ├── llm/               # Chat system
@@ -540,6 +541,24 @@ Three-tier polling with Steam API for exact player counts:
 - **Fonts:** Geist Sans, Geist Mono
 - **Color Tokens:** CSS variables (--surface, --text-primary, --accent-*, --trend-*)
 - **Components:** ThemeProvider, ThemeToggle, CollapsibleSection, DenseMetricGrid, StatusBar
+
+## Insights Dashboard (v2.2)
+
+CCU analytics page at `/insights` with sparkline visualizations:
+
+| Tab | Description | Data Source |
+|-----|-------------|-------------|
+| **Top Games** | Top 50 by peak CCU | ccu_snapshots |
+| **Newest** | Recent releases (sort: release/growth) | apps + ccu_snapshots |
+| **Trending** | Top 50 by CCU growth % | ccu_snapshots (period comparison) |
+
+**Features:**
+- Inline sparklines (70x24px, 12-15 points)
+- Time range selector (24h/7d/30d)
+- Metrics: CCU, reviews (count/%, velocity), price, playtime
+- URL parameter persistence for sharing
+
+**Files:** `apps/admin/src/app/(main)/insights/`
 
 ## Common Patterns
 

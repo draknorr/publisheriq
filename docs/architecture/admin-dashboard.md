@@ -1,8 +1,8 @@
 # Admin Dashboard Architecture
 
-This document describes the redesigned admin dashboard introduced in PublisherIQ v2.0.
+This document describes the admin dashboard and related analytics pages in PublisherIQ.
 
-**Last Updated:** January 8, 2026
+**Last Updated:** January 9, 2026
 
 ## Overview
 
@@ -51,6 +51,17 @@ AdminWaitlistPage          # Waitlist approval
 AdminUsagePage             # Credit usage analytics
 ├── UsageStats             # Total usage metrics
 └── TransactionLog         # Recent transactions
+
+# Insights Dashboard (v2.2)
+InsightsPage               # CCU analytics dashboard
+├── InsightsTabs           # Tab management & state
+├── TimeRangeSelector      # 24h / 7d / 30d toggle
+├── TopGamesTab            # Top games by peak CCU
+│   └── TopGameCard[]      # Game rows with sparklines
+├── NewestGamesTab         # Recent releases with sort toggle
+│   └── TopGameCard[]
+└── TrendingGamesTab       # Fastest growing games
+    └── TopGameCard[]
 ```
 
 ### Data Flow
@@ -444,8 +455,117 @@ interface SyncJob {
 
 ---
 
+## Insights Dashboard (v2.2)
+
+The Insights page (`/insights`) provides CCU analytics with sparkline visualizations, built on the tiered CCU tracking system.
+
+### File Structure
+
+```
+apps/admin/src/app/(main)/insights/
+├── page.tsx                    # Server component, parallel data fetch
+├── InsightsTabs.tsx            # Tab management & state (client)
+├── lib/
+│   ├── insights-types.ts       # TypeScript type definitions
+│   └── insights-queries.ts     # Data fetching functions
+└── components/
+    ├── TopGamesTab.tsx         # Top games by CCU
+    ├── NewestGamesTab.tsx      # Recent releases
+    ├── TrendingGamesTab.tsx    # Fastest growing games
+    ├── TopGameCard.tsx         # Game row with sparklines
+    ├── TimeRangeSelector.tsx   # 24h / 7d / 30d toggle
+    └── InsightsSkeleton.tsx    # Loading skeleton
+```
+
+### Three Tabs
+
+| Tab | Data Source | Sorting | Description |
+|-----|-------------|---------|-------------|
+| **Top Games** | ccu_snapshots (peak CCU) | By peak CCU | Top 50 games by CCU in selected time range |
+| **Newest** | apps (release date) | By Release / By CCU Growth | Games released in past year with CCU data |
+| **Trending** | ccu_snapshots (growth %) | By growth % | Top 50 games by CCU growth, min 10 avg CCU |
+
+### Sparklines
+
+Each game displays an inline CCU sparkline:
+
+- **Data**: Downsampled to 12-15 points from ccu_snapshots
+- **Size**: 70x24 pixels
+- **Colors**: Green (up >5%), Red (down >5%), Blue (stable)
+- **Component**: `TrendSparkline` from `/components/data-display/Sparkline.tsx`
+
+### Metrics Displayed
+
+| Column | Data Source | Description |
+|--------|-------------|-------------|
+| CCU | ccu_snapshots | Peak CCU with sparkline and growth % |
+| Reviews | latest_daily_metrics | Total reviews, positive %, velocity/day |
+| Price | latest_daily_metrics | Price with discount badge |
+| Playtime | latest_daily_metrics | Average playtime in hours |
+
+### Time Range Options
+
+| Range | Sparkline Points | Granularity |
+|-------|------------------|-------------|
+| 24h | 12 points | Hourly |
+| 7d | 14 points | Daily |
+| 30d | 15 points | Daily |
+
+### URL Parameters
+
+- `?timeRange=7d` - Time period (24h, 7d, 30d)
+- `?tab=top` - Active tab (top, newest, trending)
+- `?sort=growth` - Newest tab sort (release, growth)
+
+### Data Fetching
+
+All three tabs fetch data in parallel on page load:
+
+```ts
+// page.tsx - Server Component
+const [topGamesData, newestGamesData, trendingGamesData] = await Promise.all([
+  getTopGames(timeRange),
+  getNewestGames(timeRange, sortBy),
+  getTrendingGames(timeRange),
+]);
+```
+
+### GameInsight Type
+
+```ts
+interface GameInsight {
+  appid: number;
+  name: string;
+  releaseDate: string | null;
+  currentCcu: number;
+  peakCcu?: number;
+  avgCcu?: number;
+  growthPct?: number;
+  ccuSparkline?: number[];
+  ccuTrend?: 'up' | 'down' | 'stable';
+  totalReviews?: number;
+  positivePercent?: number;
+  reviewVelocity?: number;
+  priceCents?: number | null;
+  discountPercent?: number | null;
+  isFree?: boolean;
+  avgPlaytimeHours?: number | null;
+}
+```
+
+### Responsive Design
+
+Columns hide on smaller screens:
+- **xs**: Game + CCU only
+- **sm**: + Reviews
+- **md**: + Price
+- **lg**: + Playtime
+
+---
+
 ## Related Documentation
 
 - [Design System Architecture](./design-system.md) - UI components and theming
 - [Chat Interface Guide](../guides/chat-interface.md) - Chat system documentation
 - [v2.0 Release Notes](../releases/v2.0-new-design.md) - Complete changelog
+- [v2.2 Release Notes](../releases/v2.2-ccu-steamspy.md) - CCU tiered tracking
