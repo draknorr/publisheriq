@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Shield,
   User,
-  Coins,
   ClipboardList,
   BarChart3,
   ChevronDown,
@@ -52,7 +51,6 @@ export function Sidebar() {
   const [userProfile, setUserProfile] = useState<{
     email: string;
     role: 'user' | 'admin';
-    credit_balance: number;
   } | null>(null);
   const [adminExpanded, setAdminExpanded] = useState(false);
 
@@ -79,7 +77,7 @@ export function Sidebar() {
         if (user) {
           const { data: profile } = await supabase
             .from('user_profiles')
-            .select('email, role, credit_balance')
+            .select('email, role')
             .eq('id', user.id)
             .single();
 
@@ -294,16 +292,6 @@ export function Sidebar() {
 
           {/* Footer */}
           <div className="border-t border-border-subtle p-4">
-            {/* Credit balance */}
-            {userProfile && (
-              <div className="mb-3 flex items-center gap-2 px-1">
-                <Coins className="h-4 w-4 text-accent-green" />
-                <span className="text-body-sm text-text-secondary">
-                  {userProfile.credit_balance.toLocaleString()} credits
-                </span>
-              </div>
-            )}
-
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-accent-green animate-pulse-subtle" />

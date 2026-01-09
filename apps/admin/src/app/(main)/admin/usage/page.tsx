@@ -88,10 +88,6 @@ async function getToolUsageBreakdown() {
     .sort((a, b) => b.count - a.count);
 }
 
-function formatCreditsAsDollars(credits: number): string {
-  return `$${(credits / 100).toFixed(2)}`;
-}
-
 export default async function AdminUsagePage() {
   // Check admin access
   const result = await getUserWithProfile();
@@ -130,9 +126,6 @@ export default async function AdminUsagePage() {
               <p className="text-display-sm text-text-primary">
                 {stats.totalCreditsInSystem.toLocaleString()}
               </p>
-              <p className="text-caption text-text-muted">
-                {formatCreditsAsDollars(stats.totalCreditsInSystem)}
-              </p>
             </div>
           </div>
         </Card>
@@ -144,9 +137,6 @@ export default async function AdminUsagePage() {
               <p className="text-body-sm text-text-secondary">Total Credits Used</p>
               <p className="text-display-sm text-text-primary">
                 {stats.totalCreditsUsed.toLocaleString()}
-              </p>
-              <p className="text-caption text-text-muted">
-                {formatCreditsAsDollars(stats.totalCreditsUsed)}
               </p>
             </div>
           </div>

@@ -1,7 +1,5 @@
 /**
  * Credit calculation utilities for chat usage billing.
- *
- * Credit value: 1 credit = $0.01
  * All costs are in credits.
  */
 
@@ -104,15 +102,6 @@ export function estimateReservation(
 
   // Clamp between minimum and maximum
   return Math.min(Math.max(estimate, MINIMUM_CHARGE), MAX_RESERVATION);
-}
-
-/**
- * Format credits as dollar amount.
- * @param credits - Number of credits
- * @returns Formatted string like "$1.50"
- */
-export function formatCreditsAsDollars(credits: number): string {
-  return `$${(credits / 100).toFixed(2)}`;
 }
 
 /**

@@ -33,11 +33,6 @@ async function getRecentTransactions(userId: string): Promise<CreditTransaction[
   return transactions ?? [];
 }
 
-function formatCreditsAsDollars(credits: number): string {
-  // 1 credit = $0.01
-  return `$${(credits / 100).toFixed(2)}`;
-}
-
 function formatTransactionType(type: string): string {
   const typeMap: Record<string, string> = {
     signup_bonus: 'Signup bonus',
@@ -85,14 +80,9 @@ export default async function AccountPage() {
           </div>
           <div className="flex-1">
             <p className="text-body-sm text-text-secondary mb-1">Credit Balance</p>
-            <div className="flex items-baseline gap-3">
-              <p className="text-display-lg text-text-primary">
-                {profile.credit_balance.toLocaleString()}
-              </p>
-              <p className="text-body text-text-tertiary">
-                ({formatCreditsAsDollars(profile.credit_balance)})
-              </p>
-            </div>
+            <p className="text-display-lg text-text-primary">
+              {profile.credit_balance.toLocaleString()}
+            </p>
             <p className="text-body-xs text-text-muted mt-2">
               Contact your administrator to add credits
             </p>

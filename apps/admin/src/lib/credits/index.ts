@@ -8,7 +8,6 @@ export {
   calculateTokenCredits,
   calculateTotalCredits,
   estimateReservation,
-  formatCreditsAsDollars,
   hasMinimumCredits,
   getCreditBreakdown,
   type CreditBreakdown,
