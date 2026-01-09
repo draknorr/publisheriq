@@ -39,14 +39,7 @@ function isApiPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Redirect www to non-www (canonical domain)
-  if (request.nextUrl.hostname === 'www.publisheriq.app') {
-    const url = request.nextUrl.clone();
-    url.hostname = 'publisheriq.app';
-    return NextResponse.redirect(url, 301);
-  }
-
-  // 2. Redirect auth code from / to /auth/callback
+  // Redirect auth code from / to /auth/callback
   // Supabase sometimes ignores emailRedirectTo and sends code to Site URL
   if (pathname === '/' && request.nextUrl.searchParams.has('code')) {
     const url = request.nextUrl.clone();
@@ -54,7 +47,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 3. Redirect auth errors from / to /login with error params
+  // Redirect auth errors from / to /login with error params
   if (pathname === '/' && request.nextUrl.searchParams.has('error')) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
