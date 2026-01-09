@@ -25,12 +25,6 @@ cube('DailyMetrics', {
       sql: `appid`,
       type: 'number',
     },
-    // Name from joined Apps table - allows filtering metrics by game name
-    name: {
-      sql: `${Apps}.name`,
-      type: 'string',
-      description: 'Game name from apps table',
-    },
     metricDate: {
       sql: `metric_date`,
       type: 'time',
