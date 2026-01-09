@@ -50,6 +50,10 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  // If code exchange failed, redirect to login with error
-  return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+  // If code exchange failed, fall back to client-side exchange
+  // The client has access to the PKCE verifier in localStorage and can complete the exchange
+  const clientCallbackUrl = new URL('/auth/callback', origin);
+  clientCallbackUrl.searchParams.set('code', code);
+  clientCallbackUrl.searchParams.set('server_failed', 'true');
+  return NextResponse.redirect(clientCallbackUrl.toString());
 }

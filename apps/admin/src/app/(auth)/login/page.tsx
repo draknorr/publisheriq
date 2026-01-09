@@ -1,19 +1,29 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { Suspense, useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
-import { Gamepad2, Mail, CheckCircle, UserPlus, ArrowRight } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Gamepad2, Mail, CheckCircle, UserPlus, ArrowRight, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-export default function LoginPage() {
+function LoginPageContent() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showWaitlistPrompt, setShowWaitlistPrompt] = useState(false);
+
+  // Handle error from failed auth callback
+  useEffect(() => {
+    const urlError = searchParams.get('error');
+    if (urlError === 'auth_failed') {
+      setError('Sign-in link expired or invalid. Please request a new one.');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -184,5 +194,26 @@ export default function LoginPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+function LoginLoadingFallback() {
+  return (
+    <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+      <Card variant="elevated" padding="lg" className="w-full max-w-sm">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-8 w-8 text-accent-blue animate-spin mb-4" />
+          <p className="text-body-sm text-text-secondary">Loading...</p>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoadingFallback />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
