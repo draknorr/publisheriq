@@ -287,7 +287,7 @@ async function main(): Promise<void> {
     });
 
     // Insert snapshots
-    const { succeeded: snapshotSucceeded, failed: snapshotFailed } = await insertSnapshots(
+    const { failed: snapshotFailed } = await insertSnapshots(
       supabase,
       result.data,
       tierMap
