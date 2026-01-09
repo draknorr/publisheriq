@@ -2,7 +2,7 @@
 
 This document describes the redesigned admin dashboard introduced in PublisherIQ v2.0.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 8, 2026
 
 ## Overview
 
@@ -36,8 +36,21 @@ AdminDashboard
 │   └── JobRow[]
 ├── CollapsibleSection     # Last Sync Times
 │   └── LastSyncItem[]
-└── ChatLogsSection        # Chat query logs
-    └── Log table/cards
+├── ChatLogsSection        # Chat query logs
+│   └── Log table/cards
+│
+# New Admin Pages (v2.1+)
+AdminUsersPage             # User management
+├── UserTable              # List users, roles, credits
+└── CreditAdjustment       # Grant/deduct credits
+
+AdminWaitlistPage          # Waitlist approval
+├── WaitlistTable          # Pending applications
+└── ApprovalActions        # Approve/reject
+
+AdminUsagePage             # Credit usage analytics
+├── UsageStats             # Total usage metrics
+└── TransactionLog         # Recent transactions
 ```
 
 ### Data Flow
@@ -320,6 +333,30 @@ Integrated chat query logs with:
 - Action buttons (Search, Copy)
 - 7-day retention
 
+### User Management (v2.1+)
+
+Located at `/admin/users`. Allows admins to:
+- View all registered users
+- See credit balances and usage stats
+- Grant or deduct credits
+- Change user roles (user/admin)
+
+### Waitlist Management (v2.1+)
+
+Located at `/admin/waitlist`. Allows admins to:
+- View pending signup requests
+- Approve or reject applications
+- See applicant details (name, org, intended use)
+- Track approval history
+
+### Usage Analytics (v2.1+)
+
+Located at `/admin/usage`. Shows:
+- Total credits consumed
+- Average credits per chat
+- Credit transaction history
+- Per-user usage breakdown
+
 ---
 
 ## File Locations
@@ -330,6 +367,9 @@ Integrated chat query logs with:
 | `apps/admin/src/app/(main)/admin/AdminDashboard.tsx` | Client component, UI |
 | `apps/admin/src/lib/sync-queries.ts` | Query helpers and formatters |
 | `supabase/migrations/20260103000001_add_admin_dashboard_rpcs.sql` | RPC functions |
+| `apps/admin/src/app/(main)/admin/users/page.tsx` | User management (v2.1) |
+| `apps/admin/src/app/(main)/admin/waitlist/page.tsx` | Waitlist approval (v2.1) |
+| `apps/admin/src/app/(main)/admin/usage/page.tsx` | Usage analytics (v2.1) |
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Database**: PostgreSQL (Supabase)
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 8, 2026
 
 **Semantic Layer**: Cube.js provides type-safe queries over these tables. See [Chat Data System](chat-data-system.md) for Cube schema documentation.
 
@@ -27,6 +27,24 @@ CREATE TYPE refresh_tier AS ENUM ('active', 'moderate', 'dormant', 'dead');
 
 -- Steam Deck compatibility category
 CREATE TYPE steam_deck_category AS ENUM ('unknown', 'unsupported', 'playable', 'verified');
+
+-- User role (v2.1+)
+CREATE TYPE user_role AS ENUM ('user', 'admin');
+
+-- Waitlist application status (v2.1+)
+CREATE TYPE waitlist_status AS ENUM ('pending', 'approved', 'rejected');
+
+-- Credit transaction types (v2.1+)
+CREATE TYPE credit_transaction_type AS ENUM (
+    'signup_bonus',     -- Initial credits on account creation
+    'admin_grant',      -- Admin manually adds credits
+    'admin_deduct',     -- Admin manually removes credits
+    'chat_usage',       -- Consumed by chat (finalized reservation)
+    'refund'            -- Refund for failed operations
+);
+
+-- Credit reservation status (v2.1+)
+CREATE TYPE credit_reservation_status AS ENUM ('pending', 'finalized', 'refunded');
 ```
 
 ---
@@ -409,6 +427,11 @@ Per-app sync tracking and scheduling.
 | is_syncable | BOOLEAN | NO | TRUE | Whether to sync this app |
 | refresh_tier | refresh_tier | YES | 'moderate' | Sync frequency tier |
 | last_activity_at | TIMESTAMPTZ | YES | NULL | Last detected activity |
+| next_reviews_sync | TIMESTAMPTZ | YES | NULL | When app is due for review sync (v2.1+) |
+| reviews_interval_hours | INTEGER | NO | 24 | Hours between review syncs (v2.1+) |
+| review_velocity_tier | TEXT | YES | NULL | Velocity tier: 'high', 'medium', 'low', 'dormant' (v2.1+) |
+| velocity_7d | DECIMAL | YES | NULL | 7-day average reviews/day (v2.1+) |
+| velocity_calculated_at | TIMESTAMPTZ | YES | NULL | When velocity was last calculated (v2.1+) |
 
 **Indexes**:
 - `idx_sync_status_embedding_needed` on `(priority_score DESC, last_embedding_sync)` WHERE `is_syncable = TRUE`
@@ -466,6 +489,149 @@ cleanup_old_chat_logs() -- Deletes logs older than 7 days
 ```
 
 **Used by**: Admin chat logs dashboard at `/admin/chat-logs`
+
+---
+
+### review_deltas (v2.1+)
+
+Daily review change tracking for trend visualization and velocity-based sync scheduling.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | BIGSERIAL | NO | auto | Primary key |
+| appid | INTEGER | NO | - | FK to apps.appid |
+| delta_date | DATE | NO | - | Date of snapshot |
+| total_reviews | INTEGER | NO | - | Absolute review count at sync |
+| positive_reviews | INTEGER | NO | - | Absolute positive count at sync |
+| review_score | SMALLINT | YES | NULL | Review score (1-9) |
+| review_score_desc | TEXT | YES | NULL | Score description |
+| reviews_added | INTEGER | NO | 0 | Delta from previous sync |
+| positive_added | INTEGER | NO | 0 | Positive delta |
+| negative_added | INTEGER | NO | 0 | Negative delta |
+| hours_since_last_sync | DECIMAL(6,2) | YES | NULL | Hours since previous sync |
+| daily_velocity | DECIMAL(8,4) | GENERATED | - | Reviews per day (normalized to 24h) |
+| is_interpolated | BOOLEAN | NO | FALSE | TRUE if estimated, FALSE if from API |
+| created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
+
+**Unique**: `(appid, delta_date)`
+
+**Indexes**:
+- `idx_review_deltas_appid_date` on `(appid, delta_date DESC)`
+- `idx_review_deltas_velocity` on `daily_velocity DESC` WHERE `is_interpolated = FALSE`
+- `idx_review_deltas_date` on `delta_date DESC`
+
+---
+
+### user_profiles (v2.1+)
+
+User profiles extending Supabase auth.users with role and credits.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | - | PK, references auth.users |
+| email | TEXT | NO | - | User email |
+| full_name | TEXT | YES | NULL | Display name |
+| organization | TEXT | YES | NULL | Company/org name |
+| role | user_role | NO | 'user' | 'user' or 'admin' |
+| credit_balance | INTEGER | NO | 0 | Current credit balance (>= 0) |
+| total_credits_used | INTEGER | NO | 0 | Lifetime credits consumed |
+| total_messages_sent | INTEGER | NO | 0 | Lifetime chat messages |
+| created_at | TIMESTAMPTZ | NO | NOW() | Profile creation time |
+| updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
+
+**Indexes**:
+- `idx_user_profiles_email` on `email`
+- `idx_user_profiles_role` on `role`
+
+**RLS Policies**: Users can read own profile; Admins can read all.
+
+---
+
+### waitlist (v2.1+)
+
+Invite-only waitlist for user signups.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| email | TEXT | NO | - | Applicant email (unique) |
+| full_name | TEXT | NO | - | Applicant name |
+| organization | TEXT | YES | NULL | Company/org |
+| how_i_plan_to_use | TEXT | YES | NULL | Application reason |
+| status | waitlist_status | NO | 'pending' | 'pending', 'approved', 'rejected' |
+| reviewed_by | UUID | YES | NULL | Admin who reviewed |
+| reviewed_at | TIMESTAMPTZ | YES | NULL | Review timestamp |
+| invite_sent_at | TIMESTAMPTZ | YES | NULL | When invite was sent |
+| created_at | TIMESTAMPTZ | NO | NOW() | Application time |
+
+**Indexes**:
+- `idx_waitlist_email` on `email`
+- `idx_waitlist_status` on `status`
+- `idx_waitlist_created_at` on `created_at DESC`
+
+**RLS Policies**: Public can INSERT; Admins can SELECT/UPDATE.
+
+---
+
+### credit_transactions (v2.1+)
+
+Immutable audit log of all credit movements.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| user_id | UUID | NO | - | FK to user_profiles |
+| amount | INTEGER | NO | - | Positive for grants, negative for usage |
+| balance_after | INTEGER | NO | - | Balance after this transaction |
+| transaction_type | credit_transaction_type | NO | - | Type of transaction |
+| description | TEXT | YES | NULL | Human-readable description |
+| input_tokens | INTEGER | YES | NULL | Input tokens (chat_usage only) |
+| output_tokens | INTEGER | YES | NULL | Output tokens (chat_usage only) |
+| tool_credits | INTEGER | YES | NULL | Tool usage credits |
+| admin_user_id | UUID | YES | NULL | Admin who made adjustment |
+| reservation_id | UUID | YES | NULL | Link to reservation |
+| created_at | TIMESTAMPTZ | NO | NOW() | Transaction time |
+
+**Indexes**:
+- `idx_credit_transactions_user_date` on `(user_id, created_at DESC)`
+- `idx_credit_transactions_type` on `transaction_type`
+
+---
+
+### credit_reservations (v2.1+)
+
+Credit reservations for deduct-at-start pattern (prevents overspend).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| user_id | UUID | NO | - | FK to user_profiles |
+| reserved_amount | INTEGER | NO | - | Credits reserved upfront |
+| actual_amount | INTEGER | YES | NULL | Actual credits used (filled on finalize) |
+| status | credit_reservation_status | NO | 'pending' | 'pending', 'finalized', 'refunded' |
+| created_at | TIMESTAMPTZ | NO | NOW() | Reservation time |
+| finalized_at | TIMESTAMPTZ | YES | NULL | When finalized/refunded |
+
+**Indexes**:
+- `idx_credit_reservations_user_pending` on `user_id` WHERE `status = 'pending'`
+- `idx_credit_reservations_created` on `created_at DESC`
+
+---
+
+### rate_limit_state (v2.1+)
+
+Per-user rate limiting state.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| user_id | UUID | NO | - | PK, FK to user_profiles |
+| requests_this_minute | INTEGER | NO | 0 | Requests in current minute window |
+| requests_this_hour | INTEGER | NO | 0 | Requests in current hour window |
+| minute_window_start | TIMESTAMPTZ | NO | NOW() | Start of minute window |
+| hour_window_start | TIMESTAMPTZ | NO | NOW() | Start of hour window |
+| updated_at | TIMESTAMPTZ | NO | NOW() | Last update |
+
+**Rate Limits**: 20 requests/minute, 200 requests/hour
 
 ---
 
@@ -862,6 +1028,41 @@ Per-game data joined with publisher/developer info for rolling period queries.
 **Indexes**:
 - Unique index on `(publisher_id, appid)` for concurrent refresh
 - Index on `release_date` for date-range filtering
+
+---
+
+### review_velocity_stats (v2.1+)
+
+Pre-computed review velocity stats for fast Cube.js queries and sync scheduling.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `appid` | INTEGER | Primary key (game ID) |
+| `velocity_7d` | DECIMAL(8,4) | Average reviews/day over 7 days |
+| `velocity_30d` | DECIMAL(8,4) | Average reviews/day over 30 days |
+| `reviews_added_7d` | INTEGER | Total reviews added in 7 days |
+| `reviews_added_30d` | INTEGER | Total reviews added in 30 days |
+| `last_delta_date` | DATE | Most recent delta record |
+| `actual_sync_count` | INTEGER | Number of actual API syncs |
+| `velocity_tier` | TEXT | 'high', 'medium', 'low', 'dormant' |
+
+**Velocity Tier Classification**:
+- `high`: velocity_7d >= 5 reviews/day
+- `medium`: velocity_7d >= 1 reviews/day
+- `low`: velocity_7d >= 0.1 reviews/day
+- `dormant`: velocity_7d < 0.1 reviews/day
+
+**Indexes**:
+- Unique index on `appid` for concurrent refresh
+- Index on `(velocity_tier, velocity_7d DESC)` for tier queries
+
+**Refresh Functions**:
+```sql
+SELECT refresh_review_velocity_stats();  -- Refresh view
+SELECT update_review_velocity_tiers();   -- Sync to sync_status
+```
+
+**Used by**: ReviewVelocity cube, velocity-calculator-worker
 
 ---
 

@@ -19,6 +19,7 @@ Go to **Settings > Secrets and variables > Actions > New repository secret**:
 | `SUPABASE_URL` | `https://xxx.supabase.co` |
 | `SUPABASE_SERVICE_KEY` | `eyJ...` |
 | `STEAM_API_KEY` | Your Steam API key |
+| `DATABASE_URL` | PostgreSQL connection string (for refresh-views, v2.1) |
 
 ### 2. Enable Actions
 
@@ -43,6 +44,9 @@ All times are UTC:
 | Page Creation Scrape | `page-creation-scrape.yml` | 03:00 daily | Page dates |
 | Trends Calculation | `trends-calculation.yml` | 22:00 daily | Trend metrics |
 | Priority Calculation | `priority-calculation.yml` | 22:30 daily | Priority scores |
+| Velocity Calculation | `velocity-calculation.yml` | 08,16,00:00 | Velocity stats (v2.1) |
+| Interpolation | `interpolation.yml` | 05:00 daily | Fill data gaps (v2.1) |
+| Refresh Views | `refresh-views.yml` | 05:00 daily | Refresh materialized views (v2.1) |
 | CI | `ci.yml` | On push/PR | Type checking |
 
 ## Workflow Structure

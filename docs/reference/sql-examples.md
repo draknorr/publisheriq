@@ -317,6 +317,88 @@ WHERE t.tag = 'RPG'
 | "on sale" | `a.current_discount_percent > 0` |
 | "has workshop" | `a.has_workshop = TRUE` |
 
+---
+
+## Velocity Queries (v2.1+)
+
+### Games by Velocity Tier
+
+```sql
+SELECT a.appid, a.name, rvs.velocity_7d, rvs.velocity_tier
+FROM apps a
+JOIN review_velocity_stats rvs ON a.appid = rvs.appid
+WHERE rvs.velocity_tier = 'high'
+ORDER BY rvs.velocity_7d DESC
+LIMIT 20;
+```
+
+### Accelerating Games (7d > 30d velocity)
+
+```sql
+SELECT a.appid, a.name,
+       rvs.velocity_7d,
+       rvs.velocity_30d,
+       (rvs.velocity_7d / NULLIF(rvs.velocity_30d, 0)) as velocity_ratio
+FROM apps a
+JOIN review_velocity_stats rvs ON a.appid = rvs.appid
+WHERE rvs.velocity_7d > rvs.velocity_30d * 1.2
+  AND rvs.velocity_30d > 0
+ORDER BY velocity_ratio DESC
+LIMIT 20;
+```
+
+### Review Deltas for a Game (Last 30 Days)
+
+```sql
+SELECT delta_date, total_reviews, reviews_added, daily_velocity, is_interpolated
+FROM review_deltas
+WHERE appid = 1245620  -- Elden Ring
+  AND delta_date >= CURRENT_DATE - INTERVAL '30 days'
+ORDER BY delta_date DESC;
+```
+
+### Velocity Tier Distribution
+
+```sql
+SELECT velocity_tier,
+       COUNT(*) as game_count,
+       AVG(velocity_7d) as avg_velocity
+FROM review_velocity_stats
+GROUP BY velocity_tier
+ORDER BY avg_velocity DESC;
+```
+
+---
+
+## Credit Queries (v2.1+, Admin Only)
+
+### User Credit Balances
+
+```sql
+SELECT email, role, credit_balance, total_credits_used, total_messages_sent
+FROM user_profiles
+ORDER BY credit_balance DESC;
+```
+
+### Recent Credit Transactions
+
+```sql
+SELECT u.email, ct.amount, ct.balance_after, ct.transaction_type, ct.created_at
+FROM credit_transactions ct
+JOIN user_profiles u ON ct.user_id = u.id
+ORDER BY ct.created_at DESC
+LIMIT 50;
+```
+
+### Pending Waitlist Applications
+
+```sql
+SELECT email, full_name, organization, status, created_at
+FROM waitlist
+WHERE status = 'pending'
+ORDER BY created_at ASC;
+```
+
 ## Related Documentation
 
 - [Database Schema](../architecture/database-schema.md) - Full schema reference

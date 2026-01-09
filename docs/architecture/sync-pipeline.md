@@ -2,10 +2,14 @@
 
 This document describes how data flows through PublisherIQ, from external APIs to the database.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 8, 2026
 
 ## Recent Improvements
 
+- **Velocity-Based Review Scheduling**: Review syncs now scheduled based on review activity (v2.1)
+- **Review Delta Tracking**: Daily review changes stored for trend visualization (v2.1)
+- **Interpolation**: Automatic gap-filling for continuous time-series data (v2.1)
+- **Materialized View Refresh**: Automated daily refresh of all materialized views (v2.1)
 - **Concurrency Protection**: Sync jobs now detect stale running jobs after 2 hours
 - **Rate Limit Optimization**: Storefront sync optimized for 3 parallel workers
 - **Error Handling**: Improved duplicate dev/pub name handling during upserts
@@ -38,6 +42,9 @@ All scheduled sync jobs run via GitHub Actions on UTC time:
 | trends-calculation | 22:00 daily | `trends-worker.ts` | 500 | Trend metrics |
 | priority-calculation | 22:30 daily | `priority-worker.ts` | 1000 | Priority scores |
 | page-creation-scrape | 03:00 daily | `scraper-worker.ts` | 100 | Page dates |
+| velocity-calculation | 08,16,00:00 | `velocity-calculator-worker.ts` | - | Velocity stats (v2.1) |
+| interpolation | 05:00 daily | `interpolation-worker.ts` | - | Fill data gaps (v2.1) |
+| refresh-views | 05:00 daily | psql direct | - | Refresh materialized views (v2.1) |
 
 ## Worker Architecture
 
@@ -105,6 +112,84 @@ Workers use `get_apps_for_sync()` which:
 2. Orders by `priority_score DESC`
 3. Prioritizes apps missing developer info
 4. Returns requested batch size
+
+## Velocity-Based Review Sync Scheduling (v2.1+)
+
+In addition to priority-based scheduling, review syncs use velocity-based intervals.
+
+### Velocity Tiers
+
+| Tier | Reviews/Day | Sync Interval | Description |
+|------|-------------|---------------|-------------|
+| `high` | >= 5 | 4 hours | Active games getting many reviews |
+| `medium` | 1-5 | 12 hours | Moderate review activity |
+| `low` | 0.1-1 | 24 hours | Low but non-zero activity |
+| `dormant` | < 0.1 | 72 hours | Minimal review activity |
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Reviews Sync                                                 │
+│     - Fetch reviews from Steam API                               │
+│     - Calculate delta from previous sync                         │
+│     - Insert into review_deltas table                            │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  2. Velocity Calculation (3x daily)                              │
+│     - Refresh review_velocity_stats materialized view            │
+│     - Compute 7-day and 30-day velocity averages                 │
+│     - Classify into velocity tiers                               │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  3. Tier Update                                                  │
+│     - Update sync_status.review_velocity_tier                    │
+│     - Update sync_status.reviews_interval_hours                  │
+│     - Set sync_status.next_reviews_sync                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Review Deltas Table
+
+Each review sync creates a record in `review_deltas`:
+
+| Field | Description |
+|-------|-------------|
+| `delta_date` | Date of sync |
+| `total_reviews` | Absolute count at sync |
+| `reviews_added` | Delta from previous sync |
+| `daily_velocity` | Normalized to reviews/24h |
+| `is_interpolated` | FALSE for real syncs |
+
+### Interpolation
+
+Gaps between syncs are filled with estimated values:
+
+```
+Day 1: Actual sync → 1000 reviews (is_interpolated = FALSE)
+Day 2: No sync → Interpolated (is_interpolated = TRUE)
+Day 3: No sync → Interpolated (is_interpolated = TRUE)
+Day 4: Actual sync → 1012 reviews (is_interpolated = FALSE)
+       → Days 2,3 estimated as 1004, 1008 reviews
+```
+
+**Worker**: `interpolation-worker.ts`
+**Schedule**: Daily at 05:00 UTC
+**Environment Variable**: `INTERPOLATION_DAYS` (default 30)
+
+### New sync_status Columns
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `next_reviews_sync` | TIMESTAMPTZ | When due for review sync |
+| `reviews_interval_hours` | INTEGER | Hours between syncs (4/12/24/72) |
+| `review_velocity_tier` | TEXT | Current velocity tier |
+| `velocity_7d` | DECIMAL | 7-day velocity |
+| `velocity_calculated_at` | TIMESTAMPTZ | Last calculation time |
 
 ## Rate Limiting
 
@@ -192,6 +277,57 @@ daily_metrics → sync_status.priority_score
 app_trends    → sync_status.refresh_tier
              → sync_status.next_sync_after
 ```
+
+### 8. Velocity Calculation (v2.1+)
+
+```
+review_deltas → review_velocity_stats (REFRESH MATERIALIZED VIEW)
+              → sync_status.velocity_7d
+              → sync_status.review_velocity_tier
+              → sync_status.reviews_interval_hours
+```
+
+**Command**: `pnpm --filter @publisheriq/ingestion calculate-velocity`
+
+**What it does**:
+1. Refreshes `review_velocity_stats` materialized view
+2. Updates `sync_status` with new velocity tiers
+3. Sets `reviews_interval_hours` based on tier
+4. Outputs tier distribution (high/medium/low/dormant)
+
+### 9. Interpolation (v2.1+)
+
+```
+review_deltas (sparse) → review_deltas (continuous)
+```
+
+**Command**: `pnpm --filter @publisheriq/ingestion interpolate-reviews`
+
+**What it does**:
+1. Finds gaps in `review_deltas` between actual syncs
+2. Inserts interpolated records with `is_interpolated = TRUE`
+3. Linear interpolation between sync points
+
+**Environment Variables**:
+- `INTERPOLATION_DAYS` - Days to look back (default 30)
+
+### 10. Refresh Views (v2.1+)
+
+```
+PostgreSQL tables → Materialized views (REFRESH CONCURRENTLY)
+```
+
+**Workflow**: `refresh-views.yml`
+
+**Views refreshed**:
+- `latest_daily_metrics`
+- `publisher_metrics`
+- `developer_metrics`
+- `publisher_year_metrics`
+- `developer_year_metrics`
+- `review_velocity_stats`
+
+**Note**: Uses `psql` directly (not Supabase CLI) for reliable long-running queries.
 
 ## PICS Service Pipeline
 

@@ -2,10 +2,14 @@
 
 This document provides a complete reference for the PublisherIQ chat system's data handling architecture, including all cubes, dimensions, measures, segments, and tools. Use this as a guide for understanding the system and planning future expansions.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 8, 2026
 
 ## Recent Improvements
 
+- **lookup_games Tool**: New tool for specific game name queries (v2.1)
+- **ReviewVelocity Cube**: Pre-computed velocity stats for trend analysis (v2.1)
+- **ReviewDeltas Cube**: Time-series data for per-game review charts (v2.1)
+- **Expanded Cube Enum**: query_analytics now includes 11 cubes (was 4) (v2.1)
 - **Retry Logic**: 3 retries with exponential backoff (500ms-4s) for Cube.js 502/503/504 errors
 - **30s Timeout**: AbortController timeout prevents hanging queries
 - **Tag Normalization**: "coop" automatically converts to "co-op"
@@ -96,7 +100,7 @@ This document provides a complete reference for the PublisherIQ chat system's da
 
 ## LLM Tools Reference
 
-The chat system provides 6 tools to the LLM for data access.
+The chat system provides 7 tools to the LLM for data access.
 
 ### 1. query_analytics
 
@@ -108,7 +112,7 @@ The chat system provides 6 tools to the LLM for data access.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `cube` | string | Yes | One of: Discovery, PublisherMetrics, DeveloperMetrics, DailyMetrics, PublisherYearMetrics, PublisherGameMetrics, DeveloperYearMetrics, DeveloperGameMetrics |
+| `cube` | string | Yes | One of: Discovery, PublisherMetrics, PublisherYearMetrics, PublisherGameMetrics, DeveloperMetrics, DeveloperYearMetrics, DeveloperGameMetrics, DailyMetrics, LatestMetrics, MonthlyGameMetrics, MonthlyPublisherMetrics |
 | `dimensions` | string[] | No | Fields to select (e.g., `["Discovery.appid", "Discovery.name"]`) |
 | `measures` | string[] | No | Aggregations (e.g., `["Discovery.count"]`) |
 | `filters` | array | No | Filter conditions (see [Filter Syntax](#filter-syntax)) |
@@ -225,6 +229,33 @@ The chat system provides 6 tools to the LLM for data access.
 1. User asks: "Show me games from Krafton"
 2. LLM calls: `lookup_publishers("Krafton")` → `[{id: 1788, name: "Krafton Inc."}]`
 3. LLM calls: `query_analytics` with filter: `{"member": "PublisherGameMetrics.publisherName", "operator": "equals", "values": ["Krafton Inc."]}`
+
+---
+
+### 7. lookup_games (v2.1+)
+
+**Purpose**: Search for games by name in the database.
+
+**File**: [cube-tools.ts](../../apps/admin/src/lib/llm/cube-tools.ts)
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | Yes | Game name to search for (partial match via ILIKE) |
+| `limit` | number | No | Maximum results (default 10, max 20) |
+
+**Returns**: Array of `{appid: number, name: string, releaseYear: number}`
+
+**Use When**:
+- User asks about a **specific game by name**
+- Need to find appid before querying metrics
+- "What's the review score for Hades?" → lookup first, then query_analytics
+
+**Example Workflow**:
+1. User asks: "What's the review score for Elden Ring?"
+2. LLM calls: `lookup_games("Elden Ring")` → `[{appid: 1245620, name: "ELDEN RING", releaseYear: 2022}]`
+3. LLM calls: `query_analytics` with filter: `{"member": "Discovery.appid", "operator": "equals", "values": ["1245620"]}`
 
 ---
 
@@ -486,6 +517,106 @@ Same structure as PublisherGameMetrics with `developerId` instead of `publisherI
 **Data Source**: `latest_daily_metrics` materialized view
 
 Optimized for fast lookups of current game state.
+
+---
+
+### ReviewVelocity Cube (v2.1+)
+
+**Purpose**: Pre-computed review velocity stats for discovery and sync scheduling insights.
+
+**Data Source**: `review_velocity_stats` materialized view
+
+**File**: [packages/cube/model/ReviewVelocity.js](../../packages/cube/model/ReviewVelocity.js)
+
+#### Dimensions (9)
+
+| Dimension | Type | Description |
+|-----------|------|-------------|
+| `appid` | number | Primary key (game ID) |
+| `velocity7d` | number | Average reviews/day over 7 days |
+| `velocity30d` | number | Average reviews/day over 30 days |
+| `velocityTier` | string | 'high', 'medium', 'low', 'dormant' |
+| `reviewsAdded7d` | number | Total reviews added in 7 days |
+| `reviewsAdded30d` | number | Total reviews added in 30 days |
+| `lastDeltaDate` | time | Most recent delta record date |
+| `actualSyncCount` | number | Number of actual API syncs |
+| `velocityTrend` | string | 'accelerating', 'stable', 'decelerating' |
+
+#### Measures (11)
+
+| Measure | Type | Description |
+|---------|------|-------------|
+| `count` | count | Number of apps with velocity data |
+| `avgVelocity7d` | avg | Average 7-day velocity |
+| `avgVelocity30d` | avg | Average 30-day velocity |
+| `maxVelocity7d` | max | Maximum 7-day velocity |
+| `sumReviewsAdded7d` | sum | Total reviews added 7d |
+| `sumReviewsAdded30d` | sum | Total reviews added 30d |
+| `highVelocityCount` | sum | Count of high velocity games |
+| `mediumVelocityCount` | sum | Count of medium velocity games |
+| `lowVelocityCount` | sum | Count of low velocity games |
+| `dormantCount` | sum | Count of dormant games |
+
+#### Segments (7)
+
+| Segment | Criteria |
+|---------|----------|
+| `highVelocity` | velocity_tier = 'high' (>=5 reviews/day) |
+| `mediumVelocity` | velocity_tier = 'medium' (1-5 reviews/day) |
+| `lowVelocity` | velocity_tier = 'low' (0.1-1 reviews/day) |
+| `dormant` | velocity_tier = 'dormant' (<0.1 reviews/day) |
+| `active` | velocity_7d > 0 |
+| `accelerating` | 7d velocity > 30d velocity * 1.2 |
+| `decelerating` | 7d velocity < 30d velocity * 0.8 |
+
+---
+
+### ReviewDeltas Cube (v2.1+)
+
+**Purpose**: Time-series data for per-game review trend charts.
+
+**Data Source**: `review_deltas` table
+
+**File**: [packages/cube/model/ReviewDeltas.js](../../packages/cube/model/ReviewDeltas.js)
+
+#### Dimensions (12)
+
+| Dimension | Type | Description |
+|-----------|------|-------------|
+| `id` | number | Primary key |
+| `appid` | number | Game ID |
+| `deltaDate` | time | Snapshot date |
+| `totalReviews` | number | Absolute review count |
+| `positiveReviews` | number | Absolute positive count |
+| `reviewScore` | number | Review score (1-9) |
+| `reviewScoreDesc` | string | Score description |
+| `reviewsAdded` | number | Delta from previous sync |
+| `positiveAdded` | number | Positive delta |
+| `negativeAdded` | number | Negative delta |
+| `dailyVelocity` | number | Reviews/day (normalized to 24h) |
+| `isInterpolated` | boolean | TRUE if estimated, FALSE if from API |
+
+#### Measures (8)
+
+| Measure | Type | Description |
+|---------|------|-------------|
+| `count` | count | Number of delta records |
+| `sumReviewsAdded` | sum | Total reviews added |
+| `sumPositiveAdded` | sum | Total positive added |
+| `sumNegativeAdded` | sum | Total negative added |
+| `avgDailyVelocity` | avg | Average reviews/day |
+| `maxDailyVelocity` | max | Maximum reviews/day |
+| `latestTotalReviews` | max | Most recent total count |
+| `actualSyncCount` | sum | Count of actual syncs |
+
+#### Segments (4)
+
+| Segment | Criteria |
+|---------|----------|
+| `actualOnly` | Only real API syncs (not interpolated) |
+| `interpolatedOnly` | Only gap-filled data |
+| `hasActivity` | reviews_added > 0 |
+| `highVelocity` | daily_velocity >= 5 |
 
 ---
 
@@ -872,6 +1003,10 @@ Access chat logs at `/admin/chat-logs`:
 | Rolling period queries | *GameMetrics with segments |
 | Historical time-series | DailyMetrics |
 | Current snapshot | LatestMetrics |
+| Monthly playtime by game | MonthlyGameMetrics |
+| Monthly playtime by publisher | MonthlyPublisherMetrics |
+| Review velocity stats | ReviewVelocity |
+| Review trend time-series | ReviewDeltas |
 
 ---
 

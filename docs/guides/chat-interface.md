@@ -2,7 +2,7 @@
 
 A natural language interface for querying the Steam database. Ask questions in plain English and get instant answers with data tables, charts, and clickable game links.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 8, 2026
 
 > For technical implementation details, see [Chat Data System Architecture](../architecture/chat-data-system.md).
 
@@ -24,6 +24,7 @@ The chat interface uses a multi-layered architecture:
    - **search_games**: Tag/genre-based game discovery
    - **lookup_publishers/developers**: Name lookups for accurate filtering
    - **lookup_tags**: Discover available tags and genres
+   - **lookup_games**: Find game appids by name (v2.1)
 3. **Query Execution**: Queries run against PostgreSQL via Cube.js (not raw SQL)
 4. **Entity Linking**: Results are pre-formatted with clickable links
 5. **Response Generation**: The AI formats the results into a readable response
@@ -68,6 +69,8 @@ This architecture ensures:
 - Review velocity (reviews per day)
 - 30-day and 90-day trend changes
 - Rising indie hits
+- Velocity tiers (high/medium/low/dormant) (v2.1)
+- Accelerating/decelerating games (v2.1)
 
 ### Historical Metrics
 - Review trends over time
@@ -90,6 +93,8 @@ This architecture ensures:
 - "What games are trending up in reviews?"
 - "Show me games with improving sentiment"
 - "Which games had the biggest review increases this month?"
+- "Show me high velocity games" (v2.1)
+- "Which games have accelerating review velocity?" (v2.1)
 
 **Specific Lookups:**
 - "Tell me about Half-Life 2"
@@ -256,6 +261,9 @@ This linking is automatic and reliable because:
 
 ## Recent Updates
 
+- **lookup_games tool** (v2.1): Search for games by name to get appid
+- **ReviewVelocity cube** (v2.1): Query velocity stats and tiers
+- **ReviewDeltas cube** (v2.1): Time-series data for trend charts
 - **Entity linking now automatic**: All entity names are pre-formatted with links
 - **Publisher/developer lookup**: System finds exact database names before querying (e.g., "Krafton" → "Krafton Inc.")
 - **Default ordering**: Game lists are ordered by release date (newest first) by default

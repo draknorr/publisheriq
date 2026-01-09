@@ -80,6 +80,22 @@ LLM_PROVIDER=anthropic
 
 **Embedding Model:** text-embedding-3-small (1536 dimensions)
 
+### Authentication (v2.1+)
+
+Optional variables for user authentication and credits:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AUTH_MODE` | No | `none` | Set to `magic_link` to enable Supabase auth |
+| `CREDITS_ENABLED` | No | `false` | Set to `true` to enable credit system |
+| `NEXT_PUBLIC_SUPABASE_URL` | If auth | - | Public Supabase URL (client-side) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | If auth | - | Public anon key (client-side) |
+
+**Credit System:**
+- Signup bonus: 1000 credits ($10 equivalent)
+- Rate limits: 20/minute, 200/hour per user
+- Reservation pattern: Credits reserved before chat, finalized after
+
 ---
 
 ## PICS Service Variables
@@ -143,6 +159,7 @@ For scheduled sync jobs, add these secrets to your GitHub repository:
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | Your service role key |
 | `STEAM_API_KEY` | Your Steam API key |
+| `DATABASE_URL` | PostgreSQL connection string (v2.1, for refresh-views workflow) |
 
 ---
 

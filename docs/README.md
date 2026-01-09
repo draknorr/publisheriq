@@ -17,6 +17,33 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ## Latest Release
 
+**[v2.1 - Velocity & Auth](releases/v2.1-velocity-auth.md)** (January 8, 2026)
+
+Two major new features:
+
+**Velocity-Based Review Sync Scheduling**
+- Dynamic sync intervals based on review velocity (4h/12h/24h/72h)
+- New `review_deltas` table tracking daily review changes
+- `review_velocity_stats` materialized view for pre-computed metrics
+- New Cube.js cubes: ReviewVelocity, ReviewDeltas
+- Velocity tiers: high (≥5/day), medium (1-5/day), low (0.1-1/day), dormant (<0.1/day)
+
+**User Authentication & Credits System**
+- Magic link authentication (passwordless via Supabase)
+- Invite-only waitlist with admin approval workflow
+- Credit-based usage tracking with reservation pattern
+- Per-user rate limits (20/minute, 200/hour)
+- New admin pages: `/admin/users`, `/admin/waitlist`, `/admin/usage`
+
+**Also in v2.1:**
+- New LLM tool: `lookup_games` for searching games by name
+- Cube.js model updates (11 cubes total)
+- New landing page at `/` with dashboard moved to `/dashboard`
+
+---
+
+## Previous Releases
+
 **[v2.0 - New Design](releases/v2.0-new-design.md)** (January 2026)
 
 Major visual and functional overhaul including:
@@ -26,12 +53,6 @@ Major visual and functional overhaul including:
 - Enhanced chat/LLM capabilities with Cube.js semantic layer
 - Mobile-responsive layouts
 - Vector similarity search via Qdrant Cloud
-
-**Recent Updates (January 7, 2026):**
-- Improved game search with NULL review percentage handling
-- Sync job concurrency protection with 2-hour timeout detection
-- Complete Steam category mappings (70 categories)
-- iPad scrollbar fixes and theme toggle improvements
 
 ---
 

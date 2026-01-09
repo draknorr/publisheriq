@@ -2,7 +2,7 @@
 
 Common issues and solutions for PublisherIQ.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 8, 2026
 
 ## Database Connection Issues
 
@@ -387,6 +387,88 @@ pnpm build
 1. Check browser network tab for slow requests
 2. Enable Supabase connection pooling
 3. Add pagination to large queries
+
+---
+
+## Authentication Issues (v2.1+)
+
+### "Email not approved"
+
+**Cause:** User email not on approved waitlist.
+
+**Solution:**
+1. Check waitlist status: `SELECT status FROM waitlist WHERE email = 'user@example.com';`
+2. Admin approves via `/admin/waitlist`
+3. User can then sign in
+
+### "Magic link expired"
+
+**Cause:** Link older than 1 hour.
+
+**Solution:** Request a new magic link from `/login`
+
+### "Insufficient credits"
+
+**Cause:** User has 0 credit balance.
+
+**Solution:**
+1. Check balance: `SELECT credit_balance FROM user_profiles WHERE email = '...';`
+2. Admin grants credits via `/admin/users`
+
+### "Rate limit exceeded"
+
+**Cause:** Too many requests per minute/hour.
+
+**Solution:**
+1. Wait for rate limit window to reset
+2. Default limits: 20/minute, 200/hour
+3. Check `rate_limit_state` table for current state
+
+---
+
+## Velocity Sync Issues (v2.1+)
+
+### Velocity Not Updating
+
+**Cause:** Materialized view not refreshed.
+
+**Solution:**
+```sql
+SELECT refresh_review_velocity_stats();
+```
+
+Or run worker: `pnpm --filter @publisheriq/ingestion calculate-velocity`
+
+### Games Stuck in Wrong Tier
+
+**Cause:** Tier update function not run.
+
+**Solution:**
+```sql
+SELECT update_review_velocity_tiers();
+```
+
+### Missing Velocity Data
+
+**Cause:** No review deltas recorded yet.
+
+**Solution:**
+1. Run review sync to populate `review_deltas`
+2. Run velocity calculation
+3. Verify data: `SELECT COUNT(*) FROM review_deltas;`
+
+### Interpolation Gaps
+
+**Cause:** Interpolation worker not run or too few data points.
+
+**Solution:**
+```bash
+# Run interpolation for last 30 days
+pnpm --filter @publisheriq/ingestion interpolate-reviews
+
+# Or directly
+source .env && psql "$DATABASE_URL" -c "SELECT interpolate_all_review_deltas(CURRENT_DATE - 30, CURRENT_DATE);"
+```
 
 ---
 

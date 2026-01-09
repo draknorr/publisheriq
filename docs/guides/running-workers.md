@@ -35,6 +35,12 @@ pnpm --filter @publisheriq/ingestion trends-calculate
 
 # Calculate priority scores
 pnpm --filter @publisheriq/ingestion priority-calculate
+
+# Calculate review velocity (v2.1)
+pnpm --filter @publisheriq/ingestion calculate-velocity
+
+# Interpolate review data (v2.1)
+pnpm --filter @publisheriq/ingestion interpolate-reviews
 ```
 
 ## Worker Details
@@ -194,6 +200,49 @@ pnpm --filter @publisheriq/ingestion priority-calculate
 **Duration:** ~5-10 minutes
 
 **Rate limit:** None (database operations only)
+
+---
+
+### Velocity Calculation (v2.1+)
+
+Calculates review velocity and updates sync tiers.
+
+```bash
+pnpm --filter @publisheriq/ingestion calculate-velocity
+```
+
+**What it does:**
+- Refreshes `review_velocity_stats` materialized view
+- Updates `sync_status` with velocity tiers
+- Sets dynamic review sync intervals (4/12/24/72 hours)
+
+**Duration:** ~1-2 minutes
+
+**Rate limit:** None (database operations only)
+
+---
+
+### Interpolation (v2.1+)
+
+Fills gaps in review delta data with estimated values.
+
+```bash
+# Default (30 days)
+pnpm --filter @publisheriq/ingestion interpolate-reviews
+
+# Custom range
+INTERPOLATION_DAYS=60 pnpm --filter @publisheriq/ingestion interpolate-reviews
+```
+
+**What it does:**
+- Finds gaps in `review_deltas` table
+- Inserts interpolated records (`is_interpolated = TRUE`)
+- Linear interpolation between actual sync points
+
+**Duration:** ~5-10 minutes
+
+**Environment Variables:**
+- `INTERPOLATION_DAYS` - Days to look back (default 30)
 
 ## Environment Variables
 

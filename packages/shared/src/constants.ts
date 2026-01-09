@@ -12,8 +12,8 @@ export const RATE_LIMITS = {
   /** Steam Storefront API - 0.33 req/sec per worker (3 workers = ~1 req/sec total) */
   STOREFRONT: { requestsPerSecond: 0.33, burst: 3 },
 
-  /** Steam Reviews API - approximately 20 requests per minute */
-  REVIEWS: { requestsPerSecond: 0.33, burst: 5 },
+  /** Steam Reviews API - 60 requests per minute (summary endpoint is lightweight) */
+  REVIEWS: { requestsPerSecond: 1, burst: 10 },
 
   /** Steam Review Histogram API - approximately 60 requests per minute */
   HISTOGRAM: { requestsPerSecond: 1, burst: 5 },
@@ -43,7 +43,7 @@ export const BATCH_SIZES = {
   STOREFRONT_BATCH: 1500,
 
   /** Number of apps to fetch reviews for per worker run */
-  REVIEWS_BATCH: 800,
+  REVIEWS_BATCH: 1200,
 
   /** Number of apps to fetch histograms for per worker run */
   HISTOGRAM_BATCH: 2000,

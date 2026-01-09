@@ -2,7 +2,7 @@
 
 PublisherIQ is a comprehensive Steam data acquisition and analytics platform that collects, stores, analyzes, and presents game metadata, publisher information, player engagement trends, and semantic similarity search. This document describes the high-level architecture.
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 8, 2026
 
 ## System Diagram
 
@@ -204,6 +204,9 @@ PostgreSQL via Supabase with:
 - **Read-only queries** - Chat interface cannot modify data
 - **Service keys** - Server-side only, never exposed to browser
 - **Rate limiting** - Token bucket algorithm prevents API abuse
+- **Magic link auth** - Passwordless authentication via Supabase (v2.1)
+- **Credit-based usage** - Reservation pattern prevents overspend (v2.1)
+- **Per-user rate limits** - 20/minute, 200/hour per user (v2.1)
 
 ## Related Documentation
 
