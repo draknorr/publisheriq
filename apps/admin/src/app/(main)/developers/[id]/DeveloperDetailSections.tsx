@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui';
-import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover } from '@/components/data-display';
+import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover, TrendSparkline } from '@/components/data-display';
 import { ChevronRight, ChevronDown, Users, Building2, Monitor, Gamepad2, Layers, Calendar, FileText, Globe, BarChart3 } from 'lucide-react';
 import type { PortfolioPICSData } from '@/lib/portfolio-pics';
+import type { CCUSparklineData } from '@/lib/ccu-queries';
 
 interface Developer {
   id: number;
@@ -76,6 +77,7 @@ interface DeveloperDetailSectionsProps {
   histogram: ReviewHistogram[];
   similarDevelopers: SimilarDeveloper[];
   picsData: PortfolioPICSData | null;
+  ccuSparklines: Map<number, CCUSparklineData>;
 }
 
 const sections = [
@@ -172,6 +174,7 @@ export function DeveloperDetailSections({
   histogram,
   similarDevelopers,
   picsData,
+  ccuSparklines,
 }: DeveloperDetailSectionsProps) {
   const [activeSection, setActiveSection] = useState('summary');
 
@@ -237,7 +240,7 @@ export function DeveloperDetailSections({
           totalGames={apps.length}
         />
         <ReviewsSection id="reviews" histogram={histogram} apps={apps} />
-        <GamesSection id="games" apps={apps} />
+        <GamesSection id="games" apps={apps} ccuSparklines={ccuSparklines} />
         <NetworkSection
           id="network"
           relatedPublishers={relatedPublishers}
@@ -815,9 +818,11 @@ function ReviewsSection({
 function GamesSection({
   id,
   apps,
+  ccuSparklines,
 }: {
   id: string;
   apps: DeveloperApp[];
+  ccuSparklines: Map<number, CCUSparklineData>;
 }) {
   // Sort apps by total_reviews descending
   const sortedApps = [...apps].sort((a, b) => (b.total_reviews ?? 0) - (a.total_reviews ?? 0));
@@ -880,6 +885,7 @@ function GamesSection({
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Type</th>
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Reviews</th>
                   <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Count</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">CCU</th>
                   <th className="px-3 py-2 text-right text-caption font-medium text-text-tertiary">Owners</th>
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">30d Trend</th>
                 </tr>
@@ -916,6 +922,21 @@ function GamesSection({
                     </td>
                     <td className="px-3 py-2 text-right text-caption text-text-secondary">
                       {formatNumber(app.total_reviews)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {ccuSparklines.get(app.appid)?.dataPoints && ccuSparklines.get(app.appid)!.dataPoints.length > 0 && (
+                          <TrendSparkline
+                            data={ccuSparklines.get(app.appid)!.dataPoints}
+                            trend={ccuSparklines.get(app.appid)!.trend}
+                            height={20}
+                            width={50}
+                          />
+                        )}
+                        <span className="text-caption text-text-secondary">
+                          {formatNumber(app.ccu_peak)}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right text-caption text-text-secondary">
                       {formatOwners(app.owners_min, app.owners_max)}

@@ -3,9 +3,10 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
-import { TypeBadge, ReviewScoreBadge, RatioBar } from '@/components/data-display';
+import { TypeBadge, ReviewScoreBadge, RatioBar, TrendSparkline } from '@/components/data-display';
 import { ExternalLink } from 'lucide-react';
 import { AppDetailSections } from './AppDetailSections';
+import { getCCUSparkline } from '@/lib/ccu-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -419,7 +420,7 @@ export default async function AppDetailPage({
     notFound();
   }
 
-  const [app, developers, publishers, tags, metrics, histogram, trends, syncStatus, steamDeck, genres, categories, franchises, dlcs, steamTags] = await Promise.all([
+  const [app, developers, publishers, tags, metrics, histogram, trends, syncStatus, steamDeck, genres, categories, franchises, dlcs, steamTags, ccuSparkline] = await Promise.all([
     getAppDetails(appid),
     getDevelopers(appid),
     getPublishers(appid),
@@ -434,6 +435,7 @@ export default async function AppDetailPage({
     getFranchises(appid),
     getDLCs(appid),
     getSteamTags(appid),
+    getCCUSparkline(appid, '7d'),
   ]);
 
   if (!app) {
@@ -536,8 +538,20 @@ export default async function AppDetailPage({
           <p className="text-body font-semibold text-text-primary">{formatOwners(latestMetrics?.owners_min ?? null, latestMetrics?.owners_max ?? null)}</p>
         </div>
         <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-          <p className="text-caption text-text-tertiary">Peak CCU</p>
-          <p className="text-body font-semibold text-text-primary">{formatNumber(latestMetrics?.ccu_peak ?? null)}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-caption text-text-tertiary">Peak CCU</p>
+            {ccuSparkline.growthPct !== null && (
+              <span className={`text-caption font-medium ${ccuSparkline.growthPct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {ccuSparkline.growthPct >= 0 ? '+' : ''}{ccuSparkline.growthPct}%
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-body font-semibold text-text-primary">{formatNumber(latestMetrics?.ccu_peak ?? null)}</p>
+            <div className="hidden sm:block">
+              <TrendSparkline data={ccuSparkline.dataPoints} trend={ccuSparkline.trend} height={24} width={60} />
+            </div>
+          </div>
         </div>
         <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
           <p className="text-caption text-text-tertiary">Avg Playtime</p>

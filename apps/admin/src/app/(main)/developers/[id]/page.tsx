@@ -4,9 +4,10 @@ import { getPortfolioPICSData } from '@/lib/portfolio-pics';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
-import { ReviewScoreBadge, RatioBar } from '@/components/data-display';
+import { ReviewScoreBadge, RatioBar, TrendSparkline } from '@/components/data-display';
 import { ExternalLink } from 'lucide-react';
 import { DeveloperDetailSections } from './DeveloperDetailSections';
+import { getCCUSparklinesBatch, getPortfolioCCUSparkline, type CCUSparklineData } from '@/lib/ccu-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -442,9 +443,16 @@ export default async function DeveloperDetailPage({
     notFound();
   }
 
-  // Get similar developers based on top tags
+  // Get app IDs for CCU queries and similar developers
+  const appIds = apps.map(a => a.appid);
   const topTagNames = tags.slice(0, 5).map(t => t.tag);
-  const similarDevelopers = await getSimilarDevelopers(id, topTagNames);
+
+  // Fetch CCU sparklines and similar developers in parallel
+  const [similarDevelopers, ccuSparklines, portfolioCCU] = await Promise.all([
+    getSimilarDevelopers(id, topTagNames),
+    appIds.length > 0 ? getCCUSparklinesBatch(appIds, '7d') : Promise.resolve(new Map<number, CCUSparklineData>()),
+    appIds.length > 0 ? getPortfolioCCUSparkline(appIds, '7d') : Promise.resolve({ dataPoints: [], trend: 'stable' as const, growthPct: null, peakCCU: null }),
+  ]);
 
   // Calculate aggregated metrics
   const totalReviews = apps.reduce((sum, a) => sum + (a.total_reviews ?? 0), 0);
@@ -528,8 +536,20 @@ export default async function DeveloperDetailPage({
           <p className="text-body font-semibold text-text-primary">{formatOwners(totalOwnersMin, totalOwnersMax)}</p>
         </div>
         <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-          <p className="text-caption text-text-tertiary">Total Peak CCU</p>
-          <p className="text-body font-semibold text-text-primary">{formatNumber(totalCCU)}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-caption text-text-tertiary">Total Peak CCU</p>
+            {portfolioCCU.growthPct !== null && (
+              <span className={`text-caption font-medium ${portfolioCCU.growthPct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {portfolioCCU.growthPct >= 0 ? '+' : ''}{portfolioCCU.growthPct}%
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-body font-semibold text-text-primary">{formatNumber(totalCCU)}</p>
+            <div className="hidden sm:block">
+              <TrendSparkline data={portfolioCCU.dataPoints} trend={portfolioCCU.trend} height={24} width={60} />
+            </div>
+          </div>
         </div>
         <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
           <p className="text-caption text-text-tertiary">Games</p>
@@ -546,6 +566,7 @@ export default async function DeveloperDetailPage({
         histogram={histogram}
         similarDevelopers={similarDevelopers}
         picsData={picsData}
+        ccuSparklines={ccuSparklines}
       />
     </div>
   );
