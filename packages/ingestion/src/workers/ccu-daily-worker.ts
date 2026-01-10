@@ -11,49 +11,74 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger } from '@publisheriq/shared';
-import { fetchSteamCCUBatch } from '../apis/steam-ccu.js';
+import {
+  fetchSteamCCUBatchWithStatus,
+  type CCUResultWithStatus,
+} from '../apis/steam-ccu.js';
 
 const log = logger.child({ worker: 'ccu-daily-sync' });
 
 // Default batch size - can be overridden via env
 const DEFAULT_BATCH_SIZE = 50000;
 
+// Skip duration for invalid appids (30 days)
+const SKIP_DURATION_DAYS = 30;
+
 interface SyncStats {
   appsProcessed: number;
   appsSucceeded: number;
   appsFailed: number;
+  appsSkipped: number;
+  appsInvalid: number;
 }
 
 /**
- * Get all Tier 3 games (those not in Tier 1 or 2)
+ * Get all Tier 3 games (those not in Tier 1 or 2), excluding skipped apps
  * Falls back to priority-based selection if tier assignments don't exist
+ *
+ * @returns Object with appids to poll and count of skipped apps
  */
 async function getTier3Games(
   supabase: ReturnType<typeof getServiceClient>,
   limit: number
-): Promise<number[]> {
-  // First, try to get Tier 3 from assignments
-  const { data: tier3Data, error: tier3Error } = await supabase
+): Promise<{ appids: number[]; skippedCount: number }> {
+  const now = new Date().toISOString();
+
+  // First, try to get Tier 3 from assignments, excluding skipped apps
+  // Skip if ccu_skip_until is in the future
+  // Cast to any because ccu_tier_assignments may not be in generated types yet
+  const { data: tier3Data, error: tier3Error } = await (supabase as any)
     .from('ccu_tier_assignments')
     .select('appid')
     .eq('ccu_tier', 3)
+    .or(`ccu_skip_until.is.null,ccu_skip_until.lt.${now}`)
     .limit(limit);
 
+  // Also count how many are being skipped
+  const { count: skippedCount } = await (supabase as any)
+    .from('ccu_tier_assignments')
+    .select('*', { count: 'exact', head: true })
+    .eq('ccu_tier', 3)
+    .gt('ccu_skip_until', now);
+
   if (!tier3Error && tier3Data && tier3Data.length > 0) {
-    log.info('Using tier assignments for Tier 3 games', { count: tier3Data.length });
-    return tier3Data.map((d) => d.appid);
+    log.info('Using tier assignments for Tier 3 games', {
+      count: tier3Data.length,
+      skipped: skippedCount ?? 0,
+    });
+    return { appids: tier3Data.map((d: { appid: number }) => d.appid), skippedCount: skippedCount ?? 0 };
   }
 
   // Fallback: get all released games not in Tier 1 or 2
   log.info('No tier assignments found, falling back to direct query');
 
   // Get Tier 1 and 2 appids to exclude
-  const { data: excludeData } = await supabase
+  const { data: excludeData } = await (supabase as any)
     .from('ccu_tier_assignments')
     .select('appid')
     .in('ccu_tier', [1, 2]);
 
-  const excludeSet = new Set(excludeData?.map((d) => d.appid) ?? []);
+  const excludeSet = new Set(excludeData?.map((d: { appid: number }) => d.appid) ?? []);
 
   // Get all released games
   const { data: allGames, error: allError } = await supabase
@@ -72,7 +97,7 @@ async function getTier3Games(
   const tier3 = allGames?.filter((g) => !excludeSet.has(g.appid)).map((g) => g.appid) ?? [];
 
   log.info('Got Tier 3 games via fallback', { count: tier3.length, excluded: excludeSet.size });
-  return tier3;
+  return { appids: tier3, skippedCount: 0 };
 }
 
 /**
@@ -149,16 +174,95 @@ async function insertTier3Snapshots(
   if (snapshots.length === 0) return;
 
   // Insert in batches
+  // Cast to any because ccu_snapshots may not be in generated types yet
   const batchSize = 500;
   for (let i = 0; i < snapshots.length; i += batchSize) {
     const batch = snapshots.slice(i, i + batchSize);
-    const { error } = await supabase.from('ccu_snapshots').insert(batch);
+    const { error } = await (supabase as any).from('ccu_snapshots').insert(batch);
 
     if (error) {
       log.warn('Failed to insert Tier 3 snapshots batch', { error, batchStart: i });
       // Don't fail the job for snapshot errors - daily_metrics is the primary store for Tier 3
     }
   }
+}
+
+/**
+ * Update CCU fetch status tracking in tier assignments
+ *
+ * - Valid results: clear skip_until, set status to 'valid'
+ * - Invalid results (result:42): set skip_until to 30 days from now, set status to 'invalid'
+ * - Error results: no changes (transient failures, will retry next run)
+ */
+async function updateSkipTracking(
+  supabase: ReturnType<typeof getServiceClient>,
+  results: Map<number, CCUResultWithStatus>
+): Promise<{ validUpdated: number; invalidUpdated: number }> {
+  const skipUntil = new Date();
+  skipUntil.setDate(skipUntil.getDate() + SKIP_DURATION_DAYS);
+  const skipUntilStr = skipUntil.toISOString();
+
+  // Separate valid and invalid results (ignore errors - they'll be retried)
+  const validAppids: number[] = [];
+  const invalidAppids: number[] = [];
+
+  for (const [appid, result] of results) {
+    if (result.status === 'valid') {
+      validAppids.push(appid);
+    } else if (result.status === 'invalid') {
+      invalidAppids.push(appid);
+    }
+    // 'error' status: no update, will be retried next run
+  }
+
+  let validUpdated = 0;
+  let invalidUpdated = 0;
+
+  // Update valid apps: clear skip_until, set status
+  // Cast to any because ccu_tier_assignments may not be in generated types yet
+  const validBatchSize = 500;
+  for (let i = 0; i < validAppids.length; i += validBatchSize) {
+    const batch = validAppids.slice(i, i + validBatchSize);
+    const { error } = await (supabase as any)
+      .from('ccu_tier_assignments')
+      .update({
+        ccu_fetch_status: 'valid',
+        ccu_skip_until: null,
+      })
+      .in('appid', batch);
+
+    if (error) {
+      log.warn('Failed to update valid status batch', { error, batchStart: i });
+    } else {
+      validUpdated += batch.length;
+    }
+  }
+
+  // Update invalid apps: set skip_until, set status
+  for (let i = 0; i < invalidAppids.length; i += validBatchSize) {
+    const batch = invalidAppids.slice(i, i + validBatchSize);
+    const { error } = await (supabase as any)
+      .from('ccu_tier_assignments')
+      .update({
+        ccu_fetch_status: 'invalid',
+        ccu_skip_until: skipUntilStr,
+      })
+      .in('appid', batch);
+
+    if (error) {
+      log.warn('Failed to update invalid status batch', { error, batchStart: i });
+    } else {
+      invalidUpdated += batch.length;
+    }
+  }
+
+  log.info('Updated skip tracking', {
+    validUpdated,
+    invalidUpdated,
+    skipUntil: skipUntilStr,
+  });
+
+  return { validUpdated, invalidUpdated };
 }
 
 async function main(): Promise<void> {
@@ -186,14 +290,17 @@ async function main(): Promise<void> {
     appsProcessed: 0,
     appsSucceeded: 0,
     appsFailed: 0,
+    appsSkipped: 0,
+    appsInvalid: 0,
   };
 
   try {
-    // Get Tier 3 games
-    const appids = await getTier3Games(supabase, batchLimit);
+    // Get Tier 3 games (excluding skipped invalid apps)
+    const { appids, skippedCount } = await getTier3Games(supabase, batchLimit);
+    stats.appsSkipped = skippedCount;
 
     if (appids.length === 0) {
-      log.info('No Tier 3 games found for daily sync');
+      log.info('No Tier 3 games found for daily sync', { skipped: skippedCount });
 
       if (job) {
         await supabase
@@ -204,17 +311,18 @@ async function main(): Promise<void> {
             items_processed: 0,
             items_succeeded: 0,
             items_failed: 0,
+            metadata: { skipped: skippedCount },
           })
           .eq('id', job.id);
       }
       return;
     }
 
-    log.info('Found Tier 3 games for daily sync', { count: appids.length });
+    log.info('Found Tier 3 games for daily sync', { count: appids.length, skipped: skippedCount });
     stats.appsProcessed = appids.length;
 
-    // Fetch CCU from Steam API
-    const result = await fetchSteamCCUBatch(appids, (processed, total) => {
+    // Fetch CCU from Steam API with status tracking
+    const result = await fetchSteamCCUBatchWithStatus(appids, (processed, total) => {
       if (processed % 1000 === 0) {
         const elapsed = (Date.now() - startTime) / 1000 / 60;
         const rate = processed / elapsed;
@@ -228,18 +336,31 @@ async function main(): Promise<void> {
       }
     });
 
-    // Upsert to daily_metrics
+    stats.appsInvalid = result.invalidCount;
+
+    // Extract valid CCU data for metrics/snapshots
+    const validCcuData = new Map<number, number>();
+    for (const [appid, r] of result.results) {
+      if (r.status === 'valid' && r.playerCount !== undefined) {
+        validCcuData.set(appid, r.playerCount);
+      }
+    }
+
+    // Upsert to daily_metrics (only valid results)
     const today = new Date().toISOString().split('T')[0];
-    const { succeeded, failed } = await upsertDailyMetrics(supabase, result.data, today);
+    const { succeeded, failed } = await upsertDailyMetrics(supabase, validCcuData, today);
 
     stats.appsSucceeded = succeeded;
-    stats.appsFailed = failed + result.failedCount;
+    stats.appsFailed = failed + result.errorCount;
 
-    // Optionally insert snapshots for Tier 3 (for querying consistency)
-    await insertTier3Snapshots(supabase, result.data);
+    // Update skip tracking (mark invalid appids to skip for 30 days)
+    await updateSkipTracking(supabase, result.results);
+
+    // Insert snapshots for valid Tier 3 games
+    await insertTier3Snapshots(supabase, validCcuData);
 
     // Log some interesting stats
-    const ccuValues = Array.from(result.data.values());
+    const ccuValues = Array.from(validCcuData.values());
     if (ccuValues.length > 0) {
       const maxCCU = Math.max(...ccuValues);
       const avgCCU = Math.round(ccuValues.reduce((a, b) => a + b, 0) / ccuValues.length);
@@ -247,11 +368,13 @@ async function main(): Promise<void> {
       const gamesWithZero = ccuValues.filter((c) => c === 0).length;
 
       log.info('Daily CCU statistics', {
-        gamesWithData: result.data.size,
+        gamesWithData: validCcuData.size,
         gamesWithPlayers,
         gamesWithZero,
         maxCCU,
         avgCCU,
+        invalidAppids: result.invalidCount,
+        erroredAppids: result.errorCount,
       });
     }
 
@@ -265,6 +388,12 @@ async function main(): Promise<void> {
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsSucceeded,
           items_failed: stats.appsFailed,
+          metadata: {
+            skipped: stats.appsSkipped,
+            invalid: stats.appsInvalid,
+            valid: result.validCount,
+            errors: result.errorCount,
+          },
         })
         .eq('id', job.id);
     }
@@ -284,6 +413,7 @@ async function main(): Promise<void> {
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsSucceeded,
           items_failed: stats.appsFailed,
+          metadata: { skipped: stats.appsSkipped, invalid: stats.appsInvalid },
         })
         .eq('id', job.id);
     }
