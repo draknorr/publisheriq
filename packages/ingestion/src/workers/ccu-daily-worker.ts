@@ -21,6 +21,9 @@ const log = logger.child({ worker: 'ccu-daily-sync' });
 // Default batch size - can be overridden via env
 const DEFAULT_BATCH_SIZE = 50000;
 
+// Supabase/PostgREST default max rows per request
+const SUPABASE_PAGE_SIZE = 1000;
+
 // Skip duration for invalid appids (30 days)
 const SKIP_DURATION_DAYS = 30;
 
@@ -34,7 +37,7 @@ interface SyncStats {
 
 /**
  * Get all Tier 3 games (those not in Tier 1 or 2), excluding skipped apps
- * Falls back to priority-based selection if tier assignments don't exist
+ * Uses pagination to work around Supabase's 1000 row limit
  *
  * @returns Object with appids to poll and count of skipped apps
  */
@@ -44,57 +47,113 @@ async function getTier3Games(
 ): Promise<{ appids: number[]; skippedCount: number }> {
   const now = new Date().toISOString();
 
-  // First, try to get Tier 3 from assignments, excluding skipped apps
-  // Skip if ccu_skip_until is in the future
-  // Cast to any because ccu_tier_assignments may not be in generated types yet
-  const { data: tier3Data, error: tier3Error } = await (supabase as any)
-    .from('ccu_tier_assignments')
-    .select('appid')
-    .eq('ccu_tier', 3)
-    .or(`ccu_skip_until.is.null,ccu_skip_until.lt.${now}`)
-    .limit(limit);
-
-  // Also count how many are being skipped
+  // Count how many are being skipped (apps with skip_until in the future)
   const { count: skippedCount } = await (supabase as any)
     .from('ccu_tier_assignments')
     .select('*', { count: 'exact', head: true })
     .eq('ccu_tier', 3)
     .gt('ccu_skip_until', now);
 
-  if (!tier3Error && tier3Data && tier3Data.length > 0) {
-    log.info('Using tier assignments for Tier 3 games', {
-      count: tier3Data.length,
-      skipped: skippedCount ?? 0,
-    });
-    return { appids: tier3Data.map((d: { appid: number }) => d.appid), skippedCount: skippedCount ?? 0 };
+  // Paginate through Tier 3 games, excluding skipped apps
+  // Cast to any because ccu_tier_assignments may not be in generated types yet
+  const allAppids: number[] = [];
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore && allAppids.length < limit) {
+    const { data: pageData, error: pageError } = await (supabase as any)
+      .from('ccu_tier_assignments')
+      .select('appid')
+      .eq('ccu_tier', 3)
+      .or(`ccu_skip_until.is.null,ccu_skip_until.lt.${now}`)
+      .range(offset, offset + SUPABASE_PAGE_SIZE - 1);
+
+    if (pageError) {
+      throw new Error(`Failed to get Tier 3 games: ${pageError.message}`);
+    }
+
+    if (!pageData || pageData.length === 0) {
+      hasMore = false;
+    } else {
+      for (const row of pageData as { appid: number }[]) {
+        if (allAppids.length < limit) {
+          allAppids.push(row.appid);
+        }
+      }
+      offset += SUPABASE_PAGE_SIZE;
+      hasMore = pageData.length === SUPABASE_PAGE_SIZE;
+
+      if (offset % 10000 === 0) {
+        log.info('Fetching Tier 3 appids...', { fetched: allAppids.length, offset });
+      }
+    }
   }
 
-  // Fallback: get all released games not in Tier 1 or 2
+  if (allAppids.length > 0) {
+    log.info('Using tier assignments for Tier 3 games', {
+      count: allAppids.length,
+      skipped: skippedCount ?? 0,
+      pages: Math.ceil(offset / SUPABASE_PAGE_SIZE),
+    });
+    return { appids: allAppids, skippedCount: skippedCount ?? 0 };
+  }
+
+  // Fallback: get all released games not in Tier 1 or 2 (also paginated)
   log.info('No tier assignments found, falling back to direct query');
 
-  // Get Tier 1 and 2 appids to exclude
-  const { data: excludeData } = await (supabase as any)
-    .from('ccu_tier_assignments')
-    .select('appid')
-    .in('ccu_tier', [1, 2]);
+  // Get Tier 1 and 2 appids to exclude (paginated)
+  const excludeSet = new Set<number>();
+  offset = 0;
+  hasMore = true;
 
-  const excludeSet = new Set(excludeData?.map((d: { appid: number }) => d.appid) ?? []);
+  while (hasMore) {
+    const { data: excludeData } = await (supabase as any)
+      .from('ccu_tier_assignments')
+      .select('appid')
+      .in('ccu_tier', [1, 2])
+      .range(offset, offset + SUPABASE_PAGE_SIZE - 1);
 
-  // Get all released games
-  const { data: allGames, error: allError } = await supabase
-    .from('apps')
-    .select('appid')
-    .eq('type', 'game')
-    .eq('is_released', true)
-    .eq('is_delisted', false)
-    .limit(limit);
-
-  if (allError) {
-    throw new Error(`Failed to get Tier 3 games: ${allError.message}`);
+    if (!excludeData || excludeData.length === 0) {
+      hasMore = false;
+    } else {
+      for (const row of excludeData as { appid: number }[]) {
+        excludeSet.add(row.appid);
+      }
+      offset += SUPABASE_PAGE_SIZE;
+      hasMore = excludeData.length === SUPABASE_PAGE_SIZE;
+    }
   }
 
-  // Filter out Tier 1 and 2
-  const tier3 = allGames?.filter((g) => !excludeSet.has(g.appid)).map((g) => g.appid) ?? [];
+  // Get all released games (paginated)
+  const tier3: number[] = [];
+  offset = 0;
+  hasMore = true;
+
+  while (hasMore && tier3.length < limit) {
+    const { data: gameData, error: gameError } = await supabase
+      .from('apps')
+      .select('appid')
+      .eq('type', 'game')
+      .eq('is_released', true)
+      .eq('is_delisted', false)
+      .range(offset, offset + SUPABASE_PAGE_SIZE - 1);
+
+    if (gameError) {
+      throw new Error(`Failed to get games: ${gameError.message}`);
+    }
+
+    if (!gameData || gameData.length === 0) {
+      hasMore = false;
+    } else {
+      for (const g of gameData) {
+        if (!excludeSet.has(g.appid) && tier3.length < limit) {
+          tier3.push(g.appid);
+        }
+      }
+      offset += SUPABASE_PAGE_SIZE;
+      hasMore = gameData.length === SUPABASE_PAGE_SIZE;
+    }
+  }
 
   log.info('Got Tier 3 games via fallback', { count: tier3.length, excluded: excludeSet.size });
   return { appids: tier3, skippedCount: 0 };
