@@ -181,6 +181,10 @@ export const TIME_RANGE_CONFIG: Record<TimeRange, TimeRangeConfig> = {
 
 /**
  * Get top games by peak CCU in the given time range
+ *
+ * Data sources (in priority order):
+ * 1. ccu_snapshots - Real-time hourly data for Tier 1+2 games
+ * 2. ccu_tier_assignments.recent_peak_ccu - 7-day peak fallback (includes SteamSpy data)
  */
 export async function getTopGames(timeRange: TimeRange): Promise<GameInsight[]> {
   const supabase = getSupabase();
@@ -195,27 +199,58 @@ export async function getTopGames(timeRange: TimeRange): Promise<GameInsight[]> 
     cutoffTime.setDate(cutoffTime.getDate() - 30);
   }
 
-  // Get peak CCU from snapshots (using type assertion for new table)
-  const { data: snapshotData, error: snapshotError } = await (supabase as any)
-    .from('ccu_snapshots')
-    .select('appid, player_count')
-    .gte('snapshot_time', cutoffTime.toISOString())
-    .order('player_count', { ascending: false }) as {
-      data: Pick<CCUSnapshotRow, 'appid' | 'player_count'>[] | null;
-      error: Error | null;
-    };
+  // Fetch both data sources in parallel for better performance
+  const [snapshotResult, tierResult] = await Promise.all([
+    // Primary: Get peak CCU from snapshots (Tier 1+2 games)
+    (supabase as any)
+      .from('ccu_snapshots')
+      .select('appid, player_count')
+      .gte('snapshot_time', cutoffTime.toISOString())
+      .order('player_count', { ascending: false }) as Promise<{
+        data: Pick<CCUSnapshotRow, 'appid' | 'player_count'>[] | null;
+        error: Error | null;
+      }>,
 
-  if (snapshotError || !snapshotData) {
+    // Fallback: Get recent_peak_ccu from tier assignments (includes SteamSpy data)
+    (supabase as any)
+      .from('ccu_tier_assignments')
+      .select('appid, recent_peak_ccu')
+      .gt('recent_peak_ccu', 0)
+      .order('recent_peak_ccu', { ascending: false })
+      .limit(500) as Promise<{
+        data: { appid: number; recent_peak_ccu: number }[] | null;
+        error: Error | null;
+      }>,
+  ]);
+
+  const { data: snapshotData, error: snapshotError } = snapshotResult;
+  const { data: tierData, error: tierError } = tierResult;
+
+  if (snapshotError) {
     console.error('Snapshot query error:', snapshotError);
-    return [];
+  }
+  if (tierError) {
+    console.error('Tier assignment query error:', tierError);
   }
 
-  // Aggregate to get peak per app
+  // Aggregate peak CCU per app from snapshots (primary source)
   const peakByApp = new Map<number, number>();
-  for (const row of snapshotData) {
-    const current = peakByApp.get(row.appid) ?? 0;
-    if (row.player_count > current) {
-      peakByApp.set(row.appid, row.player_count);
+  if (snapshotData) {
+    for (const row of snapshotData) {
+      const current = peakByApp.get(row.appid) ?? 0;
+      if (row.player_count > current) {
+        peakByApp.set(row.appid, row.player_count);
+      }
+    }
+  }
+
+  // Add tier assignment data for games not in snapshots (fallback)
+  // This covers games with SteamSpy CCU but no recent snapshot data
+  if (tierData) {
+    for (const row of tierData) {
+      if (!peakByApp.has(row.appid) && row.recent_peak_ccu > 0) {
+        peakByApp.set(row.appid, row.recent_peak_ccu);
+      }
     }
   }
 
@@ -304,6 +339,10 @@ export async function getTopGames(timeRange: TimeRange): Promise<GameInsight[]> 
 
 /**
  * Get newest games (released in past year) with CCU data
+ *
+ * Data sources (in priority order):
+ * 1. ccu_snapshots - Real-time hourly data for Tier 1+2 games
+ * 2. ccu_tier_assignments.recent_peak_ccu - 7-day peak fallback (includes SteamSpy data)
  */
 export async function getNewestGames(
   timeRange: TimeRange,
@@ -341,22 +380,46 @@ export async function getNewestGames(
     cutoffTime.setDate(cutoffTime.getDate() - 30);
   }
 
-  // Get CCU data from snapshots (using type assertion for new table)
-  const { data: snapshotData } = await (supabase as any)
-    .from('ccu_snapshots')
-    .select('appid, player_count')
-    .in('appid', appIds)
-    .gte('snapshot_time', cutoffTime.toISOString()) as {
-      data: Pick<CCUSnapshotRow, 'appid' | 'player_count'>[] | null;
-    };
+  // Fetch both CCU data sources in parallel
+  const [snapshotResult, tierResult] = await Promise.all([
+    // Primary: Get CCU data from snapshots (Tier 1+2 games)
+    (supabase as any)
+      .from('ccu_snapshots')
+      .select('appid, player_count')
+      .in('appid', appIds)
+      .gte('snapshot_time', cutoffTime.toISOString()) as Promise<{
+        data: Pick<CCUSnapshotRow, 'appid' | 'player_count'>[] | null;
+      }>,
 
-  // Aggregate peak CCU per app
+    // Fallback: Get recent_peak_ccu from tier assignments
+    (supabase as any)
+      .from('ccu_tier_assignments')
+      .select('appid, recent_peak_ccu')
+      .in('appid', appIds)
+      .gt('recent_peak_ccu', 0) as Promise<{
+        data: { appid: number; recent_peak_ccu: number }[] | null;
+      }>,
+  ]);
+
+  const { data: snapshotData } = snapshotResult;
+  const { data: tierData } = tierResult;
+
+  // Aggregate peak CCU per app from snapshots (primary source)
   const peakByApp = new Map<number, number>();
   if (snapshotData) {
     for (const row of snapshotData) {
       const current = peakByApp.get(row.appid) ?? 0;
       if (row.player_count > current) {
         peakByApp.set(row.appid, row.player_count);
+      }
+    }
+  }
+
+  // Add tier assignment data for games not in snapshots (fallback)
+  if (tierData) {
+    for (const row of tierData) {
+      if (!peakByApp.has(row.appid) && row.recent_peak_ccu > 0) {
+        peakByApp.set(row.appid, row.recent_peak_ccu);
       }
     }
   }
