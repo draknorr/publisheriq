@@ -17,33 +17,36 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ## Latest Release
 
-**[v2.2 - CCU & SteamSpy Improvements](releases/v2.2-ccu-steamspy.md)** (January 9, 2026)
+**[v2.3 - Embedding Optimization](releases/v2.3-embedding-optimization.md)** (January 11, 2026)
 
-Major improvements to CCU data accuracy and sync efficiency:
+**10x faster embedding sync throughput** through batch optimization and async I/O:
 
-**Tiered CCU Tracking System**
-- Three-tier polling strategy: Tier 1 (hourly), Tier 2 (2-hourly), Tier 3 (daily)
-- Exact CCU from Steam's GetNumberOfCurrentPlayers API (replaces SteamSpy estimates)
-- New `ccu_snapshots` table for hourly data with 30-day retention
-- New `ccu_tier_assignments` table with automatic tier recalculation
-- CCU source tracking via `daily_metrics.ccu_source`
+**Performance Optimizations**
+- Batch sizes optimized: Games 500, Publishers 200, Developers 100
+- Async Qdrant writes (`wait: false`) with end-of-sync verification
+- OpenAI retry logic: 3 retries with exponential backoff (1s→2s→4s)
+- Progress logging every 30 seconds for observability
+- Workflow timeout reduced from 120 to 60 minutes
 
-**SteamSpy Supplementary Fetch**
-- Fixes missing games in SteamSpy pagination (e.g., Arc Raiders with 120K reviews)
-- Individual app fetches for high-priority games missing from bulk API
+**Bug Fixes**
+- Fixed duplicate Similar Games header in app detail page
+- Fixed PostgreSQL ambiguous column reference in embedding functions
+- Fixed `language_count` calculation (jsonb_object_keys vs jsonb_array_length)
 
-**Rate Limit & Batch Size Improvements**
-- Reviews API: 3x faster (0.33 → 1 req/sec)
-- Reviews batch size: 2x larger (1200 → 2500 apps)
-- Daily review capacity: ~30k apps (up from ~14k)
-
-**Also in v2.2:**
-- Priority calculation fix for never-synced apps
-- New CCU workflows: `ccu-sync.yml`, `ccu-daily-sync.yml`, `ccu-cleanup.yml`
+**Configuration**
+- New `SYNC_COLLECTION` env var for selective syncing (games/publishers/developers/all)
 
 ---
 
 ## Previous Releases
+
+**[v2.2 - CCU & SteamSpy Improvements](releases/v2.2-ccu-steamspy.md)** (January 9, 2026)
+
+- Tiered CCU tracking: Tier 1 (hourly), Tier 2 (2-hourly), Tier 3 (3x daily rotation)
+- Exact CCU from Steam's GetNumberOfCurrentPlayers API
+- SteamSpy supplementary fetch for missing games
+- Reviews API 3x faster, batch size 2x larger
+- Priority calculation fix for never-synced apps
 
 **[v2.1 - Velocity & Auth](releases/v2.1-velocity-auth.md)** (January 8, 2026)
 

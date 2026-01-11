@@ -2,10 +2,11 @@
 
 This document describes how data flows through PublisherIQ, from external APIs to the database.
 
-**Last Updated:** January 10, 2026
+**Last Updated:** January 11, 2026
 
 ## Recent Improvements
 
+- **10x Embedding Throughput**: Async Qdrant writes, batch optimization (500/200/100), retry logic (v2.3)
 - **CCU Rotation Tracking**: 3x daily Tier 3 polling with `last_ccu_synced` ensures full coverage every ~2 days (v2.2)
 - **CCU Skip Tracking**: Invalid appids (result:42) automatically skipped for 30 days (v2.2)
 - **Store Asset Mtime**: PICS-sourced page creation timestamps replace broken Community Hub scraper (v2.2)
@@ -43,7 +44,7 @@ All scheduled sync jobs run via GitHub Actions on UTC time:
 |-----|----------------|--------|------------|---------|
 | applist-sync | 00:15 daily | `applist-worker.ts` | Full | Master app list |
 | steamspy-sync | 02:15 daily | `steamspy-worker.ts` | 1000/page | CCU, owners, tags |
-| embedding-sync | 03:00 daily | `embedding-worker.ts` | 100/200 | Vector embeddings |
+| embedding-sync | 03:00 daily | `embedding-worker.ts` | 500/200/100 | Vector embeddings (v2.3) |
 | histogram-sync | 04:15 daily | `histogram-worker.ts` | 300 | Monthly reviews |
 | storefront-sync | 06,10,14,18,22:00 | `storefront-worker.ts` | 200 | Game metadata |
 | reviews-sync | :15 every 2h | `reviews-worker.ts` | 2500 | Review counts |
@@ -542,7 +543,7 @@ Instead of OFFSET pagination (which is inefficient for large datasets), the work
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  1. Fetch batch via RPC                                          │
-│     get_apps_for_embedding(limit=100)                           │
+│     get_apps_for_embedding(limit=500)                           │
 │     - Returns apps where: last_embedding_sync IS NULL           │
 │       OR updated_at > last_embedding_sync                        │
 │     - Ordered by: unembedded-first, then priority_score DESC    │
@@ -576,7 +577,7 @@ Instead of OFFSET pagination (which is inefficient for large datasets), the work
 │  5. Upsert to Qdrant Cloud                                       │
 │     - 5 collections: games, publishers (×2), developers (×2)    │
 │     - Payload includes all metadata for filtering                │
-│     - Batch size: 100 points per upsert                          │
+│     - Batch size: 500 points per upsert (v2.3)                   │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
@@ -595,7 +596,7 @@ Instead of OFFSET pagination (which is inefficient for large datasets), the work
 
 ### Three-Phase Sync
 
-1. **Games** (batch size: 100)
+1. **Games** (batch size: 500)
    - Syncs all games that need embedding
    - Uses `get_apps_for_embedding()` RPC function
    - Marks complete with `mark_apps_embedded()`
@@ -604,11 +605,13 @@ Instead of OFFSET pagination (which is inefficient for large datasets), the work
    - Two embeddings per publisher: portfolio + identity
    - Uses `get_publishers_needing_embedding()` RPC function
    - Marks complete with `mark_publishers_embedded()`
+   - Reduced from 500 to avoid RPC timeout (v2.3)
 
-3. **Developers** (batch size: 200)
+3. **Developers** (batch size: 100)
    - Two embeddings per developer: portfolio + identity
    - Uses `get_developers_needing_embedding()` RPC function
    - Marks complete with `mark_developers_embedded()`
+   - Smallest batch due to complex aggregation query (v2.3)
 
 ### Qdrant Collections
 
@@ -619,6 +622,26 @@ Instead of OFFSET pagination (which is inefficient for large datasets), the work
 | `publisheriq_publishers_identity` | Publishers | Match by top games |
 | `publisheriq_developers_portfolio` | Developers | Match by entire catalog |
 | `publisheriq_developers_identity` | Developers | Match by top games |
+
+### Performance Optimizations (v2.3)
+
+**Async Qdrant Writes:**
+- Uses `wait: false` for non-blocking upserts
+- Collection verification at sync completion ensures data integrity
+- Enables 10x throughput improvement over blocking writes
+
+**OpenAI API Retry Logic:**
+- 3 retries with exponential backoff (1s → 2s → 4s, max 10s)
+- Handles 429 (rate limit), 5xx errors, timeouts
+- `isRetryableError()` function classifies transient vs permanent failures
+
+**Progress Monitoring:**
+- Logs every 30 seconds during sync
+- Metrics: elapsed time, items processed/skipped, tokens used, items/minute
+
+**Selective Sync:**
+- `SYNC_COLLECTION` env var controls which entity types to sync
+- Options: `all`, `games`, `publishers`, `developers`
 
 ### Cost Tracking
 

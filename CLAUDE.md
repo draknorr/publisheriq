@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data acquisition platform with natural language chat interface. Last updated: January 10, 2026.
+> Steam data acquisition platform with natural language chat interface. Last updated: January 11, 2026.
 
 ---
 
@@ -499,7 +499,7 @@ Three-tier polling with Steam API for exact player counts:
 |----------|----------|---------|
 | applist-sync | 00:15 daily | Master app list |
 | steamspy-sync | 02:15 daily | CCU, owners, tags |
-| embedding-sync | 03:00 daily | Vector embeddings (games, publishers, developers) |
+| embedding-sync | 03:00 daily (60min) | Vector embeddings (batch: 500/200/100) |
 | histogram-sync | 04:15 daily | Monthly review trends |
 | ccu-sync | :00 hourly | Tier 1+2 CCU polling |
 | ccu-daily-sync | 04:30, 12:30, 20:30 (3x daily) | Tier 3 CCU polling (rotation) |
@@ -536,6 +536,23 @@ Three-tier polling with Steam API for exact player counts:
 
 **Embedding Model:** OpenAI text-embedding-3-small (1536 dimensions)
 **Change Detection:** Hash-based (only re-embeds when data changes)
+
+## Embedding Sync Configuration (v2.3)
+
+**Batch Sizes (optimized for throughput vs. timeout balance):**
+| Entity | DB Fetch | Qdrant Upsert | Notes |
+|--------|----------|---------------|-------|
+| Games | 500 | 500 | Larger batches, simple query |
+| Publishers | 200 | 500 | Smaller to avoid RPC timeout |
+| Developers | 100 | 500 | Smallest due to complex RPC query |
+
+**Performance Features:**
+- Async Qdrant writes (`wait: false`) with end-of-sync verification
+- OpenAI retry logic: 3 retries with exponential backoff (1s→2s→4s)
+- Progress logging every 30 seconds
+- Selective sync via `SYNC_COLLECTION` env var (games/publishers/developers/all)
+
+**Workflow:** 60-minute timeout (reduced from 120 after optimizations)
 
 ## Design System (v2.0)
 
