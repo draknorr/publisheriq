@@ -38,18 +38,20 @@ All times are UTC:
 |----------|------|----------|---------|
 | App List Sync | `applist-sync.yml` | 00:15 daily | Master app list |
 | SteamSpy Sync | `steamspy-sync.yml` | 02:15 daily | Owners, playtime, tags |
+| Embedding Sync | `embedding-sync.yml` | 03:00 daily | Vector embeddings |
 | Histogram Sync | `histogram-sync.yml` | 04:15 daily | Monthly reviews |
 | Storefront Sync | `storefront-sync.yml` | 06,10,14,18,22:00 | Game metadata |
 | Reviews Sync | `reviews-sync.yml` | :15 every 2h | Review counts (batch 2500, v2.2) |
-| Page Creation Scrape | `page-creation-scrape.yml` | 03:00 daily | Page dates |
 | Trends Calculation | `trends-calculation.yml` | 22:00 daily | Trend metrics |
 | Priority Calculation | `priority-calculation.yml` | 22:30 daily | Priority scores |
 | Velocity Calculation | `velocity-calculation.yml` | 08,16,00:00 | Velocity stats (v2.1) |
 | Interpolation | `interpolation.yml` | 05:00 daily | Fill data gaps (v2.1) |
 | Refresh Views | `refresh-views.yml` | 05:00 daily | Refresh materialized views (v2.1) |
 | CCU Sync | `ccu-sync.yml` | :00 hourly | Tier 1+2 CCU (v2.2) |
-| CCU Daily Sync | `ccu-daily-sync.yml` | 04:30 daily | Tier 3 CCU (v2.2) |
+| CCU Daily Sync | `ccu-daily-sync.yml` | 04:30, 12:30, 20:30 (3x daily) | Tier 3 CCU rotation (v2.2) |
 | CCU Cleanup | `ccu-cleanup.yml` | Sun 03:00 | Aggregate + cleanup snapshots (v2.2) |
+| Cleanup Reservations | `cleanup-reservations.yml` | :00 hourly | Stale credit reservation cleanup |
+| Cleanup Chat Logs | `cleanup-chat-logs.yml` | 03:00 daily | 7-day log retention |
 | CI | `ci.yml` | On push/PR | Type checking |
 
 ## Workflow Structure
@@ -144,7 +146,7 @@ gh workflow run steamspy-sync.yml -f max_pages=10
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| `limit` | `50000` | Maximum apps to sync |
+| `limit` | `150000` | Maximum apps to sync (rotation covers ~21k per run) |
 
 ## Monitoring
 

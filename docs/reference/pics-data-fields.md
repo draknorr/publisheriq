@@ -33,6 +33,7 @@ The `common` section contains the most relevant metadata.
 | `steam_release_date` | timestamp | Official Steam release date (Unix) |
 | `original_release_date` | timestamp | Original release date (if released elsewhere first) |
 | `releasestate` | string | "released", "prerelease", "unavailable", "preloadonly" |
+| `store_asset_mtime` | timestamp | Store page creation time (v2.2: replaces page scraping) |
 
 ### Review Data
 

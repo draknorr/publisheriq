@@ -27,9 +27,6 @@ pnpm --filter @publisheriq/ingestion reviews-sync
 # Review histogram (monthly trends)
 pnpm --filter @publisheriq/ingestion histogram-sync
 
-# Page creation scraping
-pnpm --filter @publisheriq/ingestion page-creation-scrape
-
 # Calculate trends
 pnpm --filter @publisheriq/ingestion trends-calculate
 
@@ -128,10 +125,11 @@ pnpm --filter @publisheriq/ingestion reviews-sync
 **What it does:**
 - Calls Steam Reviews API
 - Updates `daily_metrics` (review counts, scores)
+- Creates `review_deltas` records for velocity tracking
 
 **Duration:** ~30-60 minutes per 10k apps
 
-**Rate limit:** ~20 requests per minute
+**Rate limit:** ~60 requests per minute (1 req/sec, v2.2 improvement)
 
 ---
 
@@ -150,24 +148,6 @@ pnpm --filter @publisheriq/ingestion histogram-sync
 **Duration:** ~15-30 minutes per 10k apps
 
 **Rate limit:** ~60 requests per minute
-
----
-
-### Page Creation Scrape
-
-Scrapes community hub for page creation dates.
-
-```bash
-pnpm --filter @publisheriq/ingestion page-creation-scrape
-```
-
-**What it does:**
-- Scrapes Steam Community Hub pages
-- Updates `apps.page_creation_date`
-
-**Duration:** Slow (1.5s per app)
-
-**Rate limit:** Conservative 1 per 1.5 seconds
 
 ---
 
@@ -257,28 +237,30 @@ pnpm --filter @publisheriq/ingestion ccu-tiered-sync
 
 ### CCU Daily Sync (v2.2+)
 
-Syncs CCU data for all remaining games (Tier 3).
+Syncs CCU data for Tier 3 games using rotation tracking.
 
 ```bash
-# Default (50,000 apps)
+# Default (up to 150,000 apps, ~21k per run due to timeout)
 pnpm --filter @publisheriq/ingestion ccu-daily-sync
 
 # Custom limit
-LIMIT=10000 pnpm --filter @publisheriq/ingestion ccu-daily-sync
+CCU_DAILY_LIMIT=10000 pnpm --filter @publisheriq/ingestion ccu-daily-sync
 ```
 
 **What it does:**
-- Fetches CCU for Tier 3 games (all others)
-- Processes in batches with rate limiting
+- Fetches Tier 3 games sorted by `last_ccu_synced ASC NULLS FIRST`
+- Skips apps with active `ccu_skip_until` (invalid appids)
 - Updates `daily_metrics.ccu` and `ccu_source`
-- Skips apps with `storefront_accessible = false`
+- Updates `last_ccu_synced` for rotation tracking
 
-**Duration:** ~3-4 hours for 50k apps
+**Duration:** ~6 hours (timeout limit, processes ~21k games)
 
 **Rate limit:** 1 request per second (Steam API)
 
+**Schedule:** Runs 3x daily (04:30, 12:30, 20:30 UTC) for full Tier 3 coverage
+
 **Environment Variables:**
-- `LIMIT` - Maximum apps to sync (default 50000)
+- `CCU_DAILY_LIMIT` - Maximum apps to sync (default 150000)
 
 ---
 

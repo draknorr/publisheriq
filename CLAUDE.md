@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data acquisition platform with natural language chat interface. Last updated: January 9, 2026.
+> Steam data acquisition platform with natural language chat interface. Last updated: January 10, 2026.
 
 ---
 
@@ -484,12 +484,14 @@ Three-tier polling with Steam API for exact player counts:
 |------|----------|---------|-------|
 | 1 | Top 500 by 7-day peak CCU | Hourly | ~500 |
 | 2 | Top 1000 newest releases (past year) | Every 2h | ~1000 |
-| 3 | All other games | Daily | ~60,000+ |
+| 3 | All other games | 3x daily (rotation) | ~120,000+ |
 
 **Key Features:**
 - `ccu_source` column tracks provenance: `'steam_api'` vs `'steamspy'`
 - 30-day snapshot retention with weekly aggregation
 - Automatic tier reassignment via `recalculate_ccu_tiers()` RPC
+- **Rotation tracking**: `last_ccu_synced` column ensures full Tier 3 coverage every ~2 days
+- **Skip tracking**: Invalid appids (result:42) skipped for 30 days via `ccu_skip_until`
 
 ## GitHub Actions Schedule (UTC)
 
@@ -500,7 +502,7 @@ Three-tier polling with Steam API for exact player counts:
 | embedding-sync | 03:00 daily | Vector embeddings (games, publishers, developers) |
 | histogram-sync | 04:15 daily | Monthly review trends |
 | ccu-sync | :00 hourly | Tier 1+2 CCU polling |
-| ccu-daily-sync | 04:30 daily | Tier 3 CCU polling |
+| ccu-daily-sync | 04:30, 12:30, 20:30 (3x daily) | Tier 3 CCU polling (rotation) |
 | ccu-cleanup | Sunday 03:00 | Snapshot cleanup + aggregation |
 | storefront-sync | 06,10,14,18,22:00 | Game metadata |
 | reviews-sync | +30 min after storefront | Review counts |
@@ -510,6 +512,7 @@ Three-tier polling with Steam API for exact player counts:
 | trends-calculation | 22:00 daily | Trend metrics |
 | priority-calculation | 22:30 daily | Priority scores |
 | cleanup-chat-logs | 03:00 daily | 7-day log retention |
+| cleanup-reservations | :00 hourly | Stale credit reservation cleanup |
 
 ## PICS Service (Python on Railway)
 

@@ -4,7 +4,7 @@
 
 **Database**: PostgreSQL (Supabase)
 
-**Last Updated:** January 9, 2026
+**Last Updated:** January 10, 2026
 
 **Semantic Layer**: Cube.js provides type-safe queries over these tables. See [Chat Data System](chat-data-system.md) for Cube schema documentation.
 
@@ -62,7 +62,6 @@ Steam game publishers.
 | normalized_name | TEXT | NO | - | Lowercase, trimmed name for lookups |
 | steam_vanity_url | TEXT | YES | NULL | Steam store vanity URL slug |
 | first_game_release_date | DATE | YES | NULL | Earliest game release date |
-| first_page_creation_date | DATE | YES | NULL | Earliest Steam page creation date |
 | game_count | INTEGER | NO | 0 | Number of games published |
 | last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
 | embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
@@ -86,7 +85,6 @@ Steam game developers.
 | normalized_name | TEXT | NO | - | Lowercase, trimmed name for lookups |
 | steam_vanity_url | TEXT | YES | NULL | Steam store vanity URL slug |
 | first_game_release_date | DATE | YES | NULL | Earliest game release date |
-| first_page_creation_date | DATE | YES | NULL | Earliest Steam page creation date |
 | game_count | INTEGER | NO | 0 | Number of games developed |
 | last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
 | embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
@@ -111,8 +109,7 @@ Steam apps (games, DLC, demos, etc).
 | is_free | BOOLEAN | NO | FALSE | Whether app is free |
 | release_date | DATE | YES | NULL | Parsed release date |
 | release_date_raw | TEXT | YES | NULL | Raw release date string from Steam |
-| page_creation_date | DATE | YES | NULL | Steam store page creation date |
-| page_creation_date_raw | TEXT | YES | NULL | Raw page creation date string |
+| store_asset_mtime | TIMESTAMPTZ | YES | NULL | Steam store page creation timestamp (from PICS) |
 | has_workshop | BOOLEAN | NO | FALSE | Has Steam Workshop support |
 | current_price_cents | INTEGER | YES | NULL | Current price in cents (USD) |
 | current_discount_percent | INTEGER | NO | 0 | Active discount percentage |
@@ -412,7 +409,6 @@ Per-app sync tracking and scheduling.
 | last_storefront_sync | TIMESTAMPTZ | YES | NULL | Last Storefront sync time |
 | last_reviews_sync | TIMESTAMPTZ | YES | NULL | Last Reviews sync time |
 | last_histogram_sync | TIMESTAMPTZ | YES | NULL | Last Histogram sync time |
-| last_page_creation_scrape | TIMESTAMPTZ | YES | NULL | Last page scrape time |
 | last_pics_sync | TIMESTAMPTZ | YES | NULL | Last PICS data sync time |
 | pics_change_number | BIGINT | YES | NULL | Last processed PICS change number |
 | last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
@@ -425,7 +421,6 @@ Per-app sync tracking and scheduling.
 | last_error_source | sync_source | YES | NULL | Which source had last error |
 | last_error_message | TEXT | YES | NULL | Last error details |
 | last_error_at | TIMESTAMPTZ | YES | NULL | When last error occurred |
-| needs_page_creation_scrape | BOOLEAN | NO | TRUE | Needs page creation scraping |
 | is_syncable | BOOLEAN | NO | TRUE | Whether to sync this app |
 | refresh_tier | refresh_tier | YES | 'moderate' | Sync frequency tier |
 | last_activity_at | TIMESTAMPTZ | YES | NULL | Last detected activity |
@@ -674,11 +669,14 @@ Current CCU tier assignment for each game. Recalculated hourly.
 | release_rank | INTEGER | YES | NULL | Rank by release date (for Tier 2) |
 | last_tier_change | TIMESTAMPTZ | YES | NULL | When tier last changed |
 | updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
+| ccu_fetch_status | TEXT | YES | NULL | Last fetch result: 'valid', 'invalid', 'error' |
+| ccu_skip_until | TIMESTAMPTZ | YES | NULL | Skip until this time (30 days for invalid appids) |
+| last_ccu_synced | TIMESTAMPTZ | YES | NULL | Last CCU sync time (for Tier 3 rotation) |
 
 **Tier Definitions**:
 - **Tier 1**: Top 500 games by 7-day peak CCU → hourly polling
 - **Tier 2**: Top 1000 newest releases (past year) → every 2 hours
-- **Tier 3**: All other games → daily polling
+- **Tier 3**: All other games → 3x daily polling (rotation)
 
 **Indexes**:
 - `idx_ccu_tier_assignments_tier` on `ccu_tier`

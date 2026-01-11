@@ -2,7 +2,7 @@
 
 Complete reference for all API rate limits in PublisherIQ.
 
-**Last Updated:** January 9, 2026
+**Last Updated:** January 10, 2026
 
 ## Summary Table
 
@@ -15,7 +15,6 @@ Complete reference for all API rate limits in PublisherIQ.
 | Steam CCU | ~60/min | 1/sec | GetNumberOfCurrentPlayers (v2.2) |
 | SteamSpy All | 1/60sec | 1/min | Paginated bulk fetch |
 | SteamSpy Detail | 1/sec | 1/sec | Single app queries |
-| Community Scraping | 1/1.5sec | Conservative | Avoid detection |
 
 ---
 
@@ -103,6 +102,11 @@ const rateLimiter = new RateLimiter({
 - No authentication required
 - Returns exact current player count
 
+**CCU Skip Tracking (v2.2):**
+- Invalid appids (result: 42) are skipped for 30 days
+- Tracked in `ccu_tier_assignments.ccu_skip_until`
+- Reduces wasted API calls by 10-15%
+
 ---
 
 ## Third-Party APIs
@@ -128,21 +132,6 @@ const rateLimiter = new RateLimiter({
 - For individual app lookups
 - Includes tag vote counts
 - Use bulk API when possible
-
----
-
-## Scraping
-
-### Community Hub
-
-**Rate Limit:** 1 request per 1.5 seconds (conservative)
-
-**Purpose:** Fetch page creation dates
-
-**Notes:**
-- No official API available
-- Conservative rate to avoid detection
-- Cache results forever (dates don't change)
 
 ---
 

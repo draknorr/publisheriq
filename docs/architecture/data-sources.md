@@ -2,7 +2,7 @@
 
 PublisherIQ collects data from multiple sources organized into tiers based on reliability and coverage.
 
-**Last Updated:** January 9, 2026
+**Last Updated:** January 10, 2026
 
 ## Data Source Hierarchy
 
@@ -20,8 +20,7 @@ TIER 2 - ENRICHMENT (80-90% coverage)
     ⚠️ NOT authoritative for publishers/developers
 
 TIER 3 - SPECIALIZED
-├── PICS Service               → Tags, genres, relationships, Steam Deck
-└── Community Hub Scraping     → Page creation dates (historical)
+└── PICS Service               → Tags, genres, relationships, Steam Deck, store_asset_mtime
 ```
 
 ---
@@ -302,20 +301,18 @@ See [PICS Data Fields](../reference/pics-data-fields.md) for field reference.
 
 ---
 
-### Community Hub Scraping
+### Store Asset Mtime (from PICS)
 
-**Purpose:** Page creation dates (historical)
+**Purpose:** Store page creation timestamps
 
-**URL Pattern:**
-```
-https://steamcommunity.com/app/{appid}
-```
+The `store_asset_mtime` field from PICS provides the timestamp when the Steam store page was created. This replaces the previous Community Hub scraper, which was looking for a "Founded" date that only exists on Steam Group pages (not individual game pages).
 
-The "Founded" date (when a Steam page was created) is only available by scraping the community hub page.
+**Key Points:**
+- Data comes from PICS service (no additional scraping needed)
+- More accurate than scraping (direct from Steam's internal data)
+- Populated during normal PICS sync
 
-**Rate Limit:** 1 request per 1.5 seconds (conservative)
-
-**Implementation:** `packages/ingestion/src/scrapers/page-creation.ts`
+**Implementation:** `services/pics-service/src/database/operations.py`
 
 ---
 

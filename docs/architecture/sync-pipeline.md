@@ -2,11 +2,15 @@
 
 This document describes how data flows through PublisherIQ, from external APIs to the database.
 
-**Last Updated:** January 9, 2026
+**Last Updated:** January 10, 2026
 
 ## Recent Improvements
 
-- **Tiered CCU Tracking**: Three-tier system with hourly, 2-hourly, and daily polling (v2.2)
+- **CCU Rotation Tracking**: 3x daily Tier 3 polling with `last_ccu_synced` ensures full coverage every ~2 days (v2.2)
+- **CCU Skip Tracking**: Invalid appids (result:42) automatically skipped for 30 days (v2.2)
+- **Store Asset Mtime**: PICS-sourced page creation timestamps replace broken Community Hub scraper (v2.2)
+- **Race Condition Fix**: Publisher/developer upserts now use case-insensitive normalized_name (v2.2)
+- **Tiered CCU Tracking**: Three-tier system with hourly, 2-hourly, and 3x daily polling (v2.2)
 - **Exact CCU from Steam API**: GetNumberOfCurrentPlayers replaces SteamSpy estimates (v2.2)
 - **SteamSpy Supplementary Fetch**: Individual fetch for games missing from pagination (v2.2)
 - **3x Reviews Throughput**: Rate limit increased from 0.33 to 1 req/sec (v2.2)
@@ -45,13 +49,14 @@ All scheduled sync jobs run via GitHub Actions on UTC time:
 | reviews-sync | :15 every 2h | `reviews-worker.ts` | 2500 | Review counts |
 | trends-calculation | 22:00 daily | `trends-worker.ts` | 500 | Trend metrics |
 | priority-calculation | 22:30 daily | `priority-worker.ts` | 1000 | Priority scores |
-| page-creation-scrape | 03:00 daily | `scraper-worker.ts` | 100 | Page dates |
 | velocity-calculation | 08,16,00:00 | `velocity-calculator-worker.ts` | - | Velocity stats (v2.1) |
 | interpolation | 05:00 daily | `interpolation-worker.ts` | - | Fill data gaps (v2.1) |
 | refresh-views | 05:00 daily | psql direct | - | Refresh materialized views (v2.1) |
 | ccu-sync | :00 hourly | `ccu-tiered-worker.ts` | ~1500 | Tier 1+2 CCU (v2.2) |
-| ccu-daily-sync | 04:30 daily | `ccu-daily-worker.ts` | 50000 | Tier 3 CCU (v2.2) |
+| ccu-daily-sync | 04:30, 12:30, 20:30 (3x daily) | `ccu-daily-worker.ts` | ~21k/run (rotation) | Tier 3 CCU (v2.2) |
 | ccu-cleanup | Sun 03:00 | psql direct | - | Aggregate + cleanup snapshots (v2.2) |
+| cleanup-reservations | :00 hourly | psql direct | - | Stale credit reservation cleanup |
+| cleanup-chat-logs | 03:00 daily | psql direct | - | 7-day chat log retention |
 
 ## Worker Architecture
 
@@ -208,7 +213,26 @@ CCU (concurrent user) data is collected via a three-tier system using Steam's na
 |------|----------|-------------------|-------|
 | **Tier 1** | Top 500 by 7-day peak CCU | Hourly | ~500 |
 | **Tier 2** | Top 1000 newest releases (past year) | Every 2 hours (even hours) | ~1000 |
-| **Tier 3** | All other games | Daily | ~60,000+ |
+| **Tier 3** | All other games | 3x daily (rotation) | ~120,000+ |
+
+### CCU Rotation Tracking
+
+Tier 3 games use rotation tracking to ensure full coverage:
+
+- **3x Daily Schedule**: Runs at 04:30, 12:30, 20:30 UTC
+- **Oldest-First Ordering**: Queries by `last_ccu_synced ASC NULLS FIRST`
+- **Per-Run Capacity**: ~21k games (6-hour timeout at 1 req/sec)
+- **Full Coverage**: Complete Tier 3 rotation every ~2 days
+
+### CCU Skip Tracking
+
+Invalid appids are automatically skipped to reduce wasted API calls:
+
+- **Valid Response (result: 1)**: Update CCU, set `ccu_fetch_status = 'valid'`
+- **Invalid Response (result: 42)**: Set `ccu_skip_until = NOW() + 30 days`
+- **Network Error**: Set `ccu_fetch_status = 'error'`, no skip (transient)
+
+This reduces wasted API calls by 10-15%.
 
 ### CCU Data Flow
 
@@ -446,9 +470,13 @@ Steam GetNumberOfCurrentPlayers API → daily_metrics (Tier 3 games)
 **Command**: `pnpm --filter @publisheriq/ingestion ccu-daily-sync`
 
 **What it does**:
-1. Fetches all Tier 3 games (not in Tier 1 or 2)
-2. Polls CCU for each game (up to `CCU_DAILY_LIMIT`, default 50k)
-3. Creates/updates `daily_metrics` with `ccu_source='steam_api'`
+1. Fetches Tier 3 games sorted by `last_ccu_synced ASC NULLS FIRST`
+2. Skips apps with active `ccu_skip_until` (invalid appids)
+3. Polls CCU for each game (up to `CCU_DAILY_LIMIT`, default 150k)
+4. Creates/updates `daily_metrics` with `ccu_source='steam_api'`
+5. Updates `last_ccu_synced` for each processed game
+
+**Schedule**: 3x daily (04:30, 12:30, 20:30 UTC) for full Tier 3 coverage
 
 ### 13. CCU Cleanup (v2.2+)
 
