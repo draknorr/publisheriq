@@ -49,7 +49,25 @@ export interface GameEmbeddingData {
   developer_ids: number[];
   publisher_ids: number[];
   updated_at: string;
-  total_reviews: number | null;  // From daily_metrics, for popularity comparison
+  // Metrics from latest_daily_metrics
+  total_reviews: number | null;
+  owners_min: number | null;
+  ccu_peak: number | null;
+  average_playtime_forever: number | null;
+  // From apps table
+  metacritic_score: number | null;
+  content_descriptors: Record<string, unknown> | null;
+  language_count: number | null;
+  // From app_trends
+  trend_30d_direction: string | null;
+  // From review_velocity_stats
+  velocity_tier: string | null;
+  // Franchise names for embedding text
+  franchise_names: string[];
+  // SteamSpy community tags (user-voted)
+  steamspy_tags: string[];
+  // Primary genre for embedding prefix
+  primary_genre: string | null;
 }
 
 /**
@@ -123,54 +141,236 @@ function formatPlatforms(platforms: string | null): string {
 }
 
 /**
+ * Get playtime tier description
+ */
+function getPlaytimeTier(minutes: number | null): string | null {
+  if (minutes === null) return null;
+  if (minutes < 300) return 'Short';         // < 5 hours
+  if (minutes < 1200) return 'Medium';       // 5-20 hours
+  if (minutes < 6000) return 'Long';         // 20-100 hours
+  return 'Endless';                          // 100+ hours
+}
+
+/**
+ * Get scale/popularity description based on CCU and reviews
+ */
+function getScaleTier(ccuPeak: number | null, totalReviews: number | null): string {
+  // Use CCU if available, otherwise fall back to reviews
+  if (ccuPeak !== null) {
+    if (ccuPeak >= 50000) return 'Massive';
+    if (ccuPeak >= 10000) return 'Large';
+    if (ccuPeak >= 1000) return 'Medium';
+    if (ccuPeak >= 100) return 'Small';
+    return 'Indie';
+  }
+  if (totalReviews !== null) {
+    if (totalReviews >= 100000) return 'Massive';
+    if (totalReviews >= 10000) return 'Large';
+    if (totalReviews >= 1000) return 'Medium';
+    if (totalReviews >= 100) return 'Small';
+    return 'Indie';
+  }
+  return 'Unknown scale';
+}
+
+/**
+ * Get price tier description
+ */
+function getPriceTier(priceCents: number | null, isFree: boolean): string {
+  if (isFree) return 'Free';
+  if (priceCents === null) return 'Unknown price';
+  if (priceCents < 1000) return 'Budget';     // < $10
+  if (priceCents < 2000) return 'Mid-price';  // $10-20
+  if (priceCents < 4000) return 'Standard';   // $20-40
+  return 'Premium';                           // $40+
+}
+
+/**
+ * Get trend direction description
+ */
+function getTrendDescription(direction: string | null): string | null {
+  if (!direction) return null;
+  switch (direction) {
+    case 'up': return 'Trending up';
+    case 'down': return 'Declining';
+    case 'stable': return 'Stable';
+    default: return null;
+  }
+}
+
+/**
+ * Extract content descriptors as tags
+ */
+function extractContentDescriptors(descriptors: Record<string, unknown> | null): string[] {
+  if (!descriptors) return [];
+  const tags: string[] = [];
+
+  // Common descriptor fields
+  if (descriptors.violence) tags.push('Violence');
+  if (descriptors.blood) tags.push('Blood');
+  if (descriptors.gore) tags.push('Gore');
+  if (descriptors.sexual_content) tags.push('Sexual Content');
+  if (descriptors.nudity) tags.push('Nudity');
+  if (descriptors.mature) tags.push('Mature');
+  if (descriptors.drugs) tags.push('Drug Reference');
+  if (descriptors.gambling) tags.push('Gambling');
+  if (descriptors.language) tags.push('Strong Language');
+
+  // Also check for notes/ids arrays
+  if (Array.isArray(descriptors.notes)) {
+    tags.push(...(descriptors.notes as string[]).slice(0, 3));
+  }
+
+  return tags;
+}
+
+/**
  * Build embedding text for a game
- * Combines all metadata into a structured text format
+ * Enhanced structure with all available metadata for better similarity matching
+ *
+ * New structure:
+ * - Genre-prefixed title (reduces name dominance)
+ * - Franchise context (series identification)
+ * - Separated gameplay/theme tags
+ * - Community tags from SteamSpy
+ * - Content descriptors (maturity markers)
+ * - Playtime tier (game length)
+ * - Scale/popularity tier (CCU + reviews)
+ * - Activity level (velocity + trend)
+ * - Metacritic score (external reception)
+ * - Language count (localization scope)
  */
 export function buildGameEmbeddingText(game: GameEmbeddingData): string {
-  const lines: string[] = [game.name, ''];
+  const lines: string[] = [];
 
-  lines.push(`Type: ${game.type}`);
-
-  if (game.developers.length > 0) {
-    lines.push(`Developers: ${game.developers.join(', ')}`);
+  // Line 1: Genre-prefixed title (reduces name dominance in embeddings)
+  const genrePrefix = game.primary_genre || (game.genres.length > 0 ? game.genres[0] : null);
+  if (genrePrefix && game.type === 'game') {
+    lines.push(`${genrePrefix} game: ${game.name}`);
+  } else if (game.type !== 'game') {
+    lines.push(`${game.type.toUpperCase()}: ${game.name}`);
+  } else {
+    lines.push(game.name);
   }
 
-  if (game.publishers.length > 0) {
-    lines.push(`Publishers: ${game.publishers.join(', ')}`);
+  // Line 2: Franchise context (if part of a series)
+  if (game.franchise_names && game.franchise_names.length > 0) {
+    lines.push(`Part of the ${game.franchise_names[0]} series`);
   }
 
+  lines.push(''); // Blank line separator
+
+  // CLASSIFICATION SECTION
+  // Genres (all of them)
   if (game.genres.length > 0) {
     lines.push(`Genres: ${game.genres.join(', ')}`);
   }
 
+  // PICS Tags (official Steam tags, up to 15)
   if (game.tags.length > 0) {
     lines.push(`Tags: ${game.tags.slice(0, 15).join(', ')}`);
   }
 
+  // SteamSpy community tags (user-voted, supplement to PICS)
+  if (game.steamspy_tags && game.steamspy_tags.length > 0) {
+    // Filter out duplicates that already appear in PICS tags
+    const uniqueCommunityTags = game.steamspy_tags.filter(
+      (t) => !game.tags.some((pt) => pt.toLowerCase() === t.toLowerCase())
+    );
+    if (uniqueCommunityTags.length > 0) {
+      lines.push(`Community tags: ${uniqueCommunityTags.slice(0, 10).join(', ')}`);
+    }
+  }
+
+  // Features/categories
   if (game.categories.length > 0) {
     lines.push(`Features: ${game.categories.join(', ')}`);
   }
 
-  lines.push(`Platforms: ${formatPlatforms(game.platforms)}`);
-
-  if (game.release_date) {
-    lines.push(`Released: ${game.release_date}`);
+  // Content descriptors (maturity markers)
+  const contentTags = extractContentDescriptors(game.content_descriptors);
+  if (contentTags.length > 0) {
+    lines.push(`Content: ${contentTags.join(', ')}`);
   }
 
-  lines.push(`Price: ${formatPrice(game.current_price_cents, game.is_free)}`);
+  lines.push(''); // Blank line separator
 
-  if (game.controller_support) {
-    lines.push(`Controller: ${game.controller_support}`);
+  // METRICS SECTION
+  // Playtime tier (game length)
+  const playtimeTier = getPlaytimeTier(game.average_playtime_forever);
+  if (playtimeTier) {
+    const hours = game.average_playtime_forever
+      ? Math.round(game.average_playtime_forever / 60)
+      : null;
+    lines.push(`Length: ${playtimeTier}${hours ? ` (~${hours} hours)` : ''}`);
   }
 
-  if (game.steam_deck_category) {
-    lines.push(`Steam Deck: ${game.steam_deck_category}`);
+  // Scale/popularity tier
+  const scaleTier = getScaleTier(game.ccu_peak, game.total_reviews);
+  const scaleDetails: string[] = [];
+  if (game.ccu_peak) scaleDetails.push(`${game.ccu_peak.toLocaleString()} peak players`);
+  if (game.total_reviews) scaleDetails.push(`${game.total_reviews.toLocaleString()} reviews`);
+  lines.push(`Scale: ${scaleTier}${scaleDetails.length > 0 ? ` (${scaleDetails.join(', ')})` : ''}`);
+
+  // Activity level (velocity + trend)
+  const activityParts: string[] = [];
+  if (game.velocity_tier) {
+    activityParts.push(`${game.velocity_tier} activity`);
+  }
+  const trendDesc = getTrendDescription(game.trend_30d_direction);
+  if (trendDesc) {
+    activityParts.push(trendDesc);
+  }
+  if (activityParts.length > 0) {
+    lines.push(`Activity: ${activityParts.join(', ')}`);
   }
 
+  // Reception (reviews + metacritic)
+  const receptionParts: string[] = [];
   if (game.pics_review_percentage !== null) {
     const desc = getReviewDescription(game.pics_review_score);
-    lines.push(`Reviews: ${desc} (${game.pics_review_percentage}% positive)`);
+    receptionParts.push(`${desc} (${game.pics_review_percentage}% positive)`);
   }
+  if (game.metacritic_score) {
+    receptionParts.push(`Metacritic: ${game.metacritic_score}/100`);
+  }
+  if (receptionParts.length > 0) {
+    lines.push(`Reception: ${receptionParts.join(' | ')}`);
+  }
+
+  lines.push(''); // Blank line separator
+
+  // IDENTITY SECTION (moved to end - already in payload for filtering)
+  if (game.developers.length > 0) {
+    lines.push(`By ${game.developers.join(', ')}`);
+  }
+  if (game.publishers.length > 0 && game.publishers.join(', ') !== game.developers.join(', ')) {
+    lines.push(`Published by ${game.publishers.join(', ')}`);
+  }
+
+  // PLATFORM SECTION
+  const platformParts: string[] = [formatPlatforms(game.platforms)];
+  if (game.steam_deck_category && game.steam_deck_category !== 'unknown') {
+    platformParts.push(`Steam Deck: ${game.steam_deck_category}`);
+  }
+  if (game.controller_support) {
+    platformParts.push(`Controller: ${game.controller_support}`);
+  }
+  lines.push(`Platforms: ${platformParts.join(' | ')}`);
+
+  // Languages
+  if (game.language_count && game.language_count > 0) {
+    lines.push(`Languages: ${game.language_count} supported`);
+  }
+
+  // Release & Price
+  const releaseParts: string[] = [];
+  if (game.release_date) {
+    const year = new Date(game.release_date).getFullYear();
+    releaseParts.push(`${year}`);
+  }
+  releaseParts.push(getPriceTier(game.current_price_cents, game.is_free));
+  lines.push(`Released: ${releaseParts.join(' | ')}`);
 
   const text = lines.join('\n');
 

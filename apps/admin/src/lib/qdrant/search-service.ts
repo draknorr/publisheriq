@@ -43,6 +43,27 @@ export interface FindSimilarArgs {
 }
 
 /**
+ * Similar entity result with match reasons
+ */
+export interface SimilarEntity {
+  id: number;
+  name: string;
+  score: number;
+  rawScore?: number; // Original vector similarity before boosts
+  type?: string;
+  genres?: string[];
+  tags?: string[];
+  review_percentage?: number | null;
+  price_cents?: number | null;
+  is_free?: boolean;
+  // Publisher/Developer fields
+  game_count?: number;
+  is_major?: boolean;
+  // Explainability
+  matchReasons?: string[];
+}
+
+/**
  * Result from find_similar
  */
 export interface FindSimilarResult {
@@ -52,20 +73,7 @@ export interface FindSimilarResult {
     name: string;
     type: string;
   };
-  results?: Array<{
-    id: number;
-    name: string;
-    score: number;
-    type?: string;
-    genres?: string[];
-    tags?: string[];
-    review_percentage?: number | null;
-    price_cents?: number | null;
-    is_free?: boolean;
-    // Publisher/Developer fields
-    game_count?: number;
-    is_major?: boolean;
-  }>;
+  results?: SimilarEntity[];
   total_found?: number;
   error?: string;
   debug?: {
@@ -208,6 +216,148 @@ async function getEntityVectorAndPayload(
 }
 
 /**
+ * Score boost configuration for hybrid scoring
+ */
+const SCORE_BOOSTS = {
+  SAME_FRANCHISE: 0.15,    // +15% for same series
+  SAME_DEVELOPER: 0.08,    // +8% for same developer
+  SAME_PUBLISHER: 0.03,    // +3% for same publisher
+  SHARED_GENRE: 0.02,      // +2% per shared genre
+  SHARED_TAG: 0.01,        // +1% per shared tag
+  MAX_GENRE_BOOSTS: 3,     // Cap genre boosts at 3
+  MAX_TAG_BOOSTS: 5,       // Cap tag boosts at 5
+  MAX_TOTAL_BOOST: 0.25,   // Cap total boost at 25%
+};
+
+/**
+ * Source payload fields needed for hybrid scoring
+ */
+interface SourcePayloadForBoost {
+  franchise_ids?: number[];
+  developer_ids?: number[];
+  publisher_ids?: number[];
+  genres?: string[];
+  tags?: string[];
+  franchise_names?: string[];
+}
+
+/**
+ * Result payload fields needed for hybrid scoring
+ */
+interface ResultPayloadForBoost {
+  franchise_ids?: number[];
+  developer_ids?: number[];
+  publisher_ids?: number[];
+  genres?: string[];
+  tags?: string[];
+  franchise_names?: string[];
+  name?: string;
+  type?: string;
+  review_percentage?: number | null;
+  price_cents?: number | null;
+  is_free?: boolean;
+  top_genres?: string[];
+  top_tags?: string[];
+  game_count?: number;
+  is_major?: boolean;
+  avg_review_percentage?: number | null;
+}
+
+/**
+ * Apply hybrid score boosts for shared attributes
+ * Returns boosted results sorted by new score with match reasons
+ */
+function applyScoreBoosts(
+  sourcePayload: SourcePayloadForBoost,
+  results: Array<{ id: number; score: number; payload: ResultPayloadForBoost }>
+): Array<{ id: number; score: number; rawScore: number; payload: ResultPayloadForBoost; matchReasons: string[] }> {
+  return results
+    .map((result) => {
+      let boost = 0;
+      const reasons: string[] = [];
+
+      // Franchise boost (+15%)
+      if (sourcePayload.franchise_ids?.length && result.payload.franchise_ids?.length) {
+        const sharedFranchise = sourcePayload.franchise_ids.find((id) =>
+          result.payload.franchise_ids?.includes(id)
+        );
+        if (sharedFranchise !== undefined) {
+          boost += SCORE_BOOSTS.SAME_FRANCHISE;
+          // Try to get franchise name for better UX
+          const franchiseName = result.payload.franchise_names?.[
+            result.payload.franchise_ids?.indexOf(sharedFranchise) ?? 0
+          ];
+          reasons.push(franchiseName ? `${franchiseName} series` : 'Same series');
+        }
+      }
+
+      // Developer boost (+8%)
+      if (sourcePayload.developer_ids?.length && result.payload.developer_ids?.length) {
+        const sharedDev = sourcePayload.developer_ids.some((id) =>
+          result.payload.developer_ids?.includes(id)
+        );
+        if (sharedDev) {
+          boost += SCORE_BOOSTS.SAME_DEVELOPER;
+          reasons.push('Same developer');
+        }
+      }
+
+      // Publisher boost (+3%)
+      if (sourcePayload.publisher_ids?.length && result.payload.publisher_ids?.length) {
+        const sharedPub = sourcePayload.publisher_ids.some((id) =>
+          result.payload.publisher_ids?.includes(id)
+        );
+        if (sharedPub) {
+          boost += SCORE_BOOSTS.SAME_PUBLISHER;
+          reasons.push('Same publisher');
+        }
+      }
+
+      // Genre boost (+2% each, max 3)
+      const sourceGenres = sourcePayload.genres || [];
+      const resultGenres = result.payload.genres || result.payload.top_genres || [];
+      if (sourceGenres.length && resultGenres.length) {
+        const sharedGenres = sourceGenres.filter((g) =>
+          resultGenres.some((rg) => rg.toLowerCase() === g.toLowerCase())
+        );
+        const genreBoostCount = Math.min(sharedGenres.length, SCORE_BOOSTS.MAX_GENRE_BOOSTS);
+        boost += genreBoostCount * SCORE_BOOSTS.SHARED_GENRE;
+        // Add top shared genre to reasons
+        if (sharedGenres.length > 0) {
+          reasons.push(sharedGenres[0]);
+        }
+      }
+
+      // Tag boost (+1% each, max 5)
+      const sourceTags = sourcePayload.tags || [];
+      const resultTags = result.payload.tags || result.payload.top_tags || [];
+      if (sourceTags.length && resultTags.length) {
+        const sharedTags = sourceTags.filter((t) =>
+          resultTags.some((rt) => rt.toLowerCase() === t.toLowerCase())
+        );
+        const tagBoostCount = Math.min(sharedTags.length, SCORE_BOOSTS.MAX_TAG_BOOSTS);
+        boost += tagBoostCount * SCORE_BOOSTS.SHARED_TAG;
+        // Add top shared tag to reasons (if not already covered by genre)
+        if (sharedTags.length > 0 && !reasons.includes(sharedTags[0])) {
+          reasons.push(sharedTags[0]);
+        }
+      }
+
+      // Cap total boost
+      boost = Math.min(boost, SCORE_BOOSTS.MAX_TOTAL_BOOST);
+
+      return {
+        id: result.id,
+        score: Math.min(result.score + boost, 1.0),
+        rawScore: result.score,
+        payload: result.payload,
+        matchReasons: reasons,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+/**
  * Execute similarity search
  */
 export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarResult> {
@@ -300,8 +450,12 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
   }
 
   // Execute search with entity-type-specific payload fields
+  // Include relationship IDs for hybrid scoring boosts
   const payloadFields = entity_type === 'game'
-    ? ['name', 'type', 'genres', 'tags', 'review_percentage', 'price_cents', 'is_free']
+    ? [
+        'name', 'type', 'genres', 'tags', 'review_percentage', 'price_cents', 'is_free',
+        'franchise_ids', 'franchise_names', 'developer_ids', 'publisher_ids', // For hybrid scoring
+      ]
     : ['name', 'game_count', 'top_genres', 'top_tags', 'avg_review_percentage', 'is_major'];
 
   let searchResult;
@@ -322,39 +476,56 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     };
   }
 
-  // Format results based on entity type, filtering out the source entity
-  const results = searchResult
-    .filter((point) => point.id !== entity.id) // Exclude source entity
-    .slice(0, limit) // Ensure we return the requested limit
-    .map((point) => {
-      const payload = point.payload as Record<string, unknown>;
+  // Filter out source entity first
+  const filteredResults = searchResult.filter((point) => point.id !== entity.id);
 
-      if (entity_type === 'game') {
-        return {
-          id: point.id as number,
-          name: (payload.name as string) || 'Unknown',
-          score: Math.round(point.score * 100), // Convert to percentage
-          type: payload.type as string | undefined,
-          genres: (payload.genres as string[] | undefined)?.slice(0, 3),
-          tags: (payload.tags as string[] | undefined)?.slice(0, 5),
-          review_percentage: payload.review_percentage as number | null | undefined,
-          price_cents: payload.price_cents as number | null | undefined,
-          is_free: payload.is_free as boolean | undefined,
-        };
-      } else {
-        // Publisher/Developer results
-        return {
-          id: point.id as number,
-          name: (payload.name as string) || 'Unknown',
-          score: Math.round(point.score * 100),
-          game_count: payload.game_count as number | undefined,
-          genres: (payload.top_genres as string[] | undefined)?.slice(0, 3),
-          tags: (payload.top_tags as string[] | undefined)?.slice(0, 5),
-          review_percentage: payload.avg_review_percentage as number | null | undefined,
-          is_major: payload.is_major as boolean | undefined,
-        };
-      }
+  // Format results based on entity type
+  let results: SimilarEntity[];
+
+  if (entity_type === 'game') {
+    // Prepare for hybrid scoring
+    const rawResults = filteredResults.map((point) => ({
+      id: point.id as number,
+      score: point.score,
+      payload: point.payload as ResultPayloadForBoost,
+    }));
+
+    // Apply hybrid score boosts for games
+    const boostedResults = applyScoreBoosts(
+      sourcePayload as SourcePayloadForBoost,
+      rawResults
+    );
+
+    // Take top results after re-sorting by boosted score
+    results = boostedResults.slice(0, limit).map((item) => ({
+      id: item.id,
+      name: (item.payload.name as string) || 'Unknown',
+      score: Math.round(item.score * 100), // Convert to percentage
+      rawScore: Math.round(item.rawScore * 100), // Original vector similarity
+      type: item.payload.type as string | undefined,
+      genres: (item.payload.genres as string[] | undefined)?.slice(0, 3),
+      tags: (item.payload.tags as string[] | undefined)?.slice(0, 5),
+      review_percentage: item.payload.review_percentage as number | null | undefined,
+      price_cents: item.payload.price_cents as number | null | undefined,
+      is_free: item.payload.is_free as boolean | undefined,
+      matchReasons: item.matchReasons.length > 0 ? item.matchReasons : undefined,
+    }));
+  } else {
+    // Publisher/Developer results (no hybrid scoring for now)
+    results = filteredResults.slice(0, limit).map((point) => {
+      const payload = point.payload as Record<string, unknown>;
+      return {
+        id: point.id as number,
+        name: (payload.name as string) || 'Unknown',
+        score: Math.round(point.score * 100),
+        game_count: payload.game_count as number | undefined,
+        genres: (payload.top_genres as string[] | undefined)?.slice(0, 3),
+        tags: (payload.top_tags as string[] | undefined)?.slice(0, 5),
+        review_percentage: payload.avg_review_percentage as number | null | undefined,
+        is_major: payload.is_major as boolean | undefined,
+      };
     });
+  }
 
   return {
     success: true,

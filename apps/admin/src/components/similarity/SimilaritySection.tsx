@@ -17,6 +17,7 @@ interface SimilarEntity {
   id: number;
   name: string;
   score: number;
+  rawScore?: number; // Original vector similarity before boosts
   type?: string;
   genres?: string[];
   tags?: string[];
@@ -24,6 +25,7 @@ interface SimilarEntity {
   price_cents?: number | null;
   is_free?: boolean;
   game_count?: number;
+  matchReasons?: string[]; // Why this game is similar
 }
 
 interface SimilarityResponse {
@@ -173,6 +175,7 @@ export function SimilaritySection({
                 priceCents={entity.price_cents}
                 isFree={entity.is_free}
                 entityType={entityType}
+                matchReasons={entity.matchReasons}
               />
             ))}
           </div>
@@ -193,6 +196,7 @@ export function SimilaritySection({
               isFree={entity.is_free}
               gameCount={entity.game_count}
               entityType={entityType}
+              matchReasons={entity.matchReasons}
             />
           ))}
         </div>

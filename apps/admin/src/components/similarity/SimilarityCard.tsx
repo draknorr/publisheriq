@@ -20,6 +20,7 @@ interface SimilarityCardProps {
   steamDeckVerified?: boolean;
   gameCount?: number; // For publishers/developers
   entityType?: 'game' | 'publisher' | 'developer';
+  matchReasons?: string[]; // Why this game is similar (from hybrid scoring)
   className?: string;
 }
 
@@ -49,6 +50,7 @@ export function SimilarityCard({
   steamDeckVerified,
   gameCount,
   entityType = 'game',
+  matchReasons,
   className = '',
 }: SimilarityCardProps) {
   const href = entityType === 'game'
@@ -57,10 +59,10 @@ export function SimilarityCard({
       ? `/publishers/${id}`
       : `/developers/${id}`;
 
-  // Show top 2 genres and top 3 tags
-  const displayGenres = genres?.slice(0, 2) ?? [];
-  const displayTags = tags?.slice(0, 3) ?? [];
-  const sharedMetadata = [...displayGenres, ...displayTags];
+  // Use matchReasons from hybrid scoring if available, otherwise fall back to genres/tags
+  const displayReasons = matchReasons && matchReasons.length > 0
+    ? matchReasons.slice(0, 4)
+    : [...(genres?.slice(0, 2) ?? []), ...(tags?.slice(0, 2) ?? [])].slice(0, 4);
 
   return (
     <Link href={href}>
@@ -109,17 +111,25 @@ export function SimilarityCard({
           )}
         </div>
 
-        {/* Shared metadata tags */}
-        {sharedMetadata.length > 0 && (
+        {/* Why similar - match reasons badges */}
+        {displayReasons.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {sharedMetadata.map((item, i) => (
-              <span
-                key={`${item}-${i}`}
-                className="px-1.5 py-0.5 rounded text-caption bg-surface-overlay text-text-tertiary"
-              >
-                {item}
-              </span>
-            ))}
+            {displayReasons.map((reason, i) => {
+              // Special styling for relationship-based reasons
+              const isRelationship = reason.includes('series') || reason === 'Same developer' || reason === 'Same publisher';
+              return (
+                <span
+                  key={`${reason}-${i}`}
+                  className={`px-1.5 py-0.5 rounded text-caption ${
+                    isRelationship
+                      ? 'bg-accent-blue/15 text-accent-blue'
+                      : 'bg-surface-overlay text-text-tertiary'
+                  }`}
+                >
+                  {reason}
+                </span>
+              );
+            })}
           </div>
         )}
       </Card>

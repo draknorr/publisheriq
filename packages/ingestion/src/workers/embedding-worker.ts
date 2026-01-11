@@ -21,6 +21,11 @@ import {
   type PriceTier,
   type Platform,
   type SteamDeckCategory,
+  type OwnersTier,
+  type CcuTier,
+  type PlaytimeTier,
+  type VelocityTier,
+  type TrendDirection,
 } from '@publisheriq/qdrant';
 import {
   buildGameEmbeddingText,
@@ -66,6 +71,56 @@ function getPriceTier(priceCents: number | null, isFree: boolean): PriceTier {
   return 'premium';
 }
 
+/**
+ * Calculate owners tier from owners_min
+ */
+function getOwnersTier(ownersMin: number | null): OwnersTier | null {
+  if (ownersMin === null) return null;
+  if (ownersMin >= 1_000_000) return 'over_1m';
+  if (ownersMin >= 100_000) return '100k_1m';
+  if (ownersMin >= 10_000) return '10k_100k';
+  return 'under_10k';
+}
+
+/**
+ * Calculate CCU tier from ccu_peak
+ */
+function getCcuTier(ccuPeak: number | null): CcuTier | null {
+  if (ccuPeak === null) return null;
+  if (ccuPeak >= 10_000) return 'over_10k';
+  if (ccuPeak >= 1_000) return '1k_10k';
+  if (ccuPeak >= 100) return '100_1k';
+  return 'under_100';
+}
+
+/**
+ * Calculate playtime tier from average_playtime_forever (in minutes)
+ */
+function getPlaytimeTier(minutes: number | null): PlaytimeTier | null {
+  if (minutes === null) return null;
+  if (minutes < 300) return 'short'; // < 5 hours
+  if (minutes < 1200) return 'medium'; // 5-20 hours
+  if (minutes < 6000) return 'long'; // 20-100 hours
+  return 'endless'; // 100+ hours
+}
+
+/**
+ * Parse velocity tier from string
+ */
+function parseVelocityTier(tier: string | null): VelocityTier | null {
+  if (!tier) return null;
+  const validTiers: VelocityTier[] = ['high', 'medium', 'low', 'dormant'];
+  return validTiers.includes(tier as VelocityTier) ? (tier as VelocityTier) : null;
+}
+
+/**
+ * Parse trend direction from string
+ */
+function parseTrendDirection(direction: string | null): TrendDirection | null {
+  if (!direction) return null;
+  const validDirections: TrendDirection[] = ['up', 'stable', 'down'];
+  return validDirections.includes(direction as TrendDirection) ? (direction as TrendDirection) : null;
+}
 
 /**
  * Parse platforms string to array
@@ -80,6 +135,7 @@ function parsePlatforms(platforms: string | null): Platform[] {
 
 /**
  * Build game payload for Qdrant
+ * Now includes all tier fields and new metadata
  */
 function buildGamePayload(game: GameEmbeddingData, embeddingHash: string): GamePayload {
   return {
@@ -97,15 +153,30 @@ function buildGamePayload(game: GameEmbeddingData, embeddingHash: string): GameP
     price_cents: game.current_price_cents,
     review_score: game.pics_review_score,
     review_percentage: game.pics_review_percentage,
-    total_reviews: game.total_reviews, // From daily_metrics via get_apps_for_embedding
-    owners_tier: null, // Not currently used, popularity uses total_reviews instead
-    ccu_tier: null, // Not currently used
+    total_reviews: game.total_reviews,
+    // Popularity tiers (now populated)
+    owners_tier: getOwnersTier(game.owners_min),
+    ccu_tier: getCcuTier(game.ccu_peak),
+    // Activity & Engagement tiers (NEW)
+    playtime_tier: getPlaytimeTier(game.average_playtime_forever),
+    velocity_tier: parseVelocityTier(game.velocity_tier),
+    trend_direction: parseTrendDirection(game.trend_30d_direction),
+    // External ratings (NEW)
+    metacritic_score: game.metacritic_score,
+    // Localization (NEW)
+    language_count: game.language_count,
+    // Franchise names for display (NEW)
+    franchise_names: game.franchise_names || [],
+    // Dates
     release_year: game.release_date ? new Date(game.release_date).getFullYear() : null,
+    // Relationships
     developer_ids: game.developer_ids,
     publisher_ids: game.publisher_ids,
     franchise_ids: game.franchise_ids,
+    // Status
     is_released: game.is_released,
     is_delisted: game.is_delisted,
+    // Sync tracking
     embedding_hash: embeddingHash,
     updated_at: Date.now(),
   };
@@ -136,11 +207,11 @@ async function processGameBatch(
   const { embeddings, usage } = await generateEmbeddings(texts);
   stats.tokensUsed += usage.total_tokens;
 
-  // Build Qdrant points
+  // Build Qdrant points (cast payload to satisfy Qdrant client types)
   const points = worthyGames.map((game, i) => ({
     id: game.appid,
     vector: embeddings[i],
-    payload: buildGamePayload(game, hashes[i]),
+    payload: buildGamePayload(game, hashes[i]) as unknown as Record<string, unknown>,
   }));
 
   // Upsert to Qdrant in batches
@@ -188,7 +259,7 @@ async function processPublisherBatch(
     await generateEmbeddings(identityTexts);
   stats.tokensUsed += identityUsage.total_tokens;
 
-  // Build payloads and upsert portfolio collection
+  // Build payloads and upsert portfolio collection (cast payload to satisfy Qdrant client types)
   const portfolioPoints = publishers.map((pub: PublisherEmbeddingData, i: number) => ({
     id: pub.id,
     vector: portfolioEmbeddings[i],
@@ -208,7 +279,7 @@ async function processPublisherBatch(
       is_major: pub.game_count >= 10,
       embedding_hash: portfolioHashes[i],
       updated_at: Date.now(),
-    } as PublisherPortfolioPayload,
+    } as unknown as Record<string, unknown>,
   }));
 
   for (let i = 0; i < portfolioPoints.length; i += QDRANT_BATCH_SIZE) {
@@ -219,7 +290,7 @@ async function processPublisherBatch(
     });
   }
 
-  // Upsert identity collection
+  // Upsert identity collection (cast payload to satisfy Qdrant client types)
   const identityPoints = publishers.map((pub: PublisherEmbeddingData, i: number) => ({
     id: pub.id,
     vector: identityEmbeddings[i],
@@ -235,7 +306,7 @@ async function processPublisherBatch(
       avg_review_percentage: pub.avg_review_percentage ? Math.round(pub.avg_review_percentage) : null,
       embedding_hash: identityHashes[i],
       updated_at: Date.now(),
-    } as PublisherIdentityPayload,
+    } as unknown as Record<string, unknown>,
   }));
 
   for (let i = 0; i < identityPoints.length; i += QDRANT_BATCH_SIZE) {
@@ -328,7 +399,7 @@ async function processDeveloperBatch(
     await generateEmbeddings(identityTexts);
   stats.tokensUsed += identityUsage.total_tokens;
 
-  // Upsert portfolio collection
+  // Upsert portfolio collection (cast payload to satisfy Qdrant client types)
   const portfolioPoints = developers.map((dev: DeveloperEmbeddingData, i: number) => ({
     id: dev.id,
     vector: portfolioEmbeddings[i],
@@ -347,7 +418,7 @@ async function processDeveloperBatch(
       is_indie: dev.is_indie,
       embedding_hash: portfolioHashes[i],
       updated_at: Date.now(),
-    } as DeveloperPortfolioPayload,
+    } as unknown as Record<string, unknown>,
   }));
 
   for (let i = 0; i < portfolioPoints.length; i += QDRANT_BATCH_SIZE) {
@@ -358,7 +429,7 @@ async function processDeveloperBatch(
     });
   }
 
-  // Upsert identity collection
+  // Upsert identity collection (cast payload to satisfy Qdrant client types)
   const identityPoints = developers.map((dev: DeveloperEmbeddingData, i: number) => ({
     id: dev.id,
     vector: identityEmbeddings[i],
@@ -374,7 +445,7 @@ async function processDeveloperBatch(
       avg_review_percentage: dev.avg_review_percentage ? Math.round(dev.avg_review_percentage) : null,
       embedding_hash: identityHashes[i],
       updated_at: Date.now(),
-    } as DeveloperIdentityPayload,
+    } as unknown as Record<string, unknown>,
   }));
 
   for (let i = 0; i < identityPoints.length; i += QDRANT_BATCH_SIZE) {

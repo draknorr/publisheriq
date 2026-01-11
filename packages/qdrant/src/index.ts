@@ -36,6 +36,9 @@ export type {
   PriceTier,
   OwnersTier,
   CcuTier,
+  PlaytimeTier,
+  VelocityTier,
+  TrendDirection,
   // Payloads
   GamePayload,
   PublisherPortfolioPayload,

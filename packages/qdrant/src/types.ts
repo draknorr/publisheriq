@@ -23,6 +23,15 @@ export type OwnersTier = 'under_10k' | '10k_100k' | '100k_1m' | 'over_1m';
 // CCU tiers for filtering
 export type CcuTier = 'under_100' | '100_1k' | '1k_10k' | 'over_10k';
 
+// Playtime tiers for filtering (based on average_playtime_forever)
+export type PlaytimeTier = 'short' | 'medium' | 'long' | 'endless';
+
+// Velocity tiers for activity level
+export type VelocityTier = 'high' | 'medium' | 'low' | 'dormant';
+
+// Trend direction
+export type TrendDirection = 'up' | 'stable' | 'down';
+
 /**
  * Game payload stored in Qdrant
  */
@@ -54,6 +63,20 @@ export interface GamePayload {
   // Popularity
   owners_tier: OwnersTier | null;
   ccu_tier: CcuTier | null;
+
+  // Activity & Engagement (NEW)
+  playtime_tier: PlaytimeTier | null;
+  velocity_tier: VelocityTier | null;
+  trend_direction: TrendDirection | null;
+
+  // External ratings (NEW)
+  metacritic_score: number | null;
+
+  // Localization (NEW)
+  language_count: number | null;
+
+  // Franchise names for display (NEW)
+  franchise_names: string[];
 
   // Dates
   release_year: number | null;
@@ -234,6 +257,11 @@ export interface GameFilters {
   // Popularity filters
   owners_tiers?: OwnersTier[];
   ccu_tiers?: CcuTier[];
+
+  // Activity & Engagement filters (NEW)
+  playtime_tiers?: PlaytimeTier[];
+  velocity_tiers?: VelocityTier[];
+  trend_directions?: TrendDirection[];
 
   // Date filters
   release_year?: RangeFilter;

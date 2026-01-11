@@ -17,6 +17,7 @@ interface CompactSimilarityCardProps {
   priceCents?: number | null;
   isFree?: boolean;
   entityType?: 'game' | 'publisher' | 'developer';
+  matchReasons?: string[]; // Why this game is similar (from hybrid scoring)
 }
 
 function formatPrice(cents: number | null | undefined, isFree?: boolean): string {
@@ -43,6 +44,7 @@ export function CompactSimilarityCard({
   priceCents,
   isFree,
   entityType = 'game',
+  matchReasons,
 }: CompactSimilarityCardProps) {
   const href = entityType === 'game'
     ? `/apps/${id}`
@@ -50,10 +52,10 @@ export function CompactSimilarityCard({
       ? `/publishers/${id}`
       : `/developers/${id}`;
 
-  // Combine genres + tags for "why similar" display (max 3)
-  const displayGenres = genres?.slice(0, 2) ?? [];
-  const displayTags = tags?.slice(0, 2) ?? [];
-  const sharedMetadata = [...displayGenres, ...displayTags].slice(0, 3);
+  // Use matchReasons from hybrid scoring if available, otherwise fall back to genres/tags
+  const displayReasons = matchReasons && matchReasons.length > 0
+    ? matchReasons.slice(0, 3)
+    : [...(genres?.slice(0, 2) ?? []), ...(tags?.slice(0, 1) ?? [])].slice(0, 3);
 
   const hasPrice = priceCents !== null || isFree;
   const hasReview = reviewPercentage !== null && reviewPercentage !== undefined;
@@ -93,16 +95,24 @@ export function CompactSimilarityCard({
       )}
 
       {/* Row 3: Why similar (compact tags) */}
-      {sharedMetadata.length > 0 && (
+      {displayReasons.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {sharedMetadata.map((item, i) => (
-            <span
-              key={`${item}-${i}`}
-              className="px-1 py-0.5 rounded text-caption bg-surface-overlay text-text-tertiary truncate max-w-[5rem]"
-            >
-              {item}
-            </span>
-          ))}
+          {displayReasons.map((reason, i) => {
+            // Special styling for relationship-based reasons
+            const isRelationship = reason.includes('series') || reason === 'Same developer' || reason === 'Same publisher';
+            return (
+              <span
+                key={`${reason}-${i}`}
+                className={`px-1 py-0.5 rounded text-caption truncate max-w-[5rem] ${
+                  isRelationship
+                    ? 'bg-accent-blue/15 text-accent-blue'
+                    : 'bg-surface-overlay text-text-tertiary'
+                }`}
+              >
+                {reason}
+              </span>
+            );
+          })}
         </div>
       )}
     </Link>
