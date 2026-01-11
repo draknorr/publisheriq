@@ -125,12 +125,6 @@ function getReviewDescription(score: number | null): string {
   return REVIEW_DESCRIPTIONS[score] || 'Unknown';
 }
 
-function formatPrice(priceCents: number | null, isFree: boolean): string {
-  if (isFree) return 'Free to Play';
-  if (priceCents === null) return 'Price unknown';
-  return `$${(priceCents / 100).toFixed(2)}`;
-}
-
 function formatPlatforms(platforms: string | null): string {
   if (!platforms) return 'Unknown';
   return platforms
