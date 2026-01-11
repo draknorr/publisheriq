@@ -104,9 +104,58 @@ async function getSparklinesBatch(
 }
 
 /**
- * Search for games by name with metrics
+ * Search for games using fuzzy matching RPC
+ * Falls back to simple ILIKE if RPC fails
  */
 async function searchGames(query: string, limit: number): Promise<GameSearchResult[]> {
+  const supabase = getSupabase();
+
+  // Try fuzzy search RPC first
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('search_games_fuzzy', {
+    p_query: query,
+    p_limit: limit,
+  });
+
+  if (error) {
+    console.error('Game fuzzy search error, falling back to ILIKE:', error);
+    return searchGamesFallback(query, limit);
+  }
+
+  if (!data || data.length === 0) return [];
+
+  // Fetch sparklines for the found games
+  const appIds = data.map((g: { appid: number }) => g.appid);
+  const sparklines = await getSparklinesBatch(appIds);
+
+  return data.map(
+    (g: {
+      appid: number;
+      name: string;
+      release_date: string | null;
+      is_free: boolean;
+      positive_percentage: number | null;
+      total_reviews: number | null;
+    }) => {
+      const sparkline = sparklines.get(g.appid);
+      return {
+        appid: g.appid,
+        name: g.name,
+        releaseYear: g.release_date ? new Date(g.release_date).getFullYear() : null,
+        reviewScore: g.positive_percentage,
+        totalReviews: g.total_reviews,
+        isFree: g.is_free ?? false,
+        sparkline: sparkline?.dataPoints,
+        sparklineTrend: sparkline?.trend,
+      };
+    }
+  );
+}
+
+/**
+ * Fallback game search using simple ILIKE (if RPC unavailable)
+ */
+async function searchGamesFallback(query: string, limit: number): Promise<GameSearchResult[]> {
   const supabase = getSupabase();
 
   const { data, error } = await supabase
@@ -130,13 +179,12 @@ async function searchGames(query: string, limit: number): Promise<GameSearchResu
     .limit(limit);
 
   if (error) {
-    console.error('Game search error:', error);
+    console.error('Game search fallback error:', error);
     return [];
   }
 
   if (!data || data.length === 0) return [];
 
-  // Fetch sparklines for the found games
   const appIds = data.map((g) => g.appid);
   const sparklines = await getSparklinesBatch(appIds);
 
@@ -157,20 +205,52 @@ async function searchGames(query: string, limit: number): Promise<GameSearchResu
 }
 
 /**
- * Search for publishers by name
+ * Search for publishers using fuzzy matching RPC
+ * Falls back to simple ILIKE if RPC fails
  */
 async function searchPublishers(query: string, limit: number): Promise<PublisherSearchResult[]> {
+  const supabase = getSupabase();
+
+  // Try fuzzy search RPC first
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('search_publishers_fuzzy', {
+    p_query: query,
+    p_limit: limit,
+  });
+
+  if (error) {
+    console.error('Publisher fuzzy search error, falling back to ILIKE:', error);
+    return searchPublishersFallback(query, limit);
+  }
+
+  return (
+    data?.map((p: { id: number; name: string; game_count: number }) => ({
+      id: p.id,
+      name: p.name,
+      gameCount: p.game_count ?? 0,
+    })) || []
+  );
+}
+
+/**
+ * Fallback publisher search using simple ILIKE (if RPC unavailable)
+ */
+async function searchPublishersFallback(
+  query: string,
+  limit: number
+): Promise<PublisherSearchResult[]> {
   const supabase = getSupabase();
 
   const { data, error } = await supabase
     .from('publishers')
     .select('id, name, game_count')
+    .gt('game_count', 0)
     .ilike('name', `%${query}%`)
     .order('game_count', { ascending: false, nullsFirst: false })
     .limit(limit);
 
   if (error) {
-    console.error('Publisher search error:', error);
+    console.error('Publisher search fallback error:', error);
     return [];
   }
 
@@ -184,20 +264,52 @@ async function searchPublishers(query: string, limit: number): Promise<Publisher
 }
 
 /**
- * Search for developers by name
+ * Search for developers using fuzzy matching RPC
+ * Falls back to simple ILIKE if RPC fails
  */
 async function searchDevelopers(query: string, limit: number): Promise<DeveloperSearchResult[]> {
+  const supabase = getSupabase();
+
+  // Try fuzzy search RPC first
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('search_developers_fuzzy', {
+    p_query: query,
+    p_limit: limit,
+  });
+
+  if (error) {
+    console.error('Developer fuzzy search error, falling back to ILIKE:', error);
+    return searchDevelopersFallback(query, limit);
+  }
+
+  return (
+    data?.map((d: { id: number; name: string; game_count: number }) => ({
+      id: d.id,
+      name: d.name,
+      gameCount: d.game_count ?? 0,
+    })) || []
+  );
+}
+
+/**
+ * Fallback developer search using simple ILIKE (if RPC unavailable)
+ */
+async function searchDevelopersFallback(
+  query: string,
+  limit: number
+): Promise<DeveloperSearchResult[]> {
   const supabase = getSupabase();
 
   const { data, error } = await supabase
     .from('developers')
     .select('id, name, game_count')
+    .gt('game_count', 0)
     .ilike('name', `%${query}%`)
     .order('game_count', { ascending: false, nullsFirst: false })
     .limit(limit);
 
   if (error) {
-    console.error('Developer search error:', error);
+    console.error('Developer search fallback error:', error);
     return [];
   }
 
