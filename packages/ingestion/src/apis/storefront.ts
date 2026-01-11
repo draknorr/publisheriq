@@ -256,7 +256,7 @@ export async function fetchStorefrontAppDetails(
 ): Promise<StorefrontResult> {
   await rateLimiters.storefront.acquire();
 
-  const url = `${API_URLS.STEAM_STORE}/api/appdetails/?appids=${appid}`;
+  const url = `${API_URLS.STEAM_STORE}/api/appdetails/?appids=${appid}&cc=us`;
 
   try {
     const response = await withRetry(async () => {
@@ -323,7 +323,7 @@ export async function fetchStorefrontPrices(
 ): Promise<Map<number, { priceCents: number | null; discountPercent: number }>> {
   await rateLimiters.storefront.acquire();
 
-  const url = `${API_URLS.STEAM_STORE}/api/appdetails/?appids=${appids.join(',')}&filters=price_overview`;
+  const url = `${API_URLS.STEAM_STORE}/api/appdetails/?appids=${appids.join(',')}&filters=price_overview&cc=us`;
 
   const results = new Map<number, { priceCents: number | null; discountPercent: number }>();
 
