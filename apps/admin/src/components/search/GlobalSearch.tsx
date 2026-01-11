@@ -3,15 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Command } from 'cmdk';
-import {
-  Search,
-  Gamepad2,
-  Building2,
-  User,
-  MessageSquare,
-  Sparkles,
-  Loader2,
-} from 'lucide-react';
+import { Search, Gamepad2, Building2, User, MessageSquare, Sparkles, Loader2 } from 'lucide-react';
 import { useGlobalSearch } from './GlobalSearchProvider';
 import type { SearchResponse, GameSearchResult, PublisherSearchResult, DeveloperSearchResult } from './types';
 
@@ -35,7 +27,6 @@ export function GlobalSearch() {
 
   // Debounced search
   const search = useCallback(async (searchQuery: string) => {
-    // Cancel previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -74,14 +65,8 @@ export function GlobalSearch() {
   const handleInputChange = useCallback(
     (value: string) => {
       setQuery(value);
-
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-
-      debounceRef.current = setTimeout(() => {
-        search(value);
-      }, 150);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => search(value), 150);
     },
     [search]
   );
@@ -121,13 +106,8 @@ export function GlobalSearch() {
     router.push(`/chat?q=${encodeURIComponent(`Find games similar to ${query}`)}`);
   }, [close, router, query]);
 
-  // Format review score
-  const formatScore = (score: number | null) => {
-    if (score === null) return null;
-    return `${Math.round(score)}%`;
-  };
+  const formatScore = (score: number | null) => (score === null ? null : `${Math.round(score)}%`);
 
-  // Format review count
   const formatReviews = (count: number | null) => {
     if (count === null) return null;
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
@@ -139,98 +119,118 @@ export function GlobalSearch() {
     results && (results.games.length > 0 || results.publishers.length > 0 || results.developers.length > 0);
   const showEmpty = query.trim().length >= 2 && !isLoading && results && !hasResults;
 
-  return (
-    <Command.Dialog
-      open={isOpen}
-      onOpenChange={(open) => !open && close()}
-      label="Global Search"
-      className="fixed inset-0 z-50"
-    >
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={close} />
+  if (!isOpen) return null;
 
-      {/* Dialog */}
-      <div className="fixed left-1/2 top-[20%] -translate-x-1/2 w-full max-w-xl">
-        <div className="bg-surface-elevated border border-border-subtle rounded-xl shadow-overlay overflow-hidden animate-scale-in">
+  return (
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={close} />
+
+      {/* Dialog Container */}
+      <div className="fixed inset-0 flex items-start justify-center pt-[15vh] px-4">
+        <Command
+          label="Global Search"
+          className="w-full max-w-[560px] bg-surface-elevated rounded-2xl shadow-2xl border border-border-subtle overflow-hidden animate-scale-in"
+          shouldFilter={false}
+        >
           {/* Search Input */}
-          <div className="flex items-center gap-3 px-4 border-b border-border-subtle">
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 text-text-muted animate-spin" />
-            ) : (
-              <Search className="w-5 h-5 text-text-muted" />
-            )}
+          <div className="flex items-center px-4 py-3 border-b border-border-subtle">
+            <div className="flex items-center justify-center w-10 h-10">
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 text-accent-primary animate-spin" />
+              ) : (
+                <Search className="w-5 h-5 text-text-muted" />
+              )}
+            </div>
             <Command.Input
               value={query}
               onValueChange={handleInputChange}
               placeholder="Search games, publishers, developers..."
-              className="flex-1 py-4 bg-transparent text-body-lg text-text-primary placeholder:text-text-muted focus:outline-none"
               autoFocus
+              className="flex-1 h-10 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted border-0 outline-none focus:outline-none focus:ring-0"
             />
-            <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-caption text-text-tertiary bg-surface rounded border border-border-subtle">
-              esc
+            <kbd className="hidden sm:flex items-center h-6 px-1.5 text-[11px] font-medium text-text-tertiary bg-surface-raised rounded border border-border-subtle">
+              ESC
             </kbd>
           </div>
 
           {/* Results List */}
-          <Command.List className="max-h-[60vh] overflow-y-auto p-2">
+          <Command.List className="max-h-[400px] overflow-y-auto overscroll-contain">
             {/* Empty state - type to search */}
             {!query.trim() && (
-              <div className="py-8 text-center text-text-secondary">
-                <Search className="w-8 h-8 mx-auto mb-2 text-text-muted" />
-                <p className="text-body">Type to search games, publishers, or developers</p>
-                <p className="text-body-sm text-text-tertiary mt-1">Minimum 2 characters</p>
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="w-12 h-12 rounded-full bg-surface-raised flex items-center justify-center mb-3">
+                  <Search className="w-5 h-5 text-text-muted" />
+                </div>
+                <p className="text-[14px] text-text-secondary">Search games, publishers, or developers</p>
+                <p className="text-[12px] text-text-tertiary mt-1">Type at least 2 characters</p>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {query.trim().length >= 2 && isLoading && !results && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 text-accent-primary animate-spin" />
               </div>
             )}
 
             {/* Empty state - no results */}
             {showEmpty && (
-              <Command.Empty className="py-8 text-center text-text-secondary">
-                <p className="text-body">No results found for &ldquo;{query}&rdquo;</p>
-                <p className="text-body-sm text-text-tertiary mt-1">Try a different search term</p>
+              <Command.Empty className="flex flex-col items-center justify-center py-12 px-4">
+                <p className="text-[14px] text-text-secondary">No results for &ldquo;{query}&rdquo;</p>
+                <p className="text-[12px] text-text-tertiary mt-1">Try a different search term</p>
               </Command.Empty>
             )}
 
             {/* Games */}
             {results && results.games.length > 0 && (
-              <Command.Group
-                heading={
-                  <span className="flex items-center gap-2 px-2 py-1.5 text-caption text-text-tertiary uppercase tracking-wide">
-                    <Gamepad2 className="w-3.5 h-3.5" />
-                    Games
-                  </span>
-                }
-              >
+              <Command.Group>
+                <div className="px-3 py-2">
+                  <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Games</span>
+                </div>
                 {results.games.map((game) => (
                   <Command.Item
                     key={`game-${game.appid}`}
                     value={`game-${game.name}`}
                     onSelect={() => handleSelectGame(game)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer data-[selected=true]:bg-surface-overlay transition-colors"
+                    className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-primary/10 hover:bg-surface-overlay transition-colors"
                   >
-                    <Gamepad2 className="w-4 h-4 text-accent-primary shrink-0" />
+                    <div className="w-8 h-8 rounded-lg bg-accent-primary/10 flex items-center justify-center shrink-0">
+                      <Gamepad2 className="w-4 h-4 text-accent-primary" />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-body text-text-primary truncate">{game.name}</span>
+                        <span className="text-[14px] font-medium text-text-primary truncate">{game.name}</span>
                         {game.releaseYear && (
-                          <span className="text-caption text-text-tertiary shrink-0">{game.releaseYear}</span>
+                          <span className="text-[12px] text-text-tertiary shrink-0">{game.releaseYear}</span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-caption text-text-secondary">
+                      <div className="flex items-center gap-1.5 mt-0.5">
                         {formatScore(game.reviewScore) && (
                           <span
-                            className={
+                            className={`text-[12px] font-medium ${
                               game.reviewScore && game.reviewScore >= 80
                                 ? 'text-trend-positive'
                                 : game.reviewScore && game.reviewScore >= 70
                                   ? 'text-accent-yellow'
                                   : 'text-text-secondary'
-                            }
+                            }`}
                           >
                             {formatScore(game.reviewScore)}
                           </span>
                         )}
-                        {formatReviews(game.totalReviews) && <span>{formatReviews(game.totalReviews)} reviews</span>}
-                        {game.isFree && <span className="text-accent-cyan">Free</span>}
+                        {formatScore(game.reviewScore) && formatReviews(game.totalReviews) && (
+                          <span className="text-text-tertiary">·</span>
+                        )}
+                        {formatReviews(game.totalReviews) && (
+                          <span className="text-[12px] text-text-secondary">{formatReviews(game.totalReviews)} reviews</span>
+                        )}
+                        {game.isFree && (
+                          <>
+                            <span className="text-text-tertiary">·</span>
+                            <span className="text-[12px] font-medium text-accent-cyan">Free</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </Command.Item>
@@ -240,25 +240,23 @@ export function GlobalSearch() {
 
             {/* Publishers */}
             {results && results.publishers.length > 0 && (
-              <Command.Group
-                heading={
-                  <span className="flex items-center gap-2 px-2 py-1.5 text-caption text-text-tertiary uppercase tracking-wide">
-                    <Building2 className="w-3.5 h-3.5" />
-                    Publishers
-                  </span>
-                }
-              >
+              <Command.Group>
+                <div className="px-3 py-2 mt-1">
+                  <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Publishers</span>
+                </div>
                 {results.publishers.map((publisher) => (
                   <Command.Item
                     key={`publisher-${publisher.id}`}
                     value={`publisher-${publisher.name}`}
                     onSelect={() => handleSelectPublisher(publisher)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer data-[selected=true]:bg-surface-overlay transition-colors"
+                    className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-purple/10 hover:bg-surface-overlay transition-colors"
                   >
-                    <Building2 className="w-4 h-4 text-accent-purple shrink-0" />
+                    <div className="w-8 h-8 rounded-lg bg-accent-purple/10 flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-accent-purple" />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-body text-text-primary truncate block">{publisher.name}</span>
-                      <span className="text-caption text-text-secondary">{publisher.gameCount} games</span>
+                      <span className="text-[14px] font-medium text-text-primary truncate block">{publisher.name}</span>
+                      <span className="text-[12px] text-text-secondary">{publisher.gameCount} games</span>
                     </div>
                   </Command.Item>
                 ))}
@@ -267,65 +265,64 @@ export function GlobalSearch() {
 
             {/* Developers */}
             {results && results.developers.length > 0 && (
-              <Command.Group
-                heading={
-                  <span className="flex items-center gap-2 px-2 py-1.5 text-caption text-text-tertiary uppercase tracking-wide">
-                    <User className="w-3.5 h-3.5" />
-                    Developers
-                  </span>
-                }
-              >
+              <Command.Group>
+                <div className="px-3 py-2 mt-1">
+                  <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Developers</span>
+                </div>
                 {results.developers.map((developer) => (
                   <Command.Item
                     key={`developer-${developer.id}`}
                     value={`developer-${developer.name}`}
                     onSelect={() => handleSelectDeveloper(developer)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer data-[selected=true]:bg-surface-overlay transition-colors"
+                    className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-green/10 hover:bg-surface-overlay transition-colors"
                   >
-                    <User className="w-4 h-4 text-accent-green shrink-0" />
+                    <div className="w-8 h-8 rounded-lg bg-accent-green/10 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-accent-green" />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-body text-text-primary truncate block">{developer.name}</span>
-                      <span className="text-caption text-text-secondary">{developer.gameCount} games</span>
+                      <span className="text-[14px] font-medium text-text-primary truncate block">{developer.name}</span>
+                      <span className="text-[12px] text-text-secondary">{developer.gameCount} games</span>
                     </div>
                   </Command.Item>
                 ))}
               </Command.Group>
             )}
 
-            {/* Actions - shown when query has content */}
+            {/* Actions */}
             {query.trim().length >= 2 && (
-              <Command.Group
-                heading={
-                  <span className="flex items-center gap-2 px-2 py-1.5 text-caption text-text-tertiary uppercase tracking-wide">
-                    Actions
-                  </span>
-                }
-              >
+              <Command.Group>
+                <div className="px-3 py-2 mt-1">
+                  <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Actions</span>
+                </div>
                 <Command.Item
                   value={`action-chat-${query}`}
                   onSelect={handleAskInChat}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer data-[selected=true]:bg-surface-overlay transition-colors"
+                  className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-blue/10 hover:bg-surface-overlay transition-colors"
                 >
-                  <MessageSquare className="w-4 h-4 text-accent-blue shrink-0" />
-                  <span className="text-body text-text-primary">
-                    Ask about &ldquo;{query}&rdquo; in chat
+                  <div className="w-8 h-8 rounded-lg bg-accent-blue/10 flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-4 h-4 text-accent-blue" />
+                  </div>
+                  <span className="text-[14px] text-text-primary">
+                    Ask about <span className="font-medium">&ldquo;{query}&rdquo;</span> in chat
                   </span>
                 </Command.Item>
                 <Command.Item
                   value={`action-similar-${query}`}
                   onSelect={handleFindSimilar}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer data-[selected=true]:bg-surface-overlay transition-colors"
+                  className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-orange/10 hover:bg-surface-overlay transition-colors mb-2"
                 >
-                  <Sparkles className="w-4 h-4 text-accent-orange shrink-0" />
-                  <span className="text-body text-text-primary">
-                    Find games similar to &ldquo;{query}&rdquo;
+                  <div className="w-8 h-8 rounded-lg bg-accent-orange/10 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4 text-accent-orange" />
+                  </div>
+                  <span className="text-[14px] text-text-primary">
+                    Find games similar to <span className="font-medium">&ldquo;{query}&rdquo;</span>
                   </span>
                 </Command.Item>
               </Command.Group>
             )}
           </Command.List>
-        </div>
+        </Command>
       </div>
-    </Command.Dialog>
+    </div>
   );
 }
