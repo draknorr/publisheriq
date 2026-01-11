@@ -46,6 +46,7 @@ interface SimilaritySectionProps {
   entityType: EntityType;
   limit?: number;
   showFilters?: boolean;
+  showHeader?: boolean; // Whether to show the section header (default: true)
   compact?: boolean; // Use horizontal scroll layout with compact cards
   className?: string;
 }
@@ -64,6 +65,7 @@ export function SimilaritySection({
   entityType,
   limit = 8,
   showFilters = false,
+  showHeader = true,
   compact = false,
   className = '',
 }: SimilaritySectionProps) {
@@ -117,8 +119,10 @@ export function SimilaritySection({
   return (
     <section className={className}>
       {/* Header with optional filters */}
+      {(showHeader || (showFilters && entityType === 'game')) && (
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-subheading text-text-primary">{sectionTitle}</h3>
+        {showHeader && <h3 className="text-subheading text-text-primary">{sectionTitle}</h3>}
+        {!showHeader && <div />} {/* Spacer when header hidden but filters shown */}
         {showFilters && entityType === 'game' && (
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-text-tertiary" />
@@ -140,6 +144,7 @@ export function SimilaritySection({
           </div>
         )}
       </div>
+      )}
 
       {/* Content */}
       {loading ? (

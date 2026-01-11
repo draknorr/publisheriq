@@ -372,6 +372,7 @@ export function AppDetailSections({
               entityType="game"
               limit={10}
               showFilters={true}
+              showHeader={false}
               compact={true}
             />
           </section>
