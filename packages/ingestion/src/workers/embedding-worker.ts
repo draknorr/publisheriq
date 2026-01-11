@@ -9,9 +9,11 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger } from '@publisheriq/shared';
+import pLimit from 'p-limit';
 import {
   getQdrantClient,
   initializeCollections,
+  getCollectionStats,
   COLLECTIONS,
   type GamePayload,
   type PriceTier,
@@ -39,11 +41,16 @@ import {
 
 const log = logger.child({ worker: 'embedding-sync' });
 
-// Configuration
-const GAME_BATCH_SIZE = 100; // Games to fetch from DB at a time
-const QDRANT_BATCH_SIZE = 100; // Points to upsert at a time
-const PUBLISHER_BATCH_SIZE = 200; // Publishers to fetch from DB at a time
-const DEVELOPER_BATCH_SIZE = 200; // Developers to fetch from DB at a time
+// Configuration - optimized batch sizes for throughput
+const GAME_BATCH_SIZE = 500; // Games to fetch from DB at a time (was 100)
+const QDRANT_BATCH_SIZE = 500; // Points to upsert at a time (was 100)
+const PUBLISHER_BATCH_SIZE = 500; // Publishers to fetch from DB at a time (was 200)
+const DEVELOPER_BATCH_SIZE = 500; // Developers to fetch from DB at a time (was 200)
+const PROGRESS_LOG_INTERVAL_MS = 30000; // Log progress every 30 seconds
+const OPENAI_CONCURRENCY = 4; // Concurrent OpenAI API calls
+
+// Concurrency limiter for OpenAI calls
+const openaiLimit = pLimit(OPENAI_CONCURRENCY);
 
 interface SyncStats {
   gamesProcessed: number;
@@ -214,7 +221,7 @@ async function processGameBatch(
   for (let i = 0; i < points.length; i += QDRANT_BATCH_SIZE) {
     const batch = points.slice(i, i + QDRANT_BATCH_SIZE);
     await qdrant.upsert(COLLECTIONS.GAMES, {
-      wait: true,
+      wait: false, // Async writes for throughput (verification at end)
       points: batch,
     });
   }
@@ -281,7 +288,7 @@ async function processPublisherBatch(
   for (let i = 0; i < portfolioPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = portfolioPoints.slice(i, i + QDRANT_BATCH_SIZE);
     await qdrant.upsert(COLLECTIONS.PUBLISHERS_PORTFOLIO, {
-      wait: true,
+      wait: false, // Async writes for throughput (verification at end)
       points: batch,
     });
   }
@@ -308,7 +315,7 @@ async function processPublisherBatch(
   for (let i = 0; i < identityPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = identityPoints.slice(i, i + QDRANT_BATCH_SIZE);
     await qdrant.upsert(COLLECTIONS.PUBLISHERS_IDENTITY, {
-      wait: true,
+      wait: false, // Async writes for throughput (verification at end)
       points: batch,
     });
   }
@@ -420,7 +427,7 @@ async function processDeveloperBatch(
   for (let i = 0; i < portfolioPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = portfolioPoints.slice(i, i + QDRANT_BATCH_SIZE);
     await qdrant.upsert(COLLECTIONS.DEVELOPERS_PORTFOLIO, {
-      wait: true,
+      wait: false, // Async writes for throughput (verification at end)
       points: batch,
     });
   }
@@ -447,7 +454,7 @@ async function processDeveloperBatch(
   for (let i = 0; i < identityPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = identityPoints.slice(i, i + QDRANT_BATCH_SIZE);
     await qdrant.upsert(COLLECTIONS.DEVELOPERS_IDENTITY, {
-      wait: true,
+      wait: false, // Async writes for throughput (verification at end)
       points: batch,
     });
   }
@@ -510,6 +517,40 @@ async function processDevelopers(
 }
 
 /**
+ * Start progress logging interval
+ */
+function startProgressLogging(
+  stats: SyncStats,
+  startTime: number
+): NodeJS.Timeout {
+  return setInterval(() => {
+    const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
+    const total = stats.gamesEmbedded + stats.publishersEmbedded + stats.developersEmbedded;
+    const rate = total > 0 ? (total / parseFloat(elapsed)).toFixed(0) : '0';
+    log.info('Progress update', {
+      elapsedMinutes: elapsed,
+      gamesEmbedded: stats.gamesEmbedded,
+      gamesSkipped: stats.gamesSkipped,
+      publishersEmbedded: stats.publishersEmbedded,
+      developersEmbedded: stats.developersEmbedded,
+      tokensUsed: stats.tokensUsed,
+      itemsPerMinute: rate,
+    });
+  }, PROGRESS_LOG_INTERVAL_MS);
+}
+
+/**
+ * Verify Qdrant collections have data after sync
+ */
+async function verifyQdrantCollections(
+  qdrant: ReturnType<typeof getQdrantClient>
+): Promise<void> {
+  log.info('Verifying Qdrant collections...');
+  const collectionStats = await getCollectionStats(qdrant);
+  log.info('Qdrant collection stats', collectionStats);
+}
+
+/**
  * Main worker function
  */
 async function main(): Promise<void> {
@@ -547,6 +588,9 @@ async function main(): Promise<void> {
     developersEmbedded: 0,
     tokensUsed: 0,
   };
+
+  // Start progress logging
+  const progressInterval = startProgressLogging(stats, startTime);
 
   try {
     // Initialize Qdrant collections
@@ -598,6 +642,12 @@ async function main(): Promise<void> {
       await processDevelopers(supabase, qdrant, stats);
     }
 
+    // Stop progress logging
+    clearInterval(progressInterval);
+
+    // Verify Qdrant collections
+    await verifyQdrantCollections(qdrant);
+
     // Update sync job as completed
     if (job) {
       await supabase
@@ -620,6 +670,9 @@ async function main(): Promise<void> {
       estimatedCost: `$${((stats.tokensUsed / 1000000) * 0.02).toFixed(4)}`,
     });
   } catch (error) {
+    // Stop progress logging on error
+    clearInterval(progressInterval);
+
     log.error('Embedding sync failed', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,

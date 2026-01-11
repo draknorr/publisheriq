@@ -521,30 +521,69 @@ export function isWorthEmbedding(game: GameEmbeddingData): boolean {
 }
 
 /**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Check if an error is retryable (rate limit or transient server error)
+ */
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    // Rate limit or transient errors
+    if (message.includes('429') || message.includes('rate limit')) return true;
+    if (message.includes('500') || message.includes('502') || message.includes('503') || message.includes('504')) return true;
+    if (message.includes('timeout') || message.includes('econnreset') || message.includes('socket hang up')) return true;
+  }
+  return false;
+}
+
+/**
  * Generate embeddings for a batch of texts
- * Uses OpenAI's text-embedding-3-small model
+ * Uses OpenAI's text-embedding-3-small model with retry logic
  */
 export async function generateEmbeddings(
-  texts: string[]
+  texts: string[],
+  maxRetries = 3
 ): Promise<{ embeddings: number[][]; usage: { prompt_tokens: number; total_tokens: number } }> {
   if (texts.length === 0) {
     return { embeddings: [], usage: { prompt_tokens: 0, total_tokens: 0 } };
   }
 
   const openai = getOpenAI();
+  let lastError: Error | undefined;
 
-  const response = await openai.embeddings.create({
-    model: EMBEDDING_CONFIG.MODEL,
-    input: texts,
-    dimensions: EMBEDDING_CONFIG.DIMENSIONS,
-  });
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await openai.embeddings.create({
+        model: EMBEDDING_CONFIG.MODEL,
+        input: texts,
+        dimensions: EMBEDDING_CONFIG.DIMENSIONS,
+      });
 
-  const embeddings = response.data.map((d) => d.embedding);
+      const embeddings = response.data.map((d) => d.embedding);
 
-  return {
-    embeddings,
-    usage: response.usage,
-  };
+      return {
+        embeddings,
+        usage: response.usage,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt < maxRetries && isRetryableError(error)) {
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000); // 1s, 2s, 4s, max 10s
+        console.warn(`OpenAI API error (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${backoffMs}ms:`, lastError.message);
+        await sleep(backoffMs);
+      } else {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 /**

@@ -6,9 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Batch size for processing (default 100)'
+        description: 'Batch size for processing (default 500)'
         required: false
-        default: '100'
+        default: '500'
+      sync_collection:
+        description: 'Collection to sync (games, publishers, developers, all)'
+        required: false
+        default: 'all'
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -20,7 +24,7 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60  # Reduced from 120 with optimizations
 
     steps:
       - uses: actions/checkout@v4
@@ -42,4 +46,5 @@ jobs:
         run: pnpm --filter @publisheriq/ingestion embedding-sync
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '100' }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '500' }}
+          SYNC_COLLECTION: ${{ github.event.inputs.sync_collection || 'all' }}
