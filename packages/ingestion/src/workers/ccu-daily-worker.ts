@@ -19,7 +19,8 @@ import {
 const log = logger.child({ worker: 'ccu-daily-sync' });
 
 // Default batch size - can be overridden via env
-const DEFAULT_BATCH_SIZE = 50000;
+// Set high enough to cover all Tier 3 games (~120k+) since timeout limits actual processing
+const DEFAULT_BATCH_SIZE = 150000;
 
 // Supabase/PostgREST default max rows per request
 const SUPABASE_PAGE_SIZE = 1000;
@@ -66,6 +67,7 @@ async function getTier3Games(
       .select('appid')
       .eq('ccu_tier', 3)
       .or(`ccu_skip_until.is.null,ccu_skip_until.lt.${now}`)
+      .order('last_ccu_synced', { ascending: true, nullsFirst: true })
       .range(offset, offset + SUPABASE_PAGE_SIZE - 1);
 
     if (pageError) {
@@ -277,9 +279,10 @@ async function updateSkipTracking(
   let validUpdated = 0;
   let invalidUpdated = 0;
 
-  // Update valid apps: clear skip_until, set status
+  // Update valid apps: clear skip_until, set status, record sync time for rotation
   // Cast to any because ccu_tier_assignments may not be in generated types yet
   const validBatchSize = 500;
+  const syncTime = new Date().toISOString();
   for (let i = 0; i < validAppids.length; i += validBatchSize) {
     const batch = validAppids.slice(i, i + validBatchSize);
     const { error } = await (supabase as any)
@@ -287,6 +290,7 @@ async function updateSkipTracking(
       .update({
         ccu_fetch_status: 'valid',
         ccu_skip_until: null,
+        last_ccu_synced: syncTime,
       })
       .in('appid', batch);
 
@@ -297,7 +301,7 @@ async function updateSkipTracking(
     }
   }
 
-  // Update invalid apps: set skip_until, set status
+  // Update invalid apps: set skip_until, set status, record sync time
   for (let i = 0; i < invalidAppids.length; i += validBatchSize) {
     const batch = invalidAppids.slice(i, i + validBatchSize);
     const { error } = await (supabase as any)
@@ -305,6 +309,7 @@ async function updateSkipTracking(
       .update({
         ccu_fetch_status: 'invalid',
         ccu_skip_until: skipUntilStr,
+        last_ccu_synced: syncTime,
       })
       .in('appid', batch);
 
