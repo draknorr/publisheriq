@@ -26,6 +26,21 @@ export function GlobalSearch() {
     }
   }, [isOpen]);
 
+  // Handle escape key to close
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, close]);
+
   // Debounced search
   const search = useCallback(async (searchQuery: string) => {
     if (abortControllerRef.current) {
@@ -128,10 +143,10 @@ export function GlobalSearch() {
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={close} />
 
       {/* Dialog Container */}
-      <div className="fixed inset-0 flex items-start justify-center pt-[15vh] px-4">
+      <div className="fixed inset-0 flex items-start justify-center pt-[15vh] px-4 pointer-events-none">
         <Command
           label="Global Search"
-          className="w-full max-w-[560px] bg-surface-elevated rounded-2xl shadow-2xl border border-border-subtle overflow-hidden animate-scale-in"
+          className="w-full max-w-[560px] bg-surface-elevated rounded-2xl shadow-2xl border border-border-subtle overflow-hidden animate-scale-in pointer-events-auto"
           shouldFilter={false}
         >
           {/* Search Input */}
