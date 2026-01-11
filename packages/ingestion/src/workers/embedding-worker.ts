@@ -9,7 +9,6 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import { logger } from '@publisheriq/shared';
-import pLimit from 'p-limit';
 import {
   getQdrantClient,
   initializeCollections,
@@ -47,10 +46,6 @@ const QDRANT_BATCH_SIZE = 500; // Points to upsert at a time (was 100)
 const PUBLISHER_BATCH_SIZE = 500; // Publishers to fetch from DB at a time (was 200)
 const DEVELOPER_BATCH_SIZE = 500; // Developers to fetch from DB at a time (was 200)
 const PROGRESS_LOG_INTERVAL_MS = 30000; // Log progress every 30 seconds
-const OPENAI_CONCURRENCY = 4; // Concurrent OpenAI API calls
-
-// Concurrency limiter for OpenAI calls
-const openaiLimit = pLimit(OPENAI_CONCURRENCY);
 
 interface SyncStats {
   gamesProcessed: number;
