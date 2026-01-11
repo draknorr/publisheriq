@@ -53,20 +53,17 @@ async function processApp(
       return;
     }
 
-    // Insert histogram entries
-    for (const entry of histogram) {
-      const monthStart = entry.monthStart.toISOString().split('T')[0];
+    // Batch insert all histogram entries in one call
+    const histogramData = histogram.map((entry) => ({
+      appid,
+      month_start: entry.monthStart.toISOString().split('T')[0],
+      recommendations_up: entry.recommendationsUp,
+      recommendations_down: entry.recommendationsDown,
+    }));
 
-      await supabase.from('review_histogram').upsert(
-        {
-          appid,
-          month_start: monthStart,
-          recommendations_up: entry.recommendationsUp,
-          recommendations_down: entry.recommendationsDown,
-        },
-        { onConflict: 'appid,month_start' }
-      );
-    }
+    await supabase
+      .from('review_histogram')
+      .upsert(histogramData, { onConflict: 'appid,month_start' });
 
     // Update sync status
     await supabase

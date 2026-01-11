@@ -40,8 +40,8 @@ module.exports = {
     }
   },
 
-  // Disable scheduled refresh for now (simpler setup)
-  scheduledRefreshTimer: false,
+  // Enable scheduled refresh to keep pre-aggregations fresh
+  scheduledRefreshTimer: 60, // Check every 60 seconds
 
   // Allow Playground in development
   devServer: process.env.CUBEJS_DEV_MODE === 'true',
