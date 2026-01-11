@@ -3,7 +3,7 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
-import { TypeBadge, ReviewScoreBadge, RatioBar, TrendSparkline } from '@/components/data-display';
+import { TypeBadge, ReviewScoreBadge, RatioBar, TrendSparkline, CCUSourceBadge } from '@/components/data-display';
 import { ExternalLink } from 'lucide-react';
 import { AppDetailSections } from './AppDetailSections';
 import { getCCUSparkline } from '@/lib/ccu-queries';
@@ -95,6 +95,7 @@ interface DailyMetric {
   owners_min: number | null;
   owners_max: number | null;
   ccu_peak: number | null;
+  ccu_source: 'steam_api' | 'steamspy' | null;
   average_playtime_forever: number | null;
   average_playtime_2weeks: number | null;
   price_cents: number | null;
@@ -126,6 +127,7 @@ interface SyncStatus {
   last_histogram_sync: string | null;
   priority_score: number | null;
   refresh_tier: string | null;
+  review_velocity_tier: 'high' | 'medium' | 'low' | 'dormant' | null;
   last_activity_at: string | null;
   consecutive_errors: number | null;
   last_error_source: string | null;
@@ -205,7 +207,13 @@ async function getDailyMetrics(appid: number): Promise<DailyMetric[]> {
     .order('metric_date', { ascending: false })
     .limit(30);
 
-  return data ?? [];
+  if (!data) return [];
+
+  // Cast ccu_source to the correct literal type
+  return data.map(d => ({
+    ...d,
+    ccu_source: d.ccu_source as DailyMetric['ccu_source'],
+  }));
 }
 
 async function getReviewHistogram(appid: number): Promise<ReviewHistogram[]> {
@@ -277,10 +285,11 @@ async function getSyncStatus(appid: number): Promise<SyncStatus | null> {
 
   if (!data) return null;
 
-  const syncData = data as typeof data & { refresh_tier?: string; last_activity_at?: string };
+  const syncData = data as typeof data & { refresh_tier?: string; last_activity_at?: string; review_velocity_tier?: string };
   return {
     ...syncData,
     refresh_tier: syncData.refresh_tier ?? null,
+    review_velocity_tier: (syncData.review_velocity_tier as SyncStatus['review_velocity_tier']) ?? null,
     last_activity_at: syncData.last_activity_at ?? null,
   } as SyncStatus;
 }
@@ -547,6 +556,7 @@ export default async function AppDetailPage({
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-body font-semibold text-text-primary">{formatNumber(latestMetrics?.ccu_peak ?? null)}</p>
+            {latestMetrics?.ccu_source && <CCUSourceBadge source={latestMetrics.ccu_source} />}
             <div className="hidden sm:block">
               <TrendSparkline data={ccuSparkline.dataPoints} trend={ccuSparkline.trend} height={24} width={60} />
             </div>

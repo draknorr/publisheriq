@@ -3,7 +3,7 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout';
-import { MetricCard, TrendIndicator, ReviewScoreBadge } from '@/components/data-display';
+import { MetricCard, TrendIndicator, ReviewScoreBadge, SteamDeckBadge, PlatformIcons } from '@/components/data-display';
 import { Card } from '@/components/ui';
 import { TrendingUp, AlertCircle, MessageSquare, ExternalLink } from 'lucide-react';
 
@@ -139,6 +139,12 @@ async function getApps(search?: string, sort: SortField = 'appid', order: SortOr
     query = query.is('daily_metrics.total_reviews', null);
   } else if (filter === 'trending_up') {
     query = query.eq('app_trends.trend_30d_direction', 'up');
+  } else if (filter === 'steam_deck_verified') {
+    query = query.eq('app_steam_deck.category', 'verified');
+  } else if (filter === 'free') {
+    query = query.eq('is_free', true);
+  } else if (filter === 'has_ccu') {
+    query = query.not('daily_metrics.ccu_peak', 'is', null);
   }
 
   const { data, error } = await query;
@@ -373,6 +379,18 @@ function formatNumber(n: number | null): string {
   return n.toLocaleString();
 }
 
+function formatReleaseDate(date: string | null, raw: string | null): string {
+  if (date) {
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }
+  if (raw) {
+    // Handle partial dates like "Coming Soon", "Q4 2024", etc.
+    return raw.length > 12 ? raw.substring(0, 9) + '...' : raw;
+  }
+  return '—';
+}
+
 function SortHeader({
   field,
   label,
@@ -476,7 +494,7 @@ export default async function AppsPage({
             </svg>
           </div>
         </form>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link
             href="/apps"
             className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
@@ -496,6 +514,36 @@ export default async function AppsPage({
             }`}
           >
             Trending ↑
+          </Link>
+          <Link
+            href="/apps?filter=steam_deck_verified"
+            className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
+              filter === 'steam_deck_verified'
+                ? 'bg-accent-green/20 text-accent-green border border-accent-green/30'
+                : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
+            }`}
+          >
+            Deck ✓
+          </Link>
+          <Link
+            href="/apps?filter=free"
+            className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
+              filter === 'free'
+                ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30'
+                : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
+            }`}
+          >
+            Free
+          </Link>
+          <Link
+            href="/apps?filter=has_ccu"
+            className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
+              filter === 'has_ccu'
+                ? 'bg-accent-purple/20 text-accent-purple border border-accent-purple/30'
+                : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
+            }`}
+          >
+            Has CCU
           </Link>
           <Link
             href="/apps?filter=errors"
@@ -531,9 +579,14 @@ export default async function AppsPage({
                 <Card variant="interactive" padding="sm">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
-                      <span className="text-body-sm font-medium text-text-primary line-clamp-1">
-                        {app.name}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-body-sm font-medium text-text-primary line-clamp-1">
+                          {app.name}
+                        </span>
+                        {app.steam_deck_category && app.steam_deck_category !== 'unknown' && (
+                          <SteamDeckBadge category={app.steam_deck_category} size="sm" />
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         {app.genres.length > 0 && (
                           <span className="text-caption text-text-tertiary">{app.genres[0].name}</span>
@@ -559,7 +612,9 @@ export default async function AppsPage({
                       <span className="text-text-muted">No reviews</span>
                     )}
                     <span className="text-text-tertiary">{formatNumber(app.total_reviews)} reviews</span>
-                    <span className="text-text-tertiary">{formatOwners(app.owners_min, app.owners_max)}</span>
+                    {app.ccu_peak && (
+                      <span className="text-text-tertiary">CCU: {formatNumber(app.ccu_peak)}</span>
+                    )}
                   </div>
                 </Card>
               </Link>
@@ -571,24 +626,29 @@ export default async function AppsPage({
             <table className="w-full">
               <thead className="bg-surface-elevated sticky top-0 z-10">
                 <tr>
-                  <SortHeader field="name" label="App Name" currentSort={sort} currentOrder={order} className="min-w-[250px]" />
+                  <SortHeader field="name" label="App Name" currentSort={sort} currentOrder={order} className="min-w-[200px]" />
+                  <SortHeader field="release_date" label="Release" currentSort={sort} currentOrder={order} />
+                  <th className="px-3 py-2 text-center text-caption font-medium text-text-tertiary w-[70px]" title="Platforms">Platforms</th>
+                  <th className="px-3 py-2 text-center text-caption font-medium text-text-tertiary w-[50px]" title="Steam Deck">Deck</th>
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Genres</th>
-                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">MC</th>
+                  <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary w-[40px]">MC</th>
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">Developer</th>
                   <SortHeader field="review_score" label="Reviews" currentSort={sort} currentOrder={order} />
                   <SortHeader field="total_reviews" label="Count" currentSort={sort} currentOrder={order} />
                   <SortHeader field="owners_max" label="Owners" currentSort={sort} currentOrder={order} />
+                  <SortHeader field="ccu_peak" label="CCU" currentSort={sort} currentOrder={order} />
                   <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">30d Trend</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {apps.map((app) => (
                   <tr key={app.appid} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
+                    {/* App Name */}
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/apps/${app.appid}`}
-                          className="text-body-sm font-medium text-text-primary hover:text-accent-primary transition-colors truncate max-w-[220px]"
+                          className="text-body-sm font-medium text-text-primary hover:text-accent-primary transition-colors truncate max-w-[180px]"
                           title={app.name}
                         >
                           {app.name}
@@ -608,6 +668,23 @@ export default async function AppsPage({
                         )}
                       </div>
                     </td>
+                    {/* Release Date */}
+                    <td className="px-3 py-2 text-caption text-text-secondary whitespace-nowrap">
+                      {formatReleaseDate(app.release_date, app.release_date_raw)}
+                    </td>
+                    {/* Platforms */}
+                    <td className="px-3 py-2 text-center">
+                      <PlatformIcons platforms={app.platforms} size="sm" />
+                    </td>
+                    {/* Steam Deck */}
+                    <td className="px-3 py-2 text-center">
+                      {app.steam_deck_category && app.steam_deck_category !== 'unknown' ? (
+                        <SteamDeckBadge category={app.steam_deck_category} size="sm" />
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
+                    </td>
+                    {/* Genres */}
                     <td className="px-3 py-2">
                       {app.genres.length > 0 ? (
                         <div className="flex items-center gap-1">
@@ -622,6 +699,7 @@ export default async function AppsPage({
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
+                    {/* Metacritic */}
                     <td className="px-3 py-2">
                       {app.metacritic_score !== null ? (
                         <span className={`text-body-sm font-medium ${
@@ -634,6 +712,7 @@ export default async function AppsPage({
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
+                    {/* Developer */}
                     <td className="px-3 py-2">
                       {app.developers.length > 0 ? (
                         <span className="text-body-sm text-text-secondary truncate max-w-[120px] block">
@@ -643,6 +722,7 @@ export default async function AppsPage({
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
+                    {/* Reviews */}
                     <td className="px-3 py-2">
                       {app.total_reviews && app.total_reviews > 0 ? (
                         <ReviewScoreBadge
@@ -652,12 +732,19 @@ export default async function AppsPage({
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
+                    {/* Count */}
                     <td className="px-3 py-2 text-body-sm text-text-secondary">
                       {formatNumber(app.total_reviews)}
                     </td>
+                    {/* Owners */}
                     <td className="px-3 py-2 text-body-sm text-text-secondary">
                       {formatOwners(app.owners_min, app.owners_max)}
                     </td>
+                    {/* CCU Peak */}
+                    <td className="px-3 py-2 text-body-sm text-text-secondary">
+                      {formatNumber(app.ccu_peak)}
+                    </td>
+                    {/* 30d Trend */}
                     <td className="px-3 py-2">
                       {app.trend_30d_direction ? (
                         <TrendIndicator

@@ -8,6 +8,11 @@ export {
   TierBadge,
   TypeBadge,
   ReviewScoreBadge,
+  SteamDeckBadge,
+  PlatformIcons,
+  VelocityTierBadge,
+  CCUTierBadge,
+  CCUSourceBadge,
 } from './TrendIndicator';
 export {
   DataTable,

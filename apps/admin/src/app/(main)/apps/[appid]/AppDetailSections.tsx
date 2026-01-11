@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar, ReviewScoreBadge } from '@/components/data-display';
+import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar, ReviewScoreBadge, VelocityTierBadge, CCUSourceBadge } from '@/components/data-display';
 import { SimilaritySection } from '@/components/similarity';
 import { Card } from '@/components/ui';
 import { CheckCircle2, XCircle, AlertTriangle, ChevronRight, ChevronDown, Monitor, Gamepad2, Calendar, FileText, Wrench, Globe, ExternalLink, Layers } from 'lucide-react';
@@ -85,6 +85,7 @@ interface DailyMetric {
   owners_min: number | null;
   owners_max: number | null;
   ccu_peak: number | null;
+  ccu_source: 'steam_api' | 'steamspy' | null;
   average_playtime_forever: number | null;
   average_playtime_2weeks: number | null;
   price_cents: number | null;
@@ -116,6 +117,7 @@ interface SyncStatus {
   last_histogram_sync: string | null;
   priority_score: number | null;
   refresh_tier: string | null;
+  review_velocity_tier: 'high' | 'medium' | 'low' | 'dormant' | null;
   last_activity_at: string | null;
   consecutive_errors: number | null;
   last_error_source: string | null;
@@ -428,6 +430,10 @@ function SummarySection({
   const languageKeys = app.languages ? Object.keys(app.languages) : [];
   const namedTags = steamTags.filter(t => !t.name.startsWith('Tag '));
   const displayedTags = tagsExpanded ? namedTags : namedTags.slice(0, TAG_LIMIT);
+
+  // Find community tags that are not in official tags (case-insensitive comparison)
+  const officialTagNames = new Set(namedTags.map(t => t.name.toLowerCase()));
+  const uniqueCommunityTags = tags.filter(t => !officialTagNames.has(t.tag.toLowerCase()));
   const displayedLanguages = languagesExpanded ? languageKeys : languageKeys.slice(0, LANGUAGE_LIMIT);
   const displayedDescriptors = contentDescriptorsExpanded ? contentDescriptors : contentDescriptors.slice(0, CONTENT_DESCRIPTOR_LIMIT);
   const displayedDLCs = dlcsExpanded ? dlcs : dlcs.slice(0, DLC_LIMIT);
@@ -490,8 +496,9 @@ function SummarySection({
 
           {/* Tags - spans 2 columns */}
           <div className="lg:col-span-2 p-3 rounded-md border border-border-subtle bg-surface-raised">
+            {/* Official Tags (from Steam's product info) */}
             {namedTags.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 mb-2">
                 <span className="text-caption text-text-tertiary mr-1">Tags:</span>
                 {displayedTags.map((tag) => (
                   <a
@@ -499,7 +506,7 @@ function SummarySection({
                     href={`https://store.steampowered.com/search/?tags=${tag.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors"
+                    className="px-2 py-0.5 rounded text-caption bg-accent-blue/10 border border-accent-blue/20 text-accent-blue hover:bg-accent-blue/20 transition-colors"
                     title={`Rank #${tag.rank}`}
                   >
                     {tag.name}
@@ -515,6 +522,7 @@ function SummarySection({
                 )}
               </div>
             ) : tags.length > 0 ? (
+              // Fallback to SteamSpy tags if no official tags
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-caption text-text-tertiary mr-1">Tags:</span>
                 {tags.slice(0, TAG_LIMIT).map(({ tag }) => (
@@ -531,6 +539,25 @@ function SummarySection({
               </div>
             ) : (
               <p className="text-caption text-text-muted">No tags available</p>
+            )}
+
+            {/* Community Tags - only show if there are unique tags not in official */}
+            {namedTags.length > 0 && uniqueCommunityTags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border-subtle">
+                <span className="text-caption text-text-muted mr-1">Community:</span>
+                {uniqueCommunityTags.slice(0, 6).map(({ tag, vote_count }) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 rounded text-caption bg-accent-purple/10 border border-accent-purple/20 text-accent-purple"
+                    title={vote_count ? `${vote_count.toLocaleString()} votes` : undefined}
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {uniqueCommunityTags.length > 6 && (
+                  <span className="text-caption text-text-muted">+{uniqueCommunityTags.length - 6}</span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1205,6 +1232,9 @@ function SyncSection({
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-md border border-border-subtle bg-surface-raised">
           {syncStatus.refresh_tier && (
             <TierBadge tier={syncStatus.refresh_tier as 'active' | 'moderate' | 'dormant' | 'dead'} />
+          )}
+          {syncStatus.review_velocity_tier && (
+            <VelocityTierBadge tier={syncStatus.review_velocity_tier} />
           )}
           {syncStatus.is_syncable ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-accent-green/10 text-accent-green text-caption font-medium">
