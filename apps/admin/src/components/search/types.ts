@@ -9,6 +9,9 @@ export interface GameSearchResult {
   reviewScore: number | null;
   totalReviews: number | null;
   isFree: boolean;
+  // Sparkline data (7-day CCU trend)
+  sparkline?: number[];
+  sparklineTrend?: 'up' | 'down' | 'stable';
 }
 
 export interface PublisherSearchResult {

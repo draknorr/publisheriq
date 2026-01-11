@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Command } from 'cmdk';
 import { Search, Gamepad2, Building2, User, MessageSquare, Sparkles, Loader2 } from 'lucide-react';
 import { useGlobalSearch } from './GlobalSearchProvider';
+import { TrendSparkline } from '@/components/data-display';
 import type { SearchResponse, GameSearchResult, PublisherSearchResult, DeveloperSearchResult } from './types';
 
 export function GlobalSearch() {
@@ -233,6 +234,17 @@ export function GlobalSearch() {
                         )}
                       </div>
                     </div>
+                    {/* 7-day CCU trend sparkline */}
+                    {game.sparkline && game.sparkline.length > 0 && (
+                      <div className="shrink-0 w-16">
+                        <TrendSparkline
+                          data={game.sparkline}
+                          trend={game.sparklineTrend}
+                          height={24}
+                          variant="line"
+                        />
+                      </div>
+                    )}
                   </Command.Item>
                 ))}
               </Command.Group>
