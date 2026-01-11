@@ -2,21 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowRight } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { getRandomPrompts } from '@/lib/example-prompts';
+import { useGlobalSearch } from '@/components/search';
 
 export function DashboardSearch() {
-  const [query, setQuery] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
   const [suggestions] = useState(() => getRandomPrompts(4));
   const router = useRouter();
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim()) {
-      router.push(`/chat?q=${encodeURIComponent(query.trim())}`);
-    }
-  };
+  const { open } = useGlobalSearch();
 
   const handleSuggestionClick = (suggestion: string) => {
     router.push(`/chat?q=${encodeURIComponent(suggestion)}`);
@@ -33,43 +26,24 @@ export function DashboardSearch() {
           Research games, track market trends, and benchmark competitors with natural language queries
         </p>
 
-        {/* Search Input */}
-        <form onSubmit={handleSubmit} className="relative mb-8">
-          <div
-            className={`
-              relative rounded-2xl transition-all duration-200
-              ${isFocused ? 'shadow-glow-primary' : ''}
-            `}
-          >
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              placeholder="Ask anything about games, publishers, or market trends..."
-              className={`
-                w-full pl-14 pr-14 py-5 text-body-lg
-                bg-surface-raised border rounded-2xl
-                text-text-primary placeholder:text-text-muted
-                focus:outline-none transition-all duration-200
-                ${isFocused
-                  ? 'border-accent-primary'
-                  : 'border-border-subtle hover:border-border-muted'
-                }
-              `}
-            />
-            {query.trim() && (
-              <button
-                type="submit"
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-accent-primary hover:bg-accent-primary-hover text-white transition-colors"
-              >
-                <ArrowRight className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-        </form>
+        {/* Search Trigger Button */}
+        <button
+          onClick={open}
+          className="
+            w-full flex items-center gap-3 px-5 py-5 mb-8
+            bg-surface-raised border border-border-subtle rounded-2xl
+            text-text-muted hover:border-border-muted hover:shadow-glow-primary
+            transition-all duration-200 group
+          "
+        >
+          <Search className="w-5 h-5" />
+          <span className="flex-1 text-left text-body-lg">
+            Search games, publishers, developers...
+          </span>
+          <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-caption bg-surface rounded border border-border-subtle group-hover:border-border-muted transition-colors">
+            <span className="text-xs">⌘</span>K
+          </kbd>
+        </button>
 
         {/* Example Prompts */}
         <div className="flex flex-wrap gap-2 justify-center">
