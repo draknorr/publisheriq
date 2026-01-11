@@ -141,7 +141,9 @@ const tierConfig = {
 };
 
 export function TierBadge({ tier, className = '' }: TierBadgeProps) {
-  const config = tierConfig[tier];
+  // Fallback to 'dormant' for unexpected values
+  const validTier = tier in tierConfig ? tier : 'dormant';
+  const config = tierConfig[validTier];
 
   return (
     <span
@@ -254,7 +256,9 @@ export function SteamDeckBadge({
   showLabel = false,
   className = ''
 }: SteamDeckBadgeProps) {
-  const config = steamDeckConfig[category];
+  // Fallback to 'unknown' for unexpected values
+  const validCategory = category in steamDeckConfig ? category : 'unknown';
+  const config = steamDeckConfig[validCategory];
   const Icon = config.icon;
 
   const sizeConfig = {
@@ -352,7 +356,9 @@ const velocityTierConfig: Record<VelocityTier, {
 };
 
 export function VelocityTierBadge({ tier, className = '' }: VelocityTierBadgeProps) {
-  const config = velocityTierConfig[tier];
+  // Fallback to 'dormant' for unexpected values
+  const validTier = tier in velocityTierConfig ? tier : 'dormant';
+  const config = velocityTierConfig[validTier];
 
   return (
     <span
@@ -386,7 +392,9 @@ const ccuTierConfig: Record<CCUTier, {
 };
 
 export function CCUTierBadge({ tier, reason, className = '' }: CCUTierBadgeProps) {
-  const config = ccuTierConfig[tier];
+  // Fallback to 'tier3' for unexpected values
+  const validTier = tier in ccuTierConfig ? tier : 'tier3';
+  const config = ccuTierConfig[validTier];
 
   return (
     <span
