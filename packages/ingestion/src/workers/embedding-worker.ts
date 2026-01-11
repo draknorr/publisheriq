@@ -40,6 +40,59 @@ import {
 
 const log = logger.child({ worker: 'embedding-sync' });
 
+// Retry configuration
+const QDRANT_MAX_RETRIES = 3;
+const QDRANT_RETRY_BASE_MS = 2000; // Start with 2s, then 4s, 8s
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry wrapper for Qdrant operations
+ * Handles transient errors like 502 Bad Gateway
+ */
+async function withQdrantRetry<T>(
+  operation: () => Promise<T>,
+  context: string
+): Promise<T> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt <= QDRANT_MAX_RETRIES; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const message = lastError.message.toLowerCase();
+
+      // Check if retryable (502, 503, 504, timeout, connection errors)
+      const isRetryable =
+        message.includes('bad gateway') ||
+        message.includes('502') ||
+        message.includes('503') ||
+        message.includes('504') ||
+        message.includes('timeout') ||
+        message.includes('econnreset') ||
+        message.includes('socket hang up');
+
+      if (attempt < QDRANT_MAX_RETRIES && isRetryable) {
+        const backoffMs = QDRANT_RETRY_BASE_MS * Math.pow(2, attempt);
+        log.warn(`Qdrant ${context} failed (attempt ${attempt + 1}/${QDRANT_MAX_RETRIES + 1}), retrying in ${backoffMs}ms`, {
+          error: lastError.message,
+        });
+        await sleep(backoffMs);
+      } else {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 // Configuration - optimized batch sizes for throughput
 const GAME_BATCH_SIZE = 500; // Games to fetch from DB at a time (was 100)
 const QDRANT_BATCH_SIZE = 500; // Points to upsert at a time (was 100)
@@ -212,13 +265,16 @@ async function processGameBatch(
     payload: buildGamePayload(game, hashes[i]) as unknown as Record<string, unknown>,
   }));
 
-  // Upsert to Qdrant in batches
+  // Upsert to Qdrant in batches with retry
   for (let i = 0; i < points.length; i += QDRANT_BATCH_SIZE) {
     const batch = points.slice(i, i + QDRANT_BATCH_SIZE);
-    await qdrant.upsert(COLLECTIONS.GAMES, {
-      wait: false, // Async writes for throughput (verification at end)
-      points: batch,
-    });
+    await withQdrantRetry(
+      () => qdrant.upsert(COLLECTIONS.GAMES, {
+        wait: false, // Async writes for throughput (verification at end)
+        points: batch,
+      }),
+      'games upsert'
+    );
   }
 
   // Mark as embedded in Supabase
@@ -282,10 +338,13 @@ async function processPublisherBatch(
 
   for (let i = 0; i < portfolioPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = portfolioPoints.slice(i, i + QDRANT_BATCH_SIZE);
-    await qdrant.upsert(COLLECTIONS.PUBLISHERS_PORTFOLIO, {
-      wait: false, // Async writes for throughput (verification at end)
-      points: batch,
-    });
+    await withQdrantRetry(
+      () => qdrant.upsert(COLLECTIONS.PUBLISHERS_PORTFOLIO, {
+        wait: false, // Async writes for throughput (verification at end)
+        points: batch,
+      }),
+      'publishers portfolio upsert'
+    );
   }
 
   // Upsert identity collection (cast payload to satisfy Qdrant client types)
@@ -309,10 +368,13 @@ async function processPublisherBatch(
 
   for (let i = 0; i < identityPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = identityPoints.slice(i, i + QDRANT_BATCH_SIZE);
-    await qdrant.upsert(COLLECTIONS.PUBLISHERS_IDENTITY, {
-      wait: false, // Async writes for throughput (verification at end)
-      points: batch,
-    });
+    await withQdrantRetry(
+      () => qdrant.upsert(COLLECTIONS.PUBLISHERS_IDENTITY, {
+        wait: false, // Async writes for throughput (verification at end)
+        points: batch,
+      }),
+      'publishers identity upsert'
+    );
   }
 
   stats.publishersEmbedded += publishers.length;
@@ -421,10 +483,13 @@ async function processDeveloperBatch(
 
   for (let i = 0; i < portfolioPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = portfolioPoints.slice(i, i + QDRANT_BATCH_SIZE);
-    await qdrant.upsert(COLLECTIONS.DEVELOPERS_PORTFOLIO, {
-      wait: false, // Async writes for throughput (verification at end)
-      points: batch,
-    });
+    await withQdrantRetry(
+      () => qdrant.upsert(COLLECTIONS.DEVELOPERS_PORTFOLIO, {
+        wait: false, // Async writes for throughput (verification at end)
+        points: batch,
+      }),
+      'developers portfolio upsert'
+    );
   }
 
   // Upsert identity collection (cast payload to satisfy Qdrant client types)
@@ -448,10 +513,13 @@ async function processDeveloperBatch(
 
   for (let i = 0; i < identityPoints.length; i += QDRANT_BATCH_SIZE) {
     const batch = identityPoints.slice(i, i + QDRANT_BATCH_SIZE);
-    await qdrant.upsert(COLLECTIONS.DEVELOPERS_IDENTITY, {
-      wait: false, // Async writes for throughput (verification at end)
-      points: batch,
-    });
+    await withQdrantRetry(
+      () => qdrant.upsert(COLLECTIONS.DEVELOPERS_IDENTITY, {
+        wait: false, // Async writes for throughput (verification at end)
+        points: batch,
+      }),
+      'developers identity upsert'
+    );
   }
 
   stats.developersEmbedded += developers.length;
