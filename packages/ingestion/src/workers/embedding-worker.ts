@@ -43,8 +43,8 @@ const log = logger.child({ worker: 'embedding-sync' });
 // Configuration - optimized batch sizes for throughput
 const GAME_BATCH_SIZE = 500; // Games to fetch from DB at a time (was 100)
 const QDRANT_BATCH_SIZE = 500; // Points to upsert at a time (was 100)
-const PUBLISHER_BATCH_SIZE = 500; // Publishers to fetch from DB at a time (was 200)
-const DEVELOPER_BATCH_SIZE = 500; // Developers to fetch from DB at a time (was 200)
+const PUBLISHER_BATCH_SIZE = 200; // Publishers - smaller to avoid RPC timeout
+const DEVELOPER_BATCH_SIZE = 100; // Developers - smaller due to complex RPC query
 const PROGRESS_LOG_INTERVAL_MS = 30000; // Log progress every 30 seconds
 
 interface SyncStats {
