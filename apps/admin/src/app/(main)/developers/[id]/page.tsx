@@ -25,7 +25,6 @@ interface Developer {
   normalized_name: string;
   steam_vanity_url: string | null;
   first_game_release_date: string | null;
-  first_page_creation_date: string | null;
   game_count: number | null;
   created_at: string;
   updated_at: string;

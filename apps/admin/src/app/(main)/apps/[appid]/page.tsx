@@ -25,7 +25,7 @@ interface AppDetails {
   is_free: boolean;
   release_date: string | null;
   release_date_raw: string | null;
-  page_creation_date: string | null;
+  store_asset_mtime: string | null;
   has_workshop: boolean;
   current_price_cents: number | null;
   current_discount_percent: number | null;
@@ -124,7 +124,6 @@ interface SyncStatus {
   last_storefront_sync: string | null;
   last_reviews_sync: string | null;
   last_histogram_sync: string | null;
-  last_page_creation_scrape: string | null;
   priority_score: number | null;
   refresh_tier: string | null;
   last_activity_at: string | null;

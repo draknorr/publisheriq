@@ -18,9 +18,6 @@ export const RATE_LIMITS = {
   /** Steam Review Histogram API - approximately 60 requests per minute */
   HISTOGRAM: { requestsPerSecond: 1, burst: 5 },
 
-  /** Community Hub scraping - conservative 1 request per 1.5 seconds */
-  COMMUNITY_SCRAPE: { requestsPerSecond: 0.67, burst: 1 },
-
   /** Steam CCU API (GetNumberOfCurrentPlayers) - conservative 1 req/sec */
   STEAM_CCU: { requestsPerSecond: 1, burst: 5 },
 } as const;
@@ -32,7 +29,6 @@ export const API_URLS = {
   STEAM_WEB: 'https://api.steampowered.com',
   STEAM_STORE: 'https://store.steampowered.com',
   STEAMSPY: 'https://steamspy.com/api.php',
-  STEAM_COMMUNITY: 'https://steamcommunity.com',
 } as const;
 
 /**
@@ -50,9 +46,6 @@ export const BATCH_SIZES = {
 
   /** Number of apps to fetch histograms for per worker run */
   HISTOGRAM_BATCH: 2000,
-
-  /** Number of community pages to scrape per worker run */
-  SCRAPER_BATCH: 1000,
 
   /** Number of apps to calculate trends for per batch */
   TRENDS_BATCH: 500,
@@ -151,5 +144,5 @@ export const APP_TYPES = [
 ] as const;
 
 export type AppType = (typeof APP_TYPES)[number];
-export type SyncSource = 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'scraper';
+export type SyncSource = 'steamspy' | 'storefront' | 'reviews' | 'histogram';
 export type TrendDirection = 'up' | 'down' | 'stable';

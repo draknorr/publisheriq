@@ -47,7 +47,7 @@ export interface AppWithError {
 }
 
 export interface SourceCompletionStats {
-  source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'page_creation' | 'pics';
+  source: 'steamspy' | 'storefront' | 'reviews' | 'histogram' | 'pics';
   totalApps: number;
   syncedApps: number;
   neverSynced: number;
@@ -355,7 +355,6 @@ export async function getSourceCompletionStats(
     storefront: lastSyncs.storefront,
     reviews: lastSyncs.reviews,
     histogram: lastSyncs.histogram,
-    page_creation: null,
   };
 
   if (!error && data && data.length > 0) {
@@ -396,7 +395,6 @@ export async function getSourceCompletionStats(
     storefrontSynced, storefrontStale,
     reviewsSynced, reviewsStale,
     histogramSynced, histogramStale,
-    pageCreationSynced
   ] = await Promise.all([
     // SteamSpy
     supabase.from('sync_status').select('*', { count: 'exact', head: true })
@@ -418,9 +416,6 @@ export async function getSourceCompletionStats(
       .eq('is_syncable', true).not('last_histogram_sync', 'is', null),
     supabase.from('sync_status').select('*', { count: 'exact', head: true })
       .eq('is_syncable', true).not('last_histogram_sync', 'is', null).lt('last_histogram_sync', sevenDaysAgo),
-    // Page Creation
-    supabase.from('sync_status').select('*', { count: 'exact', head: true })
-      .eq('is_syncable', true).not('last_page_creation_scrape', 'is', null),
   ]);
 
   const buildStats = (
@@ -442,7 +437,6 @@ export async function getSourceCompletionStats(
     buildStats('storefront', storefrontSynced.count ?? 0, storefrontStale.count ?? 0),
     buildStats('reviews', reviewsSynced.count ?? 0, reviewsStale.count ?? 0),
     buildStats('histogram', histogramSynced.count ?? 0, histogramStale.count ?? 0),
-    buildStats('page_creation', pageCreationSynced.count ?? 0, 0),
   ];
 }
 

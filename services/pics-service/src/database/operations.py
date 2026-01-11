@@ -315,6 +315,9 @@ class PICSDatabase:
                 "last_content_update": (
                     app.last_update_timestamp.isoformat() if app.last_update_timestamp else None
                 ),
+                "store_asset_mtime": (
+                    app.store_asset_mtime.date().isoformat() if app.store_asset_mtime else None
+                ),
                 "current_build_id": app.current_build_id,
                 "content_descriptors": app.content_descriptors if app.content_descriptors else None,
                 "languages": app.languages if app.languages else None,

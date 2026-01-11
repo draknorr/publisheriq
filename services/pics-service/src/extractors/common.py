@@ -46,6 +46,7 @@ class ExtractedPICSData:
     # Dates
     steam_release_date: Optional[datetime] = None
     original_release_date: Optional[datetime] = None
+    store_asset_mtime: Optional[datetime] = None  # When store page was created
     release_state: Optional[str] = None
     last_update_timestamp: Optional[datetime] = None
 
@@ -122,6 +123,7 @@ class PICSExtractor:
             # Dates
             steam_release_date=self._parse_timestamp(common.get("steam_release_date")),
             original_release_date=self._parse_timestamp(common.get("original_release_date")),
+            store_asset_mtime=self._parse_timestamp(common.get("store_asset_mtime")),
             release_state=common.get("releasestate"),
             last_update_timestamp=self._extract_last_update(depots),
             # Reviews

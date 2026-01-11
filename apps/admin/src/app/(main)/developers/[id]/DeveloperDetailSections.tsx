@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui';
 import { TypeBadge, ReviewScoreBadge, TrendIndicator, StackedBarChart, RatioBar, ReviewBreakdownPopover, TrendSparkline } from '@/components/data-display';
-import { ChevronRight, ChevronDown, Users, Building2, Monitor, Gamepad2, Layers, Calendar, FileText, Globe, BarChart3 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Users, Building2, Monitor, Gamepad2, Layers, Calendar, Globe, BarChart3 } from 'lucide-react';
 import type { PortfolioPICSData } from '@/lib/portfolio-pics';
 import type { CCUSparklineData } from '@/lib/ccu-queries';
 
@@ -15,7 +15,6 @@ interface Developer {
   normalized_name: string;
   steam_vanity_url: string | null;
   first_game_release_date: string | null;
-  first_page_creation_date: string | null;
   game_count: number | null;
   created_at: string;
   updated_at: string;
@@ -296,16 +295,11 @@ function SummarySection({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Quick Facts Card */}
           <div className="p-3 rounded-md border border-border-subtle bg-surface-raised">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex flex-col sm:items-center text-left sm:text-center">
                 <Calendar className="h-4 w-4 text-text-tertiary mb-1" />
                 <p className="text-caption text-text-tertiary">First Release</p>
                 <p className="text-body-sm font-medium text-text-primary">{formatDate(developer.first_game_release_date)}</p>
-              </div>
-              <div className="flex flex-col sm:items-center text-left sm:text-center">
-                <FileText className="h-4 w-4 text-text-tertiary mb-1" />
-                <p className="text-caption text-text-tertiary">Page Created</p>
-                <p className="text-body-sm font-medium text-text-primary">{formatDate(developer.first_page_creation_date)}</p>
               </div>
               <div className="flex flex-col sm:items-center text-left sm:text-center">
                 <Gamepad2 className="h-4 w-4 text-text-tertiary mb-1" />

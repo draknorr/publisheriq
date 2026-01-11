@@ -21,7 +21,6 @@
     "storefront-sync": "tsx src/workers/storefront-worker.ts",
     "reviews-sync": "tsx src/workers/reviews-worker.ts",
     "histogram-sync": "tsx src/workers/histogram-worker.ts",
-    "scrape-creation-dates": "tsx src/workers/scraper-worker.ts",
     "calculate-trends": "tsx src/workers/trends-worker.ts",
     "update-priorities": "tsx src/workers/priority-worker.ts",
     "embedding-sync": "tsx src/workers/embedding-worker.ts",
@@ -38,7 +37,6 @@
     "@publisheriq/database": "workspace:*",
     "@publisheriq/qdrant": "workspace:*",
     "@publisheriq/shared": "workspace:*",
-    "cheerio": "^1.0.0",
     "openai": "^4.77.0",
     "p-limit": "^6.1.0"
   },

@@ -18,7 +18,6 @@ const sourceConfig: Record<string, { label: string; icon: string }> = {
   storefront: { label: 'Storefront', icon: '🏪' },
   reviews: { label: 'Reviews', icon: '⭐' },
   histogram: { label: 'Histogram', icon: '📈' },
-  page_creation: { label: 'Page Creation', icon: '📅' },
   pics: { label: 'PICS', icon: '⚡' },
 };
 

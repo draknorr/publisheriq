@@ -503,8 +503,6 @@ export type Database = {
           metacritic_score: number | null
           metacritic_url: string | null
           name: string
-          page_creation_date: string | null
-          page_creation_date_raw: string | null
           parent_appid: number | null
           pics_review_percentage: number | null
           pics_review_score: number | null
@@ -512,6 +510,7 @@ export type Database = {
           release_date: string | null
           release_date_raw: string | null
           release_state: string | null
+          store_asset_mtime: string | null
           type: Database["public"]["Enums"]["app_type"] | null
           updated_at: string | null
         }
@@ -535,8 +534,6 @@ export type Database = {
           metacritic_score?: number | null
           metacritic_url?: string | null
           name: string
-          page_creation_date?: string | null
-          page_creation_date_raw?: string | null
           parent_appid?: number | null
           pics_review_percentage?: number | null
           pics_review_score?: number | null
@@ -544,6 +541,7 @@ export type Database = {
           release_date?: string | null
           release_date_raw?: string | null
           release_state?: string | null
+          store_asset_mtime?: string | null
           type?: Database["public"]["Enums"]["app_type"] | null
           updated_at?: string | null
         }
@@ -567,8 +565,6 @@ export type Database = {
           metacritic_score?: number | null
           metacritic_url?: string | null
           name?: string
-          page_creation_date?: string | null
-          page_creation_date_raw?: string | null
           parent_appid?: number | null
           pics_review_percentage?: number | null
           pics_review_score?: number | null
@@ -576,10 +572,115 @@ export type Database = {
           release_date?: string | null
           release_date_raw?: string | null
           release_state?: string | null
+          store_asset_mtime?: string | null
           type?: Database["public"]["Enums"]["app_type"] | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      ccu_snapshots: {
+        Row: {
+          appid: number
+          ccu_tier: number
+          id: number
+          player_count: number
+          snapshot_time: string
+        }
+        Insert: {
+          appid: number
+          ccu_tier: number
+          id?: number
+          player_count: number
+          snapshot_time?: string
+        }
+        Update: {
+          appid?: number
+          ccu_tier?: number
+          id?: number
+          player_count?: number
+          snapshot_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ccu_snapshots_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "ccu_snapshots_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "ccu_snapshots_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: false
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
+      }
+      ccu_tier_assignments: {
+        Row: {
+          appid: number
+          ccu_fetch_status: string | null
+          ccu_skip_until: string | null
+          ccu_tier: number
+          last_tier_change: string | null
+          recent_peak_ccu: number | null
+          release_rank: number | null
+          tier_reason: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          appid: number
+          ccu_fetch_status?: string | null
+          ccu_skip_until?: string | null
+          ccu_tier?: number
+          last_tier_change?: string | null
+          recent_peak_ccu?: number | null
+          release_rank?: number | null
+          tier_reason?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          appid?: number
+          ccu_fetch_status?: string | null
+          ccu_skip_until?: string | null
+          ccu_tier?: number
+          last_tier_change?: string | null
+          recent_peak_ccu?: number | null
+          release_rank?: number | null
+          tier_reason?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ccu_tier_assignments_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "apps"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "ccu_tier_assignments_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "developer_game_metrics"
+            referencedColumns: ["appid"]
+          },
+          {
+            foreignKeyName: "ccu_tier_assignments_appid_fkey"
+            columns: ["appid"]
+            isOneToOne: true
+            referencedRelation: "publisher_game_metrics"
+            referencedColumns: ["appid"]
+          },
+        ]
       }
       chat_query_logs: {
         Row: {
@@ -750,6 +851,7 @@ export type Database = {
           average_playtime_2weeks: number | null
           average_playtime_forever: number | null
           ccu_peak: number | null
+          ccu_source: string | null
           discount_percent: number | null
           id: number
           metric_date: string
@@ -771,6 +873,7 @@ export type Database = {
           average_playtime_2weeks?: number | null
           average_playtime_forever?: number | null
           ccu_peak?: number | null
+          ccu_source?: string | null
           discount_percent?: number | null
           id?: number
           metric_date: string
@@ -792,6 +895,7 @@ export type Database = {
           average_playtime_2weeks?: number | null
           average_playtime_forever?: number | null
           ccu_peak?: number | null
+          ccu_source?: string | null
           discount_percent?: number | null
           id?: number
           metric_date?: string
@@ -879,7 +983,6 @@ export type Database = {
           created_at: string | null
           embedding_hash: string | null
           first_game_release_date: string | null
-          first_page_creation_date: string | null
           game_count: number | null
           id: number
           last_embedding_sync: string | null
@@ -892,7 +995,6 @@ export type Database = {
           created_at?: string | null
           embedding_hash?: string | null
           first_game_release_date?: string | null
-          first_page_creation_date?: string | null
           game_count?: number | null
           id?: number
           last_embedding_sync?: string | null
@@ -905,7 +1007,6 @@ export type Database = {
           created_at?: string | null
           embedding_hash?: string | null
           first_game_release_date?: string | null
-          first_page_creation_date?: string | null
           game_count?: number | null
           id?: number
           last_embedding_sync?: string | null
@@ -963,7 +1064,6 @@ export type Database = {
           created_at: string | null
           embedding_hash: string | null
           first_game_release_date: string | null
-          first_page_creation_date: string | null
           game_count: number | null
           id: number
           last_embedding_sync: string | null
@@ -976,7 +1076,6 @@ export type Database = {
           created_at?: string | null
           embedding_hash?: string | null
           first_game_release_date?: string | null
-          first_page_creation_date?: string | null
           game_count?: number | null
           id?: number
           last_embedding_sync?: string | null
@@ -989,7 +1088,6 @@ export type Database = {
           created_at?: string | null
           embedding_hash?: string | null
           first_game_release_date?: string | null
-          first_page_creation_date?: string | null
           game_count?: number | null
           id?: number
           last_embedding_sync?: string | null
@@ -1284,13 +1382,12 @@ export type Database = {
           last_error_source: Database["public"]["Enums"]["sync_source"] | null
           last_histogram_sync: string | null
           last_known_total_reviews: number | null
-          last_page_creation_scrape: string | null
           last_pics_sync: string | null
           last_price_sync: string | null
           last_reviews_sync: string | null
+          last_steamspy_individual_fetch: string | null
           last_steamspy_sync: string | null
           last_storefront_sync: string | null
-          needs_page_creation_scrape: boolean | null
           next_reviews_sync: string | null
           next_sync_after: string | null
           pics_change_number: number | null
@@ -1317,13 +1414,12 @@ export type Database = {
           last_error_source?: Database["public"]["Enums"]["sync_source"] | null
           last_histogram_sync?: string | null
           last_known_total_reviews?: number | null
-          last_page_creation_scrape?: string | null
           last_pics_sync?: string | null
           last_price_sync?: string | null
           last_reviews_sync?: string | null
+          last_steamspy_individual_fetch?: string | null
           last_steamspy_sync?: string | null
           last_storefront_sync?: string | null
-          needs_page_creation_scrape?: boolean | null
           next_reviews_sync?: string | null
           next_sync_after?: string | null
           pics_change_number?: number | null
@@ -1350,13 +1446,12 @@ export type Database = {
           last_error_source?: Database["public"]["Enums"]["sync_source"] | null
           last_histogram_sync?: string | null
           last_known_total_reviews?: number | null
-          last_page_creation_scrape?: string | null
           last_pics_sync?: string | null
           last_price_sync?: string | null
           last_reviews_sync?: string | null
+          last_steamspy_individual_fetch?: string | null
           last_steamspy_sync?: string | null
           last_storefront_sync?: string | null
-          needs_page_creation_scrape?: boolean | null
           next_reviews_sync?: string | null
           next_sync_after?: string | null
           pics_change_number?: number | null
@@ -1756,6 +1851,10 @@ export type Database = {
           success: boolean
         }[]
       }
+      aggregate_daily_ccu_peaks: {
+        Args: { target_date?: string }
+        Returns: number
+      }
       batch_update_prices: {
         Args: { p_appids: number[]; p_discounts: number[]; p_prices: number[] }
         Returns: number
@@ -1767,6 +1866,7 @@ export type Database = {
           retry_after_seconds: number
         }[]
       }
+      cleanup_old_ccu_snapshots: { Args: never; Returns: number }
       cleanup_old_chat_logs: { Args: never; Returns: number }
       cleanup_stale_reservations: { Args: never; Returns: number }
       execute_readonly_query: { Args: { query_text: string }; Returns: Json }
@@ -2048,6 +2148,14 @@ export type Database = {
           total_apps: number
         }[]
       }
+      get_steamspy_individual_fetch_candidates: {
+        Args: { p_limit?: number; p_min_reviews?: number }
+        Returns: {
+          appid: number
+          name: string
+          total_reviews: number
+        }[]
+      }
       get_unsynced_app_ids: {
         Args: never
         Returns: {
@@ -2077,6 +2185,14 @@ export type Database = {
       mark_publishers_embedded: {
         Args: { p_hashes: string[]; p_ids: number[] }
         Returns: undefined
+      }
+      recalculate_ccu_tiers: {
+        Args: never
+        Returns: {
+          tier1_count: number
+          tier2_count: number
+          tier3_count: number
+        }[]
       }
       refresh_all_metrics_views: { Args: never; Returns: undefined }
       refresh_dashboard_stats: { Args: never; Returns: undefined }

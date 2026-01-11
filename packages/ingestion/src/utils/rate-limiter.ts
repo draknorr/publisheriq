@@ -139,7 +139,6 @@ export const rateLimiters = {
   storefront: new RateLimiter(RATE_LIMITS.STOREFRONT),
   reviews: new RateLimiter(RATE_LIMITS.REVIEWS),
   histogram: new RateLimiter(RATE_LIMITS.HISTOGRAM),
-  communityScrape: new RateLimiter(RATE_LIMITS.COMMUNITY_SCRAPE),
   steamCCU: new RateLimiter(RATE_LIMITS.STEAM_CCU),
 };
 
