@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar, ReviewScoreBadge, VelocityTierBadge, CCUSourceBadge } from '@/components/data-display';
+import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar, ReviewScoreBadge, VelocityTierBadge } from '@/components/data-display';
 import { SimilaritySection } from '@/components/similarity';
 import { Card } from '@/components/ui';
 import { CheckCircle2, XCircle, AlertTriangle, ChevronRight, ChevronDown, Monitor, Gamepad2, Calendar, FileText, Wrench, Globe, ExternalLink, Layers } from 'lucide-react';
