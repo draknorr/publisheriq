@@ -30,6 +30,12 @@ export interface SearchResults {
   games: GameSearchResult[];
   publishers: PublisherSearchResult[];
   developers: DeveloperSearchResult[];
+  // Best similarity score for each category (0-1, used for section ordering)
+  scores?: {
+    games: number;
+    publishers: number;
+    developers: number;
+  };
 }
 
 export interface SearchResponse {

@@ -131,6 +131,33 @@ export function GlobalSearch() {
     return count.toString();
   };
 
+  // Determine section order based on best match scores
+  // If a publisher/developer has a near-exact match (score >= 0.9), show that section first
+  const getSectionOrder = (): ('games' | 'publishers' | 'developers')[] => {
+    if (!results?.scores) return ['games', 'publishers', 'developers'];
+
+    const sections: { key: 'games' | 'publishers' | 'developers'; score: number; hasResults: boolean }[] = [
+      { key: 'games', score: results.scores.games, hasResults: results.games.length > 0 },
+      { key: 'publishers', score: results.scores.publishers, hasResults: results.publishers.length > 0 },
+      { key: 'developers', score: results.scores.developers, hasResults: results.developers.length > 0 },
+    ];
+
+    // Sort by score descending, but only if score is high enough (>= 0.9 for publishers/devs)
+    // This ensures "valve" shows Valve publisher first, but "elden" shows Elden Ring game first
+    return sections
+      .filter((s) => s.hasResults)
+      .sort((a, b) => {
+        // Give strong boost to publisher/developer exact matches
+        const aBoost = (a.key !== 'games' && a.score >= 0.9) ? 1 : 0;
+        const bBoost = (b.key !== 'games' && b.score >= 0.9) ? 1 : 0;
+        if (aBoost !== bBoost) return bBoost - aBoost;
+        return b.score - a.score;
+      })
+      .map((s) => s.key);
+  };
+
+  const sectionOrder = getSectionOrder();
+
   const hasResults =
     results && (results.games.length > 0 || results.publishers.length > 0 || results.developers.length > 0);
   const showEmpty = query.trim().length >= 2 && !isLoading && results && !hasResults;
@@ -198,122 +225,130 @@ export function GlobalSearch() {
               </Command.Empty>
             )}
 
-            {/* Games */}
-            {results && results.games.length > 0 && (
-              <Command.Group>
-                <div className="px-3 py-2">
-                  <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Games</span>
-                </div>
-                {results.games.map((game) => (
-                  <Command.Item
-                    key={`game-${game.appid}`}
-                    value={`game-${game.name}`}
-                    onSelect={() => handleSelectGame(game)}
-                    className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-primary/10 hover:bg-surface-overlay transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-accent-primary/10 flex items-center justify-center shrink-0">
-                      <Gamepad2 className="w-4 h-4 text-accent-primary" />
+            {/* Render sections in dynamic order based on match quality */}
+            {results && sectionOrder.map((section, idx) => {
+              if (section === 'games' && results.games.length > 0) {
+                return (
+                  <Command.Group key="games">
+                    <div className={`px-3 py-2 ${idx > 0 ? 'mt-1' : ''}`}>
+                      <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Games</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[14px] font-medium text-text-primary truncate">{game.name}</span>
-                        {game.releaseYear && (
-                          <span className="text-[12px] text-text-tertiary shrink-0">{game.releaseYear}</span>
+                    {results.games.map((game) => (
+                      <Command.Item
+                        key={`game-${game.appid}`}
+                        value={`game-${game.name}`}
+                        onSelect={() => handleSelectGame(game)}
+                        className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-primary/10 hover:bg-surface-overlay transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-accent-primary/10 flex items-center justify-center shrink-0">
+                          <Gamepad2 className="w-4 h-4 text-accent-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[14px] font-medium text-text-primary truncate">{game.name}</span>
+                            {game.releaseYear && (
+                              <span className="text-[12px] text-text-tertiary shrink-0">{game.releaseYear}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {formatScore(game.reviewScore) && (
+                              <span
+                                className={`text-[12px] font-medium ${
+                                  game.reviewScore && game.reviewScore >= 80
+                                    ? 'text-trend-positive'
+                                    : game.reviewScore && game.reviewScore >= 70
+                                      ? 'text-accent-yellow'
+                                      : 'text-text-secondary'
+                                }`}
+                              >
+                                {formatScore(game.reviewScore)}
+                              </span>
+                            )}
+                            {formatScore(game.reviewScore) && formatReviews(game.totalReviews) && (
+                              <span className="text-text-tertiary">·</span>
+                            )}
+                            {formatReviews(game.totalReviews) && (
+                              <span className="text-[12px] text-text-secondary">{formatReviews(game.totalReviews)} reviews</span>
+                            )}
+                            {game.isFree && (
+                              <>
+                                <span className="text-text-tertiary">·</span>
+                                <span className="text-[12px] font-medium text-accent-cyan">Free</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {/* 7-day CCU trend sparkline */}
+                        {game.sparkline && game.sparkline.length > 0 && (
+                          <div className="shrink-0 w-16">
+                            <TrendSparkline
+                              data={game.sparkline}
+                              trend={game.sparklineTrend}
+                              height={24}
+                              variant="line"
+                            />
+                          </div>
                         )}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {formatScore(game.reviewScore) && (
-                          <span
-                            className={`text-[12px] font-medium ${
-                              game.reviewScore && game.reviewScore >= 80
-                                ? 'text-trend-positive'
-                                : game.reviewScore && game.reviewScore >= 70
-                                  ? 'text-accent-yellow'
-                                  : 'text-text-secondary'
-                            }`}
-                          >
-                            {formatScore(game.reviewScore)}
-                          </span>
-                        )}
-                        {formatScore(game.reviewScore) && formatReviews(game.totalReviews) && (
-                          <span className="text-text-tertiary">·</span>
-                        )}
-                        {formatReviews(game.totalReviews) && (
-                          <span className="text-[12px] text-text-secondary">{formatReviews(game.totalReviews)} reviews</span>
-                        )}
-                        {game.isFree && (
-                          <>
-                            <span className="text-text-tertiary">·</span>
-                            <span className="text-[12px] font-medium text-accent-cyan">Free</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {/* 7-day CCU trend sparkline */}
-                    {game.sparkline && game.sparkline.length > 0 && (
-                      <div className="shrink-0 w-16">
-                        <TrendSparkline
-                          data={game.sparkline}
-                          trend={game.sparklineTrend}
-                          height={24}
-                          variant="line"
-                        />
-                      </div>
-                    )}
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            )}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                );
+              }
 
-            {/* Publishers */}
-            {results && results.publishers.length > 0 && (
-              <Command.Group>
-                <div className="px-3 py-2 mt-1">
-                  <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Publishers</span>
-                </div>
-                {results.publishers.map((publisher) => (
-                  <Command.Item
-                    key={`publisher-${publisher.id}`}
-                    value={`publisher-${publisher.name}`}
-                    onSelect={() => handleSelectPublisher(publisher)}
-                    className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-purple/10 hover:bg-surface-overlay transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-accent-purple/10 flex items-center justify-center shrink-0">
-                      <Building2 className="w-4 h-4 text-accent-purple" />
+              if (section === 'publishers' && results.publishers.length > 0) {
+                return (
+                  <Command.Group key="publishers">
+                    <div className={`px-3 py-2 ${idx > 0 ? 'mt-1' : ''}`}>
+                      <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Publishers</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[14px] font-medium text-text-primary truncate block">{publisher.name}</span>
-                      <span className="text-[12px] text-text-secondary">{publisher.gameCount} games</span>
-                    </div>
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            )}
+                    {results.publishers.map((publisher) => (
+                      <Command.Item
+                        key={`publisher-${publisher.id}`}
+                        value={`publisher-${publisher.name}`}
+                        onSelect={() => handleSelectPublisher(publisher)}
+                        className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-purple/10 hover:bg-surface-overlay transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-accent-purple/10 flex items-center justify-center shrink-0">
+                          <Building2 className="w-4 h-4 text-accent-purple" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[14px] font-medium text-text-primary truncate block">{publisher.name}</span>
+                          <span className="text-[12px] text-text-secondary">{publisher.gameCount} games</span>
+                        </div>
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                );
+              }
 
-            {/* Developers */}
-            {results && results.developers.length > 0 && (
-              <Command.Group>
-                <div className="px-3 py-2 mt-1">
-                  <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Developers</span>
-                </div>
-                {results.developers.map((developer) => (
-                  <Command.Item
-                    key={`developer-${developer.id}`}
-                    value={`developer-${developer.name}`}
-                    onSelect={() => handleSelectDeveloper(developer)}
-                    className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-green/10 hover:bg-surface-overlay transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-accent-green/10 flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-accent-green" />
+              if (section === 'developers' && results.developers.length > 0) {
+                return (
+                  <Command.Group key="developers">
+                    <div className={`px-3 py-2 ${idx > 0 ? 'mt-1' : ''}`}>
+                      <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Developers</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[14px] font-medium text-text-primary truncate block">{developer.name}</span>
-                      <span className="text-[12px] text-text-secondary">{developer.gameCount} games</span>
-                    </div>
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            )}
+                    {results.developers.map((developer) => (
+                      <Command.Item
+                        key={`developer-${developer.id}`}
+                        value={`developer-${developer.name}`}
+                        onSelect={() => handleSelectDeveloper(developer)}
+                        className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-green/10 hover:bg-surface-overlay transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-accent-green/10 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 text-accent-green" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[14px] font-medium text-text-primary truncate block">{developer.name}</span>
+                          <span className="text-[12px] text-text-secondary">{developer.gameCount} games</span>
+                        </div>
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                );
+              }
+
+              return null;
+            })}
 
             {/* Actions */}
             {query.trim().length >= 2 && (

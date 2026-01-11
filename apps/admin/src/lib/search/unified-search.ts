@@ -103,11 +103,20 @@ async function getSparklinesBatch(
   return result;
 }
 
+/** Result with best match score for section ordering */
+interface SearchResultWithScore<T> {
+  results: T[];
+  bestScore: number;
+}
+
 /**
  * Search for games using fuzzy matching RPC
  * Falls back to simple ILIKE if RPC fails
  */
-async function searchGames(query: string, limit: number): Promise<GameSearchResult[]> {
+async function searchGames(
+  query: string,
+  limit: number
+): Promise<SearchResultWithScore<GameSearchResult>> {
   const supabase = getSupabase();
 
   // Try fuzzy search RPC first
@@ -119,16 +128,22 @@ async function searchGames(query: string, limit: number): Promise<GameSearchResu
 
   if (error) {
     console.error('Game fuzzy search error, falling back to ILIKE:', error);
-    return searchGamesFallback(query, limit);
+    const fallbackResults = await searchGamesFallback(query, limit);
+    return { results: fallbackResults, bestScore: fallbackResults.length > 0 ? 0.5 : 0 };
   }
 
-  if (!data || data.length === 0) return [];
+  if (!data || data.length === 0) return { results: [], bestScore: 0 };
+
+  // Get best similarity score from results
+  const bestScore = Math.max(
+    ...data.map((g: { similarity_score: number }) => g.similarity_score ?? 0)
+  );
 
   // Fetch sparklines for the found games
   const appIds = data.map((g: { appid: number }) => g.appid);
   const sparklines = await getSparklinesBatch(appIds);
 
-  return data.map(
+  const results = data.map(
     (g: {
       appid: number;
       name: string;
@@ -150,6 +165,8 @@ async function searchGames(query: string, limit: number): Promise<GameSearchResu
       };
     }
   );
+
+  return { results, bestScore };
 }
 
 /**
@@ -208,7 +225,10 @@ async function searchGamesFallback(query: string, limit: number): Promise<GameSe
  * Search for publishers using fuzzy matching RPC
  * Falls back to simple ILIKE if RPC fails
  */
-async function searchPublishers(query: string, limit: number): Promise<PublisherSearchResult[]> {
+async function searchPublishers(
+  query: string,
+  limit: number
+): Promise<SearchResultWithScore<PublisherSearchResult>> {
   const supabase = getSupabase();
 
   // Try fuzzy search RPC first
@@ -220,16 +240,25 @@ async function searchPublishers(query: string, limit: number): Promise<Publisher
 
   if (error) {
     console.error('Publisher fuzzy search error, falling back to ILIKE:', error);
-    return searchPublishersFallback(query, limit);
+    const fallbackResults = await searchPublishersFallback(query, limit);
+    return { results: fallbackResults, bestScore: fallbackResults.length > 0 ? 0.5 : 0 };
   }
 
-  return (
+  if (!data || data.length === 0) return { results: [], bestScore: 0 };
+
+  // Get best similarity score from results
+  const bestScore = Math.max(
+    ...data.map((p: { similarity_score: number }) => p.similarity_score ?? 0)
+  );
+
+  const results =
     data?.map((p: { id: number; name: string; game_count: number }) => ({
       id: p.id,
       name: p.name,
       gameCount: p.game_count ?? 0,
-    })) || []
-  );
+    })) || [];
+
+  return { results, bestScore };
 }
 
 /**
@@ -267,7 +296,10 @@ async function searchPublishersFallback(
  * Search for developers using fuzzy matching RPC
  * Falls back to simple ILIKE if RPC fails
  */
-async function searchDevelopers(query: string, limit: number): Promise<DeveloperSearchResult[]> {
+async function searchDevelopers(
+  query: string,
+  limit: number
+): Promise<SearchResultWithScore<DeveloperSearchResult>> {
   const supabase = getSupabase();
 
   // Try fuzzy search RPC first
@@ -279,16 +311,25 @@ async function searchDevelopers(query: string, limit: number): Promise<Developer
 
   if (error) {
     console.error('Developer fuzzy search error, falling back to ILIKE:', error);
-    return searchDevelopersFallback(query, limit);
+    const fallbackResults = await searchDevelopersFallback(query, limit);
+    return { results: fallbackResults, bestScore: fallbackResults.length > 0 ? 0.5 : 0 };
   }
 
-  return (
+  if (!data || data.length === 0) return { results: [], bestScore: 0 };
+
+  // Get best similarity score from results
+  const bestScore = Math.max(
+    ...data.map((d: { similarity_score: number }) => d.similarity_score ?? 0)
+  );
+
+  const results =
     data?.map((d: { id: number; name: string; game_count: number }) => ({
       id: d.id,
       name: d.name,
       gameCount: d.game_count ?? 0,
-    })) || []
-  );
+    })) || [];
+
+  return { results, bestScore };
 }
 
 /**
@@ -324,6 +365,7 @@ async function searchDevelopersFallback(
 
 /**
  * Search all entity types in parallel
+ * Returns results with similarity scores for dynamic section ordering
  */
 export async function unifiedSearch(query: string, limit = 5): Promise<SearchResults> {
   const trimmedQuery = query.trim();
@@ -336,11 +378,20 @@ export async function unifiedSearch(query: string, limit = 5): Promise<SearchRes
     };
   }
 
-  const [games, publishers, developers] = await Promise.all([
+  const [gamesResult, publishersResult, developersResult] = await Promise.all([
     searchGames(trimmedQuery, limit),
     searchPublishers(trimmedQuery, limit),
     searchDevelopers(trimmedQuery, limit),
   ]);
 
-  return { games, publishers, developers };
+  return {
+    games: gamesResult.results,
+    publishers: publishersResult.results,
+    developers: developersResult.results,
+    scores: {
+      games: gamesResult.bestScore,
+      publishers: publishersResult.bestScore,
+      developers: developersResult.bestScore,
+    },
+  };
 }
