@@ -24,6 +24,7 @@ export function createBrowserClient() {
         sameSite: 'lax',
         secure: true,
         path: '/',
+        maxAge: 604800, // 7 days in seconds - persist session across browser close
       },
     }
   );
