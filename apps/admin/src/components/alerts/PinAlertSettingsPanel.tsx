@@ -165,7 +165,7 @@ export function PinAlertSettingsPanel({
       >
         <div
           className="px-4 pb-4 space-y-4"
-          onClick={(e) => e.preventDefault()}
+          onClick={(e) => e.stopPropagation()}
         >
           {loading ? (
             <div className="space-y-2">
