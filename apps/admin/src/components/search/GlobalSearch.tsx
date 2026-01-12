@@ -177,8 +177,8 @@ export function GlobalSearch() {
           shouldFilter={false}
         >
           {/* Search Input */}
-          <div className="flex items-center px-4 py-3 border-b border-border-subtle">
-            <div className="flex items-center justify-center w-10 h-10">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+            <div className="shrink-0 flex items-center justify-center w-10 h-10">
               {isLoading ? (
                 <Loader2 className="w-5 h-5 text-accent-primary animate-spin" />
               ) : (
@@ -190,9 +190,9 @@ export function GlobalSearch() {
               onValueChange={handleInputChange}
               placeholder="Search games, publishers, developers..."
               autoFocus
-              className="flex-1 h-10 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted border-0 outline-none focus:outline-none focus:ring-0"
+              className="flex-1 min-w-0 h-10 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted border-0 outline-none focus:outline-none focus:ring-0"
             />
-            <kbd className="hidden sm:flex items-center h-6 px-1.5 text-[11px] font-medium text-text-tertiary bg-surface-raised rounded border border-border-subtle">
+            <kbd className="shrink-0 hidden sm:flex items-center h-6 px-1.5 text-[11px] font-medium text-text-tertiary bg-surface-raised rounded border border-border-subtle">
               ESC
             </kbd>
           </div>
