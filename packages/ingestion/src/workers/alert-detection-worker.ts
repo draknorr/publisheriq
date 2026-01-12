@@ -48,6 +48,15 @@ interface PinnedEntity {
   sensitivity_review: number;
   sensitivity_sentiment: number;
   alerts_enabled: boolean;
+  // Per-alert-type toggles (merged from pin and global settings)
+  alert_ccu_spike: boolean;
+  alert_ccu_drop: boolean;
+  alert_trend_reversal: boolean;
+  alert_review_surge: boolean;
+  alert_sentiment_shift: boolean;
+  alert_price_change: boolean;
+  alert_new_release: boolean;
+  alert_milestone: boolean;
 }
 
 interface DetectionState {
@@ -412,14 +421,42 @@ async function main(): Promise<void> {
       const stateKey = `${entity.entity_type}:${entity.entity_id}`;
       const baseline = stateMap.get(stateKey) ?? null;
 
-      // Run all detection functions
-      const detections: (DetectionResult | null)[] = [
-        detectCcuAnomaly(entity, baseline, entity.sensitivity_ccu),
-        detectTrendReversal(entity, baseline),
-        detectReviewSurge(entity, baseline, entity.sensitivity_review),
-        detectSentimentShift(entity, baseline, entity.sensitivity_sentiment),
-        detectMilestone(entity, baseline),
-      ];
+      // Run detection functions based on per-alert-type toggles
+      const detections: (DetectionResult | null)[] = [];
+
+      // CCU spike/drop detection (single function returns either spike or drop)
+      if (entity.alert_ccu_spike || entity.alert_ccu_drop) {
+        const ccuResult = detectCcuAnomaly(entity, baseline, entity.sensitivity_ccu);
+        // Only include if the specific alert type is enabled
+        if (ccuResult) {
+          if (
+            (ccuResult.alertType === 'ccu_spike' && entity.alert_ccu_spike) ||
+            (ccuResult.alertType === 'ccu_drop' && entity.alert_ccu_drop)
+          ) {
+            detections.push(ccuResult);
+          }
+        }
+      }
+
+      // Trend reversal detection
+      if (entity.alert_trend_reversal) {
+        detections.push(detectTrendReversal(entity, baseline));
+      }
+
+      // Review surge detection
+      if (entity.alert_review_surge) {
+        detections.push(detectReviewSurge(entity, baseline, entity.sensitivity_review));
+      }
+
+      // Sentiment shift detection
+      if (entity.alert_sentiment_shift) {
+        detections.push(detectSentimentShift(entity, baseline, entity.sensitivity_sentiment));
+      }
+
+      // Milestone detection
+      if (entity.alert_milestone) {
+        detections.push(detectMilestone(entity, baseline));
+      }
 
       // Create alerts for any detections
       for (const detection of detections) {

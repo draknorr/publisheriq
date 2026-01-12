@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { Gamepad2, Building2, Code } from 'lucide-react';
+import { Gamepad2, Building2, Code, Settings } from 'lucide-react';
+import { PinAlertSettingsPanel } from '@/components/alerts/PinAlertSettingsPanel';
 
 interface PinnedEntity {
   pin_id: string;
@@ -86,102 +88,121 @@ function getReviewColor(percent: number | null): string {
 }
 
 export function PinnedCard({ pin }: PinnedCardProps) {
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const href = getEntityHref(pin.entity_type, pin.entity_id);
   const isGame = pin.entity_type === 'game';
 
   return (
-    <Link
-      href={href}
-      className="block p-4 rounded-lg bg-surface-elevated border border-border-subtle hover:border-accent-blue/50 transition-colors"
-    >
-      {/* Header: Name + Type Badge */}
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <h3 className="font-medium text-text-primary line-clamp-2 text-body-sm leading-tight">
-          {pin.display_name}
-        </h3>
-        <span
-          className={`flex items-center gap-1 px-2 py-0.5 rounded text-caption font-medium flex-shrink-0 ${getEntityBadgeStyles(pin.entity_type)}`}
-        >
-          {getEntityIcon(pin.entity_type)}
-          {pin.entity_type.charAt(0).toUpperCase() + pin.entity_type.slice(1)}
-        </span>
-      </div>
-
-      {/* Metrics (games only for now) */}
-      {isGame && (
-        <div className="space-y-2 text-body-sm">
-          {/* CCU Row */}
-          <div className="flex justify-between items-center">
-            <span className="text-text-secondary">CCU</span>
-            <span className="text-text-primary font-medium">
-              {formatNumber(pin.ccu_current)}
-              {pin.ccu_change_pct !== null && (
-                <span
-                  className={`ml-1.5 text-caption ${pin.ccu_change_pct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}
-                >
-                  {pin.ccu_change_pct >= 0 ? '+' : ''}
-                  {pin.ccu_change_pct.toFixed(1)}%
-                </span>
-              )}
+    <div className="rounded-lg bg-surface-elevated border border-border-subtle hover:border-accent-blue/50 transition-colors overflow-hidden">
+      <Link href={href} className="block p-4">
+        {/* Header: Name + Type Badge + Settings */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <h3 className="font-medium text-text-primary line-clamp-2 text-body-sm leading-tight flex-1">
+            {pin.display_name}
+          </h3>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSettingsExpanded(!settingsExpanded);
+              }}
+              className="p-1 -m-1 rounded hover:bg-surface-overlay transition-colors"
+              aria-label="Alert settings"
+              title="Alert settings"
+            >
+              <Settings className="h-3.5 w-3.5 text-text-muted hover:text-text-secondary" />
+            </button>
+            <span
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-caption font-medium ${getEntityBadgeStyles(pin.entity_type)}`}
+            >
+              {getEntityIcon(pin.entity_type)}
+              {pin.entity_type.charAt(0).toUpperCase() + pin.entity_type.slice(1)}
             </span>
           </div>
+        </div>
 
-          {/* Reviews Row */}
-          <div className="flex justify-between items-center">
-            <span className="text-text-secondary">Reviews</span>
-            <span className="text-text-primary">
-              {formatNumber(pin.total_reviews)}
-              {pin.positive_pct !== null && (
-                <span className={`ml-1.5 ${getReviewColor(pin.positive_pct)}`}>
-                  ({pin.positive_pct.toFixed(0)}%)
-                </span>
-              )}
-            </span>
-          </div>
-
-          {/* Price Row */}
-          <div className="flex justify-between items-center">
-            <span className="text-text-secondary">Price</span>
-            <span className="text-text-primary">
-              {formatPrice(pin.price_cents)}
-              {pin.discount_percent !== null && pin.discount_percent > 0 && (
-                <span className="ml-1.5 text-accent-green text-caption font-medium">
-                  -{pin.discount_percent}%
-                </span>
-              )}
-            </span>
-          </div>
-
-          {/* Trend indicator */}
-          {pin.trend_direction && (
-            <div className="flex justify-between items-center pt-1 border-t border-border-subtle">
-              <span className="text-text-secondary">Trend</span>
-              <span
-                className={`text-caption font-medium ${
-                  pin.trend_direction === 'up'
-                    ? 'text-accent-green'
-                    : pin.trend_direction === 'down'
-                      ? 'text-accent-red'
-                      : 'text-text-muted'
-                }`}
-              >
-                {pin.trend_direction === 'up'
-                  ? 'Trending Up'
-                  : pin.trend_direction === 'down'
-                    ? 'Trending Down'
-                    : 'Stable'}
+        {/* Metrics (games only for now) */}
+        {isGame && (
+          <div className="space-y-2 text-body-sm">
+            {/* CCU Row */}
+            <div className="flex justify-between items-center">
+              <span className="text-text-secondary">CCU</span>
+              <span className="text-text-primary font-medium">
+                {formatNumber(pin.ccu_current)}
+                {pin.ccu_change_pct !== null && (
+                  <span
+                    className={`ml-1.5 text-caption ${pin.ccu_change_pct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}
+                  >
+                    {pin.ccu_change_pct >= 0 ? '+' : ''}
+                    {pin.ccu_change_pct.toFixed(1)}%
+                  </span>
+                )}
               </span>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Publisher/Developer placeholder - just show entity type for now */}
-      {!isGame && (
-        <div className="text-body-sm text-text-muted">
-          View details
-        </div>
-      )}
-    </Link>
+            {/* Reviews Row */}
+            <div className="flex justify-between items-center">
+              <span className="text-text-secondary">Reviews</span>
+              <span className="text-text-primary">
+                {formatNumber(pin.total_reviews)}
+                {pin.positive_pct !== null && (
+                  <span className={`ml-1.5 ${getReviewColor(pin.positive_pct)}`}>
+                    ({pin.positive_pct.toFixed(0)}%)
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {/* Price Row */}
+            <div className="flex justify-between items-center">
+              <span className="text-text-secondary">Price</span>
+              <span className="text-text-primary">
+                {formatPrice(pin.price_cents)}
+                {pin.discount_percent !== null && pin.discount_percent > 0 && (
+                  <span className="ml-1.5 text-accent-green text-caption font-medium">
+                    -{pin.discount_percent}%
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {/* Trend indicator */}
+            {pin.trend_direction && (
+              <div className="flex justify-between items-center pt-1 border-t border-border-subtle">
+                <span className="text-text-secondary">Trend</span>
+                <span
+                  className={`text-caption font-medium ${
+                    pin.trend_direction === 'up'
+                      ? 'text-accent-green'
+                      : pin.trend_direction === 'down'
+                        ? 'text-accent-red'
+                        : 'text-text-muted'
+                  }`}
+                >
+                  {pin.trend_direction === 'up'
+                    ? 'Trending Up'
+                    : pin.trend_direction === 'down'
+                      ? 'Trending Down'
+                      : 'Stable'}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Publisher/Developer placeholder - just show entity type for now */}
+        {!isGame && (
+          <div className="text-body-sm text-text-muted">View details</div>
+        )}
+      </Link>
+
+      {/* Alert Settings Panel */}
+      <PinAlertSettingsPanel
+        pinId={pin.pin_id}
+        isExpanded={settingsExpanded}
+        onToggle={() => setSettingsExpanded(!settingsExpanded)}
+      />
+    </div>
   );
 }

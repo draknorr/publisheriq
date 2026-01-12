@@ -1684,6 +1684,71 @@ export type Database = {
           },
         ]
       }
+      user_pin_alert_settings: {
+        Row: {
+          alert_ccu_drop: boolean | null
+          alert_ccu_spike: boolean | null
+          alert_milestone: boolean | null
+          alert_new_release: boolean | null
+          alert_price_change: boolean | null
+          alert_review_surge: boolean | null
+          alert_sentiment_shift: boolean | null
+          alert_trend_reversal: boolean | null
+          alerts_enabled: boolean
+          ccu_sensitivity: number | null
+          created_at: string
+          pin_id: string
+          review_sensitivity: number | null
+          sentiment_sensitivity: number | null
+          updated_at: string
+          use_custom_settings: boolean
+        }
+        Insert: {
+          alert_ccu_drop?: boolean | null
+          alert_ccu_spike?: boolean | null
+          alert_milestone?: boolean | null
+          alert_new_release?: boolean | null
+          alert_price_change?: boolean | null
+          alert_review_surge?: boolean | null
+          alert_sentiment_shift?: boolean | null
+          alert_trend_reversal?: boolean | null
+          alerts_enabled?: boolean
+          ccu_sensitivity?: number | null
+          created_at?: string
+          pin_id: string
+          review_sensitivity?: number | null
+          sentiment_sensitivity?: number | null
+          updated_at?: string
+          use_custom_settings?: boolean
+        }
+        Update: {
+          alert_ccu_drop?: boolean | null
+          alert_ccu_spike?: boolean | null
+          alert_milestone?: boolean | null
+          alert_new_release?: boolean | null
+          alert_price_change?: boolean | null
+          alert_review_surge?: boolean | null
+          alert_sentiment_shift?: boolean | null
+          alert_trend_reversal?: boolean | null
+          alerts_enabled?: boolean
+          ccu_sensitivity?: number | null
+          created_at?: string
+          pin_id?: string
+          review_sensitivity?: number | null
+          sentiment_sensitivity?: number | null
+          updated_at?: string
+          use_custom_settings?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_pin_alert_settings_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: true
+            referencedRelation: "user_pins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_pins: {
         Row: {
           display_name: string
@@ -2311,6 +2376,14 @@ export type Database = {
       get_pinned_entities_with_metrics: {
         Args: never
         Returns: {
+          alert_ccu_drop: boolean
+          alert_ccu_spike: boolean
+          alert_milestone: boolean
+          alert_new_release: boolean
+          alert_price_change: boolean
+          alert_review_surge: boolean
+          alert_sentiment_shift: boolean
+          alert_trend_reversal: boolean
           alerts_enabled: boolean
           ccu_7d_avg: number
           ccu_current: number

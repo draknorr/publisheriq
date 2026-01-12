@@ -59,3 +59,51 @@ export const DEFAULT_PREFERENCES: AlertPreferences = {
   alert_new_release: true,
   alert_milestone: true,
 };
+
+// Per-pin alert settings (stored in user_pin_alert_settings table)
+// null values mean "inherit from global user_alert_preferences"
+export interface PinAlertSettings {
+  use_custom_settings: boolean;
+  alerts_enabled: boolean;
+  ccu_sensitivity: number | null;
+  review_sensitivity: number | null;
+  sentiment_sensitivity: number | null;
+  alert_ccu_spike: boolean | null;
+  alert_ccu_drop: boolean | null;
+  alert_trend_reversal: boolean | null;
+  alert_review_surge: boolean | null;
+  alert_sentiment_shift: boolean | null;
+  alert_price_change: boolean | null;
+  alert_new_release: boolean | null;
+  alert_milestone: boolean | null;
+}
+
+// Keys that can be inherited from global preferences
+export type InheritablePreferenceKey = keyof Omit<AlertPreferences, 'alerts_enabled'>;
+
+// API response for GET /api/pins/[id]/alert-settings
+export interface PinAlertSettingsResponse {
+  // Raw settings from database (null = inherit)
+  settings: PinAlertSettings | null;
+  // Which fields are inherited from global (true = using global value)
+  inherited: Record<InheritablePreferenceKey, boolean>;
+  // Effective (merged) values actually used for alert detection
+  effective: AlertPreferences;
+}
+
+// Default per-pin settings (all null = inherit everything from global)
+export const DEFAULT_PIN_SETTINGS: PinAlertSettings = {
+  use_custom_settings: false,
+  alerts_enabled: true,
+  ccu_sensitivity: null,
+  review_sensitivity: null,
+  sentiment_sensitivity: null,
+  alert_ccu_spike: null,
+  alert_ccu_drop: null,
+  alert_trend_reversal: null,
+  alert_review_surge: null,
+  alert_sentiment_shift: null,
+  alert_price_change: null,
+  alert_new_release: null,
+  alert_milestone: null,
+};
