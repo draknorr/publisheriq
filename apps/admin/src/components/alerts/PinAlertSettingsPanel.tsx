@@ -235,8 +235,12 @@ export function PinAlertSettingsPanel({
                   <div className="grid grid-cols-2 gap-1">
                     {ALERT_TYPES.map((type) => {
                       const fieldKey = `alert_${type}` as InheritablePreferenceKey;
-                      const isInherited = inherited?.[fieldKey] ?? true;
-                      const effectiveValue = data?.effective?.[fieldKey] ?? true;
+                      // Use local settings value if set, otherwise fall back to effective
+                      const localValue = settings?.[fieldKey as keyof typeof settings];
+                      const isInherited = localValue === null || localValue === undefined;
+                      const displayValue = isInherited
+                        ? (data?.effective?.[fieldKey] ?? true)
+                        : localValue;
 
                       return (
                         <label
@@ -245,10 +249,8 @@ export function PinAlertSettingsPanel({
                         >
                           <input
                             type="checkbox"
-                            checked={effectiveValue as boolean}
+                            checked={displayValue as boolean}
                             onChange={(e) => {
-                              // If checked matches global, set to null (inherit)
-                              // Otherwise set explicit value
                               updateSetting(fieldKey, e.target.checked);
                             }}
                             className="h-3.5 w-3.5 rounded border-border-subtle text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
@@ -274,9 +276,12 @@ export function PinAlertSettingsPanel({
                   </h4>
                   <div className="space-y-3">
                     {Object.entries(SENSITIVITY_LABELS).map(([key, label]) => {
-                      const typedKey = key as InheritablePreferenceKey;
-                      const isInherited = inherited?.[typedKey] ?? true;
-                      const effectiveValue = (data?.effective?.[typedKey] as number) ?? 1.0;
+                      // Use local settings value if set, otherwise fall back to effective
+                      const localValue = settings?.[key as keyof typeof settings] as number | null;
+                      const isInherited = localValue === null || localValue === undefined;
+                      const displayValue = isInherited
+                        ? ((data?.effective?.[key as keyof typeof data.effective] as number) ?? 1.0)
+                        : localValue;
 
                       return (
                         <div key={key} className="space-y-1">
@@ -286,7 +291,7 @@ export function PinAlertSettingsPanel({
                             </span>
                             <div className="flex items-center gap-1">
                               <span className="text-caption text-text-muted tabular-nums">
-                                {effectiveValue.toFixed(1)}x
+                                {displayValue.toFixed(1)}x
                               </span>
                               {isInherited && (
                                 <span className="text-[10px] text-text-muted bg-surface-overlay px-1 rounded">
@@ -300,7 +305,7 @@ export function PinAlertSettingsPanel({
                             min="0.5"
                             max="2.0"
                             step="0.1"
-                            value={effectiveValue}
+                            value={displayValue}
                             onChange={(e) =>
                               updateSetting(key, parseFloat(e.target.value))
                             }
