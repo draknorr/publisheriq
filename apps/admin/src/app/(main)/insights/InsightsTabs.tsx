@@ -7,6 +7,7 @@ import { TimeRangeSelector } from './components/TimeRangeSelector';
 import { TopGamesTab } from './components/TopGamesTab';
 import { NewestGamesTab } from './components/NewestGamesTab';
 import { TrendingGamesTab } from './components/TrendingGamesTab';
+import { MyDashboardTab } from './components/MyDashboardTab';
 import { InsightsSkeleton } from './components/InsightsSkeleton';
 import type { GameInsight, TimeRange, InsightsTab, NewestSortMode } from './lib/insights-types';
 
@@ -80,27 +81,31 @@ export function InsightsTabs({
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList>
+            <TabsTrigger value="dashboard">My Dashboard</TabsTrigger>
             <TabsTrigger value="top">Top Games</TabsTrigger>
             <TabsTrigger value="newest">Newest</TabsTrigger>
             <TabsTrigger value="trending">Trending</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {/* Time Range + Loading Indicator */}
-        <div className="flex items-center gap-3">
-          {isPending && (
-            <span className="text-caption text-text-muted animate-pulse">Updating...</span>
-          )}
-          <TimeRangeSelector
-            value={timeRange}
-            onChange={handleTimeRangeChange}
-            disabled={isPending}
-          />
-        </div>
+        {/* Time Range + Loading Indicator (hidden on dashboard tab) */}
+        {activeTab !== 'dashboard' && (
+          <div className="flex items-center gap-3">
+            {isPending && (
+              <span className="text-caption text-text-muted animate-pulse">Updating...</span>
+            )}
+            <TimeRangeSelector
+              value={timeRange}
+              onChange={handleTimeRangeChange}
+              disabled={isPending}
+            />
+          </div>
+        )}
       </div>
 
       {/* Tab Content */}
-      <div className={isPending ? 'opacity-60 pointer-events-none' : ''}>
+      <div className={isPending && activeTab !== 'dashboard' ? 'opacity-60 pointer-events-none' : ''}>
+        {activeTab === 'dashboard' && <MyDashboardTab />}
         {activeTab === 'top' &&
           (isPending ? (
             <InsightsSkeleton />

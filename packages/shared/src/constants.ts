@@ -105,6 +105,32 @@ export const PRIORITY_SCORES = {
 } as const;
 
 /**
+ * Alert detection thresholds for pinned entity monitoring
+ */
+export const ALERT_THRESHOLDS = {
+  /** CCU change percentage from 7-day average to trigger spike/drop alert */
+  CCU_CHANGE_PERCENT: 50,
+
+  /** Minimum CCU to consider for alerts (filters noise from low-traffic games) */
+  CCU_MIN_ABSOLUTE: 100,
+
+  /** Multiplier above average velocity to trigger review surge alert */
+  REVIEW_VELOCITY_MULTIPLIER: 3,
+
+  /** Minimum reviews per day before considering velocity alerts */
+  REVIEW_MIN_DAILY: 5,
+
+  /** Positive ratio change percentage to trigger sentiment shift alert */
+  SENTIMENT_CHANGE_PERCENT: 5,
+
+  /** Minimum total reviews before considering sentiment alerts */
+  SENTIMENT_MIN_REVIEWS: 50,
+
+  /** Review count thresholds for milestone alerts */
+  MILESTONES: [1000, 10000, 50000, 100000, 500000, 1000000],
+} as const;
+
+/**
  * Steam Workshop category ID
  * Used to detect if a game supports Workshop
  */

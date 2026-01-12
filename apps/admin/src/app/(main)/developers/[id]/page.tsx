@@ -8,6 +8,8 @@ import { ReviewScoreBadge, RatioBar, TrendSparkline } from '@/components/data-di
 import { ExternalLink } from 'lucide-react';
 import { DeveloperDetailSections } from './DeveloperDetailSections';
 import { getCCUSparklinesBatch, getPortfolioCCUSparkline, type CCUSparklineData } from '@/lib/ccu-queries';
+import { PinButton } from '@/components/PinButton';
+import { getUser, createServerClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -442,6 +444,23 @@ export default async function DeveloperDetailPage({
     notFound();
   }
 
+  // Check if user is authenticated and if this developer is pinned
+  // Note: user_pins table is created by migration 20260112000001_add_personalization.sql
+  const user = await getUser();
+  let pinStatus: { id: string } | null = null;
+  if (user) {
+    const supabaseAuth = await createServerClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabaseAuth as any)
+      .from('user_pins')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('entity_type', 'developer')
+      .eq('entity_id', developer.id)
+      .maybeSingle();
+    pinStatus = data;
+  }
+
   // Get app IDs for CCU queries and similar developers
   const appIds = apps.map(a => a.appid);
   const topTagNames = tags.slice(0, 5).map(t => t.tag);
@@ -472,17 +491,27 @@ export default async function DeveloperDetailPage({
         title={developer.name}
         backLink={{ label: 'Back to Developers', href: '/developers' }}
         actions={
-          developer.steam_vanity_url ? (
-            <a
-              href={`https://store.steampowered.com/developer/${developer.steam_vanity_url}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm font-medium text-text-secondary hover:text-text-primary bg-surface-elevated hover:bg-surface-overlay border border-border-subtle transition-colors"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Steam
-            </a>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            <PinButton
+              entityType="developer"
+              entityId={developer.id}
+              displayName={developer.name}
+              isAuthenticated={!!user}
+              initialPinned={!!pinStatus}
+              initialPinId={pinStatus?.id}
+            />
+            {developer.steam_vanity_url && (
+              <a
+                href={`https://store.steampowered.com/developer/${developer.steam_vanity_url}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm font-medium text-text-secondary hover:text-text-primary bg-surface-elevated hover:bg-surface-overlay border border-border-subtle transition-colors"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Steam
+              </a>
+            )}
+          </div>
         }
       />
 

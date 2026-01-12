@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_detection_state: {
+        Row: {
+          ccu_7d_avg: number | null
+          ccu_7d_max: number | null
+          ccu_7d_min: number | null
+          ccu_prev_value: number | null
+          discount_percent_prev: number | null
+          entity_id: number
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          id: number
+          positive_ratio_prev: number | null
+          price_cents_prev: number | null
+          review_velocity_7d_avg: number | null
+          total_reviews_prev: number | null
+          trend_30d_direction_prev: string | null
+          updated_at: string
+        }
+        Insert: {
+          ccu_7d_avg?: number | null
+          ccu_7d_max?: number | null
+          ccu_7d_min?: number | null
+          ccu_prev_value?: number | null
+          discount_percent_prev?: number | null
+          entity_id: number
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          id?: number
+          positive_ratio_prev?: number | null
+          price_cents_prev?: number | null
+          review_velocity_7d_avg?: number | null
+          total_reviews_prev?: number | null
+          trend_30d_direction_prev?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ccu_7d_avg?: number | null
+          ccu_7d_max?: number | null
+          ccu_7d_min?: number | null
+          ccu_prev_value?: number | null
+          discount_percent_prev?: number | null
+          entity_id?: number
+          entity_type?: Database["public"]["Enums"]["entity_type"]
+          id?: number
+          positive_ratio_prev?: number | null
+          price_cents_prev?: number | null
+          review_velocity_7d_avg?: number | null
+          total_reviews_prev?: number | null
+          trend_30d_direction_prev?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_categories: {
         Row: {
           appid: number
@@ -630,6 +681,7 @@ export type Database = {
           ccu_fetch_status: string | null
           ccu_skip_until: string | null
           ccu_tier: number
+          last_ccu_synced: string | null
           last_tier_change: string | null
           recent_peak_ccu: number | null
           release_rank: number | null
@@ -641,6 +693,7 @@ export type Database = {
           ccu_fetch_status?: string | null
           ccu_skip_until?: string | null
           ccu_tier?: number
+          last_ccu_synced?: string | null
           last_tier_change?: string | null
           recent_peak_ccu?: number | null
           release_rank?: number | null
@@ -652,6 +705,7 @@ export type Database = {
           ccu_fetch_status?: string | null
           ccu_skip_until?: string | null
           ccu_tier?: number
+          last_ccu_synced?: string | null
           last_tier_change?: string | null
           recent_peak_ccu?: number | null
           release_rank?: number | null
@@ -1490,6 +1544,184 @@ export type Database = {
           },
         ]
       }
+      user_alert_preferences: {
+        Row: {
+          alert_ccu_drop: boolean
+          alert_ccu_spike: boolean
+          alert_milestone: boolean
+          alert_new_release: boolean
+          alert_price_change: boolean
+          alert_review_surge: boolean
+          alert_sentiment_shift: boolean
+          alert_trend_reversal: boolean
+          alerts_enabled: boolean
+          ccu_sensitivity: number
+          created_at: string
+          email_digest_enabled: boolean
+          email_digest_frequency: string | null
+          review_sensitivity: number
+          sentiment_sensitivity: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alert_ccu_drop?: boolean
+          alert_ccu_spike?: boolean
+          alert_milestone?: boolean
+          alert_new_release?: boolean
+          alert_price_change?: boolean
+          alert_review_surge?: boolean
+          alert_sentiment_shift?: boolean
+          alert_trend_reversal?: boolean
+          alerts_enabled?: boolean
+          ccu_sensitivity?: number
+          created_at?: string
+          email_digest_enabled?: boolean
+          email_digest_frequency?: string | null
+          review_sensitivity?: number
+          sentiment_sensitivity?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alert_ccu_drop?: boolean
+          alert_ccu_spike?: boolean
+          alert_milestone?: boolean
+          alert_new_release?: boolean
+          alert_price_change?: boolean
+          alert_review_surge?: boolean
+          alert_sentiment_shift?: boolean
+          alert_trend_reversal?: boolean
+          alerts_enabled?: boolean
+          ccu_sensitivity?: number
+          created_at?: string
+          email_digest_enabled?: boolean
+          email_digest_frequency?: string | null
+          review_sensitivity?: number
+          sentiment_sensitivity?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_alert_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_alerts: {
+        Row: {
+          alert_type: Database["public"]["Enums"]["alert_type"]
+          change_percent: number | null
+          created_at: string
+          current_value: number | null
+          dedup_key: string
+          description: string
+          id: string
+          is_read: boolean
+          metric_name: string | null
+          pin_id: string
+          previous_value: number | null
+          read_at: string | null
+          severity: Database["public"]["Enums"]["alert_severity"]
+          source_data: Json | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          alert_type: Database["public"]["Enums"]["alert_type"]
+          change_percent?: number | null
+          created_at?: string
+          current_value?: number | null
+          dedup_key: string
+          description: string
+          id?: string
+          is_read?: boolean
+          metric_name?: string | null
+          pin_id: string
+          previous_value?: number | null
+          read_at?: string | null
+          severity?: Database["public"]["Enums"]["alert_severity"]
+          source_data?: Json | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          alert_type?: Database["public"]["Enums"]["alert_type"]
+          change_percent?: number | null
+          created_at?: string
+          current_value?: number | null
+          dedup_key?: string
+          description?: string
+          id?: string
+          is_read?: boolean
+          metric_name?: string | null
+          pin_id?: string
+          previous_value?: number | null
+          read_at?: string | null
+          severity?: Database["public"]["Enums"]["alert_severity"]
+          source_data?: Json | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_alerts_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: false
+            referencedRelation: "user_pins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_alerts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_pins: {
+        Row: {
+          display_name: string
+          entity_id: number
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          id: string
+          pin_order: number | null
+          pinned_at: string
+          user_id: string
+        }
+        Insert: {
+          display_name: string
+          entity_id: number
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          id?: string
+          pin_order?: number | null
+          pinned_at?: string
+          user_id: string
+        }
+        Update: {
+          display_name?: string
+          entity_id?: number
+          entity_type?: Database["public"]["Enums"]["entity_type"]
+          id?: string
+          pin_order?: number | null
+          pinned_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_pins_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           created_at: string
@@ -1889,54 +2121,78 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: {
           appid: number
+          average_playtime_forever: number
           categories: string[]
+          ccu_peak: number
+          content_descriptors: Json
           controller_support: string
           current_price_cents: number
           developer_ids: number[]
           developers: string[]
           franchise_ids: number[]
+          franchise_names: string[]
           genres: string[]
           is_delisted: boolean
           is_free: boolean
           is_released: boolean
+          language_count: number
+          metacritic_score: number
           name: string
+          owners_min: number
           pics_review_percentage: number
           pics_review_score: number
           platforms: string
+          primary_genre: string
           publisher_ids: number[]
           publishers: string[]
           release_date: string
           steam_deck_category: string
+          steamspy_tags: string[]
           tags: string[]
+          total_reviews: number
+          trend_30d_direction: string
           type: string
           updated_at: string
+          velocity_tier: string
         }[]
       }
       get_apps_for_embedding_by_ids: {
         Args: { p_appids: number[] }
         Returns: {
           appid: number
+          average_playtime_forever: number
           categories: string[]
+          ccu_peak: number
+          content_descriptors: Json
           controller_support: string
           current_price_cents: number
           developer_ids: number[]
           developers: string[]
           franchise_ids: number[]
+          franchise_names: string[]
           genres: string[]
           is_delisted: boolean
           is_free: boolean
           is_released: boolean
+          language_count: number
+          metacritic_score: number
           name: string
+          owners_min: number
           pics_review_percentage: number
           pics_review_score: number
           platforms: string
+          primary_genre: string
           publisher_ids: number[]
           publishers: string[]
           release_date: string
           steam_deck_category: string
+          steamspy_tags: string[]
           tags: string[]
+          total_reviews: number
+          trend_30d_direction: string
           type: string
           updated_at: string
+          velocity_tier: string
         }[]
       }
       get_apps_for_reviews_sync: {
@@ -2052,6 +2308,28 @@ export type Database = {
           with_tags: number
         }[]
       }
+      get_pinned_entities_with_metrics: {
+        Args: never
+        Returns: {
+          alerts_enabled: boolean
+          ccu_7d_avg: number
+          ccu_current: number
+          discount_percent: number
+          display_name: string
+          entity_id: number
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          pin_id: string
+          positive_ratio: number
+          price_cents: number
+          review_velocity: number
+          sensitivity_ccu: number
+          sensitivity_review: number
+          sensitivity_sentiment: number
+          total_reviews: number
+          trend_30d_direction: string
+          user_id: string
+        }[]
+      }
       get_priority_distribution: {
         Args: never
         Returns: {
@@ -2162,6 +2440,25 @@ export type Database = {
           appid: number
         }[]
       }
+      get_user_pins_with_metrics: {
+        Args: { p_user_id: string }
+        Returns: {
+          ccu_change_pct: number
+          ccu_current: number
+          discount_percent: number
+          display_name: string
+          entity_id: number
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          pin_id: string
+          pin_order: number
+          pinned_at: string
+          positive_pct: number
+          price_cents: number
+          review_velocity: number
+          total_reviews: number
+          trend_direction: string
+        }[]
+      }
       interpolate_all_review_deltas: {
         Args: { p_end_date?: string; p_start_date?: string }
         Returns: {
@@ -2216,6 +2513,58 @@ export type Database = {
         Args: { p_amount: number; p_user_id: string }
         Returns: string
       }
+      search_developers_fuzzy: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          game_count: number
+          id: number
+          is_exact_match: boolean
+          name: string
+          similarity_score: number
+        }[]
+      }
+      search_games_fuzzy: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          appid: number
+          is_exact_match: boolean
+          is_free: boolean
+          name: string
+          positive_percentage: number
+          release_date: string
+          similarity_score: number
+          total_reviews: number
+        }[]
+      }
+      search_publishers_fuzzy: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          game_count: number
+          id: number
+          is_exact_match: boolean
+          name: string
+          similarity_score: number
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      update_alert_detection_state: {
+        Args: {
+          p_ccu_7d_avg?: number
+          p_ccu_7d_max?: number
+          p_ccu_7d_min?: number
+          p_ccu_prev_value?: number
+          p_discount_percent_prev?: number
+          p_entity_id: number
+          p_entity_type: Database["public"]["Enums"]["entity_type"]
+          p_positive_ratio_prev?: number
+          p_price_cents_prev?: number
+          p_review_velocity_7d_avg?: number
+          p_total_reviews_prev?: number
+          p_trend_30d_direction_prev?: string
+        }
+        Returns: undefined
+      }
       update_review_velocity_tiers: {
         Args: never
         Returns: {
@@ -2250,6 +2599,16 @@ export type Database = {
       }
     }
     Enums: {
+      alert_severity: "low" | "medium" | "high"
+      alert_type:
+        | "ccu_spike"
+        | "ccu_drop"
+        | "trend_reversal"
+        | "review_surge"
+        | "sentiment_shift"
+        | "price_change"
+        | "new_release"
+        | "milestone"
       app_type:
         | "game"
         | "dlc"
@@ -2270,6 +2629,7 @@ export type Database = {
         | "admin_deduct"
         | "chat_usage"
         | "refund"
+      entity_type: "game" | "publisher" | "developer"
       refresh_tier: "active" | "moderate" | "dormant" | "dead"
       steam_deck_category: "unknown" | "unsupported" | "playable" | "verified"
       sync_source:
@@ -2409,6 +2769,17 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      alert_severity: ["low", "medium", "high"],
+      alert_type: [
+        "ccu_spike",
+        "ccu_drop",
+        "trend_reversal",
+        "review_surge",
+        "sentiment_shift",
+        "price_change",
+        "new_release",
+        "milestone",
+      ],
       app_type: [
         "game",
         "dlc",
@@ -2431,6 +2802,7 @@ export const Constants = {
         "chat_usage",
         "refund",
       ],
+      entity_type: ["game", "publisher", "developer"],
       refresh_tier: ["active", "moderate", "dormant", "dead"],
       steam_deck_category: ["unknown", "unsupported", "playable", "verified"],
       sync_source: [

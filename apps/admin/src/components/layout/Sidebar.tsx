@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
 import { ThemeToggle } from '@/components/ui';
+import { AlertBadge } from '@/components/alerts';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 interface NavItem {
@@ -166,8 +167,8 @@ export function Sidebar() {
         `}
       >
         <div className="flex h-full flex-col">
-          {/* Logo */}
-          <div className="flex h-14 items-center border-b border-border-subtle px-5">
+          {/* Logo + Alert Badge */}
+          <div className="flex h-14 items-center justify-between border-b border-border-subtle px-5">
             <Link
               href="/dashboard"
               className="flex items-center gap-2.5 text-text-primary transition-opacity hover:opacity-80"
@@ -177,6 +178,7 @@ export function Sidebar() {
               </div>
               <span className="text-subheading tracking-tight">PublisherIQ</span>
             </Link>
+            <AlertBadge isAuthenticated={userProfile !== null} />
           </div>
 
           {/* Navigation */}

@@ -35,9 +35,9 @@ export default async function InsightsPage({ searchParams }: PageProps) {
     ? (params.timeRange as TimeRange)
     : '7d';
 
-  const tab: InsightsTab = ['top', 'newest', 'trending'].includes(params.tab ?? '')
+  const tab: InsightsTab = ['dashboard', 'top', 'newest', 'trending'].includes(params.tab ?? '')
     ? (params.tab as InsightsTab)
-    : 'top';
+    : 'dashboard';
 
   const newestSort: NewestSortMode = params.sort === 'growth' ? 'growth' : 'release';
 

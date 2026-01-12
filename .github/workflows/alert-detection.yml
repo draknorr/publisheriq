@@ -1,0 +1,37 @@
+name: Alert Detection
+
+on:
+  schedule:
+    # Run hourly at :15 (after CCU sync at :00)
+    - cron: '15 * * * *'
+  workflow_dispatch:
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run alert detection
+        run: pnpm --filter @publisheriq/ingestion alert-detection
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
