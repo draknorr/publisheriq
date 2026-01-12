@@ -18,7 +18,7 @@ Tracking progress for Qdrant Cloud optimization enhancements. Each sprint can be
 - [x] 2.1 Create get_game_momentum RPC in Supabase
 - [x] 2.2 Create get_sentiment_trajectory RPC in Supabase
 - [x] 2.3 Update buildGameEmbeddingText with momentum metrics
-- [ ] 2.4 Run full re-embed (manually via embedding-sync)
+- [x] 2.4 Run full re-embed (manually via embedding-sync)
 - [ ] 2.5 Test: Verify new embeddings include trend text
 
 ## Sprint 3: Trend-Based Discovery
@@ -41,6 +41,15 @@ Tracking progress for Qdrant Cloud optimization enhancements. Each sprint can be
 
 ## Notes
 <!-- Add implementation notes, issues, or deferred items here -->
+
+### Sprint 2.4 Embedding Sync Notes (2026-01-12)
+- Ran embedding-sync locally with momentum-enhanced embedding text
+- Results in 5.3 minutes:
+  - Games: 9,838 embedded, 2,102 skipped (unchanged hash)
+  - Publishers: 0 (RPC timeout - known issue with get_publishers_for_embedding)
+  - Developers: 7,284 embedded
+- Tokens used: ~2.07M, estimated cost: $0.04
+- Note: Publisher embeddings failed due to statement timeout on RPC - may need optimization
 
 ### Sprint 3 Implementation Notes (2026-01-12)
 - Added `discover_trending` tool for trend-based game discovery
