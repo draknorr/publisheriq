@@ -291,6 +291,7 @@ export interface GameFilters {
  */
 export interface EntityFilters {
   game_count?: RangeFilter;
+  avg_review_percentage?: RangeFilter;
   first_release_year?: RangeFilter;
   top_genres?: string[];
   top_tags?: string[];

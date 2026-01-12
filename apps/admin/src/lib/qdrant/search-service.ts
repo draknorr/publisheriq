@@ -4,18 +4,50 @@
  * Handles semantic similarity searches using Qdrant.
  */
 
+import OpenAI from 'openai';
 import {
   getQdrantClient,
   isQdrantConfigured,
   getCollectionName,
   buildGameFilter,
+  buildEntityFilter,
+  EMBEDDING_CONFIG,
+  COLLECTIONS,
   type GameFilters,
+  type EntityFilters,
   type GamePayload,
   type EntityType,
   type PopularityComparison,
   type ReviewComparison,
 } from '@publisheriq/qdrant';
 import { getSupabase } from '@/lib/supabase';
+
+// OpenAI client for concept search embeddings (lazy initialized)
+let openaiClient: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Missing OPENAI_API_KEY environment variable');
+    }
+    openaiClient = new OpenAI({ apiKey });
+  }
+  return openaiClient;
+}
+
+/**
+ * Generate embedding for a query string
+ */
+async function generateQueryEmbedding(text: string): Promise<number[]> {
+  const openai = getOpenAI();
+  const response = await openai.embeddings.create({
+    model: EMBEDDING_CONFIG.MODEL,
+    input: text,
+    dimensions: EMBEDDING_CONFIG.DIMENSIONS,
+  });
+  return response.data[0].embedding;
+}
 
 // Maximum results to return
 const MAX_RESULTS = 50;
@@ -28,6 +60,7 @@ export interface FindSimilarArgs {
   entity_type: EntityType;
   reference_name: string;
   filters?: {
+    // Game-specific filters
     popularity_comparison?: PopularityComparison;
     review_comparison?: ReviewComparison;
     max_price_cents?: number;
@@ -38,6 +71,13 @@ export interface FindSimilarArgs {
     tags?: string[];
     min_reviews?: number;
     release_year?: { gte?: number; lte?: number };
+    // Entity-specific filters (publishers/developers)
+    game_count?: { gte?: number; lte?: number };
+    avg_review_percentage?: { gte?: number; lte?: number };
+    is_major?: boolean;
+    is_indie?: boolean;
+    top_genres?: string[];
+    top_tags?: string[];
   };
   limit?: number;
 }
@@ -443,10 +483,20 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
 
     qdrantFilter = buildGameFilter(gameFilters, sourceMetrics);
   } else if (entity_type !== 'game') {
-    // For publishers/developers, don't apply exclusion filter for now
-    // The source entity will be filtered out client-side if it appears in results
-    // TODO: Investigate why entity filter causes "Bad Request" from Qdrant
-    qdrantFilter = undefined;
+    // Build entity filters for publishers/developers
+    const entityFilters: EntityFilters = {
+      exclude_ids: [entity.id],
+    };
+
+    // Map filter args to EntityFilters
+    if (filters?.game_count) entityFilters.game_count = filters.game_count;
+    if (filters?.avg_review_percentage) entityFilters.avg_review_percentage = filters.avg_review_percentage;
+    if (filters?.is_major !== undefined) entityFilters.is_major = filters.is_major;
+    if (filters?.is_indie !== undefined) entityFilters.is_indie = filters.is_indie;
+    if (filters?.top_genres) entityFilters.top_genres = filters.top_genres;
+    if (filters?.top_tags) entityFilters.top_tags = filters.top_tags;
+
+    qdrantFilter = buildEntityFilter(entityFilters);
   }
 
   // Execute search with entity-type-specific payload fields
@@ -546,5 +596,142 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
       },
       vectorFilter: qdrantFilter as Record<string, unknown> | undefined,
     },
+  };
+}
+
+/**
+ * Arguments for search_by_concept tool
+ */
+export interface SearchByConceptArgs {
+  description: string;
+  filters?: {
+    max_price_cents?: number;
+    is_free?: boolean;
+    platforms?: ('windows' | 'macos' | 'linux')[];
+    steam_deck?: ('verified' | 'playable')[];
+    genres?: string[];
+    tags?: string[];
+    min_reviews?: number;
+    release_year?: { gte?: number; lte?: number };
+    review_percentage?: { gte?: number };
+  };
+  limit?: number;
+}
+
+/**
+ * Result from search_by_concept
+ */
+export interface SearchByConceptResult {
+  success: boolean;
+  query_description?: string;
+  results?: SimilarEntity[];
+  total_found?: number;
+  error?: string;
+}
+
+/**
+ * Search for games by concept description
+ * Embeds the description and searches the game vector collection
+ */
+export async function searchByConcept(args: SearchByConceptArgs): Promise<SearchByConceptResult> {
+  // Check if Qdrant is configured
+  if (!isQdrantConfigured()) {
+    return {
+      success: false,
+      error: 'Concept search not configured. QDRANT_URL and QDRANT_API_KEY must be set.',
+    };
+  }
+
+  const { description, filters, limit = DEFAULT_RESULTS } = args;
+  const actualLimit = Math.min(limit, MAX_RESULTS);
+
+  // Validate description
+  if (!description || description.trim().length === 0) {
+    return {
+      success: false,
+      error: 'Description is required for concept search.',
+    };
+  }
+
+  // Generate embedding for the description
+  let queryVector: number[];
+  try {
+    queryVector = await generateQueryEmbedding(description);
+  } catch (embeddingError) {
+    console.error('Embedding generation error:', embeddingError);
+    return {
+      success: false,
+      error: `Failed to process description: ${embeddingError instanceof Error ? embeddingError.message : 'Unknown error'}`,
+    };
+  }
+
+  // Build filter with default exclusions for released, non-delisted games
+  const gameFilters: GameFilters = {
+    exclude_delisted: true,
+    is_released: true,
+  };
+
+  // Map filter args to GameFilters
+  if (filters) {
+    if (filters.is_free !== undefined) gameFilters.is_free = filters.is_free;
+    if (filters.max_price_cents) gameFilters.price_range = { lte: filters.max_price_cents };
+    if (filters.platforms) gameFilters.platforms = filters.platforms;
+    if (filters.steam_deck) gameFilters.steam_deck = filters.steam_deck;
+    if (filters.genres) gameFilters.genres = filters.genres;
+    if (filters.tags) gameFilters.tags = filters.tags;
+    if (filters.min_reviews) gameFilters.min_reviews = filters.min_reviews;
+    if (filters.release_year) gameFilters.release_year = filters.release_year;
+    if (filters.review_percentage) gameFilters.review_percentage = filters.review_percentage;
+  }
+
+  const qdrantFilter = buildGameFilter(gameFilters);
+
+  // Execute search
+  const client = getQdrantClient();
+  const collection = COLLECTIONS.GAMES;
+
+  const payloadFields = [
+    'name', 'type', 'genres', 'tags', 'review_percentage', 'price_cents', 'is_free',
+  ];
+
+  let searchResult;
+  try {
+    searchResult = await client.search(collection, {
+      vector: queryVector,
+      filter: qdrantFilter,
+      limit: actualLimit,
+      with_payload: {
+        include: payloadFields,
+      },
+    });
+  } catch (searchError) {
+    console.error('Qdrant search error:', searchError);
+    return {
+      success: false,
+      error: `Search failed: ${searchError instanceof Error ? searchError.message : 'Unknown error'}`,
+    };
+  }
+
+  // Format results (no hybrid scoring for concept search - pure vector similarity)
+  const results: SimilarEntity[] = searchResult.map((point) => {
+    const payload = point.payload as Record<string, unknown>;
+    return {
+      id: point.id as number,
+      name: (payload.name as string) || 'Unknown',
+      score: Math.round(point.score * 100), // Convert to percentage
+      type: payload.type as string | undefined,
+      genres: (payload.genres as string[] | undefined)?.slice(0, 3),
+      tags: (payload.tags as string[] | undefined)?.slice(0, 5),
+      review_percentage: payload.review_percentage as number | null | undefined,
+      price_cents: payload.price_cents as number | null | undefined,
+      is_free: payload.is_free as boolean | undefined,
+    };
+  });
+
+  return {
+    success: true,
+    query_description: description,
+    results,
+    total_found: searchResult.length,
   };
 }

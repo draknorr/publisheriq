@@ -6,7 +6,7 @@ import { TOOLS } from '@/lib/llm/tools';
 import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
 import { executeQuery } from '@/lib/query-executor';
 import { executeCubeQuery } from '@/lib/cube-executor';
-import { findSimilar, type FindSimilarArgs } from '@/lib/qdrant/search-service';
+import { findSimilar, searchByConcept, type FindSimilarArgs, type SearchByConceptArgs } from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
 import {
@@ -16,6 +16,7 @@ import {
   type LookupDevelopersArgs,
 } from '@/lib/search/publisher-lookup';
 import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
+import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import { logChatQuery } from '@/lib/chat-query-logger';
 import { createServerClient } from '@/lib/supabase/server';
@@ -70,6 +71,9 @@ async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; erro
   } else if (toolCall.name === 'find_similar') {
     const args = toolCall.arguments as unknown as FindSimilarArgs;
     return findSimilar(args);
+  } else if (toolCall.name === 'search_by_concept') {
+    const args = toolCall.arguments as unknown as SearchByConceptArgs;
+    return searchByConcept(args);
   } else if (toolCall.name === 'search_games') {
     const args = toolCall.arguments as unknown as SearchGamesArgs;
     return searchGames(args);
@@ -85,6 +89,9 @@ async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; erro
   } else if (toolCall.name === 'lookup_games') {
     const args = toolCall.arguments as unknown as LookupGamesArgs;
     return lookupGames(args);
+  } else if (toolCall.name === 'discover_trending') {
+    const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
+    return discoverTrending(args);
   }
   return { success: false, error: `Unknown tool: ${toolCall.name}` };
 }

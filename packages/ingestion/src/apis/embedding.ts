@@ -68,6 +68,15 @@ export interface GameEmbeddingData {
   steamspy_tags: string[];
   // Primary genre for embedding prefix
   primary_genre: string | null;
+  // Momentum data (from ccu_snapshots + review_velocity_stats)
+  ccu_growth_7d: number | null;
+  ccu_growth_30d: number | null;
+  velocity_7d: number | null;
+  velocity_acceleration: number | null;
+  // Sentiment trajectory (from daily_metrics)
+  recent_review_pct: number | null;
+  historical_review_pct: number | null;
+  sentiment_delta: number | null;
 }
 
 /**
@@ -330,6 +339,47 @@ export function buildGameEmbeddingText(game: GameEmbeddingData): string {
   }
   if (receptionParts.length > 0) {
     lines.push(`Reception: ${receptionParts.join(' | ')}`);
+  }
+
+  // MOMENTUM section (CCU growth + review velocity with acceleration)
+  const momentumParts: string[] = [];
+  // CCU growth - only show if significant (>= 10%)
+  if (game.ccu_growth_7d !== null && Math.abs(game.ccu_growth_7d) >= 10) {
+    const sign = game.ccu_growth_7d >= 0 ? '+' : '';
+    momentumParts.push(`${sign}${game.ccu_growth_7d}% CCU week-over-week`);
+  }
+  if (game.ccu_growth_30d !== null && Math.abs(game.ccu_growth_30d) >= 10) {
+    const sign = game.ccu_growth_30d >= 0 ? '+' : '';
+    momentumParts.push(`${sign}${game.ccu_growth_30d}% vs 30-day avg`);
+  }
+  if (momentumParts.length > 0) {
+    lines.push(`Momentum: ${momentumParts.join(', ')}`);
+  }
+
+  // Review velocity with acceleration indicator
+  if (game.velocity_7d !== null && game.velocity_7d > 0) {
+    let velocityText = `Review velocity: ${game.velocity_7d.toFixed(1)}/day`;
+    if (game.velocity_acceleration !== null && Math.abs(game.velocity_acceleration) >= 0.5) {
+      if (game.velocity_acceleration > 0) {
+        velocityText += `, Accelerating (+${game.velocity_acceleration.toFixed(1)}/day)`;
+      } else {
+        velocityText += `, Decelerating (${game.velocity_acceleration.toFixed(1)}/day)`;
+      }
+    }
+    lines.push(velocityText);
+  }
+
+  // SENTIMENT section (only if delta is meaningful >= 2%)
+  if (
+    game.recent_review_pct !== null &&
+    game.historical_review_pct !== null &&
+    game.sentiment_delta !== null &&
+    Math.abs(game.sentiment_delta) >= 2
+  ) {
+    const trend = game.sentiment_delta > 0 ? 'improving' : 'declining';
+    lines.push(
+      `Recent sentiment: ${game.recent_review_pct}% positive (vs ${game.historical_review_pct}% historical, ${trend})`
+    );
   }
 
   lines.push(''); // Blank line separator

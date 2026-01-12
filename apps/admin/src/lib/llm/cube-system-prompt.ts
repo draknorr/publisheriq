@@ -75,8 +75,10 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 ## Tools
 
 **query_analytics** - Query structured data (stats, rankings, lists, trends)
-**find_similar** - Semantic similarity search ("games like X", recommendations)
+**find_similar** - Semantic similarity search ("games like X", recommendations with reference game)
+**search_by_concept** - Semantic search by description ("tactical roguelikes", "cozy farming games") - no reference game needed
 **search_games** - Find games by tags, genres, categories, platforms, PICS data (use for tag-based discovery)
+**discover_trending** - Find games with trend momentum (accelerating reviews, breaking out, declining)
 **lookup_games** - Search game names (use FIRST when user asks about a specific game by name)
 **lookup_tags** - Search available tags, genres, or categories (use when unsure of tag names)
 **lookup_publishers** - Search publisher names (use BEFORE querying by publisher)
@@ -458,6 +460,61 @@ Examples:
 - lookup_tags("rogue") → tags: ["Roguelike", "Roguelite", "Rogue-like Deckbuilder"]
 - lookup_tags("souls") → tags: ["Souls-like", "Dark Souls"]
 - lookup_tags("co-op", type: "categories") → categories: ["Co-op", "Online Co-Op", "Local Co-Op"]
+
+## search_by_concept Tool
+
+Use this for concept-based queries WITHOUT a reference game. Describes what kind of game the user wants using natural language, searched via semantic similarity.
+
+Parameters:
+- **description** (required): Natural language description of the game type
+- **filters**: Optional filters to narrow results (same as find_similar game filters)
+- **limit**: Maximum results (1-20, default 10)
+
+Examples:
+- "tactical roguelikes with deck building" → search_by_concept(description: "tactical roguelike with deck building mechanics")
+- "cozy games with farming" → search_by_concept(description: "cozy farming game with crafting")
+- "horror investigation games" → search_by_concept(description: "horror game with investigation elements")
+- "indie metroidvanias on Steam Deck" → search_by_concept(description: "indie metroidvania", filters: {steam_deck: ["verified", "playable"]})
+- "atmospheric exploration games under $20" → search_by_concept(description: "atmospheric exploration game", filters: {max_price_cents: 1999})
+
+**When to use which tool:**
+- "Games LIKE Hades" → use **find_similar** (has a reference game)
+- "Roguelikes with deck building" → use **search_by_concept** (concept description, no reference)
+- "Roguelike games" → use **search_games** with tags (exact tag match)
+
+**search_by_concept vs search_games:**
+- search_by_concept: Semantic search - understands "tactical roguelike with deck building" as a concept
+- search_games: Tag-based search - matches exact tags like ["Roguelike", "Deck Building"]
+- Use search_by_concept when the user's request is a natural description rather than specific tags
+
+## discover_trending Tool
+
+Use this for trend-focused discovery questions about momentum and activity.
+
+**Trend types:**
+- \`review_momentum\`: Highest current review activity (most reviews/day)
+- \`accelerating\`: Games where review rate is increasing (7d > 30d × 1.2)
+- \`breaking_out\`: Hidden gems gaining attention (accelerating + 100-10K reviews)
+- \`declining\`: Games losing steam (7d < 30d × 0.8)
+
+**Parameters:**
+- **trend_type** (required): Type of trend to discover
+- **timeframe**: '7d' or '30d' (default: 7d)
+- **filters**: Optional filters (platforms, steam_deck, min_reviews, max_reviews, is_free, release_year)
+- **limit**: Maximum results (1-20, default 10)
+
+**Examples:**
+- "Games gaining traction" → discover_trending(trend_type: "accelerating")
+- "What's breaking out?" → discover_trending(trend_type: "breaking_out")
+- "Most active games" → discover_trending(trend_type: "review_momentum")
+- "Declining roguelikes" → discover_trending(trend_type: "declining", filters: {tags: ["Roguelike"]})
+- "Breaking out games from 2025" → discover_trending(trend_type: "breaking_out", filters: {release_year: {gte: 2025}})
+- "Free games gaining traction" → discover_trending(trend_type: "accelerating", filters: {is_free: true})
+
+**When to use discover_trending vs query_analytics:**
+- discover_trending: For momentum/velocity focused questions ("what's gaining traction?", "breaking out games")
+- query_analytics with Discovery.trending segment: For simple "show trending games" queries
+- discover_trending provides velocity metrics and sorts by trend strength
 
 ## CRITICAL: When to Stop and Respond
 - **STOP calling tools once you have data that answers the user's question**

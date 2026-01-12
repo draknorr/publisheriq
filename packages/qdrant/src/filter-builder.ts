@@ -266,6 +266,13 @@ export function buildEntityFilter(filters: EntityFilters): QdrantFilter | undefi
     }
   }
 
+  if (filters.avg_review_percentage) {
+    const range = buildRange(filters.avg_review_percentage);
+    if (range) {
+      must.push({ key: 'avg_review_percentage', range });
+    }
+  }
+
   if (filters.first_release_year) {
     const range = buildRange(filters.first_release_year);
     if (range) {

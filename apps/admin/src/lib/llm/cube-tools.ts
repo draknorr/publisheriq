@@ -194,6 +194,41 @@ Returns semantically similar entities based on genres, tags, features, and other
                 lte: { type: 'number', description: 'Released in or before this year' },
               },
             },
+            // Entity-specific filters (for publisher/developer searches)
+            game_count: {
+              type: 'object',
+              properties: {
+                gte: { type: 'number', description: 'Minimum games published/developed' },
+                lte: { type: 'number', description: 'Maximum games published/developed' },
+              },
+              description: 'Filter publishers/developers by game count',
+            },
+            avg_review_percentage: {
+              type: 'object',
+              properties: {
+                gte: { type: 'number', description: 'Minimum average review % (0-100)' },
+                lte: { type: 'number', description: 'Maximum average review % (0-100)' },
+              },
+              description: 'Filter by average review score across portfolio',
+            },
+            is_major: {
+              type: 'boolean',
+              description: 'Filter for major publishers (10+ games)',
+            },
+            is_indie: {
+              type: 'boolean',
+              description: 'Filter for indie developers (self-published)',
+            },
+            top_genres: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Filter by primary genres in portfolio',
+            },
+            top_tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Filter by common tags in portfolio',
+            },
           },
         },
         limit: {
@@ -382,6 +417,173 @@ Returns matching developer names with their IDs for use in filters.`,
   },
 };
 
+export const SEARCH_BY_CONCEPT_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'search_by_concept',
+    description: `Search for games matching a natural language description using semantic similarity.
+
+Use this tool for concept-based queries WITHOUT a reference game:
+- "tactical roguelikes with deck building"
+- "cozy farming games with crafting"
+- "horror games with investigation elements"
+- "fast-paced action games with pixel art"
+
+This searches the game database using semantic understanding of the description.
+For "games like X", use find_similar instead.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        description: {
+          type: 'string',
+          description: 'Natural language description of the type of game to find',
+        },
+        filters: {
+          type: 'object',
+          description: 'Optional filters to narrow results',
+          properties: {
+            max_price_cents: {
+              type: 'number',
+              description: 'Maximum price in cents (e.g., 1999 for $19.99)',
+            },
+            is_free: {
+              type: 'boolean',
+              description: 'Only show free-to-play games',
+            },
+            platforms: {
+              type: 'array',
+              items: { type: 'string', enum: ['windows', 'macos', 'linux'] },
+              description: 'Required platform support',
+            },
+            steam_deck: {
+              type: 'array',
+              items: { type: 'string', enum: ['verified', 'playable'] },
+              description: 'Steam Deck compatibility requirement',
+            },
+            genres: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Required genres (e.g., ["Action", "RPG"])',
+            },
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Required tags (e.g., ["Roguelike", "Indie"])',
+            },
+            min_reviews: {
+              type: 'number',
+              description: 'Minimum number of reviews',
+            },
+            release_year: {
+              type: 'object',
+              properties: {
+                gte: { type: 'number', description: 'Released in or after this year' },
+                lte: { type: 'number', description: 'Released in or before this year' },
+              },
+            },
+            review_percentage: {
+              type: 'object',
+              properties: {
+                gte: { type: 'number', description: 'Minimum positive review percentage (0-100)' },
+              },
+            },
+          },
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results to return (1-20, default 10)',
+        },
+      },
+      required: ['description'],
+    },
+  },
+};
+
+export const DISCOVER_TRENDING_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'discover_trending',
+    description: `Discover games with trend momentum based on review activity.
+
+Use for:
+- "Games gaining traction this week"
+- "What's breaking out right now?"
+- "Games with accelerating reviews"
+- "Declining games" / "Games losing momentum"
+
+Trend types:
+- review_momentum: Highest review activity (most reviews/day)
+- accelerating: Games where review rate is increasing
+- breaking_out: Hidden gems gaining sudden attention (accelerating + not mainstream)
+- declining: Games where review velocity is dropping`,
+    parameters: {
+      type: 'object',
+      properties: {
+        trend_type: {
+          type: 'string',
+          enum: ['review_momentum', 'accelerating', 'breaking_out', 'declining'],
+          description: 'Type of trend to discover',
+        },
+        timeframe: {
+          type: 'string',
+          enum: ['7d', '30d'],
+          description: 'Timeframe for analysis (default: 7d)',
+        },
+        filters: {
+          type: 'object',
+          description: 'Optional filters to narrow results',
+          properties: {
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Required tags (e.g., ["Roguelike", "Indie"])',
+            },
+            genres: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Required genres (e.g., ["Action", "RPG"])',
+            },
+            platforms: {
+              type: 'array',
+              items: { type: 'string', enum: ['windows', 'macos', 'linux'] },
+              description: 'Required platform support',
+            },
+            steam_deck: {
+              type: 'array',
+              items: { type: 'string', enum: ['verified', 'playable'] },
+              description: 'Steam Deck compatibility requirement',
+            },
+            min_reviews: {
+              type: 'number',
+              description: 'Minimum total reviews',
+            },
+            max_reviews: {
+              type: 'number',
+              description: 'Maximum total reviews (for hidden gems)',
+            },
+            is_free: {
+              type: 'boolean',
+              description: 'Filter by free-to-play status',
+            },
+            release_year: {
+              type: 'object',
+              properties: {
+                gte: { type: 'number', description: 'Released in or after this year' },
+                lte: { type: 'number', description: 'Released in or before this year' },
+              },
+            },
+          },
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results (1-20, default 10)',
+        },
+      },
+      required: ['trend_type'],
+    },
+  },
+};
+
 export const LOOKUP_GAMES_TOOL: Tool = {
   type: 'function',
   function: {
@@ -415,7 +617,9 @@ Returns matching games with appid and name. Use the appid in subsequent query_an
 export const CUBE_TOOLS: Tool[] = [
   QUERY_ANALYTICS_TOOL,
   FIND_SIMILAR_TOOL,
+  SEARCH_BY_CONCEPT_TOOL,
   SEARCH_GAMES_TOOL,
+  DISCOVER_TRENDING_TOOL,
   LOOKUP_TAGS_TOOL,
   LOOKUP_PUBLISHERS_TOOL,
   LOOKUP_DEVELOPERS_TOOL,

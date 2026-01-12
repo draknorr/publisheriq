@@ -19,9 +19,11 @@ export const COLLECTIONS = {
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
 
 // Embedding configuration
+// Note: Reduced from 1536 to 512 dimensions to save ~67% storage
+// OpenAI's Matryoshka training preserves semantic quality at lower dims
 export const EMBEDDING_CONFIG = {
   MODEL: 'text-embedding-3-small',
-  DIMENSIONS: 1536,
+  DIMENSIONS: 512,
   MAX_TOKENS: 8191,
   MAX_CHARS: 2000, // ~500 tokens, safe limit
 } as const;
@@ -110,7 +112,7 @@ async function ensureCollection(
         default_segment_number: 2, // Good for ~150k vectors
         memmap_threshold: 20000, // Use mmap for larger segments
       },
-      on_disk_payload: false, // Keep payloads in RAM for fast filtering
+      on_disk_payload: true, // Store payloads on disk to reduce RAM usage (~50% savings)
     });
   }
 
