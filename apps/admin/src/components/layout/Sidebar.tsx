@@ -8,8 +8,6 @@ import {
   Gamepad2,
   Building2,
   Users,
-  Menu,
-  X,
   MessageSquare,
   Shield,
   User,
@@ -50,7 +48,7 @@ const adminNavItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isOpen, toggle, close } = useSidebar();
+  const { isOpen, close } = useSidebar();
   const [userProfile, setUserProfile] = useState<{
     email: string;
     role: 'user' | 'admin';
@@ -132,22 +130,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile header controls */}
-      <div className="fixed left-4 right-4 top-safe z-50 flex items-center justify-between md:hidden">
-        <button
-          onClick={toggle}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-raised border border-border-subtle"
-          aria-label={isOpen ? 'Close menu' : 'Open menu'}
-        >
-          {isOpen ? (
-            <X className="h-5 w-5 text-text-primary" />
-          ) : (
-            <Menu className="h-5 w-5 text-text-primary" />
-          )}
-        </button>
-        <ThemeToggle />
-      </div>
-
       {/* Mobile overlay */}
       {isOpen && (
         <div
