@@ -8,6 +8,9 @@ import {
   Gamepad2,
   Building2,
   Users,
+  Menu,
+  X,
+  Search,
   MessageSquare,
   Shield,
   User,
@@ -18,6 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
+import { useGlobalSearch } from '@/components/search';
 import { ThemeToggle } from '@/components/ui';
 import { AlertBadge } from '@/components/alerts';
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -48,7 +52,8 @@ const adminNavItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isOpen, close } = useSidebar();
+  const { isOpen, toggle, close } = useSidebar();
+  const { open: openSearch } = useGlobalSearch();
   const [userProfile, setUserProfile] = useState<{
     email: string;
     role: 'user' | 'admin';
@@ -130,6 +135,31 @@ export function Sidebar() {
 
   return (
     <>
+      {/* Mobile header controls */}
+      <div className="fixed left-4 right-4 top-safe z-50 flex items-center justify-between md:hidden">
+        <button
+          onClick={toggle}
+          className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-raised border border-border-subtle"
+          aria-label={isOpen ? 'Close menu' : 'Open menu'}
+        >
+          {isOpen ? (
+            <X className="h-5 w-5 text-text-primary" />
+          ) : (
+            <Menu className="h-5 w-5 text-text-primary" />
+          )}
+        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openSearch}
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-raised border border-border-subtle"
+            aria-label="Search"
+          >
+            <Search className="h-5 w-5 text-text-primary" />
+          </button>
+          <ThemeToggle />
+        </div>
+      </div>
+
       {/* Mobile overlay */}
       {isOpen && (
         <div
@@ -161,6 +191,25 @@ export function Sidebar() {
               <span className="text-subheading tracking-tight">PublisherIQ</span>
             </Link>
             <AlertBadge isAuthenticated={userProfile !== null} />
+          </div>
+
+          {/* Search Button */}
+          <div className="px-3 py-3 border-b border-border-subtle">
+            <button
+              onClick={openSearch}
+              className="
+                w-full flex items-center gap-2.5 px-3 py-2
+                bg-surface-elevated border border-border-subtle rounded-lg
+                text-text-muted hover:text-text-secondary hover:border-border-muted
+                transition-all duration-150
+              "
+            >
+              <Search className="w-4 h-4" />
+              <span className="flex-1 text-left text-body-sm">Search...</span>
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-caption bg-surface rounded border border-border-subtle">
+                <span className="text-xs">⌘</span>K
+              </kbd>
+            </button>
           </div>
 
           {/* Navigation */}
