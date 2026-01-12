@@ -25,7 +25,7 @@ function AuthCallbackContent() {
       try {
         const supabase = createBrowserClient();
 
-        // Check if there's a hash fragment with auth tokens
+        // Check if there's a hash fragment with auth tokens (implicit flow)
         // Supabase client auto-detects this on initialization
         const hash = window.location.hash;
 
@@ -47,6 +47,27 @@ function AuthCallbackContent() {
             window.history.replaceState(null, '', window.location.pathname);
 
             // Success - redirect to intended destination
+            const next = searchParams.get('next') || '/dashboard';
+            router.replace(next);
+            return;
+          }
+        }
+
+        // Check for PKCE code in query params (fallback from API route or direct magic link)
+        const code = searchParams.get('code');
+        if (code) {
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (exchangeError) {
+            console.error('Code exchange error:', exchangeError);
+            setError('Sign-in link expired or invalid. Please request a new one.');
+            setTimeout(() => router.replace('/login?error=auth_failed'), 2000);
+            return;
+          }
+
+          if (data.session) {
+            // Clear code from URL
+            window.history.replaceState(null, '', window.location.pathname);
             const next = searchParams.get('next') || '/dashboard';
             router.replace(next);
             return;

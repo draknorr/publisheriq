@@ -59,7 +59,7 @@ function LoginPageContent() {
         email,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/api/auth/callback`,
         },
       });
 

@@ -10,6 +10,11 @@ import type { Database } from '@publisheriq/database';
  * open in different browser contexts.
  */
 export function createBrowserClient() {
+  // Only set explicit domain for production (allows subdomains like app.publisheriq.app)
+  // For other environments (localhost, Vercel previews), let browser use current origin
+  const isProduction = typeof window !== 'undefined' &&
+    window.location.hostname.endsWith('.publisheriq.app');
+
   return createSupabaseBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -20,9 +25,9 @@ export function createBrowserClient() {
         autoRefreshToken: true,
       },
       cookieOptions: {
-        domain: '.publisheriq.app',
+        ...(isProduction && { domain: '.publisheriq.app' }),
         sameSite: 'lax',
-        secure: true,
+        secure: process.env.NODE_ENV === 'production',
         path: '/',
         maxAge: 604800, // 7 days in seconds - persist session across browser close
       },
