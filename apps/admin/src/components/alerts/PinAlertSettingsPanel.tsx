@@ -135,7 +135,6 @@ export function PinAlertSettingsPanel({
   };
 
   const settings = data?.settings ?? DEFAULT_PIN_SETTINGS;
-  const inherited = data?.inherited;
   const useCustom = settings?.use_custom_settings ?? false;
 
   return (
