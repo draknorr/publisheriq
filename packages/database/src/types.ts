@@ -1833,6 +1833,7 @@ export type Database = {
           full_name: string
           how_i_plan_to_use: string | null
           id: string
+          initial_credits: number
           invite_sent_at: string | null
           organization: string | null
           reviewed_at: string | null
@@ -1845,6 +1846,7 @@ export type Database = {
           full_name: string
           how_i_plan_to_use?: string | null
           id?: string
+          initial_credits?: number
           invite_sent_at?: string | null
           organization?: string | null
           reviewed_at?: string | null
@@ -1857,6 +1859,7 @@ export type Database = {
           full_name?: string
           how_i_plan_to_use?: string | null
           id?: string
+          initial_credits?: number
           invite_sent_at?: string | null
           organization?: string | null
           reviewed_at?: string | null
@@ -2188,6 +2191,8 @@ export type Database = {
           appid: number
           average_playtime_forever: number
           categories: string[]
+          ccu_growth_30d: number
+          ccu_growth_7d: number
           ccu_peak: number
           content_descriptors: Json
           controller_support: string
@@ -2197,6 +2202,7 @@ export type Database = {
           franchise_ids: number[]
           franchise_names: string[]
           genres: string[]
+          historical_review_pct: number
           is_delisted: boolean
           is_free: boolean
           is_released: boolean
@@ -2210,7 +2216,9 @@ export type Database = {
           primary_genre: string
           publisher_ids: number[]
           publishers: string[]
+          recent_review_pct: number
           release_date: string
+          sentiment_delta: number
           steam_deck_category: string
           steamspy_tags: string[]
           tags: string[]
@@ -2218,6 +2226,8 @@ export type Database = {
           trend_30d_direction: string
           type: string
           updated_at: string
+          velocity_7d: number
+          velocity_acceleration: number
           velocity_tier: string
         }[]
       }
@@ -2227,6 +2237,8 @@ export type Database = {
           appid: number
           average_playtime_forever: number
           categories: string[]
+          ccu_growth_30d: number
+          ccu_growth_7d: number
           ccu_peak: number
           content_descriptors: Json
           controller_support: string
@@ -2236,6 +2248,7 @@ export type Database = {
           franchise_ids: number[]
           franchise_names: string[]
           genres: string[]
+          historical_review_pct: number
           is_delisted: boolean
           is_free: boolean
           is_released: boolean
@@ -2249,7 +2262,9 @@ export type Database = {
           primary_genre: string
           publisher_ids: number[]
           publishers: string[]
+          recent_review_pct: number
           release_date: string
+          sentiment_delta: number
           steam_deck_category: string
           steamspy_tags: string[]
           tags: string[]
@@ -2257,6 +2272,8 @@ export type Database = {
           trend_30d_direction: string
           type: string
           updated_at: string
+          velocity_7d: number
+          velocity_acceleration: number
           velocity_tier: string
         }[]
       }
@@ -2359,6 +2376,15 @@ export type Database = {
           total_owners_min: number
           total_reviews: number
           weighted_review_score: number
+        }[]
+      }
+      get_game_momentum: {
+        Args: { p_appid: number }
+        Returns: {
+          ccu_growth_30d: number
+          ccu_growth_7d: number
+          velocity_7d: number
+          velocity_acceleration: number
         }[]
       }
       get_pics_data_stats: {
@@ -2488,6 +2514,14 @@ export type Database = {
           due_in_24_hours: number
           due_in_6_hours: number
           overdue: number
+        }[]
+      }
+      get_sentiment_trajectory: {
+        Args: { p_appid: number }
+        Returns: {
+          historical_review_pct: number
+          recent_review_pct: number
+          sentiment_delta: number
         }[]
       }
       get_source_completion_stats: {

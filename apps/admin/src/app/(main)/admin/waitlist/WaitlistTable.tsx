@@ -99,13 +99,14 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
     try {
       const supabase = createBrowserClient();
 
-      // Update waitlist status first
+      // Update waitlist status and initial credits
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: updateError } = await (supabase.from('waitlist') as any)
         .update({
           status: 'approved',
           reviewed_by: adminId,
           reviewed_at: new Date().toISOString(),
+          initial_credits: credits,
         })
         .eq('id', selectedEntry.id);
 
