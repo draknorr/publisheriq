@@ -18,6 +18,7 @@ import {
   BarChart3,
   ChevronDown,
   TrendingUp,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useSidebar } from '@/contexts';
@@ -327,6 +328,13 @@ export function Sidebar() {
 
           {/* Footer */}
           <div className="border-t border-border-subtle p-4">
+            <Link
+              href="/updates"
+              className="flex items-center gap-2 mb-3 text-caption text-text-muted hover:text-text-secondary transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>What&apos;s New</span>
+            </Link>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-accent-green animate-pulse-subtle" />
