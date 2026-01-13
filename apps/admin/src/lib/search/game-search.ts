@@ -57,6 +57,10 @@ export interface GameSearchResult {
   is_free: boolean;
   priceDollars: number | null;
   discountPercent: number | null;
+  publisherId: number | null;
+  publisherName: string | null;
+  developerId: number | null;
+  developerName: string | null;
 }
 
 /**
@@ -283,7 +287,9 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         pics_review_percentage,
         metacritic_score,
         app_steam_deck!left(category),
-        latest_daily_metrics!left(total_reviews, positive_percentage, owners_midpoint)
+        latest_daily_metrics!left(total_reviews, positive_percentage, owners_midpoint),
+        app_publishers!left(publishers!left(id, name)),
+        app_developers!left(developers!left(id, name))
       `
       )
       .eq('type', 'game')
@@ -406,6 +412,8 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         positive_percentage: number;
         owners_midpoint: number;
       }[] | null;
+      app_publishers: { publishers: { id: number; name: string } | null }[] | null;
+      app_developers: { developers: { id: number; name: string } | null }[] | null;
     }
 
     // Post-process results - map first
@@ -417,6 +425,16 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         const reviewPct =
           metrics?.[0]?.positive_percentage ?? row.pics_review_percentage ?? null;
         const priceDollars = row.current_price_cents ? row.current_price_cents / 100 : null;
+
+        // Extract first publisher (games can have multiple, take first)
+        const firstPublisher = row.app_publishers?.[0]?.publishers;
+        const publisherId = firstPublisher?.id ?? null;
+        const publisherName = firstPublisher?.name ?? null;
+
+        // Extract first developer
+        const firstDeveloper = row.app_developers?.[0]?.developers;
+        const developerId = firstDeveloper?.id ?? null;
+        const developerName = firstDeveloper?.name ?? null;
 
         return {
           appid: row.appid,
@@ -431,6 +449,10 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
           is_free: row.is_free,
           priceDollars,
           discountPercent: row.current_discount_percent ?? null,
+          publisherId,
+          publisherName,
+          developerId,
+          developerName,
           _owners_midpoint: metrics?.[0]?.owners_midpoint ?? null,
         };
       });
