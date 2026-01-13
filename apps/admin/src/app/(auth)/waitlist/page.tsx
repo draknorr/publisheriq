@@ -44,26 +44,21 @@ function WaitlistForm() {
     try {
       const supabase = createBrowserClient();
 
-      // Check if email already exists and update, or insert new
+      // Insert new waitlist entry
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: upsertError } = await (supabase.from('waitlist') as any)
-        .upsert(
-          {
-            email: formData.email,
-            full_name: formData.fullName,
-            organization: formData.organization || null,
-            how_i_plan_to_use: formData.howIPlanToUse || null,
-            status: 'pending',
-          },
-          {
-            onConflict: 'email',
-            ignoreDuplicates: false,
-          }
-        );
+      const { error: insertError } = await (supabase.from('waitlist') as any)
+        .insert({
+          email: formData.email,
+          full_name: formData.fullName,
+          organization: formData.organization || null,
+          how_i_plan_to_use: formData.howIPlanToUse || null,
+          status: 'pending',
+        });
 
-      if (upsertError) {
-        console.error('Waitlist error:', upsertError);
-        // Don't reveal specific errors to prevent email enumeration
+      // Ignore errors silently - either success or duplicate email (23505)
+      // This prevents email enumeration attacks
+      if (insertError && insertError.code !== '23505') {
+        console.error('Waitlist error:', insertError);
       }
 
       // Always show success to prevent email enumeration
