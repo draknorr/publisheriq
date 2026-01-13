@@ -17,28 +17,31 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ## Latest Release
 
-**[v2.3 - Embedding Optimization](releases/v2.3-embedding-optimization.md)** (January 11, 2026)
+**[v2.4 - Personalization & Chat Enhancements](releases/v2.4-personalization.md)** (January 12, 2026)
 
-**10x faster embedding sync throughput** through batch optimization and async I/O:
+**Personalized Dashboard**
+- Pin games, publishers, developers to track on your dashboard
+- 8 alert types: CCU spikes, trend reversals, review surges, sentiment shifts, and more
+- Configurable alert preferences with per-type toggles and sensitivity sliders
+- Real-time triggers for price changes and new releases
 
-**Performance Optimizations**
-- Batch sizes optimized: Games 500, Publishers 200, Developers 100
-- Async Qdrant writes (`wait: false`) with end-of-sync verification
-- OpenAI retry logic: 3 retries with exponential backoff (1s→2s→4s)
-- Progress logging every 30 seconds for observability
-- Workflow timeout reduced from 120 to 60 minutes
-
-**Bug Fixes**
-- Fixed duplicate Similar Games header in app detail page
-- Fixed PostgreSQL ambiguous column reference in embedding functions
-- Fixed `language_count` calculation (jsonb_object_keys vs jsonb_array_length)
-
-**Configuration**
-- New `SYNC_COLLECTION` env var for selective syncing (games/publishers/developers/all)
+**Chat Enhancements (Qdrant Sprints 1-3)**
+- New `search_by_concept` tool for semantic concept search ("tactical roguelikes with deck building")
+- New `discover_trending` tool for momentum-based discovery (accelerating, breaking_out, declining)
+- Enhanced embeddings with CCU momentum, review velocity, and sentiment trajectory
+- Embedding dimension reduction: 1536 → 512 (~67% storage savings)
+- Storage optimization: int8 quantization + on-disk payloads (~90% total reduction)
 
 ---
 
 ## Previous Releases
+
+**[v2.3 - Embedding Optimization](releases/v2.3-embedding-optimization.md)** (January 11, 2026)
+
+- 10x faster embedding sync throughput through batch optimization
+- Async Qdrant writes with end-of-sync verification
+- OpenAI retry logic: 3 retries with exponential backoff
+- Workflow timeout reduced from 120 to 60 minutes
 
 **[v2.2 - CCU & SteamSpy Improvements](releases/v2.2-ccu-steamspy.md)** (January 9, 2026)
 
@@ -110,6 +113,7 @@ How-to guides for common tasks:
 
 - **[Theming](guides/theming.md)** - Using and customizing light/dark themes
 - **[Chat Interface](guides/chat-interface.md)** - Natural language queries via Cube.js with entity linking
+- **[Chat Query Examples](guides/chat-query-examples.md)** - 60+ example queries organized by use case
 - **[Admin: Chat Logs](guides/admin-chat-logs.md)** - Analytics and debugging for chat queries
 - **[Running Workers](guides/running-workers.md)** - Manual worker execution
 - **[Adding New Workers](guides/adding-new-worker.md)** - Developer guide for new sync jobs

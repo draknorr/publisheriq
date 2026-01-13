@@ -2,9 +2,11 @@
 
 A natural language interface for querying the Steam database. Ask questions in plain English and get instant answers with data tables, charts, and clickable game links.
 
-**Last Updated:** January 8, 2026
+**Last Updated:** January 12, 2026
 
-> For technical implementation details, see [Chat Data System Architecture](../architecture/chat-data-system.md).
+> **Related Documentation:**
+> - [Chat Query Examples](./chat-query-examples.md) - 60+ example queries organized by use case
+> - [Chat Data System Architecture](../architecture/chat-data-system.md) - Technical implementation details
 
 ## Getting Started
 
@@ -21,7 +23,9 @@ The chat interface uses a multi-layered architecture:
 2. **Tool Selection**: The AI selects the appropriate tool(s) to answer your question:
    - **query_analytics**: Structured queries via Cube.js semantic layer
    - **find_similar**: Vector similarity search via Qdrant
+   - **search_by_concept**: Semantic search by natural language description (v2.4)
    - **search_games**: Tag/genre-based game discovery
+   - **discover_trending**: Trend-based discovery (momentum, accelerating, breaking_out) (v2.4)
    - **lookup_publishers/developers**: Name lookups for accurate filtering
    - **lookup_tags**: Discover available tags and genres
    - **lookup_games**: Find game appids by name (v2.1)
@@ -71,6 +75,14 @@ This architecture ensures:
 - Rising indie hits
 - Velocity tiers (high/medium/low/dormant) (v2.1)
 - Accelerating/decelerating games (v2.1)
+- Breaking out hidden gems (v2.4)
+- Momentum-based discovery (v2.4)
+
+### Concept Search (v2.4)
+- Search by describing what you want
+- "tactical roguelikes with deck building"
+- "cozy farming games with crafting"
+- "horror games with investigation elements"
 
 ### Historical Metrics
 - Review trends over time
@@ -95,6 +107,15 @@ This architecture ensures:
 - "Which games had the biggest review increases this month?"
 - "Show me high velocity games" (v2.1)
 - "Which games have accelerating review velocity?" (v2.1)
+- "Games gaining traction this week" (v2.4)
+- "What's breaking out right now?" (v2.4)
+- "Show me declining games" (v2.4)
+
+**Concept Search (v2.4):**
+- "Find tactical roguelikes with deck building"
+- "Cozy farming games with crafting"
+- "Horror games with investigation elements"
+- "Fast-paced action games with pixel art"
 
 **Specific Lookups:**
 - "Tell me about Half-Life 2"
@@ -261,6 +282,9 @@ This linking is automatic and reliable because:
 
 ## Recent Updates
 
+- **search_by_concept tool** (v2.4): Semantic search by natural language description
+- **discover_trending tool** (v2.4): Trend-based discovery (momentum, accelerating, breaking_out, declining)
+- **Enhanced embeddings** (v2.4): Now include CCU momentum, review velocity, sentiment trajectory
 - **lookup_games tool** (v2.1): Search for games by name to get appid
 - **ReviewVelocity cube** (v2.1): Query velocity stats and tiers
 - **ReviewDeltas cube** (v2.1): Time-series data for trend charts
