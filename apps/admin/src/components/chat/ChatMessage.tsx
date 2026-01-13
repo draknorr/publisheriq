@@ -8,6 +8,8 @@ import type { StreamDebugInfo } from '@/lib/llm/streaming-types';
 import { Clock } from 'lucide-react';
 import { StreamingContent, CopyButton, CodeBlock } from './content';
 import { EntityLinkProvider } from './content/EntityLinkContext';
+import { SuggestionChips } from './SuggestionChips';
+import type { QuerySuggestion } from '@/lib/chat/query-templates';
 
 interface DisplayMessage {
   id: string;
@@ -27,9 +29,16 @@ function formatMs(ms: number): string {
 interface ChatMessageProps {
   message: DisplayMessage;
   isStreaming?: boolean;
+  suggestions?: QuerySuggestion[];
+  onSuggestionClick?: (query: string) => void;
 }
 
-export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  isStreaming = false,
+  suggestions,
+  onSuggestionClick,
+}: ChatMessageProps) {
   const [showQueries, setShowQueries] = useState(false);
   const isUser = message.role === 'user';
 
@@ -74,6 +83,14 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                 <StreamingContent content={message.content} isStreaming={isStreaming} />
               </EntityLinkProvider>
             </div>
+          )}
+
+          {/* Follow-up suggestions (only for assistant messages when not streaming) */}
+          {!isUser && !isStreaming && suggestions && suggestions.length > 0 && onSuggestionClick && (
+            <SuggestionChips
+              suggestions={suggestions}
+              onSuggestionClick={onSuggestionClick}
+            />
           )}
 
           {/* Query details (for assistant messages with tool calls) */}

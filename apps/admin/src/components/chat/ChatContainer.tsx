@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { MessageSquare, StopCircle, Database } from 'lucide-react';
 import { getRandomPrompts } from '@/lib/example-prompts';
 import { useChatStream } from '@/hooks/useChatStream';
+import { generatePostResponseSuggestions } from '@/lib/chat/suggestion-generator';
+import type { QuerySuggestion } from '@/lib/chat/query-templates';
 
 interface ChatContainerProps {
   initialQuery?: string;
@@ -53,6 +55,29 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
   const lastMessage = messages[messages.length - 1];
   const isLastMessageStreaming = isStreaming && lastMessage?.role === 'assistant';
 
+  // Generate follow-up suggestions for the last assistant message (when not streaming)
+  const lastAssistantMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') return messages[i];
+    }
+    return null;
+  }, [messages]);
+
+  const followUpSuggestions: QuerySuggestion[] = useMemo(() => {
+    if (isStreaming || !lastAssistantMessage || !lastAssistantMessage.toolCalls) {
+      return [];
+    }
+    // Find the user query that preceded this assistant message
+    const assistantIndex = messages.findIndex(m => m.id === lastAssistantMessage.id);
+    const userMessage = assistantIndex > 0 ? messages[assistantIndex - 1] : null;
+    const originalQuery = userMessage?.role === 'user' ? userMessage.content : '';
+
+    return generatePostResponseSuggestions({
+      toolCalls: lastAssistantMessage.toolCalls,
+      originalQuery,
+    });
+  }, [isStreaming, lastAssistantMessage, messages]);
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Messages area */}
@@ -80,13 +105,18 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
           </div>
         )}
 
-        {messages.map((message, idx) => (
-          <ChatMessage
-            key={message.id}
-            message={message}
-            isStreaming={isLastMessageStreaming && idx === messages.length - 1}
-          />
-        ))}
+        {messages.map((message, idx) => {
+          const isLastAssistant = message.id === lastAssistantMessage?.id;
+          return (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              isStreaming={isLastMessageStreaming && idx === messages.length - 1}
+              suggestions={isLastAssistant ? followUpSuggestions : undefined}
+              onSuggestionClick={isLastAssistant ? handleSend : undefined}
+            />
+          );
+        })}
 
         {/* Pending tool calls indicator */}
         {isStreaming && pendingToolCalls.length > 0 && (
