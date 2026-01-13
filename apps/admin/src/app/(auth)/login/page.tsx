@@ -20,8 +20,10 @@ function LoginPageContent() {
   // Handle error from failed auth callback
   useEffect(() => {
     const urlError = searchParams.get('error');
-    if (urlError === 'auth_failed') {
+    if (urlError === 'auth_failed' || urlError === 'invalid_token') {
       setError('Sign-in link expired or invalid. Please request a new one.');
+    } else if (urlError === 'missing_token') {
+      setError('Invalid sign-in link. Please request a new one.');
     }
   }, [searchParams]);
 
@@ -53,15 +55,13 @@ function LoginPageContent() {
       }
 
       // Step 2: Send magic link (only for approved emails)
+      // The email template controls the redirect URL using {{ .TokenHash }}
       const supabase = createBrowserClient();
 
-      // Always redirect to production callback with origin param
-      // Production routes to the correct origin (supports Vercel preview URLs)
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: `https://www.publisheriq.app/api/auth/callback?origin=${encodeURIComponent(window.location.origin)}`,
         },
       });
 

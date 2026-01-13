@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
 // Public paths - no auth required
-const PUBLIC_PATHS = ['/login', '/waitlist', '/auth/callback', '/api/auth/callback', '/api/auth/validate-email'];
+const PUBLIC_PATHS = ['/login', '/waitlist', '/auth/callback', '/auth/confirm', '/api/auth/callback', '/api/auth/validate-email'];
 
 // Admin-only paths (requires admin role)
 const ADMIN_PATHS = ['/admin'];
