@@ -5,15 +5,21 @@ import type { NextRequest } from 'next/server';
 import type { Database } from '@publisheriq/database';
 
 /**
- * Server-side auth callback handler for OAuth providers.
+ * Server-side auth callback handler.
  *
- * Note: Magic links use implicit flow (tokens in URL hash) and don't use this route.
- * This route is only needed if you add OAuth providers (Google, GitHub, etc.)
- * that use PKCE code exchange.
+ * Supports two flows:
+ * 1. Same-origin: Exchanges code for session on production
+ * 2. Cross-origin proxy: Routes code to preview deployments for client-side exchange
+ *
+ * The proxy flow enables Vercel preview URLs to work without registering each
+ * preview URL in Supabase. The PKCE verifier is in the user's browser localStorage
+ * on the origin where they initiated login, so cross-origin requests must be
+ * forwarded there for client-side exchange.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
+  const targetOrigin = searchParams.get('origin');
   const next = searchParams.get('next') ?? '/dashboard';
 
   if (!code) {
@@ -21,9 +27,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/auth/callback`);
   }
 
-  const cookieStore = await cookies();
+  // If origin param specified and different from current, route code there
+  // The target origin's client-side handler has the PKCE verifier in localStorage
+  if (targetOrigin && targetOrigin !== origin) {
+    const targetUrl = new URL('/auth/callback', targetOrigin);
+    targetUrl.searchParams.set('code', code);
+    if (next !== '/dashboard') {
+      targetUrl.searchParams.set('next', next);
+    }
+    return NextResponse.redirect(targetUrl.toString());
+  }
 
-  // Collect cookies to set on the response
+  // Same origin - try server-side exchange
+  const cookieStore = await cookies();
   const cookiesToSet: { name: string; value: string; options: CookieOptions }[] = [];
 
   const supabase = createServerClient<Database>(
@@ -35,7 +51,6 @@ export async function GET(request: NextRequest) {
           return cookieStore.getAll();
         },
         setAll(cookies: { name: string; value: string; options: CookieOptions }[]) {
-          // Collect cookies instead of setting them immediately
           cookiesToSet.push(...cookies);
         },
       },
@@ -54,9 +69,8 @@ export async function GET(request: NextRequest) {
   }
 
   // If code exchange failed, fall back to client-side exchange
-  // The client has access to the PKCE verifier in localStorage and can complete the exchange
+  // The client has access to the PKCE verifier in localStorage
   const clientCallbackUrl = new URL('/auth/callback', origin);
   clientCallbackUrl.searchParams.set('code', code);
-  clientCallbackUrl.searchParams.set('server_failed', 'true');
   return NextResponse.redirect(clientCallbackUrl.toString());
 }

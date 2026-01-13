@@ -39,13 +39,18 @@ function isApiPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Note: Magic link auth uses implicit flow (tokens in URL hash, not ?code=)
-  // The ?code= parameter is only used for OAuth providers if configured
-
   // Redirect auth errors from / to /login with error params
   if (pathname === '/' && request.nextUrl.searchParams.has('error')) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
+  // Route auth code from root to callback handler (preserves all params including origin)
+  // This handles cases where Supabase redirects to root instead of callback path
+  if (pathname === '/' && request.nextUrl.searchParams.has('code')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/api/auth/callback';
     return NextResponse.redirect(url);
   }
 

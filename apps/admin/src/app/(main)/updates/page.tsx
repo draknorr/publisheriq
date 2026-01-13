@@ -3,22 +3,10 @@ import { PageHeader } from '@/components/layout';
 import { Card, CardTitle } from '@/components/ui';
 import {
   Sparkles,
-  Pin,
-  Bell,
-  Search,
-  TrendingUp,
-  MessageSquare,
   BarChart3,
-  Users,
-  Layers,
   Zap,
   Shield,
-  Activity,
-  Gamepad2,
   Sun,
-  Gauge,
-  Clock,
-  Tag,
 } from 'lucide-react';
 
 export const metadata: Metadata = {

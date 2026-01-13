@@ -55,11 +55,13 @@ function LoginPageContent() {
       // Step 2: Send magic link (only for approved emails)
       const supabase = createBrowserClient();
 
+      // Always redirect to production callback with origin param
+      // Production routes to the correct origin (supports Vercel preview URLs)
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+          emailRedirectTo: `https://www.publisheriq.app/api/auth/callback?origin=${encodeURIComponent(window.location.origin)}`,
         },
       });
 
