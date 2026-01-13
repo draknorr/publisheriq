@@ -53,23 +53,36 @@ function AuthCallbackContent() {
           }
         }
 
-        // Check for PKCE code in query params (fallback from API route or direct magic link)
+        // Check for PKCE code in query params (from magic link via API route)
         const code = searchParams.get('code');
         if (code) {
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          // Add timeout to prevent hanging - Supabase exchange can hang if code is invalid
+          const exchangePromise = supabase.auth.exchangeCodeForSession(code);
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Exchange timeout')), 10000)
+          );
 
-          if (exchangeError) {
-            console.error('Code exchange error:', exchangeError);
+          try {
+            const { data, error: exchangeError } = await Promise.race([exchangePromise, timeoutPromise]);
+
+            if (exchangeError) {
+              console.error('Code exchange error:', exchangeError);
+              setError('Sign-in link expired or invalid. Please request a new one.');
+              setTimeout(() => router.replace('/login?error=auth_failed'), 2000);
+              return;
+            }
+
+            if (data.session) {
+              // Clear code from URL
+              window.history.replaceState(null, '', window.location.pathname);
+              const next = searchParams.get('next') || '/dashboard';
+              router.replace(next);
+              return;
+            }
+          } catch (timeoutErr) {
+            console.error('Exchange timed out:', timeoutErr);
             setError('Sign-in link expired or invalid. Please request a new one.');
             setTimeout(() => router.replace('/login?error=auth_failed'), 2000);
-            return;
-          }
-
-          if (data.session) {
-            // Clear code from URL
-            window.history.replaceState(null, '', window.location.pathname);
-            const next = searchParams.get('next') || '/dashboard';
-            router.replace(next);
             return;
           }
         }
