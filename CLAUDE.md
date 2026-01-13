@@ -222,6 +222,9 @@ pnpm --filter @publisheriq/ingestion calculate-velocity
 pnpm --filter @publisheriq/ingestion interpolate-reviews
 pnpm --filter @publisheriq/ingestion refresh-views
 pnpm --filter @publisheriq/ingestion price-sync
+
+# Alert detection (v2.4)
+pnpm --filter @publisheriq/ingestion alert-detection
 ```
 
 ## Environment Variables
@@ -307,6 +310,9 @@ ccu_tier: 'tier1', 'tier2', 'tier3'
 user_role: 'user', 'admin'
 waitlist_status: 'pending', 'approved', 'rejected'
 credit_transaction_type: 'signup_bonus', 'usage', 'refund', 'admin_adjustment'
+entity_type: 'game', 'publisher', 'developer'
+alert_type: 'ccu_spike', 'ccu_drop', 'trend_reversal', 'review_surge', 'sentiment_shift', 'price_change', 'new_release', 'milestone'
+alert_severity: 'low', 'medium', 'high'
 ```
 
 ### Core Tables
@@ -378,6 +384,15 @@ credit_transaction_type: 'signup_bonus', 'usage', 'refund', 'admin_adjustment'
 | `credit_reservations` | Deduct-at-start pattern for chat |
 | `rate_limit_state` | Per-user rate limiting |
 
+### Personalization (v2.4)
+| Table | Purpose |
+|-------|---------|
+| `user_pins` | Pinned games/publishers/developers per user |
+| `user_alerts` | Generated alerts with deduplication key |
+| `user_alert_preferences` | Per-user global alert configuration |
+| `user_pin_alert_settings` | Per-pin alert overrides (NULL = inherit) |
+| `alert_detection_state` | Baseline metrics for change detection |
+
 ## Chat System Architecture
 
 The chat uses Cube.js semantic layer (NOT raw SQL) with 9 LLM tools:
@@ -388,7 +403,7 @@ The chat uses Cube.js semantic layer (NOT raw SQL) with 9 LLM tools:
 | `query_analytics` | Structured queries via Cube.js cubes |
 | `find_similar` | Vector similarity search via Qdrant |
 | `search_by_concept` | Semantic search by natural language description (v2.4) |
-| `search_games` | Tag/genre/category-based discovery with fuzzy matching |
+| `search_games` | Tag/genre/category-based discovery with fuzzy matching; includes publisher/developer data |
 | `discover_trending` | Trend-based discovery: momentum, accelerating, breaking_out (v2.4) |
 | `lookup_publishers` | Find exact publisher names (ILIKE) before filtering |
 | `lookup_developers` | Find exact developer names (ILIKE) before filtering |
@@ -538,6 +553,7 @@ Three-tier polling with Steam API for exact player counts:
 | priority-calculation | 22:30 daily | Priority scores |
 | cleanup-chat-logs | 03:00 daily | 7-day log retention |
 | cleanup-reservations | :00 hourly | Stale credit reservation cleanup |
+| alert-detection | :15 hourly | Alert detection for pinned entities |
 
 ## PICS Service (Python on Railway)
 

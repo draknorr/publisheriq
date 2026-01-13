@@ -114,10 +114,19 @@ How-to guides for common tasks:
 - **[Theming](guides/theming.md)** - Using and customizing light/dark themes
 - **[Chat Interface](guides/chat-interface.md)** - Natural language queries via Cube.js with entity linking
 - **[Chat Query Examples](guides/chat-query-examples.md)** - 60+ example queries organized by use case
+- **[Personalization](guides/personalization.md)** - Pinning items and managing alerts
 - **[Admin: Chat Logs](guides/admin-chat-logs.md)** - Analytics and debugging for chat queries
 - **[Running Workers](guides/running-workers.md)** - Manual worker execution
 - **[Adding New Workers](guides/adding-new-worker.md)** - Developer guide for new sync jobs
 - **[Troubleshooting](guides/troubleshooting.md)** - Common issues and solutions
+
+---
+
+## Features
+
+Feature documentation for specific capabilities:
+
+- **[Smart Query Suggestions](features/smart-query-suggestions.md)** - Type-ahead autocomplete and post-response chips
 
 ---
 

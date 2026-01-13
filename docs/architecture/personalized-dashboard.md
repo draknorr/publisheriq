@@ -182,6 +182,19 @@ Let users **pin** entities (games, publishers, developers) to create a personali
 └────────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────────────────────────────────────────────┐
+│                  user_pin_alert_settings (NEW)                      │
+│─────────────────────────────────────────────────────────────────────│
+│ pin_id (UUID) PK FK → user_pins.id                                 │
+│ use_custom_settings (BOOLEAN) DEFAULT FALSE                         │
+│ alerts_enabled (BOOLEAN) - NULL = inherit from global              │
+│ ccu_sensitivity (DECIMAL) - NULL = inherit                          │
+│ review_sensitivity (DECIMAL) - NULL = inherit                       │
+│ sentiment_sensitivity (DECIMAL) - NULL = inherit                    │
+│ alert_ccu_spike through alert_milestone (BOOLEAN) - NULL = inherit │
+│ created_at, updated_at (TIMESTAMPTZ)                                │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
 │                    alert_detection_state (NEW)                      │
 │─────────────────────────────────────────────────────────────────────│
 │ id (BIGSERIAL) PK                                                   │
@@ -908,6 +921,62 @@ export async function GET() {
   }
 
   return NextResponse.json({ count: count ?? 0 });
+}
+```
+
+### Per-Pin Alert Settings
+
+```typescript
+// apps/admin/src/app/api/pins/[id]/alert-settings/route.ts
+
+// GET /api/pins/[id]/alert-settings - Get settings with inheritance
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  // Returns:
+  // - settings: Raw DB values (with NULLs for inherited fields)
+  // - inherited: Global preferences
+  // - effective: Merged values for display
+}
+
+// PUT /api/pins/[id]/alert-settings - Update per-pin overrides
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  // Updates user_pin_alert_settings table
+  // NULL values = inherit from global preferences
+}
+
+// DELETE /api/pins/[id]/alert-settings - Reset to inherit all
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  // Removes custom settings, reverts to global defaults
+}
+```
+
+**Response Structure:**
+```json
+{
+  "settings": {
+    "use_custom_settings": true,
+    "alerts_enabled": null,      // null = inherit
+    "ccu_sensitivity": 1.5,      // custom value
+    "alert_ccu_spike": null      // null = inherit
+  },
+  "inherited": {
+    "alerts_enabled": true,
+    "ccu_sensitivity": 1.0,
+    "alert_ccu_spike": true
+  },
+  "effective": {
+    "alerts_enabled": true,      // inherited
+    "ccu_sensitivity": 1.5,      // custom
+    "alert_ccu_spike": true      // inherited
+  }
 }
 ```
 

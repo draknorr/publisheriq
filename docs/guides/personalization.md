@@ -165,6 +165,30 @@ Click **Save Changes** to apply your settings. Changes take effect immediately f
 
 ---
 
+## Per-Pin Settings
+
+Override global preferences for individual pinned items:
+
+### Accessing Per-Pin Settings
+
+1. Go to **Insights** > **My Dashboard**
+2. Find the pinned item you want to customize
+3. Click the **gear icon** on the card
+
+### What You Can Customize
+
+- Enable/disable alerts for this specific item
+- Adjust sensitivity sliders (CCU, review, sentiment)
+- Toggle specific alert types on/off
+
+### Inheritance
+
+- Fields left at "Inherit" use your global preferences
+- Custom settings override global values
+- Reset to defaults by toggling off custom settings
+
+---
+
 ## Tips and Best Practices
 
 ### What to Pin
