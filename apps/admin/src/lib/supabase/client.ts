@@ -5,9 +5,9 @@ import type { Database } from '@publisheriq/database';
  * Creates a Supabase client for browser/client components.
  * This client automatically handles auth state and cookies.
  *
- * Uses implicit flow for magic link auth to avoid PKCE localStorage issues
- * when users click links from email clients (Gmail, Outlook, etc.) that
- * open in different browser contexts.
+ * Uses PKCE flow for magic link auth. The code_verifier is stored in
+ * localStorage when login is initiated, then used to exchange the code
+ * for a session when the user clicks the magic link.
  */
 export function createBrowserClient() {
   // Only set explicit domain for production (allows subdomains like app.publisheriq.app)
@@ -20,7 +20,7 @@ export function createBrowserClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
-        flowType: 'implicit',
+        flowType: 'pkce',
         detectSessionInUrl: true,
         autoRefreshToken: true,
       },
