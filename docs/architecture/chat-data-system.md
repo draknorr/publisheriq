@@ -2,10 +2,14 @@
 
 This document provides a complete reference for the PublisherIQ chat system's data handling architecture, including all cubes, dimensions, measures, segments, and tools. Use this as a guide for understanding the system and planning future expansions.
 
-**Last Updated:** January 8, 2026
+**Last Updated:** January 12, 2026
 
 ## Recent Improvements
 
+- **search_by_concept Tool**: Semantic search by natural language description (v2.4)
+- **discover_trending Tool**: Trend-based discovery with momentum analysis (v2.4)
+- **Enhanced Embeddings**: Include CCU momentum, review velocity, sentiment trajectory (v2.4)
+- **Dimension Reduction**: 1536 → 512 dimensions (~67% storage savings) (v2.4)
 - **lookup_games Tool**: New tool for specific game name queries (v2.1)
 - **ReviewVelocity Cube**: Pre-computed velocity stats for trend analysis (v2.1)
 - **ReviewDeltas Cube**: Time-series data for per-game review charts (v2.1)
@@ -100,7 +104,7 @@ This document provides a complete reference for the PublisherIQ chat system's da
 
 ## LLM Tools Reference
 
-The chat system provides 7 tools to the LLM for data access.
+The chat system provides 9 tools to the LLM for data access.
 
 ### 1. query_analytics
 
@@ -256,6 +260,104 @@ The chat system provides 7 tools to the LLM for data access.
 1. User asks: "What's the review score for Elden Ring?"
 2. LLM calls: `lookup_games("Elden Ring")` → `[{appid: 1245620, name: "ELDEN RING", releaseYear: 2022}]`
 3. LLM calls: `query_analytics` with filter: `{"member": "Discovery.appid", "operator": "equals", "values": ["1245620"]}`
+
+---
+
+### 8. search_by_concept (v2.4+)
+
+**Purpose**: Find games matching a natural language description using semantic similarity.
+
+**Use for**: Concept-based queries WITHOUT a reference game.
+
+**File**: [apps/admin/src/lib/qdrant/search-service.ts](../../apps/admin/src/lib/qdrant/search-service.ts)
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `description` | string | Yes | Natural language description of games to find |
+| `filters` | object | No | Optional filters (price, platforms, steam_deck, genres, tags, etc.) |
+| `limit` | number | No | Max results 1-20 (default 10) |
+
+**Filter Options** (same as find_similar):
+
+| Filter | Type | Values |
+|--------|------|--------|
+| `max_price_cents` | number | Maximum price in cents |
+| `is_free` | boolean | Only free-to-play games |
+| `platforms` | string[] | `["windows", "macos", "linux"]` |
+| `steam_deck` | string[] | `["verified", "playable"]` |
+| `genres` | string[] | Genre names |
+| `tags` | string[] | Steam tag names |
+| `min_reviews` | number | Minimum review count |
+| `release_year` | object | `{gte: 2020, lte: 2024}` |
+| `review_percentage` | object | `{gte: 90}` |
+
+**Example Queries**:
+- "tactical roguelikes with deck building"
+- "cozy farming games with crafting"
+- "horror games with investigation elements"
+- "fast-paced action games with pixel art"
+
+**How It Works**:
+1. User provides natural language description
+2. Description is embedded using OpenAI text-embedding-3-small (512 dims)
+3. Vector search in Qdrant's `publisheriq_games` collection
+4. Filters applied during search
+5. Results returned with similarity scores
+
+**Difference from find_similar**: No reference game needed - pure concept matching.
+
+---
+
+### 9. discover_trending (v2.4+)
+
+**Purpose**: Discover games by review momentum and trend patterns.
+
+**Use for**: Queries about trending, accelerating, or declining games.
+
+**File**: [apps/admin/src/lib/search/trend-discovery.ts](../../apps/admin/src/lib/search/trend-discovery.ts)
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `trend_type` | string | Yes | `review_momentum`, `accelerating`, `breaking_out`, `declining` |
+| `timeframe` | string | No | `7d` or `30d` (default 7d) |
+| `filters` | object | No | Optional filters (tags, genres, platforms, steam_deck, min/max_reviews) |
+| `limit` | number | No | Max results 1-20 (default 10) |
+
+**Trend Types**:
+
+| Type | Criteria | Cube Segment |
+|------|----------|--------------|
+| `review_momentum` | Highest review activity (most reviews/day) | `Discovery.activelyReviewed` |
+| `accelerating` | Review rate increasing (7d > 30d × 1.2) | `Discovery.acceleratingVelocity` |
+| `breaking_out` | Hidden gems gaining attention (accelerating + 100-10K reviews) | `Discovery.acceleratingVelocity` |
+| `declining` | Review velocity dropping (7d < 30d × 0.8) | `Discovery.deceleratingVelocity` |
+
+**Filter Options**:
+
+| Filter | Type | Description |
+|--------|------|-------------|
+| `tags` | string[] | Required tags (e.g., ["Roguelike", "Indie"]) |
+| `genres` | string[] | Required genres (e.g., ["Action", "RPG"]) |
+| `platforms` | string[] | `["windows", "macos", "linux"]` |
+| `steam_deck` | string[] | `["verified", "playable"]` |
+| `min_reviews` | number | Minimum total reviews |
+| `max_reviews` | number | Maximum total reviews (for hidden gems) |
+| `is_free` | boolean | Free-to-play filter |
+| `release_year` | object | `{gte: 2020, lte: 2024}` |
+
+**Returns**:
+- Game info with velocity metrics: velocity7d, velocity30d, velocityTier, reviewsAdded7d, reviewsAdded30d
+- Sorted by velocity (highest first for momentum/accelerating, lowest first for declining)
+
+**Example Queries**:
+- "Games gaining traction this week"
+- "What's breaking out right now?"
+- "Games with accelerating reviews"
+- "Show me declining games"
 
 ---
 

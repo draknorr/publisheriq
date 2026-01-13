@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data acquisition platform with natural language chat interface. Last updated: January 11, 2026.
+> Steam data acquisition platform with natural language chat interface. Last updated: January 12, 2026.
 
 ---
 
@@ -111,7 +111,7 @@ PublisherIQ collects, stores, and analyzes Steam game metadata, publisher/develo
 | Database | Supabase (PostgreSQL) |
 | Semantic Layer | Cube.js (Fly.io) |
 | Vector DB | Qdrant Cloud |
-| Embeddings | OpenAI text-embedding-3-small (1536 dims) |
+| Embeddings | OpenAI text-embedding-3-small (512 dims) |
 | Workers | GitHub Actions (scheduled) |
 | PICS Service | Python + SteamKit2 (Railway) |
 | AI Chat | OpenAI Chat GPT with tool use |
@@ -128,7 +128,7 @@ publisheriq/
 │       ├── src/components/        # React components (theme, ui, data-display)
 │       └── src/lib/               # Utilities, LLM integration
 │           ├── llm/               # Chat system
-│           │   ├── cube-tools.ts           # Tool definitions (7 tools)
+│           │   ├── cube-tools.ts           # Tool definitions (9 tools)
 │           │   ├── cube-system-prompt.ts   # System prompt with Cube schemas
 │           │   ├── format-entity-links.ts  # Entity link pre-formatting
 │           │   └── streaming-types.ts      # SSE event types
@@ -380,14 +380,16 @@ credit_transaction_type: 'signup_bonus', 'usage', 'refund', 'admin_adjustment'
 
 ## Chat System Architecture
 
-The chat uses Cube.js semantic layer (NOT raw SQL) with 7 LLM tools:
+The chat uses Cube.js semantic layer (NOT raw SQL) with 9 LLM tools:
 
 ### LLM Tools
 | Tool | Purpose |
 |------|---------|
 | `query_analytics` | Structured queries via Cube.js cubes |
 | `find_similar` | Vector similarity search via Qdrant |
+| `search_by_concept` | Semantic search by natural language description (v2.4) |
 | `search_games` | Tag/genre/category-based discovery with fuzzy matching |
+| `discover_trending` | Trend-based discovery: momentum, accelerating, breaking_out (v2.4) |
 | `lookup_publishers` | Find exact publisher names (ILIKE) before filtering |
 | `lookup_developers` | Find exact developer names (ILIKE) before filtering |
 | `lookup_tags` | Discover available tags/genres/categories |
@@ -421,6 +423,24 @@ DeveloperMetrics: trending, highRevenue (>$100K), highOwners (>50K)
 - Publishers: `[Name](/publishers/ID)` → renders as link
 - Developers: `[Name](/developers/ID)` → renders as link
 
+### Concept Search (v2.4)
+Semantic search using natural language descriptions without needing a reference game:
+- "tactical roguelikes with deck building"
+- "cozy farming games with crafting"
+- "horror games with investigation elements"
+
+Uses OpenAI text-embedding-3-small (512 dims) to embed user query, then vector search in Qdrant.
+
+### Trend Discovery (v2.4)
+Discover games by review momentum:
+
+| Trend Type | Description |
+|------------|-------------|
+| `review_momentum` | Highest review activity (most reviews/day) |
+| `accelerating` | Review rate increasing (7d > 30d × 1.2) |
+| `breaking_out` | Hidden gems gaining attention (accelerating + 100-10K reviews) |
+| `declining` | Review velocity dropping (7d < 30d × 0.8) |
+
 ### Key Files
 | File | Purpose |
 |------|---------|
@@ -430,7 +450,12 @@ DeveloperMetrics: trending, highRevenue (>$100K), highOwners (>50K)
 | `apps/admin/src/lib/llm/format-entity-links.ts` | Entity link pre-formatting |
 | `apps/admin/src/app/api/chat/stream/route.ts` | SSE streaming API |
 
-### Recent Improvements
+### Recent Improvements (v2.4)
+- **Concept search**: `search_by_concept` tool for natural language game discovery
+- **Trend discovery**: `discover_trending` tool for momentum-based discovery
+- **Enhanced embeddings**: Include CCU momentum, review velocity, sentiment trajectory
+- **Dimension reduction**: 1536 → 512 dimensions (~67% storage savings)
+- **Storage optimization**: int8 quantization + on-disk payloads (~90% total reduction)
 - Retry logic: 3 retries with exponential backoff (500ms-4s) for 502/503/504
 - 30s timeout: AbortController prevents hanging queries
 - Tag normalization: "coop" → "co-op" automatically
@@ -534,8 +559,9 @@ Three-tier polling with Steam API for exact player counts:
 | `publisheriq_developers_portfolio` | Developers | Match by entire catalog |
 | `publisheriq_developers_identity` | Developers | Match by top games |
 
-**Embedding Model:** OpenAI text-embedding-3-small (1536 dimensions)
+**Embedding Model:** OpenAI text-embedding-3-small (512 dimensions, reduced from 1536 in v2.4)
 **Change Detection:** Hash-based (only re-embeds when data changes)
+**Storage Optimization (v2.4):** int8 quantization + on-disk payloads (~90% total reduction)
 
 ## Embedding Sync Configuration (v2.3)
 
@@ -562,12 +588,13 @@ Three-tier polling with Steam API for exact player counts:
 - **Color Tokens:** CSS variables (--surface, --text-primary, --accent-*, --trend-*)
 - **Components:** ThemeProvider, ThemeToggle, CollapsibleSection, DenseMetricGrid, StatusBar
 
-## Insights Dashboard (v2.2)
+## Insights Dashboard (v2.2+)
 
 CCU analytics page at `/insights` with sparkline visualizations:
 
 | Tab | Description | Data Source |
 |-----|-------------|-------------|
+| **My Dashboard** | Pinned items + alerts (v2.4) | user_pins, user_alerts |
 | **Top Games** | Top 50 by peak CCU | ccu_snapshots |
 | **Newest** | Recent releases (sort: release/growth) | apps + ccu_snapshots |
 | **Trending** | Top 50 by CCU growth % | ccu_snapshots (period comparison) |
@@ -636,8 +663,11 @@ Full documentation in `/docs/`:
 - [Database Schema](docs/architecture/database-schema.md) - Full schema with SQL examples
 - [Design System](docs/architecture/design-system.md) - Theme system and components
 - [Admin Dashboard](docs/architecture/admin-dashboard.md) - Dashboard architecture
+- [Personalized Dashboard](docs/architecture/personalized-dashboard.md) - Pins and alerts (v2.4)
 - [Data Sources](docs/architecture/data-sources.md) - API specifications
 - [Sync Pipeline](docs/architecture/sync-pipeline.md) - Data flow details
 - [v2.0 Release Notes](docs/releases/v2.0-new-design.md) - Design system, query optimization
 - [v2.1 Release Notes](docs/releases/v2.1-velocity-auth.md) - Velocity sync, authentication
 - [v2.2 Release Notes](docs/releases/v2.2-ccu-steamspy.md) - CCU tiers, SteamSpy improvements
+- [v2.3 Release Notes](docs/releases/v2.3-embedding-optimization.md) - 10x embedding sync
+- [v2.4 Release Notes](docs/releases/v2.4-personalization.md) - Personalization, concept search, trending
