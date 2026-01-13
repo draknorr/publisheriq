@@ -411,6 +411,90 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                       );
                     }
 
+                    // Handle search_by_concept results (v2.4)
+                    if (tc.name === 'search_by_concept') {
+                      const args = tc.arguments as { description?: string; filters?: Record<string, unknown>; limit?: number };
+                      const result = tc.result as { success: boolean; total_found?: number; error?: string };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Searching by concept: &ldquo;{args.description || 'unknown'}&rdquo;
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.total_found ?? 0} games found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Handle discover_trending results (v2.4)
+                    if (tc.name === 'discover_trending') {
+                      const args = tc.arguments as { trend_type?: string; timeframe?: string; filters?: Record<string, unknown> };
+                      const result = tc.result as { success: boolean; total_found?: number; error?: string };
+                      const trendLabels: Record<string, string> = {
+                        review_momentum: 'high momentum',
+                        accelerating: 'accelerating',
+                        breaking_out: 'breaking out',
+                        declining: 'declining',
+                      };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Discovering {trendLabels[args.trend_type || ''] || args.trend_type} games ({args.timeframe || '7d'})
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.total_found ?? 0} games found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Handle lookup_games results (v2.4)
+                    if (tc.name === 'lookup_games') {
+                      const args = tc.arguments as { query?: string };
+                      const result = tc.result as { success: boolean; results?: Array<{ appid: number; name: string }>; error?: string };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Looking up games: &ldquo;{args.query || 'unknown'}&rdquo;
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.results?.length || 0} games found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     // Unknown tool
                     return (
                       <div key={idx} className="text-body-sm text-text-muted">
