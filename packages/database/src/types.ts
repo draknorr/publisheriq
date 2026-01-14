@@ -2309,6 +2309,100 @@ export type Database = {
           priority_score: number
         }[]
       }
+      get_companies_aggregate_stats: {
+        Args: {
+          p_categories?: number[]
+          p_genres?: number[]
+          p_max_games?: number
+          p_min_ccu?: number
+          p_min_games?: number
+          p_min_hours?: number
+          p_min_owners?: number
+          p_min_revenue?: number
+          p_min_reviews?: number
+          p_min_score?: number
+          p_search?: string
+          p_status?: string
+          p_tags?: number[]
+          p_type?: string
+        }
+        Returns: {
+          avg_review_score: number
+          total_ccu: number
+          total_companies: number
+          total_games: number
+          total_owners: number
+          total_revenue: number
+        }[]
+      }
+      get_companies_with_filters: {
+        Args: {
+          p_categories?: number[]
+          p_genre_mode?: string
+          p_genres?: number[]
+          p_limit?: number
+          p_max_games?: number
+          p_max_growth_30d?: number
+          p_max_growth_7d?: number
+          p_min_ccu?: number
+          p_min_games?: number
+          p_min_growth_30d?: number
+          p_min_growth_7d?: number
+          p_min_hours?: number
+          p_min_owners?: number
+          p_min_revenue?: number
+          p_min_reviews?: number
+          p_min_score?: number
+          p_offset?: number
+          p_period?: string
+          p_platform_mode?: string
+          p_platforms?: string[]
+          p_relationship?: string
+          p_search?: string
+          p_sort_by?: string
+          p_sort_order?: string
+          p_status?: string
+          p_steam_deck?: string
+          p_tags?: number[]
+          p_type?: string
+        }
+        Returns: {
+          avg_review_score: number
+          ccu_growth_30d_percent: number
+          ccu_growth_7d_percent: number
+          data_updated_at: string
+          estimated_weekly_hours: number
+          external_partner_count: number
+          first_release_date: string
+          game_count: number
+          games_trending_down: number
+          games_trending_up: number
+          id: number
+          is_self_published: boolean
+          latest_release_date: string
+          name: string
+          positive_reviews: number
+          revenue_estimate_cents: number
+          review_velocity_30d: number
+          review_velocity_7d: number
+          steam_vanity_url: string
+          total_ccu: number
+          total_owners: number
+          total_reviews: number
+          type: string
+          unique_developers: number
+          works_with_external_devs: boolean
+          years_active: number
+        }[]
+      }
+      get_company_sparkline_data: {
+        Args: { p_company_id: number; p_company_type: string; p_days?: number }
+        Returns: {
+          day: string
+          peak_ccu: number
+          total_ccu: number
+        }[]
+      }
       get_credit_balance: { Args: { p_user_id: string }; Returns: number }
       get_developer_stats: { Args: never; Returns: Json }
       get_developers_for_embedding: {
@@ -2376,6 +2470,20 @@ export type Database = {
           total_owners_min: number
           total_reviews: number
           weighted_review_score: number
+        }[]
+      }
+      get_filter_option_counts: {
+        Args: {
+          p_company_type?: string
+          p_filter_type: string
+          p_min_games?: number
+          p_min_revenue?: number
+          p_status?: string
+        }
+        Returns: {
+          company_count: number
+          option_id: number
+          option_name: string
         }[]
       }
       get_game_momentum: {
