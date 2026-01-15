@@ -151,9 +151,9 @@ async function main(): Promise<void> {
 
   try {
     // Get distinct appids with histogram data using pagination
-    // Supabase defaults to 1000 rows, so we need to paginate to get all
+    // Supabase has a server-side row limit of 1000, so we paginate with that limit
     const uniqueAppidSet = new Set<number>();
-    const pageSize = 10000;
+    const pageSize = 1000;
     let offset = 0;
     let hasMore = true;
 
