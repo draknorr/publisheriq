@@ -150,47 +150,17 @@ async function main(): Promise<void> {
   let failed = 0;
 
   try {
-    // Get distinct appids with histogram data using pagination
-    // Supabase has a server-side row limit of 1000, so we paginate with that limit
-    const uniqueAppidSet = new Set<number>();
-    const pageSize = 1000;
-    let offset = 0;
-    let hasMore = true;
+    // Get distinct appids using RPC (much faster than paginating 2.9M rows)
+    log.info('Fetching distinct appids from review_histogram via RPC...');
 
-    log.info('Fetching distinct appids from review_histogram...');
+    const { data: appidRows, error: appidError } = await supabase.rpc('get_histogram_appids');
 
-    while (hasMore) {
-      const { data: batch, error } = await supabase
-        .from('review_histogram')
-        .select('appid')
-        .order('appid')
-        .range(offset, offset + pageSize - 1);
-
-      if (error) {
-        log.error('Failed to fetch appids', { error, offset });
-        throw error;
-      }
-
-      if (!batch || batch.length === 0) {
-        hasMore = false;
-      } else {
-        // Add appids from this batch to Set (automatically deduplicates)
-        for (const row of batch) {
-          uniqueAppidSet.add(row.appid);
-        }
-
-        offset += pageSize;
-        hasMore = batch.length === pageSize;
-
-        log.info('Pagination progress', {
-          offset,
-          batchSize: batch.length,
-          uniqueAppidsSoFar: uniqueAppidSet.size,
-        });
-      }
+    if (appidError) {
+      log.error('Failed to fetch appids via RPC', { error: appidError });
+      throw appidError;
     }
 
-    const uniqueAppids = Array.from(uniqueAppidSet);
+    const uniqueAppids = (appidRows || []).map((row: { appid: number }) => row.appid);
 
     if (uniqueAppids.length === 0) {
       log.info('No apps with histogram data');
