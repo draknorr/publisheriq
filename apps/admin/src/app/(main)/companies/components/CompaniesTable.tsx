@@ -72,12 +72,11 @@ function SortHeader({
   const isActive = currentSort === field;
   const arrow = isActive ? (currentOrder === 'asc' ? ' \u2191' : ' \u2193') : '';
 
-  // Check if column is sortable (both ratio check and sortable property)
+  // Check if column is sortable - ratio columns use client-side sorting
   const column = COLUMN_DEFINITIONS[field as ColumnId];
-  const isDisabled = isRatio || column?.sortable === false;
+  const isDisabled = column?.sortable === false;
 
   const handleClick = () => {
-    // Disable sorting for ratio columns AND non-sortable columns
     if (!isDisabled && field) {
       onSort(field as SortField);
     }

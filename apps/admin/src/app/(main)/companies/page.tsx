@@ -31,7 +31,9 @@ export const dynamic = 'force-dynamic';
 
 // Valid values for each param
 const VALID_TYPES: CompanyType[] = ['all', 'publisher', 'developer'];
-const VALID_SORTS: SortField[] = [
+
+// Server-side sortable fields (passed to database query)
+const SERVER_SORTS: SortField[] = [
   'name',
   'estimated_weekly_hours',
   'game_count',
@@ -42,6 +44,17 @@ const VALID_SORTS: SortField[] = [
   'revenue_estimate_cents',
   'games_trending_up',
   'ccu_growth_7d',
+];
+
+// All valid sort fields (including client-side sortable)
+const VALID_SORTS: SortField[] = [
+  ...SERVER_SORTS,
+  // Client-side sortable (computed ratios and metrics)
+  'revenue_per_game',
+  'owners_per_game',
+  'reviews_per_1k_owners',
+  'growth_30d',
+  'review_velocity',
 ];
 const VALID_STATUS = ['active', 'dormant'] as const;
 const VALID_PERIODS: TimePeriod[] = [
@@ -192,10 +205,13 @@ export default async function CompaniesPage({
   // M6a: Parse compare param
   const compareIds = parseCompareParam(params.compare || null);
 
+  // For database query, use server-compatible sort (fall back to Hours for client-side sorts)
+  const dbSort: SortField = SERVER_SORTS.includes(sort) ? sort : 'estimated_weekly_hours';
+
   // Build filter params for query
   const filterParams: CompaniesFilterParams = {
     type,
-    sort,
+    sort: dbSort,
     order,
     limit: 50,
     search,

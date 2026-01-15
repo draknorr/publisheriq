@@ -175,7 +175,8 @@ export const COLUMN_DEFINITIONS: Record<ColumnId, ColumnDefinition> = {
     shortLabel: 'Velocity',
     category: 'reviews',
     width: 120,
-    sortable: false,
+    sortable: true,
+    isRatio: true, // Client-side sorting (no backend sortField)
     methodology: 'Reviews per day over the last 7 days.',
     getValue: (c) => c.review_velocity_7d,
   },
@@ -183,13 +184,13 @@ export const COLUMN_DEFINITIONS: Record<ColumnId, ColumnDefinition> = {
   // Financial metrics
   revenue: {
     id: 'revenue',
-    label: 'Est. Revenue',
-    shortLabel: 'Revenue',
+    label: 'Est. Gross Revenue',
+    shortLabel: 'Gross Rev.',
     category: 'financial',
     width: 120,
     sortable: true,
     sortField: 'revenue_estimate_cents',
-    methodology: 'Estimated total revenue. Based on owners × price × regional adjustments.',
+    methodology: 'Current Price x Estimated Owners. To-Be-Improved.',
     getValue: (c) => c.revenue_estimate_cents,
   },
 
@@ -211,7 +212,8 @@ export const COLUMN_DEFINITIONS: Record<ColumnId, ColumnDefinition> = {
     shortLabel: '30d Growth',
     category: 'growth',
     width: 130,
-    sortable: false,
+    sortable: true,
+    isRatio: true, // Client-side sorting (no backend sortField)
     methodology: 'CCU change over the last 30 days as a percentage.',
     getValue: (c) => c.ccu_growth_30d_percent,
   },

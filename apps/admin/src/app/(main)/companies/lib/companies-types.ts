@@ -35,7 +35,13 @@ export type SortField =
   | 'total_reviews'
   | 'revenue_estimate_cents'
   | 'games_trending_up'
-  | 'ccu_growth_7d';
+  | 'ccu_growth_7d'
+  // Client-side sortable columns (computed ratios and metrics without backend support)
+  | 'revenue_per_game'
+  | 'owners_per_game'
+  | 'reviews_per_1k_owners'
+  | 'growth_30d'
+  | 'review_velocity';
 
 export type SortOrder = 'asc' | 'desc';
 
