@@ -416,7 +416,7 @@ export default function PatchNotesPage() {
         description="What's new in PublisherIQ"
       />
 
-      <div className="max-w-3xl">
+      <div className="max-w-3xl mx-auto">
         <VersionNav />
 
         {versions.map((version, index) => (
