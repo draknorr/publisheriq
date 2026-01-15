@@ -4,13 +4,22 @@ import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { CompaniesPageClient } from './components/CompaniesPageClient';
-import { getCompanies } from './lib/companies-queries';
+import { getCompanies, getAggregateStats, getCompaniesByIds, type AggregateStats } from './lib/companies-queries';
+// Columns are parsed from URL in useCompaniesFilters hook
 import type {
   Company,
   CompanyType,
   SortField,
   SortOrder,
   CompaniesSearchParams,
+  CompaniesFilterParams,
+  TimePeriod,
+  FilterMode,
+  SteamDeckFilterValue,
+  RelationshipFilterValue,
+  StatusFilterValue,
+  PlatformValue,
+  CompanyIdentifier,
 } from './lib/companies-types';
 
 export const metadata: Metadata = {
@@ -34,6 +43,69 @@ const VALID_SORTS: SortField[] = [
   'games_trending_up',
   'ccu_growth_7d',
 ];
+const VALID_STATUS = ['active', 'dormant'] as const;
+const VALID_PERIODS: TimePeriod[] = [
+  'all', '2025', '2024', '2023',
+  'last_12mo', 'last_6mo', 'last_90d', 'last_30d',
+];
+const VALID_FILTER_MODES: FilterMode[] = ['any', 'all'];
+const VALID_PLATFORMS: PlatformValue[] = ['windows', 'mac', 'linux'];
+const VALID_STEAM_DECK: SteamDeckFilterValue[] = ['verified', 'playable'];
+const VALID_RELATIONSHIPS: RelationshipFilterValue[] = ['self_published', 'external_devs', 'multi_publisher'];
+
+// Helper to parse numeric params
+function parseNumber(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const num = parseFloat(value);
+  return isNaN(num) ? undefined : num;
+}
+
+// Helper to parse comma-separated number array
+function parseNumberArray(value: string | undefined): number[] | undefined {
+  if (!value) return undefined;
+  const ids = value.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+  return ids.length > 0 ? ids : undefined;
+}
+
+// Helper to parse platforms
+function parsePlatforms(value: string | undefined): PlatformValue[] | undefined {
+  if (!value) return undefined;
+  const platforms = value.split(',')
+    .map((s) => s.trim().toLowerCase() as PlatformValue)
+    .filter((p) => VALID_PLATFORMS.includes(p));
+  return platforms.length > 0 ? platforms : undefined;
+}
+
+// Server-safe compare param parser (inlined to avoid client module taint)
+const MAX_COMPARE = 5;
+function parseCompareParam(param: string | null): CompanyIdentifier[] {
+  if (!param) return [];
+
+  const ids = param
+    .split(',')
+    .map((s) => {
+      const match = s.trim().match(/^(pub|dev):(\d+)$/);
+      if (!match) return null;
+      return {
+        type: (match[1] === 'pub' ? 'publisher' : 'developer') as 'publisher' | 'developer',
+        id: parseInt(match[2], 10),
+      };
+    })
+    .filter((id): id is CompanyIdentifier => id !== null);
+
+  // Deduplicate and limit
+  const seen = new Set<string>();
+  const unique: CompanyIdentifier[] = [];
+  for (const id of ids) {
+    const key = `${id.type}:${id.id}`;
+    if (!seen.has(key) && unique.length < MAX_COMPARE) {
+      seen.add(key);
+      unique.push(id);
+    }
+  }
+
+  return unique;
+}
 
 export default async function CompaniesPage({
   searchParams,
@@ -58,17 +130,138 @@ export default async function CompaniesPage({
 
   const order: SortOrder = params.order === 'asc' ? 'asc' : 'desc';
 
-  // Fetch companies
+  // Parse filter params
+  const search = params.search || undefined;
+  const preset = params.preset || undefined;
+  const filters = params.filters || undefined;
+
+  // Metric filter params
+  const minGames = parseNumber(params.minGames);
+  const maxGames = parseNumber(params.maxGames);
+  const minOwners = parseNumber(params.minOwners);
+  const maxOwners = parseNumber(params.maxOwners);
+  const minCcu = parseNumber(params.minCcu);
+  const maxCcu = parseNumber(params.maxCcu);
+  const minHours = parseNumber(params.minHours);
+  const maxHours = parseNumber(params.maxHours);
+  const minRevenue = parseNumber(params.minRevenue);
+  const maxRevenue = parseNumber(params.maxRevenue);
+  const minScore = parseNumber(params.minScore);
+  const maxScore = parseNumber(params.maxScore);
+  const minReviews = parseNumber(params.minReviews);
+  const maxReviews = parseNumber(params.maxReviews);
+
+  // Growth filter params
+  const minGrowth7d = parseNumber(params.minGrowth7d);
+  const maxGrowth7d = parseNumber(params.maxGrowth7d);
+  const minGrowth30d = parseNumber(params.minGrowth30d);
+  const maxGrowth30d = parseNumber(params.maxGrowth30d);
+
+  // Time period param
+  const period = VALID_PERIODS.includes(params.period as TimePeriod)
+    ? (params.period as TimePeriod)
+    : undefined;
+
+  // Status param
+  const status: StatusFilterValue = VALID_STATUS.includes(params.status as 'active' | 'dormant')
+    ? (params.status as StatusFilterValue)
+    : undefined;
+
+  // M4b: Content filter params
+  const genres = parseNumberArray(params.genres);
+  const genreMode: FilterMode | undefined = VALID_FILTER_MODES.includes(params.genreMode as FilterMode)
+    ? (params.genreMode as FilterMode)
+    : undefined;
+  const tags = parseNumberArray(params.tags);
+  const categories = parseNumberArray(params.categories);
+  const steamDeck: SteamDeckFilterValue = VALID_STEAM_DECK.includes(params.steamDeck as SteamDeckFilterValue)
+    ? (params.steamDeck as SteamDeckFilterValue)
+    : undefined;
+  const platforms = parsePlatforms(params.platforms);
+  const platformMode: FilterMode | undefined = VALID_FILTER_MODES.includes(params.platformMode as FilterMode)
+    ? (params.platformMode as FilterMode)
+    : undefined;
+
+  // M4b: Relationship param
+  const relationship: RelationshipFilterValue = VALID_RELATIONSHIPS.includes(params.relationship as RelationshipFilterValue)
+    ? (params.relationship as RelationshipFilterValue)
+    : undefined;
+
+  // M5: Columns parsed from URL in useCompaniesFilters hook
+
+  // M6a: Parse compare param
+  const compareIds = parseCompareParam(params.compare || null);
+
+  // Build filter params for query
+  const filterParams: CompaniesFilterParams = {
+    type,
+    sort,
+    order,
+    limit: 50,
+    search,
+    // Metric filters
+    minGames,
+    maxGames,
+    minOwners,
+    maxOwners,
+    minCcu,
+    maxCcu,
+    minHours,
+    maxHours,
+    minRevenue,
+    maxRevenue,
+    minScore,
+    maxScore,
+    minReviews,
+    maxReviews,
+    // Growth filters
+    minGrowth7d,
+    maxGrowth7d,
+    minGrowth30d,
+    maxGrowth30d,
+    period,
+    // M4b: Content filters
+    genres,
+    genreMode,
+    tags,
+    categories,
+    steamDeck,
+    platforms,
+    platformMode,
+    // Status & Relationship
+    status,
+    relationship,
+  };
+
+  // Fetch companies, aggregate stats, and compare companies in parallel
   let companies: Company[] = [];
+  let compareCompanies: Company[] = [];
+  let aggregateStats: AggregateStats = {
+    total_companies: 0,
+    total_games: 0,
+    total_owners: 0,
+    total_revenue: 0,
+    avg_review_score: null,
+    total_ccu: 0,
+  };
   let fetchError: string | null = null;
 
   try {
-    companies = await getCompanies({
-      type,
-      sort,
-      order,
-      limit: 50,
-    });
+    // Build list of promises
+    const promises: [Promise<Company[]>, Promise<AggregateStats>, Promise<Company[]>?] = [
+      getCompanies(filterParams),
+      getAggregateStats(filterParams),
+    ];
+
+    // Only fetch compare companies if we have valid compare IDs (2+)
+    if (compareIds.length >= 2) {
+      promises.push(getCompaniesByIds(compareIds));
+    }
+
+    const results = await Promise.all(promises);
+    companies = results[0];
+    aggregateStats = results[1];
+    compareCompanies = results[2] ?? [];
   } catch (error) {
     console.error('Failed to fetch companies:', error);
     fetchError = error instanceof Error ? error.message : 'Unknown error';
@@ -101,7 +294,41 @@ export default async function CompaniesPage({
   // Build description with count and type
   const typeLabel =
     type === 'all' ? 'publishers and developers' : `${type}s`;
-  const description = `Showing ${companies.length} ${typeLabel}`;
+
+  // Build filter description
+  const hasFilters =
+    search ||
+    filters ||
+    preset ||
+    minGames ||
+    maxGames ||
+    minOwners ||
+    maxOwners ||
+    minCcu ||
+    maxCcu ||
+    minHours ||
+    maxHours ||
+    minRevenue ||
+    maxRevenue ||
+    minScore ||
+    maxScore ||
+    minReviews ||
+    maxReviews ||
+    minGrowth7d ||
+    maxGrowth7d ||
+    minGrowth30d ||
+    maxGrowth30d ||
+    (period && period !== 'all') ||
+    status ||
+    // M4b filters
+    genres ||
+    tags ||
+    categories ||
+    steamDeck ||
+    platforms ||
+    relationship;
+  const filterDesc = hasFilters ? ' (filtered)' : '';
+  const description = `Showing ${companies.length} ${typeLabel}${filterDesc}`;
 
   return (
     <div className="space-y-6">
@@ -111,6 +338,10 @@ export default async function CompaniesPage({
         initialType={type}
         initialSort={sort}
         initialOrder={order}
+        initialSearch={search || ''}
+        initialPreset={preset || null}
+        aggregateStats={aggregateStats}
+        compareCompanies={compareCompanies}
       />
     </div>
   );

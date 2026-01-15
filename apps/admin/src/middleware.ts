@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
+import { getBypassEmail } from '@/lib/dev-auth';
 
 // Public paths - no auth required
-const PUBLIC_PATHS = ['/login', '/waitlist', '/auth/callback', '/auth/confirm', '/api/auth/callback', '/api/auth/validate-email'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/waitlist',
+  '/auth/callback',
+  '/auth/confirm',
+  '/api/auth/callback',
+  '/api/auth/validate-email',
+  '/api/auth/dev-login', // Dev auth endpoint (secured by environment checks)
+];
 
 // Admin-only paths (requires admin role)
 const ADMIN_PATHS = ['/admin'];
@@ -57,6 +66,16 @@ export async function middleware(request: NextRequest) {
   // Skip static assets
   if (isStaticAsset(pathname)) {
     return NextResponse.next();
+  }
+
+  // DEV AUTH BYPASS (secured by environment checks in dev-auth.ts)
+  const hostname = request.nextUrl.hostname;
+  const bypassEmail = getBypassEmail(hostname);
+  if (bypassEmail && !isPublicPath(pathname)) {
+    // Pass bypass email to server components via header
+    const response = NextResponse.next();
+    response.headers.set('x-dev-auth-email', bypassEmail);
+    return response;
   }
 
   // For public paths, still update session but don't require auth

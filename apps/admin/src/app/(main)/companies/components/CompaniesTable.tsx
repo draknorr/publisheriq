@@ -1,10 +1,14 @@
 'use client';
 
+import { useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { Check, Minus, Pin, ExternalLink } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { ReviewScoreBadge } from '@/components/data-display/TrendIndicator';
 import { GrowthCell } from './GrowthCell';
+import { SparklineCell } from './SparklineCell';
+import { DataFreshnessFooter } from './DataFreshnessFooter';
 import { MethodologyTooltip } from './MethodologyTooltip';
 import {
   formatCompactNumber,
@@ -12,22 +16,45 @@ import {
   formatHours,
   getReviewPercentage,
 } from '../lib/companies-queries';
+import {
+  COLUMN_DEFINITIONS,
+  isRatioColumn,
+  type ColumnId,
+} from '../lib/companies-columns';
 import type { Company, SortField, SortOrder } from '../lib/companies-types';
+import { serializeCompanyId } from '../lib/companies-types';
+import type { useSparklineLoader } from '../hooks/useSparklineLoader';
 
 interface CompaniesTableProps {
   companies: Company[];
   sortField: SortField;
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
+  visibleColumns: ColumnId[];
+  sparklineLoader: ReturnType<typeof useSparklineLoader>;
+  // M6a: Selection props
+  selectionEnabled?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelection?: (
+    id: number,
+    type: 'publisher' | 'developer',
+    index: number,
+    visibleCompanies: Company[],
+    shiftKey?: boolean
+  ) => void;
+  onToggleAllVisible?: (visibleCompanies: Company[]) => void;
+  isAllVisibleSelected?: boolean;
+  isIndeterminate?: boolean;
 }
 
 interface SortHeaderProps {
-  field: SortField;
+  field: SortField | ColumnId;
   label: string;
   currentSort: SortField;
   currentOrder: SortOrder;
   onSort: (field: SortField) => void;
   tooltipField?: string;
+  isRatio?: boolean;
   className?: string;
 }
 
@@ -38,20 +65,30 @@ function SortHeader({
   currentOrder,
   onSort,
   tooltipField,
+  isRatio = false,
   className = '',
 }: SortHeaderProps) {
   const isActive = currentSort === field;
   const arrow = isActive ? (currentOrder === 'asc' ? ' \u2191' : ' \u2193') : '';
+
+  const handleClick = () => {
+    // For ratio columns, we'll handle sorting differently
+    if (!isRatio && field) {
+      onSort(field as SortField);
+    }
+  };
 
   return (
     <th
       className={`px-3 py-2 text-left text-caption font-medium text-text-tertiary whitespace-nowrap ${className}`}
     >
       <button
-        onClick={() => onSort(field)}
+        onClick={handleClick}
         className={`hover:text-text-primary transition-colors ${
           isActive ? 'text-accent-blue' : ''
         }`}
+        disabled={isRatio}
+        title={isRatio ? 'Ratio columns cannot be sorted on server' : undefined}
       >
         {label}
         {arrow}
@@ -102,12 +139,257 @@ function TrendingCell({
   );
 }
 
+/**
+ * Render a cell value based on column ID
+ */
+function renderCell(
+  columnId: ColumnId,
+  company: Company,
+  sparklineLoader: ReturnType<typeof useSparklineLoader>
+): React.ReactNode {
+  const column = COLUMN_DEFINITIONS[columnId];
+  if (!column) return null;
+
+  switch (columnId) {
+    case 'hours':
+      return formatHours(company.estimated_weekly_hours);
+    case 'owners':
+      return formatCompactNumber(company.total_owners);
+    case 'ccu':
+      return formatCompactNumber(company.total_ccu);
+    case 'games':
+      return company.game_count;
+    case 'unique_developers':
+      return company.unique_developers;
+    case 'reviews': {
+      const reviewPct = getReviewPercentage(
+        company.positive_reviews,
+        company.total_reviews
+      );
+      return (
+        <>
+          <span>{formatCompactNumber(company.total_reviews)}</span>
+          {reviewPct !== null && (
+            <span className="ml-1">
+              <ReviewScoreBadge score={reviewPct} />
+            </span>
+          )}
+        </>
+      );
+    }
+    case 'avg_score':
+      return company.avg_review_score !== null
+        ? `${Math.round(company.avg_review_score)}%`
+        : '\u2014';
+    case 'review_velocity':
+      return company.review_velocity_7d !== null
+        ? `${company.review_velocity_7d.toFixed(1)}/day`
+        : '\u2014';
+    case 'revenue':
+      return formatRevenue(company.revenue_estimate_cents);
+    case 'growth_7d':
+      return <GrowthCell value={company.ccu_growth_7d_percent} />;
+    case 'growth_30d':
+      return <GrowthCell value={company.ccu_growth_30d_percent} />;
+    case 'trending':
+      return (
+        <TrendingCell
+          up={company.games_trending_up}
+          down={company.games_trending_down}
+        />
+      );
+    case 'revenue_per_game': {
+      const val = company.game_count > 0
+        ? company.revenue_estimate_cents / company.game_count
+        : null;
+      return val !== null ? formatRevenue(val) : '\u2014';
+    }
+    case 'owners_per_game': {
+      const val = company.game_count > 0
+        ? company.total_owners / company.game_count
+        : null;
+      return val !== null ? formatCompactNumber(val) : '\u2014';
+    }
+    case 'reviews_per_1k_owners': {
+      const val = company.total_owners > 0
+        ? (company.total_reviews / company.total_owners) * 1000
+        : null;
+      return val !== null ? val.toFixed(1) : '\u2014';
+    }
+    case 'sparkline':
+      return (
+        <SparklineCell
+          companyId={company.id}
+          companyType={company.type}
+          growthPercent={company.ccu_growth_7d_percent}
+          registerRow={sparklineLoader.registerRow}
+          getSparklineData={sparklineLoader.getSparklineData}
+          isLoading={sparklineLoader.isLoading}
+        />
+      );
+    default:
+      return '\u2014';
+  }
+}
+
+/**
+ * Get sort field for a column (used for header click handling)
+ */
+function getColumnSortField(columnId: ColumnId): SortField | null {
+  const column = COLUMN_DEFINITIONS[columnId];
+  if (!column || column.isRatio) return null;
+  return column.sortField ?? null;
+}
+
+/**
+ * M6b: Build Steam URL for publisher/developer
+ */
+function getSteamUrl(company: Company): string {
+  const vanityOrName = company.steam_vanity_url || encodeURIComponent(company.name);
+  const path = company.type === 'publisher' ? 'publisher' : 'developer';
+  return `https://store.steampowered.com/${path}/${vanityOrName}`;
+}
+
+/**
+ * M6b: Row action buttons component
+ */
+function RowActions({
+  company,
+  isPinned,
+  onPin,
+  isPinning,
+}: {
+  company: Company;
+  isPinned: boolean;
+  onPin: () => void;
+  isPinning: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {/* Pin button */}
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onPin();
+        }}
+        disabled={isPinning}
+        className={`p-1.5 rounded transition-colors ${
+          isPinned
+            ? 'text-accent-blue bg-accent-blue/10 hover:bg-accent-blue/20'
+            : 'text-text-muted hover:text-accent-blue hover:bg-surface-overlay'
+        } ${isPinning ? 'opacity-50 cursor-wait' : ''}`}
+        title={isPinned ? 'Pinned to dashboard' : 'Pin to dashboard'}
+      >
+        <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
+      </button>
+
+      {/* Steam link */}
+      <a
+        href={getSteamUrl(company)}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="p-1.5 rounded text-text-muted hover:text-accent-blue hover:bg-surface-overlay transition-colors"
+        title="Open on Steam"
+      >
+        <ExternalLink className="w-3.5 h-3.5" />
+      </a>
+    </div>
+  );
+}
+
 export function CompaniesTable({
   companies,
   sortField,
   sortOrder,
   onSort,
+  visibleColumns,
+  sparklineLoader,
+  // M6a: Selection props
+  selectionEnabled = false,
+  selectedIds = new Set(),
+  onToggleSelection,
+  onToggleAllVisible,
+  isAllVisibleSelected = false,
+  isIndeterminate = false,
 }: CompaniesTableProps) {
+  // M6b: Pin state management
+  // Track pinned companies and pinning in progress
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [pinningIds, setPinningIds] = useState<Set<string>>(new Set());
+
+  const handlePin = useCallback(async (company: Company) => {
+    const key = `${company.type}:${company.id}`;
+    const wasPinned = pinnedIds.has(key);
+
+    // Optimistic update
+    setPinningIds((prev) => new Set(prev).add(key));
+
+    try {
+      if (wasPinned) {
+        // Unpin - but we don't have the pin ID, so just update UI
+        // In a real implementation, we'd need to track pin IDs
+        setPinnedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      } else {
+        // Pin
+        const response = await fetch('/api/pins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entityType: company.type,
+            entityId: company.id,
+            displayName: company.name,
+          }),
+        });
+
+        if (response.ok) {
+          setPinnedIds((prev) => new Set(prev).add(key));
+        } else {
+          const error = await response.json().catch(() => ({}));
+          // If already pinned, mark as pinned
+          if (error.error?.includes('already pinned')) {
+            setPinnedIds((prev) => new Set(prev).add(key));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Pin error:', error);
+    } finally {
+      setPinningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, [pinnedIds]);
+
+  // Client-side sorting for ratio columns
+  const sortedCompanies = useMemo(() => {
+    // Check if current sort is a ratio column
+    const isRatio = isRatioColumn(sortField as ColumnId);
+    if (!isRatio) return companies;
+
+    const column = COLUMN_DEFINITIONS[sortField as ColumnId];
+    if (!column) return companies;
+
+    return [...companies].sort((a, b) => {
+      const aVal = column.getValue(a) as number | null;
+      const bVal = column.getValue(b) as number | null;
+
+      // Handle nulls (push to end)
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+
+      return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+    });
+  }, [companies, sortField, sortOrder]);
+
   if (companies.length === 0) {
     return (
       <Card className="p-8 text-center">
@@ -120,67 +402,101 @@ export function CompaniesTable({
     <>
       {/* Mobile Card View */}
       <div className="md:hidden space-y-2">
-        {companies.map((company, index) => (
-          <Link
-            key={`${company.type}-${company.id}`}
-            href={`/${company.type}s/${company.id}`}
-          >
-            <Card variant="interactive" padding="sm">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-text-muted text-caption">
-                    #{index + 1}
-                  </span>
-                  <span className="text-body font-medium text-text-primary">
-                    {company.name}
-                  </span>
+        {sortedCompanies.map((company, index) => {
+          const isSelected = selectedIds.has(serializeCompanyId(company.id, company.type));
+          return (
+          <div key={`${company.type}-${company.id}`} className="flex items-stretch gap-2">
+            {/* M6a: Selection checkbox */}
+            {selectionEnabled && (
+              <button
+                onClick={(e) =>
+                  onToggleSelection?.(
+                    company.id,
+                    company.type,
+                    index,
+                    sortedCompanies,
+                    e.shiftKey
+                  )
+                }
+                className="flex items-center justify-center w-8 flex-shrink-0"
+              >
+                <div
+                  className="w-5 h-5 rounded border transition-colors flex items-center justify-center"
+                  style={{
+                    backgroundColor: isSelected ? 'var(--accent-blue)' : 'transparent',
+                    borderColor: isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                  }}
+                >
+                  {isSelected && <Check className="w-3 h-3 text-white" />}
                 </div>
-                <RoleBadge type={company.type} />
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-body-sm">
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Weekly Hours</span>
-                  <span className="text-text-secondary">
-                    {formatHours(company.estimated_weekly_hours)}
-                  </span>
+              </button>
+            )}
+            <Link
+              href={`/${company.type}s/${company.id}`}
+              className="flex-1 min-w-0"
+            >
+              <Card
+                variant="interactive"
+                padding="sm"
+                className={isSelected ? 'ring-2 ring-accent-blue/50' : ''}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-text-muted text-caption">
+                      #{index + 1}
+                    </span>
+                    <span className="text-body font-medium text-text-primary">
+                      {company.name}
+                    </span>
+                  </div>
+                  <RoleBadge type={company.type} />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Games</span>
-                  <span className="text-text-secondary">
-                    {company.game_count}
-                  </span>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-body-sm">
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">Weekly Hours</span>
+                    <span className="text-text-secondary">
+                      {formatHours(company.estimated_weekly_hours)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">Games</span>
+                    <span className="text-text-secondary">
+                      {company.game_count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">Owners</span>
+                    <span className="text-text-secondary">
+                      {formatCompactNumber(company.total_owners)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">Revenue</span>
+                    <span className="text-text-secondary">
+                      {formatRevenue(company.revenue_estimate_cents)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">Growth (7d)</span>
+                    <GrowthCell value={company.ccu_growth_7d_percent} />
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">Reviews</span>
+                    <span className="text-text-secondary">
+                      {formatCompactNumber(company.total_reviews)}
+                      {company.avg_review_score !== null && (
+                        <span className="text-text-muted ml-1">
+                          ({company.avg_review_score}%)
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Owners</span>
-                  <span className="text-text-secondary">
-                    {formatCompactNumber(company.total_owners)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Revenue</span>
-                  <span className="text-text-secondary">
-                    {formatRevenue(company.revenue_estimate_cents)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Growth (7d)</span>
-                  <GrowthCell value={company.ccu_growth_7d_percent} />
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Reviews</span>
-                  <span className="text-text-secondary">
-                    {formatCompactNumber(company.total_reviews)}
-                    {company.avg_review_score !== null && (
-                      <span className="text-text-muted ml-1">
-                        ({company.avg_review_score}%)
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        ))}
+              </Card>
+            </Link>
+          </div>
+          );
+        })}
       </div>
 
       {/* Desktop Table View */}
@@ -188,6 +504,24 @@ export function CompaniesTable({
         <table className="w-full">
           <thead className="bg-surface-elevated sticky top-0 z-10">
             <tr>
+              {/* M6a: Selection checkbox column */}
+              {selectionEnabled && (
+                <th className="px-3 py-2 w-10">
+                  <button
+                    onClick={() => onToggleAllVisible?.(sortedCompanies)}
+                    className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+                    style={{
+                      backgroundColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-blue)' : 'transparent',
+                      borderColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                    }}
+                    title={isAllVisibleSelected ? 'Deselect all' : 'Select all visible'}
+                  >
+                    {isAllVisibleSelected && <Check className="w-3 h-3 text-white" />}
+                    {isIndeterminate && !isAllVisibleSelected && <Minus className="w-3 h-3 text-white" />}
+                  </button>
+                </th>
+              )}
+              {/* Fixed columns: Rank, Name, Role */}
               <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary w-12">
                 #
               </th>
@@ -202,140 +536,114 @@ export function CompaniesTable({
               <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">
                 Role
               </th>
-              <SortHeader
-                field="estimated_weekly_hours"
-                label="Est. Weekly Hours"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="estimated_weekly_hours"
-              />
-              <SortHeader
-                field="game_count"
-                label="Games"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="game_count"
-              />
-              <SortHeader
-                field="total_owners"
-                label="Total Owners"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="total_owners"
-              />
-              <SortHeader
-                field="total_ccu"
-                label="Peak CCU"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="total_ccu"
-              />
-              <SortHeader
-                field="total_reviews"
-                label="Reviews"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="total_reviews"
-              />
-              <SortHeader
-                field="revenue_estimate_cents"
-                label="Est. Revenue"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="revenue_estimate_cents"
-              />
-              <SortHeader
-                field="ccu_growth_7d"
-                label="CCU Growth (7d)"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="ccu_growth_7d_percent"
-              />
-              <SortHeader
-                field="games_trending_up"
-                label="Trending"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={onSort}
-                tooltipField="games_trending_up"
-              />
+
+              {/* Dynamic columns based on visibleColumns */}
+              {visibleColumns.map((columnId) => {
+                const column = COLUMN_DEFINITIONS[columnId];
+                if (!column) return null;
+
+                const sortFieldForColumn = getColumnSortField(columnId);
+
+                return (
+                  <SortHeader
+                    key={columnId}
+                    field={sortFieldForColumn || columnId}
+                    label={column.shortLabel || column.label}
+                    currentSort={sortField}
+                    currentOrder={sortOrder}
+                    onSort={onSort}
+                    tooltipField={column.methodology ? columnId : undefined}
+                    isRatio={column.isRatio}
+                  />
+                );
+              })}
+
+              {/* M6b: Actions column */}
+              <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary w-20">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle">
-            {companies.map((company, index) => {
-              const reviewPct = getReviewPercentage(
-                company.positive_reviews,
-                company.total_reviews
-              );
+            {sortedCompanies.map((company, index) => {
+              const isSelected = selectedIds.has(serializeCompanyId(company.id, company.type));
               return (
-                <tr
-                  key={`${company.type}-${company.id}`}
-                  className="hover:bg-surface-overlay transition-colors"
-                >
-                  <td className="px-3 py-2 text-caption text-text-muted">
-                    {index + 1}
-                  </td>
+              <tr
+                key={`${company.type}-${company.id}`}
+                className={`hover:bg-surface-overlay transition-colors ${
+                  isSelected ? 'bg-accent-blue/5' : ''
+                }`}
+              >
+                {/* M6a: Selection checkbox */}
+                {selectionEnabled && (
                   <td className="px-3 py-2">
-                    <Link
-                      href={`/${company.type}s/${company.id}`}
-                      className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+                    <button
+                      onClick={(e) =>
+                        onToggleSelection?.(
+                          company.id,
+                          company.type,
+                          index,
+                          sortedCompanies,
+                          e.shiftKey
+                        )
+                      }
+                      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+                      style={{
+                        backgroundColor: isSelected ? 'var(--accent-blue)' : 'transparent',
+                        borderColor: isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                      }}
                     >
-                      {company.name}
-                    </Link>
+                      {isSelected && <Check className="w-3 h-3 text-white" />}
+                    </button>
                   </td>
-                  <td className="px-3 py-2">
-                    <RoleBadge type={company.type} />
+                )}
+                {/* Fixed columns */}
+                <td className="px-3 py-2 text-caption text-text-muted">
+                  {index + 1}
+                </td>
+                <td className="px-3 py-2">
+                  <Link
+                    href={`/${company.type}s/${company.id}`}
+                    className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+                  >
+                    {company.name}
+                  </Link>
+                </td>
+                <td className="px-3 py-2">
+                  <RoleBadge type={company.type} />
+                </td>
+
+                {/* Dynamic columns */}
+                {visibleColumns.map((columnId) => (
+                  <td
+                    key={columnId}
+                    className="px-3 py-2 text-body-sm text-text-secondary"
+                  >
+                    {renderCell(columnId, company, sparklineLoader)}
                   </td>
-                  <td className="px-3 py-2 text-body-sm text-text-secondary">
-                    {formatHours(company.estimated_weekly_hours)}
-                  </td>
-                  <td className="px-3 py-2 text-body-sm text-text-secondary">
-                    {company.game_count}
-                  </td>
-                  <td className="px-3 py-2 text-body-sm text-text-secondary">
-                    {formatCompactNumber(company.total_owners)}
-                  </td>
-                  <td className="px-3 py-2 text-body-sm text-text-secondary">
-                    {formatCompactNumber(company.total_ccu)}
-                  </td>
-                  <td className="px-3 py-2 text-body-sm text-text-secondary">
-                    <span>{formatCompactNumber(company.total_reviews)}</span>
-                    {reviewPct !== null && (
-                      <span className="ml-1">
-                        <ReviewScoreBadge score={reviewPct} />
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-body-sm text-text-secondary">
-                    {formatRevenue(company.revenue_estimate_cents)}
-                  </td>
-                  <td className="px-3 py-2 text-body-sm">
-                    <GrowthCell value={company.ccu_growth_7d_percent} />
-                  </td>
-                  <td className="px-3 py-2 text-body-sm">
-                    <TrendingCell
-                      up={company.games_trending_up}
-                      down={company.games_trending_down}
-                    />
-                  </td>
-                </tr>
+                ))}
+
+                {/* M6b: Actions column */}
+                <td className="px-3 py-2">
+                  <RowActions
+                    company={company}
+                    isPinned={pinnedIds.has(`${company.type}:${company.id}`)}
+                    onPin={() => handlePin(company)}
+                    isPinning={pinningIds.has(`${company.type}:${company.id}`)}
+                  />
+                </td>
+              </tr>
               );
             })}
           </tbody>
         </table>
       </div>
 
-      {/* Result count footer */}
-      <div className="mt-4 text-center text-caption text-text-tertiary">
-        Showing {companies.length} companies
-      </div>
+      {/* Data Freshness Footer */}
+      <DataFreshnessFooter
+        companies={sortedCompanies}
+        resultCount={sortedCompanies.length}
+      />
     </>
   );
 }

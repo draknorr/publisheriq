@@ -2341,9 +2341,15 @@ export type Database = {
           p_genre_mode?: string
           p_genres?: number[]
           p_limit?: number
+          p_max_ccu?: number
           p_max_games?: number
           p_max_growth_30d?: number
           p_max_growth_7d?: number
+          p_max_hours?: number
+          p_max_owners?: number
+          p_max_revenue?: number
+          p_max_reviews?: number
+          p_max_score?: number
           p_min_ccu?: number
           p_min_games?: number
           p_min_growth_30d?: number

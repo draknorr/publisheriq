@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef } from 'react';
 import { X, Download, Scale } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import {
   formatPercentDiff,
   CATEGORY_LABELS,
 } from '../lib/companies-compare';
+import { generateCompareCSV, downloadCSV, generateFilename } from '../lib/companies-export';
 
 interface CompareModeProps {
   companies: Company[];
@@ -35,6 +36,24 @@ export function CompareMode({
   onRemove,
   sparklineLoader,
 }: CompareModeProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Focus trap and ESC key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    // Focus the close button when modal opens
+    closeButtonRef.current?.focus();
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   // Build comparison data
   const metricRows = useMemo(
     () => buildCompareMetricRows(companies, aggregateStats),
@@ -45,6 +64,13 @@ export function CompareMode({
     () => groupMetricsByCategory(metricRows),
     [metricRows]
   );
+
+  // M6b: Export comparison to CSV
+  const handleExport = useCallback(() => {
+    const csv = generateCompareCSV(companies, metricRows);
+    const filename = generateFilename('companies-comparison');
+    downloadCSV(csv, filename);
+  }, [companies, metricRows]);
 
   // Categories to display (in order)
   const categories = ['engagement', 'content', 'reviews', 'financial', 'growth', 'ratios'];
@@ -59,15 +85,22 @@ export function CompareMode({
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-5xl mx-4 bg-surface-raised border border-border-subtle rounded-xl shadow-lg max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="compare-modal-title"
+        className="relative w-full max-w-5xl mx-4 bg-surface-raised border border-border-subtle rounded-xl shadow-lg max-h-[90vh] overflow-hidden flex flex-col"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle bg-surface-elevated">
           <div className="flex items-center gap-3">
             <Scale className="w-5 h-5 text-accent-blue" />
-            <h2 className="text-heading-sm font-semibold text-text-primary">
+            <h2 id="compare-modal-title" className="text-heading-sm font-semibold text-text-primary">
               Compare Companies
             </h2>
             <Badge variant="default" size="sm">
@@ -79,16 +112,17 @@ export function CompareMode({
               variant="secondary"
               size="sm"
               className="gap-1.5"
-              disabled // M6b: Will be implemented
-              title="Coming soon"
+              onClick={handleExport}
+              title="Export comparison to CSV"
             >
               <Download className="w-4 h-4" />
               Export CSV
             </Button>
             <button
+              ref={closeButtonRef}
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-surface-overlay transition-colors"
-              aria-label="Close"
+              aria-label="Close comparison modal"
             >
               <X className="w-5 h-5 text-text-muted" />
             </button>

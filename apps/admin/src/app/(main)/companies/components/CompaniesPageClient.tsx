@@ -1,69 +1,407 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useState } from 'react';
+import { Download } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { ToastProvider, useToastActions } from '@/components/ui/Toast';
 import { CompanyTypeToggle } from './CompanyTypeToggle';
 import { CompaniesTable } from './CompaniesTable';
-import type { Company, CompanyType, SortField, SortOrder } from '../lib/companies-types';
+import { PresetViews } from './PresetViews';
+import { SearchBar } from './SearchBar';
+import { QuickFilters } from './QuickFilters';
+import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
+import { SavedViews } from './SavedViews';
+import { ColumnSelector } from './ColumnSelector';
+import { SummaryStatsBar } from './SummaryStatsBar';
+import { BulkActionsBar } from './BulkActionsBar';
+import { CompareMode } from './CompareMode';
+import { ExportDialog } from './ExportDialog';
+import { EmptyState } from './EmptyState';
+import { useCompaniesFilters } from '../hooks/useCompaniesFilters';
+import { useSparklineLoader } from '../hooks/useSparklineLoader';
+import { useCompaniesSelection } from '../hooks/useCompaniesSelection';
+import { useCompaniesCompare } from '../hooks/useCompaniesCompare';
+import type { Company, CompanyType, SortField, SortOrder, SavedView } from '../lib/companies-types';
+import type { AggregateStats } from '../lib/companies-queries';
 
 interface CompaniesPageClientProps {
   initialData: Company[];
   initialType: CompanyType;
   initialSort: SortField;
   initialOrder: SortOrder;
+  initialSearch: string;
+  initialPreset: string | null;
+  aggregateStats: AggregateStats;
+  // initialColumns is parsed from URL in useCompaniesFilters hook
+  // M6a: Compare companies (fetched server-side based on URL param)
+  compareCompanies: Company[];
 }
 
-export function CompaniesPageClient({
+export function CompaniesPageClient(props: CompaniesPageClientProps) {
+  return (
+    <ToastProvider>
+      <CompaniesPageClientInner {...props} />
+    </ToastProvider>
+  );
+}
+
+function CompaniesPageClientInner({
   initialData,
   initialType,
   initialSort,
   initialOrder,
+  initialSearch,
+  initialPreset,
+  aggregateStats,
+  compareCompanies,
 }: CompaniesPageClientProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const toast = useToastActions();
 
-  const updateUrl = (updates: Partial<{ type: string; sort: string; order: string }>) => {
-    const params = new URLSearchParams(searchParams.toString());
+  // M6b: Export dialog state
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<'filtered' | 'selected'>('filtered');
+  const [isPinning, setIsPinning] = useState(false);
 
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value) {
-        params.set(key, value);
+  const {
+    isPending,
+    activeQuickFilters,
+    advancedFilters,
+    advancedFilterCount,
+    visibleColumns,
+    setType,
+    setSort,
+    setSearch,
+    toggleQuickFilter,
+    applyPreset,
+    clearPreset,
+    clearAllFilters,
+    // M4a
+    setAdvancedFilter,
+    clearAdvancedFilters,
+    applyGrowthPreset,
+    // M4b
+    setGenres,
+    setGenreMode,
+    setTags,
+    setCategories,
+    setSteamDeck,
+    setPlatforms,
+    setPlatformMode,
+    setStatus,
+    setRelationship,
+    // M5
+    setColumns,
+  } = useCompaniesFilters();
+
+  // Sparkline lazy loader
+  const sparklineLoader = useSparklineLoader();
+
+  // M6a: Selection state
+  const selection = useCompaniesSelection();
+
+  // M6a: Compare state (URL-persisted)
+  const compare = useCompaniesCompare();
+
+  // M6b: Get selected companies from data
+  const getSelectedCompanies = useCallback((): Company[] => {
+    return initialData.filter((company) =>
+      selection.selectedIds.has(
+        `${company.type === 'publisher' ? 'pub' : 'dev'}:${company.id}`
+      )
+    );
+  }, [initialData, selection.selectedIds]);
+
+  // M6b: Bulk pin handler
+  const handleBulkPin = useCallback(async () => {
+    const selectedIdentifiers = selection.getSelectedIdentifiers();
+    if (selectedIdentifiers.length === 0) return;
+
+    setIsPinning(true);
+
+    try {
+      const results = await Promise.allSettled(
+        selectedIdentifiers.map(async (identifier) => {
+          const company = initialData.find(
+            (c) => c.id === identifier.id && c.type === identifier.type
+          );
+          if (!company) throw new Error('Company not found');
+
+          const response = await fetch('/api/pins', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              entityType: identifier.type,
+              entityId: identifier.id,
+              displayName: company.name,
+            }),
+          });
+
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            // Ignore already pinned errors
+            if (error.error?.includes('already pinned')) {
+              return { alreadyPinned: true };
+            }
+            throw new Error(error.error || 'Failed to pin');
+          }
+
+          return response.json();
+        })
+      );
+
+      const successCount = results.filter(
+        (r) => r.status === 'fulfilled'
+      ).length;
+      const failedCount = results.filter(
+        (r) => r.status === 'rejected'
+      ).length;
+
+      if (failedCount === 0) {
+        toast.success(`Pinned ${successCount} companies to dashboard`);
+      } else if (successCount > 0) {
+        toast.info(`Pinned ${successCount} companies, ${failedCount} failed`);
       } else {
-        params.delete(key);
+        toast.error('Failed to pin companies');
       }
-    });
 
-    startTransition(() => {
+      selection.clearSelection();
+    } catch (error) {
+      console.error('Bulk pin error:', error);
+      toast.error('Failed to pin companies');
+    } finally {
+      setIsPinning(false);
+    }
+  }, [selection, initialData, toast]);
+
+  // Check if any filters are active (for clear button)
+  const hasActiveFilters =
+    initialSearch ||
+    initialPreset ||
+    activeQuickFilters.length > 0 ||
+    advancedFilterCount > 0;
+
+  /**
+   * Apply a saved view by building and navigating to the URL
+   */
+  const handleApplyView = useCallback(
+    (view: SavedView) => {
+      const params = new URLSearchParams();
+
+      // Core params
+      if (view.type !== 'all') params.set('type', view.type);
+      params.set('sort', view.sort);
+      params.set('order', view.order);
+
+      // Metric filters
+      const f = view.filters;
+      if (f.minGames !== undefined) params.set('minGames', String(f.minGames));
+      if (f.maxGames !== undefined) params.set('maxGames', String(f.maxGames));
+      if (f.minOwners !== undefined) params.set('minOwners', String(f.minOwners));
+      if (f.maxOwners !== undefined) params.set('maxOwners', String(f.maxOwners));
+      if (f.minCcu !== undefined) params.set('minCcu', String(f.minCcu));
+      if (f.maxCcu !== undefined) params.set('maxCcu', String(f.maxCcu));
+      if (f.minHours !== undefined) params.set('minHours', String(f.minHours));
+      if (f.maxHours !== undefined) params.set('maxHours', String(f.maxHours));
+      if (f.minRevenue !== undefined) params.set('minRevenue', String(f.minRevenue));
+      if (f.maxRevenue !== undefined) params.set('maxRevenue', String(f.maxRevenue));
+      if (f.minScore !== undefined) params.set('minScore', String(f.minScore));
+      if (f.maxScore !== undefined) params.set('maxScore', String(f.maxScore));
+      if (f.minReviews !== undefined) params.set('minReviews', String(f.minReviews));
+      if (f.maxReviews !== undefined) params.set('maxReviews', String(f.maxReviews));
+
+      // Growth filters
+      if (f.minGrowth7d !== undefined) params.set('minGrowth7d', String(f.minGrowth7d));
+      if (f.maxGrowth7d !== undefined) params.set('maxGrowth7d', String(f.maxGrowth7d));
+      if (f.minGrowth30d !== undefined) params.set('minGrowth30d', String(f.minGrowth30d));
+      if (f.maxGrowth30d !== undefined) params.set('maxGrowth30d', String(f.maxGrowth30d));
+
+      // Time period
+      if (f.period && f.period !== 'all') params.set('period', f.period);
+
+      // Content filters
+      if (f.genres && f.genres.length > 0) params.set('genres', f.genres.join(','));
+      if (f.genreMode) params.set('genreMode', f.genreMode);
+      if (f.tags && f.tags.length > 0) params.set('tags', f.tags.join(','));
+      if (f.categories && f.categories.length > 0) params.set('categories', f.categories.join(','));
+      if (f.steamDeck) params.set('steamDeck', f.steamDeck);
+      if (f.platforms && f.platforms.length > 0) params.set('platforms', f.platforms.join(','));
+      if (f.platformMode) params.set('platformMode', f.platformMode);
+
+      // Status & Relationship
+      if (f.status) params.set('status', f.status);
+      if (f.relationship) params.set('relationship', f.relationship);
+
+      // M5: Columns
+      if (view.columns && view.columns.length > 0) {
+        params.set('columns', view.columns.join(','));
+      }
+
       router.push(`/companies?${params.toString()}`);
-    });
-  };
-
-  const handleTypeChange = (type: CompanyType) => {
-    updateUrl({ type });
-  };
-
-  const handleSort = (field: SortField) => {
-    // Toggle order if same field, otherwise use desc
-    const newOrder = initialSort === field && initialOrder === 'desc' ? 'asc' : 'desc';
-    updateUrl({ sort: field, order: newOrder });
-  };
+    },
+    [router]
+  );
 
   return (
-    <div className={`space-y-6 ${isPending ? 'opacity-60' : ''}`}>
+    <div className={`space-y-4 ${isPending ? 'opacity-60 pointer-events-none' : ''}`}>
+      {/* Summary Stats Bar (M5) */}
+      <SummaryStatsBar stats={aggregateStats} isLoading={isPending} />
+
+      {/* Preset Views, Saved Views & Column Selector */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <PresetViews
+          activePreset={initialPreset}
+          onSelectPreset={applyPreset}
+          onClearPreset={clearPreset}
+          disabled={isPending}
+        />
+
+        <div className="flex items-center gap-2">
+          <ColumnSelector
+            visibleColumns={visibleColumns}
+            onChange={setColumns}
+            disabled={isPending}
+          />
+          <SavedViews
+            currentFilters={advancedFilters}
+            currentSort={initialSort}
+            currentOrder={initialOrder}
+            currentType={initialType}
+            currentColumns={visibleColumns}
+            onApplyView={handleApplyView}
+            disabled={isPending}
+          />
+          {/* M6b: Export button */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setExportScope('filtered');
+              setIsExportDialogOpen(true);
+            }}
+            disabled={isPending || initialData.length === 0}
+            className="gap-1.5"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </Button>
+        </div>
+      </div>
+
       {/* Type Toggle */}
-      <CompanyTypeToggle
-        value={initialType}
-        onChange={handleTypeChange}
+      <CompanyTypeToggle value={initialType} onChange={setType} disabled={isPending} />
+
+      {/* Search Bar */}
+      <SearchBar initialValue={initialSearch} onSearch={setSearch} isPending={isPending} />
+
+      {/* Quick Filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <QuickFilters
+          activeFilters={activeQuickFilters}
+          onToggle={toggleQuickFilter}
+          disabled={isPending}
+        />
+
+        {hasActiveFilters && (
+          <button
+            onClick={clearAllFilters}
+            disabled={isPending}
+            className="px-3 py-1.5 text-body-sm text-accent-red hover:text-accent-red/80 transition-colors"
+          >
+            Clear all filters
+          </button>
+        )}
+      </div>
+
+      {/* Advanced Filters Panel (M4a + M4b) */}
+      <AdvancedFiltersPanel
+        filters={advancedFilters}
+        activeCount={advancedFilterCount}
+        companyType={initialType}
+        onFilterChange={setAdvancedFilter}
+        onClearAll={clearAdvancedFilters}
+        onGrowthPreset={applyGrowthPreset}
+        // M4b handlers
+        onGenresChange={setGenres}
+        onGenreModeChange={setGenreMode}
+        onTagsChange={setTags}
+        onCategoriesChange={setCategories}
+        onSteamDeckChange={setSteamDeck}
+        onPlatformsChange={setPlatforms}
+        onPlatformModeChange={setPlatformMode}
+        onStatusChange={setStatus}
+        onRelationshipChange={setRelationship}
         disabled={isPending}
       />
 
-      {/* Companies Table */}
-      <CompaniesTable
+      {/* Companies Table (M5: dynamic columns + sparklines) */}
+      {initialData.length > 0 ? (
+        <CompaniesTable
+          companies={initialData}
+          sortField={initialSort}
+          sortOrder={initialOrder}
+          onSort={setSort}
+          visibleColumns={visibleColumns}
+          sparklineLoader={sparklineLoader}
+          // M6a: Selection props
+          selectionEnabled
+          selectedIds={selection.selectedIds}
+          onToggleSelection={selection.toggleSelection}
+          onToggleAllVisible={selection.toggleAllVisible}
+          isAllVisibleSelected={selection.isAllVisibleSelected(initialData)}
+          isIndeterminate={selection.isIndeterminate(initialData)}
+        />
+      ) : (
+        <EmptyState
+          hasSearch={!!initialSearch}
+          hasFilters={advancedFilterCount > 0 || activeQuickFilters.length > 0}
+          hasPreset={initialPreset}
+          onClearFilters={clearAllFilters}
+        />
+      )}
+
+      {/* M6a: Bulk Actions Bar */}
+      <BulkActionsBar
+        selectedCount={selection.selectedCount}
+        canCompare={selection.selectedCount >= 2 && selection.selectedCount <= 5}
+        onCompare={() => {
+          compare.openCompare(selection.getSelectedIdentifiers());
+        }}
+        onPinAll={handleBulkPin}
+        onExport={() => {
+          setExportScope('selected');
+          setIsExportDialogOpen(true);
+        }}
+        onClear={selection.clearSelection}
+        isPinning={isPinning}
+      />
+
+      {/* M6a: Compare Mode Modal */}
+      {compare.isCompareOpen && compareCompanies.length >= 2 && (
+        <CompareMode
+          companies={compareCompanies}
+          aggregateStats={aggregateStats}
+          onClose={compare.closeCompare}
+          onRemove={compare.removeFromCompare}
+          sparklineLoader={sparklineLoader}
+        />
+      )}
+
+      {/* M6b: Export Dialog */}
+      <ExportDialog
+        isOpen={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
         companies={initialData}
-        sortField={initialSort}
-        sortOrder={initialOrder}
-        onSort={handleSort}
+        selectedCompanies={getSelectedCompanies()}
+        visibleColumns={visibleColumns}
+        filterDescription={{
+          type: initialType !== 'all' ? initialType : undefined,
+          search: initialSearch || undefined,
+          minRevenue: advancedFilters.minRevenue,
+          minGames: advancedFilters.minGames,
+        }}
+        defaultScope={exportScope}
       />
     </div>
   );
