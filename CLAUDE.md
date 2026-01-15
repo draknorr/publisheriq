@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data acquisition platform with natural language chat interface. Last updated: January 12, 2026.
+> Steam data acquisition platform with natural language chat interface. Last updated: January 15, 2026.
 
 ---
 
@@ -124,7 +124,8 @@ publisheriq/
 ├── apps/
 │   └── admin/                     # Next.js 15 dashboard
 │       ├── src/app/               # App router pages
-│       │   └── (main)/insights/   # Insights dashboard (v2.2)
+│       │   ├── (main)/insights/   # Insights dashboard (v2.2)
+│       │   └── (main)/companies/  # Companies page (v2.5) - unified pub/dev view
 │       ├── src/components/        # React components (theme, ui, data-display)
 │       └── src/lib/               # Utilities, LLM integration
 │           ├── llm/               # Chat system
@@ -623,6 +624,31 @@ CCU analytics page at `/insights` with sparkline visualizations:
 
 **Files:** `apps/admin/src/app/(main)/insights/`
 
+## Companies Page (v2.5)
+
+Unified publishers/developers analytics page at `/companies`:
+
+| Feature | Description |
+|---------|-------------|
+| **Type Toggle** | All / Publishers / Developers view |
+| **Presets** | Market Leaders, Rising Indies, Breakout, Growing Publishers |
+| **Quick Filters** | Major 10+, Prolific 5+, Active, Trending, $1M+, $10M+, 100K+ |
+| **Advanced Filters** | 9 categories: metrics, growth, content, platforms, Steam Deck, status |
+| **Columns** | 17 columns across 7 categories with toggle visibility |
+| **Compare Mode** | Side-by-side comparison of 2-5 companies |
+| **Export** | CSV/JSON with configurable columns |
+| **Saved Views** | localStorage persistence for filter configs |
+
+**RPC Functions:**
+| Function | Purpose |
+|----------|---------|
+| `get_companies_with_filters()` | Main query with two-path optimization (~214ms fast, ~4s slow) |
+| `get_companies_aggregate_stats()` | Summary statistics for context bar |
+| `get_company_sparkline_data()` | CCU time-series for sparklines |
+| `get_filter_option_counts()` | Dynamic filter dropdown counts |
+
+**Files:** `apps/admin/src/app/(main)/companies/`
+
 ## Common Patterns
 
 ### Adding a New Cube Dimension/Measure
@@ -679,11 +705,14 @@ Full documentation in `/docs/`:
 - [Database Schema](docs/architecture/database-schema.md) - Full schema with SQL examples
 - [Design System](docs/architecture/design-system.md) - Theme system and components
 - [Admin Dashboard](docs/architecture/admin-dashboard.md) - Dashboard architecture
+- [Companies Page](docs/architecture/companies-page.md) - Unified publishers/developers page (v2.5)
 - [Personalized Dashboard](docs/architecture/personalized-dashboard.md) - Pins and alerts (v2.4)
 - [Data Sources](docs/architecture/data-sources.md) - API specifications
 - [Sync Pipeline](docs/architecture/sync-pipeline.md) - Data flow details
+- [Companies Page Guide](docs/guides/companies-page.md) - Using the Companies page
 - [v2.0 Release Notes](docs/releases/v2.0-new-design.md) - Design system, query optimization
 - [v2.1 Release Notes](docs/releases/v2.1-velocity-auth.md) - Velocity sync, authentication
 - [v2.2 Release Notes](docs/releases/v2.2-ccu-steamspy.md) - CCU tiers, SteamSpy improvements
 - [v2.3 Release Notes](docs/releases/v2.3-embedding-optimization.md) - 10x embedding sync
 - [v2.4 Release Notes](docs/releases/v2.4-personalization.md) - Personalization, concept search, trending
+- [v2.5 Release Notes](docs/releases/v2.5-companies-page.md) - Unified Companies page

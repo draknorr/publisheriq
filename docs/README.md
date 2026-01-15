@@ -17,24 +17,28 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ## Latest Release
 
-**[v2.4 - Personalization & Chat Enhancements](releases/v2.4-personalization.md)** (January 12, 2026)
+**[v2.5 - Companies Page](releases/v2.5-companies-page.md)** (January 15, 2026)
 
-**Personalized Dashboard**
-- Pin games, publishers, developers to track on your dashboard
-- 8 alert types: CCU spikes, trend reversals, review surges, sentiment shifts, and more
-- Configurable alert preferences with per-type toggles and sensitivity sliders
-- Real-time triggers for price changes and new releases
-
-**Chat Enhancements (Qdrant Sprints 1-3)**
-- New `search_by_concept` tool for semantic concept search ("tactical roguelikes with deck building")
-- New `discover_trending` tool for momentum-based discovery (accelerating, breaking_out, declining)
-- Enhanced embeddings with CCU momentum, review velocity, and sentiment trajectory
-- Embedding dimension reduction: 1536 → 512 (~67% storage savings)
-- Storage optimization: int8 quantization + on-disk payloads (~90% total reduction)
+**Unified Companies Dashboard**
+- Browse publishers and developers in one unified view with type toggle
+- 9 filter categories with 25+ parameters (metrics, growth, content, platforms, Steam Deck)
+- 17 customizable columns across 7 metric categories
+- Compare mode: side-by-side comparison of 2-5 companies
+- CSV/JSON export with configurable columns
+- Saved views for filter configurations
+- Computed ratio columns: Revenue/Game, Owners/Game, Reviews/1K Owners
+- Inline CCU sparkline visualizations
 
 ---
 
 ## Previous Releases
+
+**[v2.4 - Personalization & Chat Enhancements](releases/v2.4-personalization.md)** (January 12, 2026)
+
+- Pin games, publishers, developers to your personalized dashboard
+- 8 alert types with configurable preferences and sensitivity
+- New `search_by_concept` and `discover_trending` LLM tools
+- Embedding optimization: 1536 → 512 dimensions (~90% storage savings)
 
 **[v2.3 - Embedding Optimization](releases/v2.3-embedding-optimization.md)** (January 11, 2026)
 
@@ -88,6 +92,7 @@ Understand how PublisherIQ works:
 - **[System Overview](architecture/overview.md)** - High-level architecture and component diagram
 - **[Design System](architecture/design-system.md)** - Theme system, color palette, typography, components
 - **[Admin Dashboard](architecture/admin-dashboard.md)** - Dashboard architecture and RPC optimizations
+- **[Companies Page](architecture/companies-page.md)** - Unified publishers/developers page architecture
 - **[Chat Data System](architecture/chat-data-system.md)** - Complete chat/LLM architecture, Cube.js schemas, and tools
 - **[Data Sources](architecture/data-sources.md)** - Steam APIs, SteamSpy, PICS service
 - **[Database Schema](architecture/database-schema.md)** - Tables, relationships, SQL patterns
@@ -111,6 +116,7 @@ Deploy PublisherIQ to production:
 
 How-to guides for common tasks:
 
+- **[Companies Page](guides/companies-page.md)** - Using the unified publishers/developers page
 - **[Theming](guides/theming.md)** - Using and customizing light/dark themes
 - **[Chat Interface](guides/chat-interface.md)** - Natural language queries via Cube.js with entity linking
 - **[Chat Query Examples](guides/chat-query-examples.md)** - 60+ example queries organized by use case

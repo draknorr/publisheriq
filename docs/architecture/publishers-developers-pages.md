@@ -1,6 +1,12 @@
 # Publishers & Developers Index Pages Overview
 
-> Current state documentation for `/publishers` and `/developers` index pages in PublisherIQ
+> **DEPRECATED:** This document describes the legacy `/publishers` and `/developers` pages.
+> These pages have been replaced by the unified **[Companies Page](./companies-page.md)** in v2.5.
+> See the [Companies Page Architecture](./companies-page.md) for current documentation.
+
+---
+
+> Current state documentation for `/publishers` and `/developers` index pages in PublisherIQ (Legacy)
 
 ---
 
