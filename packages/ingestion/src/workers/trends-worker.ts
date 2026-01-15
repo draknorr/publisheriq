@@ -153,7 +153,9 @@ async function main(): Promise<void> {
     // Get distinct appids using RPC (much faster than paginating 2.9M rows)
     log.info('Fetching distinct appids from review_histogram via RPC...');
 
-    const { data: appidRows, error: appidError } = await supabase.rpc('get_histogram_appids');
+    const { data: appidRows, error: appidError } = await supabase
+      .rpc('get_histogram_appids')
+      .limit(200000); // Override Supabase's default 1000 row limit
 
     if (appidError) {
       log.error('Failed to fetch appids via RPC', { error: appidError });
