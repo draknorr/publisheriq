@@ -16,6 +16,7 @@ export type ColumnId =
   // Content metrics
   | 'games'
   | 'unique_developers'
+  | 'role'
   // Review metrics
   | 'reviews'
   | 'avg_score'
@@ -135,6 +136,15 @@ export const COLUMN_DEFINITIONS: Record<ColumnId, ColumnDefinition> = {
     sortable: false,
     methodology: 'Number of unique developers this publisher has worked with.',
     getValue: (c) => c.unique_developers,
+  },
+  role: {
+    id: 'role',
+    label: 'Role',
+    category: 'content',
+    width: 60,
+    sortable: false,
+    methodology: 'Whether this is a Publisher or Developer.',
+    getValue: (c) => c.type,
   },
 
   // Review metrics
@@ -272,7 +282,7 @@ export const COLUMN_CATEGORIES: Record<ColumnCategory, { label: string; columns:
   },
   content: {
     label: 'Content',
-    columns: ['games', 'unique_developers'],
+    columns: ['games', 'unique_developers', 'role'],
   },
   reviews: {
     label: 'Reviews',

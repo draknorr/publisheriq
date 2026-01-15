@@ -21,7 +21,7 @@ import {
   isRatioColumn,
   type ColumnId,
 } from '../lib/companies-columns';
-import type { Company, SortField, SortOrder } from '../lib/companies-types';
+import type { Company, CompanyType, SortField, SortOrder } from '../lib/companies-types';
 import { serializeCompanyId } from '../lib/companies-types';
 import type { useSparklineLoader } from '../hooks/useSparklineLoader';
 
@@ -32,6 +32,7 @@ interface CompaniesTableProps {
   onSort: (field: SortField) => void;
   visibleColumns: ColumnId[];
   sparklineLoader: ReturnType<typeof useSparklineLoader>;
+  companyType: CompanyType;
   // M6a: Selection props
   selectionEnabled?: boolean;
   selectedIds?: Set<string>;
@@ -71,9 +72,13 @@ function SortHeader({
   const isActive = currentSort === field;
   const arrow = isActive ? (currentOrder === 'asc' ? ' \u2191' : ' \u2193') : '';
 
+  // Check if column is sortable (both ratio check and sortable property)
+  const column = COLUMN_DEFINITIONS[field as ColumnId];
+  const isDisabled = isRatio || column?.sortable === false;
+
   const handleClick = () => {
-    // For ratio columns, we'll handle sorting differently
-    if (!isRatio && field) {
+    // Disable sorting for ratio columns AND non-sortable columns
+    if (!isDisabled && field) {
       onSort(field as SortField);
     }
   };
@@ -87,8 +92,8 @@ function SortHeader({
         className={`hover:text-text-primary transition-colors ${
           isActive ? 'text-accent-blue' : ''
         }`}
-        disabled={isRatio}
-        title={isRatio ? 'Ratio columns cannot be sorted on server' : undefined}
+        disabled={isDisabled}
+        title={isDisabled ? 'This column cannot be sorted' : undefined}
       >
         {label}
         {arrow}
@@ -161,6 +166,8 @@ function renderCell(
       return company.game_count;
     case 'unique_developers':
       return company.unique_developers;
+    case 'role':
+      return <RoleBadge type={company.type} />;
     case 'reviews': {
       const reviewPct = getReviewPercentage(
         company.positive_reviews,
@@ -306,6 +313,7 @@ export function CompaniesTable({
   onSort,
   visibleColumns,
   sparklineLoader,
+  companyType,
   // M6a: Selection props
   selectionEnabled = false,
   selectedIds = new Set(),
@@ -389,6 +397,23 @@ export function CompaniesTable({
       return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
     });
   }, [companies, sortField, sortOrder]);
+
+  // Filter columns based on company type
+  const effectiveColumns = useMemo(() => {
+    let cols = visibleColumns;
+
+    // Hide Role column when viewing specific type (redundant info)
+    if (companyType !== 'all') {
+      cols = cols.filter((col) => col !== 'role');
+    }
+
+    // Hide Unique Devs when viewing developers (always 0, meaningless)
+    if (companyType === 'developer') {
+      cols = cols.filter((col) => col !== 'unique_developers');
+    }
+
+    return cols;
+  }, [visibleColumns, companyType]);
 
   if (companies.length === 0) {
     return (
@@ -521,7 +546,7 @@ export function CompaniesTable({
                   </button>
                 </th>
               )}
-              {/* Fixed columns: Rank, Name, Role */}
+              {/* Fixed columns: Rank, Name */}
               <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary w-12">
                 #
               </th>
@@ -533,12 +558,9 @@ export function CompaniesTable({
                 onSort={onSort}
                 className="min-w-[200px]"
               />
-              <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary">
-                Role
-              </th>
 
-              {/* Dynamic columns based on visibleColumns */}
-              {visibleColumns.map((columnId) => {
+              {/* Dynamic columns based on effectiveColumns (filtered by company type) */}
+              {effectiveColumns.map((columnId) => {
                 const column = COLUMN_DEFINITIONS[columnId];
                 if (!column) return null;
 
@@ -609,12 +631,9 @@ export function CompaniesTable({
                     {company.name}
                   </Link>
                 </td>
-                <td className="px-3 py-2">
-                  <RoleBadge type={company.type} />
-                </td>
 
                 {/* Dynamic columns */}
-                {visibleColumns.map((columnId) => (
+                {effectiveColumns.map((columnId) => (
                   <td
                     key={columnId}
                     className="px-3 py-2 text-body-sm text-text-secondary"

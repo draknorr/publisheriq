@@ -8,20 +8,32 @@ import {
   DEFAULT_COLUMNS,
   type ColumnId,
 } from '../lib/companies-columns';
+import type { CompanyType } from '../lib/companies-types';
 
 interface ColumnSelectorProps {
   visibleColumns: ColumnId[];
   onChange: (columns: ColumnId[]) => void;
   disabled?: boolean;
+  companyType: CompanyType;
 }
 
 export function ColumnSelector({
   visibleColumns,
   onChange,
   disabled,
+  companyType,
 }: ColumnSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Helper to check if column is applicable for current company type
+  const isColumnApplicable = (columnId: ColumnId): boolean => {
+    // Role only makes sense when viewing all types
+    if (columnId === 'role' && companyType !== 'all') return false;
+    // Unique devs only makes sense for publishers
+    if (columnId === 'unique_developers' && companyType === 'developer') return false;
+    return true;
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -34,9 +46,10 @@ export function ColumnSelector({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Count total selectable columns
-  const totalColumns = Object.keys(COLUMN_DEFINITIONS).length;
-  const visibleCount = visibleColumns.length;
+  // Count total selectable columns (only applicable ones for current type)
+  const applicableColumnIds = (Object.keys(COLUMN_DEFINITIONS) as ColumnId[]).filter(isColumnApplicable);
+  const totalColumns = applicableColumnIds.length;
+  const visibleCount = visibleColumns.filter(isColumnApplicable).length;
 
   const toggleColumn = (columnId: ColumnId) => {
     if (visibleColumns.includes(columnId)) {
@@ -93,7 +106,9 @@ export function ColumnSelector({
               <div className="px-3 py-2 text-caption font-medium text-text-tertiary uppercase tracking-wide bg-surface-overlay/50">
                 {category.label}
               </div>
-              {category.columns.map((columnId) => {
+              {category.columns
+                .filter((columnId) => isColumnApplicable(columnId as ColumnId))
+                .map((columnId) => {
                 const column = COLUMN_DEFINITIONS[columnId as ColumnId];
                 if (!column) return null;
                 const isVisible = visibleColumns.includes(columnId as ColumnId);

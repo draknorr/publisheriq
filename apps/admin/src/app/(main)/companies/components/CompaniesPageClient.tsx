@@ -262,6 +262,7 @@ function CompaniesPageClientInner({
             visibleColumns={visibleColumns}
             onChange={setColumns}
             disabled={isPending}
+            companyType={initialType}
           />
           <SavedViews
             currentFilters={advancedFilters}
@@ -344,6 +345,7 @@ function CompaniesPageClientInner({
           onSort={setSort}
           visibleColumns={visibleColumns}
           sparklineLoader={sparklineLoader}
+          companyType={initialType}
           // M6a: Selection props
           selectionEnabled
           selectedIds={selection.selectedIds}
