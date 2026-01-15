@@ -1,12 +1,13 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useTransition, useCallback, useMemo, useRef } from 'react';
+import { useTransition, useCallback, useMemo, useRef, useState } from 'react';
 import type {
   CompanyType,
   SortField,
   SortOrder,
   QuickFilterId,
+  PresetId,
   TimePeriod,
   SteamDeckFilterValue,
   RelationshipFilterValue,
@@ -15,7 +16,12 @@ import type {
   FilterMode,
   ColumnId,
 } from '../lib/companies-types';
-import { QUICK_FILTERS, buildFilterParams, getPresetById } from '../lib/companies-presets';
+import {
+  QUICK_FILTERS,
+  buildFilterParams,
+  getPresetById,
+  getUnifiedFilterById,
+} from '../lib/companies-presets';
 import {
   parseColumnsParam,
   serializeColumnsParam,
@@ -69,12 +75,13 @@ export interface UseCompaniesFiltersReturn {
   sort: SortField;
   order: SortOrder;
   search: string;
-  activePreset: string | null;
+  activePreset: PresetId | null;
   activeQuickFilters: QuickFilterId[];
 
   // Advanced filters state
   advancedFilters: AdvancedFiltersState;
   advancedFilterCount: number;
+  isAdvancedOpen: boolean;
 
   // Column customization (M5)
   visibleColumns: ColumnId[];
@@ -92,6 +99,7 @@ export interface UseCompaniesFiltersReturn {
   setAdvancedFilter: (field: keyof AdvancedFiltersState, value: number | string | undefined) => void;
   clearAdvancedFilters: () => void;
   applyGrowthPreset: (preset: 'growing' | 'declining' | 'stable', period: '7d' | '30d') => void;
+  toggleAdvanced: () => void;
 
   // Content filter actions (M4b)
   setGenres: (ids: number[]) => void;
@@ -197,12 +205,19 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
+  // Local UI state for advanced panel visibility
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+
   // Parse current state from URL
   const type = (searchParams.get('type') as CompanyType) || 'all';
   const sort = (searchParams.get('sort') as SortField) || 'estimated_weekly_hours';
   const order = (searchParams.get('order') as SortOrder) || 'desc';
   const search = searchParams.get('search') || '';
-  const activePreset = searchParams.get('preset');
+  const presetParam = searchParams.get('preset');
+  // Validate preset ID against known presets
+  const activePreset = presetParam && getUnifiedFilterById(presetParam as PresetId)?.type === 'preset'
+    ? (presetParam as PresetId)
+    : null;
   const filtersParam = searchParams.get('filters') || '';
   const activeQuickFilters = filtersParam
     ? (filtersParam.split(',').filter((f) => QUICK_FILTERS.some((qf) => qf.id === f)) as QuickFilterId[])
@@ -714,6 +729,13 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
     [updateUrl]
   );
 
+  /**
+   * Toggle advanced filters panel visibility
+   */
+  const toggleAdvanced = useCallback(() => {
+    setIsAdvancedOpen((prev) => !prev);
+  }, []);
+
   return {
     isPending,
     type,
@@ -724,6 +746,7 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
     activeQuickFilters,
     advancedFilters,
     advancedFilterCount,
+    isAdvancedOpen,
     // M5
     visibleColumns,
     setType,
@@ -737,6 +760,7 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
     setAdvancedFilter,
     clearAdvancedFilters,
     applyGrowthPreset,
+    toggleAdvanced,
     // M4b
     setGenres,
     setGenreMode,

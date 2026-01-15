@@ -2,18 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { Download } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 import { ToastProvider, useToastActions } from '@/components/ui/Toast';
 import { CompanyTypeToggle } from './CompanyTypeToggle';
 import { CompaniesTable } from './CompaniesTable';
-import { PresetViews } from './PresetViews';
 import { SearchBar } from './SearchBar';
-import { QuickFilters } from './QuickFilters';
+import { UnifiedFilterBar } from './UnifiedFilterBar';
+import { ContextBar } from './ContextBar';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
-import { SavedViews } from './SavedViews';
-import { ColumnSelector } from './ColumnSelector';
-import { SummaryStatsBar } from './SummaryStatsBar';
 import { BulkActionsBar } from './BulkActionsBar';
 import { CompareMode } from './CompareMode';
 import { ExportDialog } from './ExportDialog';
@@ -66,9 +61,11 @@ function CompaniesPageClientInner({
 
   const {
     isPending,
+    activePreset,
     activeQuickFilters,
     advancedFilters,
     advancedFilterCount,
+    isAdvancedOpen,
     visibleColumns,
     setType,
     setSort,
@@ -81,6 +78,7 @@ function CompaniesPageClientInner({
     setAdvancedFilter,
     clearAdvancedFilters,
     applyGrowthPreset,
+    toggleAdvanced,
     // M4b
     setGenres,
     setGenreMode,
@@ -177,8 +175,8 @@ function CompaniesPageClientInner({
 
   // Check if any filters are active (for clear button)
   const hasActiveFilters =
-    initialSearch ||
-    initialPreset ||
+    !!initialSearch ||
+    !!activePreset ||
     activeQuickFilters.length > 0 ||
     advancedFilterCount > 0;
 
@@ -244,79 +242,53 @@ function CompaniesPageClientInner({
   );
 
   return (
-    <div className={`space-y-4 ${isPending ? 'opacity-60 pointer-events-none' : ''}`}>
-      {/* Summary Stats Bar (M5) */}
-      <SummaryStatsBar stats={aggregateStats} isLoading={isPending} />
-
-      {/* Preset Views, Saved Views & Column Selector */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <PresetViews
-          activePreset={initialPreset}
-          onSelectPreset={applyPreset}
-          onClearPreset={clearPreset}
-          disabled={isPending}
-        />
-
-        <div className="flex items-center gap-2">
-          <ColumnSelector
-            visibleColumns={visibleColumns}
-            onChange={setColumns}
-            disabled={isPending}
-            companyType={initialType}
-          />
-          <SavedViews
-            currentFilters={advancedFilters}
-            currentSort={initialSort}
-            currentOrder={initialOrder}
-            currentType={initialType}
-            currentColumns={visibleColumns}
-            onApplyView={handleApplyView}
-            disabled={isPending}
-          />
-          {/* M6b: Export button */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setExportScope('filtered');
-              setIsExportDialogOpen(true);
-            }}
-            disabled={isPending || initialData.length === 0}
-            className="gap-1.5"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </Button>
+    <div className={`space-y-3 ${isPending ? 'opacity-60 pointer-events-none' : ''}`}>
+      {/* Row 1: Type Toggle + Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <CompanyTypeToggle value={initialType} onChange={setType} disabled={isPending} />
+        <div className="w-full sm:max-w-md">
+          <SearchBar initialValue={initialSearch} onSearch={setSearch} isPending={isPending} placeholder="Filter by Name" />
         </div>
       </div>
 
-      {/* Type Toggle */}
-      <CompanyTypeToggle value={initialType} onChange={setType} disabled={isPending} />
+      {/* Row 2: Unified Filter Bar (Presets + Quick Filters + Tools) */}
+      <UnifiedFilterBar
+        activePreset={activePreset}
+        activeQuickFilters={activeQuickFilters}
+        onSelectPreset={applyPreset}
+        onClearPreset={clearPreset}
+        onToggleQuickFilter={toggleQuickFilter}
+        onClearAll={clearAllFilters}
+        isAdvancedOpen={isAdvancedOpen}
+        advancedFilterCount={advancedFilterCount}
+        onToggleAdvanced={toggleAdvanced}
+        visibleColumns={visibleColumns}
+        onColumnsChange={setColumns}
+        companyType={initialType}
+        currentFilters={advancedFilters}
+        currentSort={initialSort}
+        currentOrder={initialOrder}
+        onApplyView={handleApplyView}
+        onExport={() => {
+          setExportScope('filtered');
+          setIsExportDialogOpen(true);
+        }}
+        canExport={initialData.length > 0}
+        hasActiveFilters={hasActiveFilters}
+        disabled={isPending}
+      />
 
-      {/* Search Bar */}
-      <SearchBar initialValue={initialSearch} onSearch={setSearch} isPending={isPending} />
-
-      {/* Quick Filters */}
-      <div className="flex flex-wrap items-center gap-4">
-        <QuickFilters
-          activeFilters={activeQuickFilters}
-          onToggle={toggleQuickFilter}
-          disabled={isPending}
+      {/* Row 3: Context Bar (conditional - shows stats when filters active) */}
+      {(isAdvancedOpen || advancedFilterCount > 0) && (
+        <ContextBar
+          stats={aggregateStats}
+          isLoading={isPending}
         />
+      )}
 
-        {hasActiveFilters && (
-          <button
-            onClick={clearAllFilters}
-            disabled={isPending}
-            className="px-3 py-1.5 text-body-sm text-accent-red hover:text-accent-red/80 transition-colors"
-          >
-            Clear all filters
-          </button>
-        )}
-      </div>
-
-      {/* Advanced Filters Panel (M4a + M4b) */}
-      <AdvancedFiltersPanel
+      {/* Advanced Filters Panel (M4a + M4b) - conditionally rendered */}
+      {isAdvancedOpen && (
+        <AdvancedFiltersPanel
         filters={advancedFilters}
         activeCount={advancedFilterCount}
         companyType={initialType}
@@ -335,6 +307,7 @@ function CompaniesPageClientInner({
         onRelationshipChange={setRelationship}
         disabled={isPending}
       />
+      )}
 
       {/* Companies Table (M5: dynamic columns + sparklines) */}
       {initialData.length > 0 ? (
@@ -358,7 +331,7 @@ function CompaniesPageClientInner({
         <EmptyState
           hasSearch={!!initialSearch}
           hasFilters={advancedFilterCount > 0 || activeQuickFilters.length > 0}
-          hasPreset={initialPreset}
+          hasPreset={activePreset}
           onClearFilters={clearAllFilters}
         />
       )}

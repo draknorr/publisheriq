@@ -2,7 +2,14 @@
  * Preset views and quick filter definitions for the Companies page
  */
 
-import type { CompanyType, SortField, SortOrder, QuickFilterId } from './companies-types';
+import type {
+  CompanyType,
+  SortField,
+  SortOrder,
+  QuickFilterId,
+  PresetId,
+  UnifiedFilterId,
+} from './companies-types';
 
 /**
  * Preset view definition
@@ -12,6 +19,7 @@ export interface Preset {
   label: string;
   emoji?: string;
   description: string;
+  tooltip: string;
   filters: {
     type?: CompanyType;
     minGames?: number;
@@ -54,6 +62,7 @@ export const PRESETS: Preset[] = [
     id: 'market_leaders',
     label: 'Market Leaders',
     description: 'Top companies by revenue ($10M+)',
+    tooltip: 'Companies with $10M+ estimated revenue, ranked by total revenue',
     filters: {
       minRevenue: 1_000_000_000, // $10M in cents
     },
@@ -63,10 +72,11 @@ export const PRESETS: Preset[] = [
   {
     id: 'rising_indies',
     label: 'Rising Indies',
-    description: 'Small studios with trending games',
+    description: 'Small studios with 10%+ growth',
+    tooltip: 'Studios with ≤10 games and 10%+ weekly growth, ranked by growth rate',
     filters: {
       maxGames: 10,
-      minGrowth7d: 0, // Has any positive growth (trending)
+      minGrowth7d: 10, // 10%+ growth
     },
     sort: 'ccu_growth_7d',
     order: 'desc',
@@ -76,6 +86,7 @@ export const PRESETS: Preset[] = [
     label: 'Breakout',
     emoji: '🚀',
     description: 'Companies with 50%+ growth and under 1M owners',
+    tooltip: 'Companies with 50%+ weekly growth and <1M owners, ranked by growth rate',
     filters: {
       minGrowth7d: 50,
       maxOwners: 1_000_000,
@@ -84,14 +95,15 @@ export const PRESETS: Preset[] = [
     order: 'desc',
   },
   {
-    id: 'active_publishers',
-    label: 'Active Publishers',
-    description: 'Publishers with recent releases',
+    id: 'growing_publishers',
+    label: 'Growing Publishers',
+    description: 'Publishers with 10%+ growth',
+    tooltip: 'Publishers with 10%+ weekly growth, ranked by growth rate',
     filters: {
       type: 'publisher',
-      status: 'active',
+      minGrowth7d: 10,
     },
-    sort: 'estimated_weekly_hours',
+    sort: 'ccu_growth_7d',
     order: 'desc',
   },
 ];
@@ -132,16 +144,7 @@ export const QUICK_FILTERS: QuickFilter[] = [
       minGrowth7d: 0, // Any positive growth
     },
   },
-  {
-    id: 'breakout',
-    label: 'Breakout',
-    emoji: '🚀',
-    description: '50%+ CCU growth, under 1M owners',
-    filters: {
-      minGrowth7d: 50,
-      maxOwners: 1_000_000,
-    },
-  },
+  // Note: 'breakout' removed from quick filters - now only in presets
   {
     id: 'revenue1m',
     label: '$1M+',
@@ -235,4 +238,184 @@ export function buildFilterParams(activeFilters: QuickFilterId[]): Record<string
   if (params.maxGrowth7d === 'Infinity') delete params.maxGrowth7d;
 
   return params;
+}
+
+/**
+ * Unified filter definition combining presets and quick filters
+ */
+export interface UnifiedFilter {
+  id: UnifiedFilterId;
+  label: string;
+  emoji?: string;
+  description: string;
+  tooltip?: string; // Tooltip text shown on hover (presets only)
+  type: 'preset' | 'quick';
+  filters: {
+    type?: CompanyType;
+    minGames?: number;
+    maxGames?: number;
+    minOwners?: number;
+    maxOwners?: number;
+    minRevenue?: number;
+    minGrowth7d?: number;
+    maxGrowth7d?: number;
+    status?: 'active' | 'dormant';
+  };
+  // Only for presets - applies sorting
+  sort?: SortField;
+  order?: SortOrder;
+}
+
+/**
+ * Unified filters array - presets first, then quick filters
+ * Presets: exclusive (selecting one clears others + applies sort)
+ * Quick filters: stackable (can combine multiple)
+ */
+export const UNIFIED_FILTERS: UnifiedFilter[] = [
+  // Presets (shown with purple tint, exclusive)
+  {
+    id: 'market_leaders',
+    label: 'Market Leaders',
+    description: 'Top companies by revenue ($10M+)',
+    tooltip: 'Companies with $10M+ estimated revenue, ranked by total revenue',
+    type: 'preset',
+    filters: {
+      minRevenue: 1_000_000_000, // $10M in cents
+    },
+    sort: 'revenue_estimate_cents',
+    order: 'desc',
+  },
+  {
+    id: 'rising_indies',
+    label: 'Rising Indies',
+    description: 'Small studios with 10%+ growth',
+    tooltip: 'Studios with ≤10 games and 10%+ weekly growth, ranked by growth rate',
+    type: 'preset',
+    filters: {
+      maxGames: 10,
+      minGrowth7d: 10,
+    },
+    sort: 'ccu_growth_7d',
+    order: 'desc',
+  },
+  {
+    id: 'breakout',
+    label: 'Breakout',
+    emoji: '🚀',
+    description: 'Companies with 50%+ growth and under 1M owners',
+    tooltip: 'Companies with 50%+ weekly growth and <1M owners, ranked by growth rate',
+    type: 'preset',
+    filters: {
+      minGrowth7d: 50,
+      maxOwners: 1_000_000,
+    },
+    sort: 'ccu_growth_7d',
+    order: 'desc',
+  },
+  {
+    id: 'growing_publishers',
+    label: 'Growing Publishers',
+    description: 'Publishers with 10%+ growth',
+    tooltip: 'Publishers with 10%+ weekly growth, ranked by growth rate',
+    type: 'preset',
+    filters: {
+      type: 'publisher',
+      minGrowth7d: 10,
+    },
+    sort: 'ccu_growth_7d',
+    order: 'desc',
+  },
+  // Quick filters (neutral style, stackable)
+  {
+    id: 'major',
+    label: 'Major 10+',
+    description: '10 or more games',
+    type: 'quick',
+    filters: {
+      minGames: 10,
+    },
+  },
+  {
+    id: 'prolific',
+    label: 'Prolific 5+',
+    description: '5 or more games',
+    type: 'quick',
+    filters: {
+      minGames: 5,
+    },
+  },
+  {
+    id: 'active',
+    label: 'Active',
+    description: 'Released a game in the last year',
+    type: 'quick',
+    filters: {
+      status: 'active',
+    },
+  },
+  {
+    id: 'trending',
+    label: 'Trending',
+    description: 'Has games trending up',
+    type: 'quick',
+    filters: {
+      minGrowth7d: 0,
+    },
+  },
+  {
+    id: 'revenue1m',
+    label: '$1M+',
+    description: 'Over $1M estimated revenue',
+    type: 'quick',
+    filters: {
+      minRevenue: 100_000_000, // $1M in cents
+    },
+  },
+  {
+    id: 'revenue10m',
+    label: '$10M+',
+    description: 'Over $10M estimated revenue',
+    type: 'quick',
+    filters: {
+      minRevenue: 1_000_000_000, // $10M in cents
+    },
+  },
+  {
+    id: 'owners100k',
+    label: '100K+',
+    description: 'Over 100K total owners',
+    type: 'quick',
+    filters: {
+      minOwners: 100_000,
+    },
+  },
+];
+
+/**
+ * Get a unified filter by ID
+ */
+export function getUnifiedFilterById(id: UnifiedFilterId): UnifiedFilter | undefined {
+  return UNIFIED_FILTERS.find((f) => f.id === id);
+}
+
+/**
+ * Check if a filter ID is a preset
+ */
+export function isPresetId(id: UnifiedFilterId): id is PresetId {
+  const filter = getUnifiedFilterById(id);
+  return filter?.type === 'preset';
+}
+
+/**
+ * Get all preset filters
+ */
+export function getPresetFilters(): UnifiedFilter[] {
+  return UNIFIED_FILTERS.filter((f) => f.type === 'preset');
+}
+
+/**
+ * Get all quick filters
+ */
+export function getQuickFiltersOnly(): UnifiedFilter[] {
+  return UNIFIED_FILTERS.filter((f) => f.type === 'quick');
 }

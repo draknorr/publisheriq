@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { CompaniesPageClient } from './components/CompaniesPageClient';
 import { getCompanies, getAggregateStats, getCompaniesByIds, type AggregateStats } from './lib/companies-queries';
@@ -307,48 +306,8 @@ export default async function CompaniesPage({
     );
   }
 
-  // Build description with count and type
-  const typeLabel =
-    type === 'all' ? 'publishers and developers' : `${type}s`;
-
-  // Build filter description
-  const hasFilters =
-    search ||
-    filters ||
-    preset ||
-    minGames ||
-    maxGames ||
-    minOwners ||
-    maxOwners ||
-    minCcu ||
-    maxCcu ||
-    minHours ||
-    maxHours ||
-    minRevenue ||
-    maxRevenue ||
-    minScore ||
-    maxScore ||
-    minReviews ||
-    maxReviews ||
-    minGrowth7d ||
-    maxGrowth7d ||
-    minGrowth30d ||
-    maxGrowth30d ||
-    (period && period !== 'all') ||
-    status ||
-    // M4b filters
-    genres ||
-    tags ||
-    categories ||
-    steamDeck ||
-    platforms ||
-    relationship;
-  const filterDesc = hasFilters ? ' (filtered)' : '';
-  const description = `Showing ${companies.length} ${typeLabel}${filterDesc}`;
-
   return (
     <div className="space-y-6">
-      <PageHeader title="Companies" description={description} />
       <CompaniesPageClient
         initialData={companies}
         initialType={type}

@@ -59,17 +59,31 @@ export type TimePeriod =
   | 'last_30d';
 
 /**
- * Quick filter identifiers
+ * Preset identifiers (exclusive - selecting one clears others)
+ */
+export type PresetId =
+  | 'market_leaders'
+  | 'rising_indies'
+  | 'breakout'
+  | 'growing_publishers';
+
+/**
+ * Quick filter identifiers (stackable - can combine multiple)
+ * Note: 'breakout' removed - now only in presets
  */
 export type QuickFilterId =
   | 'major'
   | 'prolific'
   | 'active'
   | 'trending'
-  | 'breakout'
   | 'revenue1m'
   | 'revenue10m'
   | 'owners100k';
+
+/**
+ * Unified filter ID (presets or quick filters)
+ */
+export type UnifiedFilterId = PresetId | QuickFilterId;
 
 /**
  * Company data returned from get_companies_with_filters RPC

@@ -464,16 +464,14 @@ export function CompaniesTable({
                 padding="sm"
                 className={isSelected ? 'ring-2 ring-accent-blue/50' : ''}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-text-muted text-caption">
-                      #{index + 1}
-                    </span>
-                    <span className="text-body font-medium text-text-primary">
-                      {company.name}
-                    </span>
-                  </div>
-                  <RoleBadge type={company.type} />
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-text-muted text-caption">
+                    #{index + 1}
+                  </span>
+                  <span className="text-body font-medium text-text-primary">
+                    {company.name}
+                  </span>
+                  {companyType === 'all' && <RoleBadge type={company.type} />}
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-body-sm">
                   <div className="flex justify-between">
@@ -623,12 +621,15 @@ export function CompaniesTable({
                   {index + 1}
                 </td>
                 <td className="px-3 py-2">
-                  <Link
-                    href={`/${company.type}s/${company.id}`}
-                    className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
-                  >
-                    {company.name}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/${company.type}s/${company.id}`}
+                      className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+                    >
+                      {company.name}
+                    </Link>
+                    {companyType === 'all' && <RoleBadge type={company.type} />}
+                  </div>
                 </td>
 
                 {/* Dynamic columns */}

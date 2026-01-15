@@ -21,14 +21,14 @@ export function CompanyTypeToggle({
       className="w-fit"
     >
       <TabsList>
-        <TabsTrigger value="all" disabled={disabled}>
-          All Companies
-        </TabsTrigger>
-        <TabsTrigger value="publisher" disabled={disabled}>
+        <TabsTrigger value="publisher" disabled={disabled} className="px-4 py-2 text-body">
           Publishers
         </TabsTrigger>
-        <TabsTrigger value="developer" disabled={disabled}>
+        <TabsTrigger value="developer" disabled={disabled} className="px-4 py-2 text-body">
           Developers
+        </TabsTrigger>
+        <TabsTrigger value="all" disabled={disabled} className="px-4 py-2 text-body">
+          All Companies
         </TabsTrigger>
       </TabsList>
     </Tabs>
