@@ -1,188 +1,428 @@
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/layout';
-import { Card, CardTitle } from '@/components/ui';
+import { Card, Badge } from '@/components/ui';
 import {
-  Sparkles,
-  BarChart3,
+  Building2,
+  Heart,
   Zap,
+  BarChart3,
   Shield,
-  Sun,
+  Palette,
+  Sparkles,
+  TrendingUp,
+  Download,
+  Search,
+  Bell,
+  Pin,
+  Gauge,
+  LineChart,
+  Lock,
+  Moon,
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: "What's New",
+  title: 'Patch Notes',
   description: 'See the latest features and improvements in PublisherIQ',
 };
 
-interface FeatureItem {
+// Types
+interface Feature {
   title: string;
   description: string;
+  icon?: React.ReactNode;
 }
 
-interface UpdateSection {
+interface Version {
+  version: string;
+  name: string;
+  date: string;
+  headline: string;
+  highlights: string[];
+  features: Feature[];
+  improvements?: string[];
+  accentColor: string;
   icon: React.ReactNode;
-  title: string;
-  features: FeatureItem[];
 }
 
-function FeatureList({ features }: { features: FeatureItem[] }) {
+// Version Card Component
+function VersionCard({ version, isLatest }: { version: Version; isLatest: boolean }) {
   return (
-    <div className="space-y-4">
-      {features.map((feature, index) => (
-        <div key={index}>
-          <h4 className="text-body font-medium text-text-primary mb-1">
-            {feature.title}
-          </h4>
-          <p className="text-body-sm text-text-secondary">{feature.description}</p>
+    <Card className="mb-8">
+      {/* Version Header */}
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div
+            className={`flex h-12 w-12 items-center justify-center rounded-xl ${version.accentColor}`}
+          >
+            {version.icon}
+          </div>
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-heading text-text-primary">
+                {version.version}
+              </h2>
+              {isLatest && (
+                <Badge variant="primary" size="sm">Latest</Badge>
+              )}
+            </div>
+            <p className="text-body text-text-secondary">{version.name}</p>
+          </div>
         </div>
+        <span className="text-body-sm text-text-tertiary">{version.date}</span>
+      </div>
+
+      {/* Headline */}
+      <p className="text-body-lg text-text-primary mb-6 font-medium">
+        {version.headline}
+      </p>
+
+      {/* Highlights */}
+      <div className="mb-6">
+        <h3 className="text-caption uppercase tracking-wide text-text-tertiary mb-3">
+          Highlights
+        </h3>
+        <ul className="space-y-2">
+          {version.highlights.map((highlight, index) => (
+            <li key={index} className="flex items-start gap-2 text-body text-text-secondary">
+              <span className="text-accent-primary mt-1">•</span>
+              {highlight}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Features */}
+      {version.features.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-caption uppercase tracking-wide text-text-tertiary mb-3">
+            New Features
+          </h3>
+          <div className="grid gap-3">
+            {version.features.map((feature, index) => (
+              <div
+                key={index}
+                className="p-4 rounded-lg bg-surface-raised border border-border-subtle"
+              >
+                <div className="flex items-start gap-3">
+                  {feature.icon && (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-overlay shrink-0">
+                      {feature.icon}
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="text-body font-medium text-text-primary mb-1">
+                      {feature.title}
+                    </h4>
+                    <p className="text-body-sm text-text-secondary">
+                      {feature.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Improvements */}
+      {version.improvements && version.improvements.length > 0 && (
+        <div>
+          <h3 className="text-caption uppercase tracking-wide text-text-tertiary mb-3">
+            Improvements
+          </h3>
+          <ul className="space-y-2">
+            {version.improvements.map((improvement, index) => (
+              <li key={index} className="flex items-start gap-2 text-body-sm text-text-secondary">
+                <span className="text-accent-green mt-0.5">✓</span>
+                {improvement}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// All versions data
+const versions: Version[] = [
+  {
+    version: 'v2.5',
+    name: 'Companies Page',
+    date: 'January 2026',
+    headline: 'One place for all publishers and developers',
+    accentColor: 'bg-accent-primary/10',
+    icon: <Building2 className="h-6 w-6 text-accent-primary" />,
+    highlights: [
+      'Browse all publishers and developers in one unified view',
+      'Compare up to 5 companies side-by-side to spot differences',
+      'Export filtered results to CSV or JSON for your own analysis',
+      'Save your favorite filter combinations for quick access',
+    ],
+    features: [
+      {
+        title: 'Unified Companies Browser',
+        description: 'Browse publishers and developers together with a single toggle. Filter by company type or see everyone at once.',
+        icon: <Building2 className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Smart Presets',
+        description: 'Jump to curated views: Market Leaders (10+ games), Rising Indies (high growth), Breakout Stars (new & trending), Growing Publishers (consistent growth).',
+        icon: <Sparkles className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Advanced Filtering',
+        description: 'Filter by game count, revenue, owner count, growth rates, genres, tags, platforms, Steam Deck support, and more. Stack multiple filters for precise results.',
+        icon: <Search className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Compare Mode',
+        description: 'Select 2-5 companies and see them side-by-side with percentage differences highlighted. Great for competitive analysis.',
+        icon: <TrendingUp className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Custom Columns',
+        description: "Choose which metrics to display. Show what matters to you, hide what doesn't.",
+        icon: <BarChart3 className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Export & Share',
+        description: 'Download your filtered results as CSV or JSON. Includes your active filters in the export.',
+        icon: <Download className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      'Page loads in under 250ms even with complex filters',
+      'Growth indicators use color and icons for quick scanning',
+      'Sparklines appear on hover without slowing down the page',
+    ],
+  },
+  {
+    version: 'v2.4',
+    name: 'Your Dashboard',
+    date: 'January 2026',
+    headline: 'Make it yours with pins and alerts',
+    accentColor: 'bg-accent-pink/10',
+    icon: <Heart className="h-6 w-6 text-accent-pink" />,
+    highlights: [
+      'Pin your favorite games, publishers, and developers',
+      'Get alerts when something important changes',
+      'Search for games by describing what you want',
+      'Discover trending games based on momentum',
+    ],
+    features: [
+      {
+        title: 'Pin Anything',
+        description: "Pin games, publishers, or developers from their detail pages. They'll appear in your personalized dashboard.",
+        icon: <Pin className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'My Dashboard',
+        description: 'A new tab in Insights showing only your pinned items with live metrics. Your command center.',
+        icon: <BarChart3 className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Smart Alerts',
+        description: 'Get notified when pinned items have significant changes: player spikes, review surges, price drops, sentiment shifts, and more.',
+        icon: <Bell className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Concept Search',
+        description: 'Find games by describing what you want: "relaxing farming games with crafting" or "tactical roguelikes with deck building". No need to know exact names.',
+        icon: <Search className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Trending Discovery',
+        description: 'Find games gaining momentum: most active, accelerating growth, breaking out, or declining.',
+        icon: <TrendingUp className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      '10x smaller database storage for similarity search',
+      'Alert preferences let you control what you\'re notified about',
+      'Better embedding quality captures player trends',
+    ],
+  },
+  {
+    version: 'v2.3',
+    name: 'Speed Update',
+    date: 'January 2026',
+    headline: 'Everything runs faster',
+    accentColor: 'bg-accent-yellow/10',
+    icon: <Zap className="h-6 w-6 text-accent-yellow" />,
+    highlights: [
+      'Background data updates are 10x faster',
+      'More reliable data sync with automatic retry',
+    ],
+    features: [],
+    improvements: [
+      'Data sync that previously took 24+ hours now completes in under 30 minutes',
+      'Automatic retry when external services are temporarily unavailable',
+      'Progress tracking shows exactly where sync operations are',
+      'Fixed: Duplicate headers no longer appear in some views',
+    ],
+  },
+  {
+    version: 'v2.2',
+    name: 'Live Player Counts',
+    date: 'January 2026',
+    headline: 'See who\'s playing right now',
+    accentColor: 'bg-accent-cyan/10',
+    icon: <Gauge className="h-6 w-6 text-accent-cyan" />,
+    highlights: [
+      'New Insights dashboard with live player counts',
+      'Sparkline charts show trends at a glance',
+      'Sort by what\'s hot, newest releases, or trending',
+    ],
+    features: [
+      {
+        title: 'Insights Dashboard',
+        description: 'A new way to browse games with live player counts and visual trends.',
+        icon: <BarChart3 className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Top Games',
+        description: 'See the most popular games by current player count.',
+        icon: <TrendingUp className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Newest Releases',
+        description: 'Browse recent releases sorted by launch date or growth rate.',
+        icon: <Sparkles className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Trending',
+        description: 'Discover games growing faster than usual based on player count changes.',
+        icon: <LineChart className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Time Ranges',
+        description: 'Toggle between 24 hours, 7 days, or 30 days to see different trend windows.',
+        icon: <BarChart3 className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Sparklines',
+        description: 'Mini charts next to every game showing player count trends over time.',
+        icon: <LineChart className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      '3x faster review data updates',
+      'More accurate player counts directly from Steam (not estimates)',
+      'Full coverage of all games every 2 days',
+    ],
+  },
+  {
+    version: 'v2.1',
+    name: 'Authentication & Activity',
+    date: 'January 2026',
+    headline: 'Secure sign-in and smarter tracking',
+    accentColor: 'bg-accent-green/10',
+    icon: <Shield className="h-6 w-6 text-accent-green" />,
+    highlights: [
+      'Secure sign-in with magic link emails',
+      'Credit system for chat usage tracking',
+      'Better detection of active vs. dormant games',
+    ],
+    features: [
+      {
+        title: 'Magic Link Sign-In',
+        description: "No passwords to remember. Enter your email, click the link we send, and you're in.",
+        icon: <Lock className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Credits',
+        description: 'Track your chat usage with a simple credit system. New users get 1000 credits to start.',
+        icon: <Sparkles className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Search Games in Chat',
+        description: 'Ask the assistant to find specific games by name with better accuracy.',
+        icon: <Search className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      'Games with high activity are checked more frequently',
+      "Dormant games don't waste resources with unnecessary checks",
+      'Review trends now show smooth curves instead of jagged lines',
+    ],
+  },
+  {
+    version: 'v2.0',
+    name: 'New Design',
+    date: 'January 2026',
+    headline: 'Fresh look, faster performance',
+    accentColor: 'bg-accent-orange/10',
+    icon: <Palette className="h-6 w-6 text-accent-orange" />,
+    highlights: [
+      'Beautiful new design with light and dark modes',
+      '66% fewer database queries mean faster page loads',
+      'New metrics: estimated playtime and active discounts',
+    ],
+    features: [
+      {
+        title: 'Light & Dark Mode',
+        description: 'Choose your preferred theme or let it follow your system settings.',
+        icon: <Moon className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Estimated Playtime',
+        description: 'See estimated weekly and monthly played hours for any game.',
+        icon: <BarChart3 className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Discount Discovery',
+        description: 'Spot games currently on sale with discount percentages shown.',
+        icon: <TrendingUp className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      'Pages load significantly faster with optimized data loading',
+      'Mobile-friendly design works on phones and tablets',
+      'Chat is more reliable with automatic retry on errors',
+      'Tag search understands variations ("coop" finds "co-op" games)',
+    ],
+  },
+];
+
+// Quick navigation component
+function VersionNav() {
+  return (
+    <div className="mb-8 flex flex-wrap gap-2">
+      {versions.map((version, index) => (
+        <a
+          key={version.version}
+          href={`#${version.version.replace('.', '')}`}
+          className={`
+            px-3 py-1.5 rounded-lg text-body-sm font-medium transition-colors
+            ${index === 0
+              ? 'bg-accent-primary text-white'
+              : 'bg-surface-raised text-text-secondary hover:bg-surface-overlay hover:text-text-primary'
+            }
+          `}
+        >
+          {version.version}
+        </a>
       ))}
     </div>
   );
 }
 
-function UpdateCard({ section }: { section: UpdateSection }) {
-  return (
-    <Card className="mb-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-primary/10">
-          {section.icon}
-        </div>
-        <CardTitle>{section.title}</CardTitle>
-      </div>
-      <FeatureList features={section.features} />
-    </Card>
-  );
-}
-
-const updates: UpdateSection[] = [
-  {
-    icon: <Sparkles className="h-5 w-5 text-accent-primary" />,
-    title: 'Personalization & Discovery',
-    features: [
-      {
-        title: 'Personalized Dashboard',
-        description:
-          'Pin your favorite games, publishers, and developers for quick access. Your pins appear on a dedicated "My Dashboard" tab in Insights, so you can track everything important to you in one place.',
-      },
-      {
-        title: 'Smart Alerts',
-        description:
-          'Get notified when something important happens to games you follow. Alert types include player count spikes, review surges, price changes, new releases from publishers you follow, and major milestones. Customize which alerts you want and adjust sensitivity per game or globally.',
-      },
-      {
-        title: 'Natural Language Search',
-        description:
-          'Describe what you\'re looking for in plain English. Try "cozy farming games with crafting" or "tactical roguelikes with deck building" - no need to know exact tags or categories.',
-      },
-      {
-        title: 'Trending Discovery',
-        description:
-          'Find games gaining momentum right now. Discover "breaking out" games - hidden gems getting noticed. See which games have accelerating interest or track games with declining attention.',
-      },
-      {
-        title: 'Smarter Chat Suggestions',
-        description:
-          'Get helpful autocomplete suggestions as you type. After each response, see related questions you might want to ask to keep exploring.',
-      },
-    ],
-  },
-  {
-    icon: <BarChart3 className="h-5 w-5 text-accent-cyan" />,
-    title: 'Real-Time Player Tracking',
-    features: [
-      {
-        title: 'Insights Dashboard',
-        description:
-          'A dedicated analytics page with visual charts. See player counts, reviews, and trends at a glance with mini sparkline charts. Switch between 24 hours, 7 days, or 30 days of data.',
-      },
-      {
-        title: 'Live Player Counts',
-        description:
-          'See exact current player numbers for games. Track how player counts change over time with top games updated hourly.',
-      },
-      {
-        title: 'Multiple Views',
-        description:
-          'Browse Top Games by current player counts, Newest releases sortable by date or growth, and Trending games that are growing fastest.',
-      },
-    ],
-  },
-  {
-    icon: <Zap className="h-5 w-5 text-accent-yellow" />,
-    title: 'Faster & Smarter',
-    features: [
-      {
-        title: 'Faster Updates',
-        description:
-          'Game similarity search is dramatically faster. Platform updates happen more quickly across the board with better handling of games gaining sudden attention.',
-      },
-      {
-        title: 'Improved Search Reliability',
-        description:
-          'More reliable results when searching. Smart spelling corrections find "co-op" even if you type "coop", and searches fall back to related categories when specific tags return nothing.',
-      },
-    ],
-  },
-  {
-    icon: <Shield className="h-5 w-5 text-accent-green" />,
-    title: 'Authentication & Activity Tracking',
-    features: [
-      {
-        title: 'Secure Sign-In',
-        description:
-          'Sign in with just your email - no password needed. Receive a secure magic link to log in, and your activity and preferences are saved to your account.',
-      },
-      {
-        title: 'Review Activity Tracking',
-        description:
-          'See which games are getting the most reviews right now. Track review velocity and discover games with increasing attention.',
-      },
-      {
-        title: 'Better Game Search in Chat',
-        description:
-          'Ask about specific games by name and get more accurate results when searching for titles.',
-      },
-    ],
-  },
-  {
-    icon: <Sun className="h-5 w-5 text-accent-orange" />,
-    title: 'Fresh New Look',
-    features: [
-      {
-        title: 'Light & Dark Mode',
-        description:
-          'Choose between light and dark themes. Automatically matches your system preference, and your choice is remembered.',
-      },
-      {
-        title: 'Faster Page Loading',
-        description:
-          'Pages load noticeably faster. Less waiting, more discovering.',
-      },
-      {
-        title: 'Playtime Estimates',
-        description:
-          'See estimated weekly and monthly hours played to understand player engagement at a glance.',
-      },
-      {
-        title: 'Discount Discovery',
-        description:
-          'Ask about games on sale and find deals through chat.',
-      },
-    ],
-  },
-];
-
-export default function UpdatesPage() {
+export default function PatchNotesPage() {
   return (
     <div>
       <PageHeader
-        title="What's New"
-        description="See what's been added to PublisherIQ"
+        title="Patch Notes"
+        description="What's new in PublisherIQ"
       />
 
       <div className="max-w-3xl">
-        {updates.map((section, index) => (
-          <UpdateCard key={index} section={section} />
+        <VersionNav />
+
+        {versions.map((version, index) => (
+          <div key={version.version} id={version.version.replace('.', '')}>
+            <VersionCard version={version} isLatest={index === 0} />
+          </div>
         ))}
       </div>
     </div>
