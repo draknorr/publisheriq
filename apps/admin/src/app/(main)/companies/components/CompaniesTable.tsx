@@ -127,12 +127,12 @@ function TrendingCell({
     <span className="inline-flex items-center gap-2 text-body-sm">
       {upVal > 0 && (
         <span className="text-accent-green">
-          \u2191{upVal}
+          ↑{upVal}
         </span>
       )}
       {downVal > 0 && (
         <span className="text-accent-red">
-          \u2193{downVal}
+          ↓{downVal}
         </span>
       )}
     </span>
