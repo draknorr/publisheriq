@@ -66,6 +66,7 @@ function SortHeader({
   currentOrder,
   onSort,
   tooltipField,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isRatio = false,
   className = '',
 }: SortHeaderProps) {

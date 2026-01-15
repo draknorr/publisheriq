@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/layout';
 import { CompaniesPageClient } from './components/CompaniesPageClient';
 import { getCompanies, getAggregateStats, getCompaniesByIds, type AggregateStats } from './lib/companies-queries';
 // Columns are parsed from URL in useCompaniesFilters hook
@@ -145,7 +146,7 @@ export default async function CompaniesPage({
   // Parse filter params
   const search = params.search || undefined;
   const preset = params.preset || undefined;
-  const filters = params.filters || undefined;
+  // Note: filters param is parsed by useCompaniesFilters hook on client side
 
   // Metric filter params
   const minGames = parseNumber(params.minGames);

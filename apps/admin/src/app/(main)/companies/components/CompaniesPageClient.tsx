@@ -47,6 +47,7 @@ function CompaniesPageClientInner({
   initialSort,
   initialOrder,
   initialSearch,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   initialPreset,
   aggregateStats,
   compareCompanies,

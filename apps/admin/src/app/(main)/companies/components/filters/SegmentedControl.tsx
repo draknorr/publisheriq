@@ -47,7 +47,6 @@ export function SegmentedControl({
       <div className="flex items-center bg-surface-overlay rounded-lg p-1">
         {SEGMENT_OPTIONS.map((option, index) => {
           const isActive = activeValue === option.value;
-          const showDivider = index > 0 && !isActive && activeValue !== SEGMENT_OPTIONS[index - 1]?.value;
 
           // Add visual separator between years and rolling periods
           const isGroupBoundary = index > 0 && option.group !== SEGMENT_OPTIONS[index - 1]?.group;
