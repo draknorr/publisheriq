@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react';
 import { Input } from '@/components/ui/Input';
 
-const DEBOUNCE_MS = 300;
-
 interface RangeInputProps {
   label: string;
   minValue: number | undefined;
@@ -25,7 +23,8 @@ interface RangeInputProps {
 }
 
 /**
- * Reusable min/max range input component with debounced updates
+ * Reusable min/max range input component
+ * Updates parent immediately - debouncing is handled by useCompaniesFilters hook
  */
 export function RangeInput({
   label,
@@ -49,25 +48,22 @@ export function RangeInput({
     maxValue !== undefined ? String(maxValue) : ''
   );
 
-  const minDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const maxDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  // Track focus state to prevent prop sync while user is typing
+  const minFocusedRef = useRef(false);
+  const maxFocusedRef = useRef(false);
 
-  // Sync local state when external value changes
+  // Sync local state when external value changes (but not while focused)
   useEffect(() => {
-    setLocalMin(minValue !== undefined ? String(minValue) : '');
+    if (!minFocusedRef.current) {
+      setLocalMin(minValue !== undefined ? String(minValue) : '');
+    }
   }, [minValue]);
 
   useEffect(() => {
-    setLocalMax(maxValue !== undefined ? String(maxValue) : '');
+    if (!maxFocusedRef.current) {
+      setLocalMax(maxValue !== undefined ? String(maxValue) : '');
+    }
   }, [maxValue]);
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (minDebounceRef.current) clearTimeout(minDebounceRef.current);
-      if (maxDebounceRef.current) clearTimeout(maxDebounceRef.current);
-    };
-  }, []);
 
   const parseValue = useCallback(
     (value: string): number | undefined => {
@@ -83,14 +79,8 @@ export function RangeInput({
     (e: ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setLocalMin(value);
-
-      if (minDebounceRef.current) {
-        clearTimeout(minDebounceRef.current);
-      }
-
-      minDebounceRef.current = setTimeout(() => {
-        onMinChange(parseValue(value));
-      }, DEBOUNCE_MS);
+      // Call parent immediately - hook handles debouncing
+      onMinChange(parseValue(value));
     },
     [onMinChange, parseValue]
   );
@@ -99,14 +89,8 @@ export function RangeInput({
     (e: ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setLocalMax(value);
-
-      if (maxDebounceRef.current) {
-        clearTimeout(maxDebounceRef.current);
-      }
-
-      maxDebounceRef.current = setTimeout(() => {
-        onMaxChange(parseValue(value));
-      }, DEBOUNCE_MS);
+      // Call parent immediately - hook handles debouncing
+      onMaxChange(parseValue(value));
     },
     [onMaxChange, parseValue]
   );
@@ -122,6 +106,8 @@ export function RangeInput({
             type={inputType}
             value={localMin}
             onChange={handleMinChange}
+            onFocus={() => { minFocusedRef.current = true; }}
+            onBlur={() => { minFocusedRef.current = false; }}
             placeholder={minPlaceholder}
             disabled={disabled}
             className="h-8 text-body-sm"
@@ -133,6 +119,8 @@ export function RangeInput({
             type={inputType}
             value={localMax}
             onChange={handleMaxChange}
+            onFocus={() => { maxFocusedRef.current = true; }}
+            onBlur={() => { maxFocusedRef.current = false; }}
             placeholder={maxPlaceholder}
             disabled={disabled}
             className="h-8 text-body-sm"

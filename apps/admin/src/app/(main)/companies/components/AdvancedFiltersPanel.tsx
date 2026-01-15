@@ -143,13 +143,13 @@ export function AdvancedFiltersPanel({
   return (
     <div className="rounded-lg border border-border-subtle bg-surface-raised">
       {/* Header */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-        aria-controls="advanced-filters-content"
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-surface-elevated/50 transition-colors rounded-t-lg"
-      >
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-3 py-2 rounded-t-lg">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          aria-expanded={isOpen}
+          aria-controls="advanced-filters-content"
+          className="flex items-center gap-2 hover:bg-surface-elevated/50 transition-colors -ml-1 px-1 py-0.5 rounded"
+        >
           <ChevronRight
             className={`h-4 w-4 text-text-tertiary transition-transform duration-150 ${
               isOpen ? 'rotate-90' : ''
@@ -161,14 +161,11 @@ export function AdvancedFiltersPanel({
               {activeCount} active
             </span>
           )}
-        </div>
+        </button>
         {activeCount > 0 && (
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClearAll();
-            }}
+            onClick={onClearAll}
             disabled={disabled}
             className="flex items-center gap-1 px-2 py-1 text-caption text-text-secondary hover:text-text-primary transition-colors"
           >
@@ -176,7 +173,7 @@ export function AdvancedFiltersPanel({
             Clear all
           </button>
         )}
-      </button>
+      </div>
 
       {/* Content */}
       {isOpen && (

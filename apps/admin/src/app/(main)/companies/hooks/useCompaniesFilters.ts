@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useTransition, useCallback, useMemo } from 'react';
+import { useTransition, useCallback, useMemo, useRef } from 'react';
 import type {
   CompanyType,
   SortField,
@@ -294,8 +294,12 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
     return count;
   }, [advancedFilters]);
 
+  // Ref for debouncing URL updates (batches rapid filter changes)
+  const urlUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingUpdatesRef = useRef<Record<string, string | null>>({});
+
   /**
-   * Update URL with new params
+   * Update URL with new params (immediate)
    */
   const updateUrl = useCallback(
     (updates: Record<string, string | null>) => {
@@ -312,6 +316,43 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
       startTransition(() => {
         router.push(`/companies?${params.toString()}`);
       });
+    },
+    [router, searchParams]
+  );
+
+  /**
+   * Update URL with debouncing (for filter inputs to batch rapid changes)
+   * This prevents multiple server fetches while user is typing
+   */
+  const updateUrlDebounced = useCallback(
+    (updates: Record<string, string | null>) => {
+      // Merge with any pending updates
+      pendingUpdatesRef.current = { ...pendingUpdatesRef.current, ...updates };
+
+      // Clear existing timeout
+      if (urlUpdateTimeoutRef.current) {
+        clearTimeout(urlUpdateTimeoutRef.current);
+      }
+
+      // Set new debounced update
+      urlUpdateTimeoutRef.current = setTimeout(() => {
+        const params = new URLSearchParams(searchParams.toString());
+
+        Object.entries(pendingUpdatesRef.current).forEach(([key, value]) => {
+          if (value === null || value === '' || value === undefined) {
+            params.delete(key);
+          } else {
+            params.set(key, value);
+          }
+        });
+
+        // Clear pending updates
+        pendingUpdatesRef.current = {};
+
+        startTransition(() => {
+          router.push(`/companies?${params.toString()}`);
+        });
+      }, 400); // 400ms debounce for URL updates
     },
     [router, searchParams]
   );
@@ -342,9 +383,10 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
    */
   const setSearch = useCallback(
     (query: string) => {
-      updateUrl({ search: query || null, preset: null });
+      // Use debounced URL update to batch rapid typing
+      updateUrlDebounced({ search: query || null, preset: null });
     },
-    [updateUrl]
+    [updateUrlDebounced]
   );
 
   /**
@@ -462,12 +504,13 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
   const setAdvancedFilter = useCallback(
     (field: keyof AdvancedFiltersState, value: number | string | undefined) => {
       const stringValue = value !== undefined ? String(value) : null;
-      updateUrl({
+      // Use debounced URL update to batch rapid filter changes
+      updateUrlDebounced({
         [field]: stringValue,
         preset: null, // Clear preset when manually filtering
       });
     },
-    [updateUrl]
+    [updateUrlDebounced]
   );
 
   /**

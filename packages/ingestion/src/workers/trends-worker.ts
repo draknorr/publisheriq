@@ -150,19 +150,41 @@ async function main(): Promise<void> {
   let failed = 0;
 
   try {
-    // Get distinct appids using RPC (much faster than paginating 2.9M rows)
+    // Get distinct appids using paginated RPC (Supabase/PostgREST has ~1000 row limit for RPC)
     log.info('Fetching distinct appids from review_histogram via RPC...');
 
-    const { data: appidRows, error: appidError } = await supabase
-      .rpc('get_histogram_appids')
-      .limit(200000); // Override Supabase's default 1000 row limit
+    const PAGE_SIZE = 1000; // Supabase/PostgREST enforces ~1000 row limit on all responses
+    const uniqueAppids: number[] = [];
+    let offset = 0;
 
-    if (appidError) {
-      log.error('Failed to fetch appids via RPC', { error: appidError });
-      throw appidError;
+    while (true) {
+      const { data: appidRows, error: appidError } = await supabase.rpc(
+        'get_histogram_appids',
+        { p_limit: PAGE_SIZE, p_offset: offset }
+      );
+
+      if (appidError) {
+        log.error('Failed to fetch appids via RPC', { error: appidError, offset });
+        throw appidError;
+      }
+
+      if (!appidRows || appidRows.length === 0) {
+        break;
+      }
+
+      uniqueAppids.push(...appidRows.map((row: { appid: number }) => row.appid));
+      log.info('Fetched appid batch', {
+        batchSize: appidRows.length,
+        totalSoFar: uniqueAppids.length,
+        offset,
+      });
+
+      if (appidRows.length < PAGE_SIZE) {
+        break; // Last page
+      }
+
+      offset += PAGE_SIZE;
     }
-
-    const uniqueAppids = (appidRows || []).map((row: { appid: number }) => row.appid);
 
     if (uniqueAppids.length === 0) {
       log.info('No apps with histogram data');

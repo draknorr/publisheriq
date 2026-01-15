@@ -10,8 +10,6 @@ interface SearchBarProps {
   placeholder?: string;
 }
 
-const DEBOUNCE_MS = 300;
-
 export function SearchBar({
   initialValue,
   onSearch,
@@ -19,46 +17,28 @@ export function SearchBar({
   placeholder = 'Search companies by name...',
 }: SearchBarProps) {
   const [value, setValue] = useState(initialValue);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync internal value when initialValue changes (e.g., from URL)
+  // Track focus state to prevent prop sync while user is typing
+  const isFocusedRef = useRef(false);
+
+  // Sync internal value when initialValue changes (but not while focused)
   useEffect(() => {
-    setValue(initialValue);
+    if (!isFocusedRef.current) {
+      setValue(initialValue);
+    }
   }, [initialValue]);
-
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
 
   const handleChange = useCallback(
     (newValue: string) => {
       setValue(newValue);
-
-      // Clear existing timeout
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-
-      // Set new debounced search
-      debounceRef.current = setTimeout(() => {
-        onSearch(newValue);
-      }, DEBOUNCE_MS);
+      // Call parent immediately - hook handles debouncing
+      onSearch(newValue);
     },
     [onSearch]
   );
 
   const handleClear = useCallback(() => {
     setValue('');
-    // Clear any pending debounce
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    // Immediate clear
     onSearch('');
   }, [onSearch]);
 
@@ -75,6 +55,8 @@ export function SearchBar({
         type="text"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
+        onFocus={() => { isFocusedRef.current = true; }}
+        onBlur={() => { isFocusedRef.current = false; }}
         placeholder={placeholder}
         className="w-full pl-10 pr-10 py-2.5 bg-surface-elevated border border-border-subtle rounded-lg
                    text-body text-text-primary placeholder:text-text-muted

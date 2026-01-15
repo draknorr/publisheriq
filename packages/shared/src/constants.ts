@@ -47,8 +47,8 @@ export const BATCH_SIZES = {
   /** Number of apps to fetch histograms for per worker run */
   HISTOGRAM_BATCH: 2000,
 
-  /** Number of apps to calculate trends for per batch */
-  TRENDS_BATCH: 500,
+  /** Number of apps to calculate trends for per batch (limited by Supabase 1000 row response limit ÷ ~26 avg histogram entries) */
+  TRENDS_BATCH: 35,
 
   /** Number of apps to calculate priority for per batch */
   PRIORITY_BATCH: 1000,
