@@ -266,6 +266,8 @@ export interface AppsSearchParams {
   // M3: Presets and quick filters
   preset?: string;
   filters?: string; // comma-separated quick filter IDs
+  // M6a: Compare mode
+  compare?: string; // comma-separated appids: "730,1245620,553850"
   // Metric filters (populated by presets/quick filters)
   minCcu?: string;
   maxCcu?: string;

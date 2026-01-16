@@ -4,7 +4,8 @@ import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/layout';
 import { AppsPageClient } from './components/AppsPageClient';
-import { getApps, getAggregateStats } from './lib/apps-queries';
+import { getApps, getAggregateStats, getAppsByIds } from './lib/apps-queries';
+import { parseCompareParam } from './lib/apps-compare-utils';
 import type {
   App,
   AppType,
@@ -129,8 +130,12 @@ export default async function AppsPage({
     steamDeck: params.steamDeck || undefined,
   };
 
+  // Parse compare param (M6a)
+  const compareAppIds = parseCompareParam(params.compare ?? null);
+
   // Fetch apps and aggregate stats in parallel
   let apps: App[] = [];
+  let compareApps: App[] = [];
   let aggregateStats: AggregateStats = {
     total_games: 0,
     avg_ccu: null,
@@ -154,6 +159,16 @@ export default async function AppsPage({
     } catch (statsError) {
       console.error('Failed to fetch aggregate stats (non-blocking):', statsError);
       // Use defaults - page will still render
+    }
+
+    // M6a: Fetch compare apps if valid (2-5 IDs)
+    if (compareAppIds.length >= 2 && compareAppIds.length <= 5) {
+      try {
+        compareApps = await getAppsByIds(compareAppIds);
+      } catch (compareError) {
+        console.error('Failed to fetch compare apps (non-blocking):', compareError);
+        // Modal won't show if compareApps is empty
+      }
     }
   } catch (error) {
     console.error('Failed to fetch apps:', error);
@@ -193,6 +208,7 @@ export default async function AppsPage({
         initialOrder={order}
         initialSearch={search || ''}
         aggregateStats={aggregateStats}
+        compareApps={compareApps}
       />
     </div>
   );

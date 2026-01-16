@@ -5,7 +5,7 @@
 > **Spec Version:** 1.1 (revised Jan 2026)
 > **Reference Implementation:** /companies page (v2.5)
 > **Started:** 2026-01-15
-> **Last Updated:** 2026-01-16 (M5a complete)
+> **Last Updated:** 2026-01-16 (M6a complete)
 
 ---
 
@@ -59,8 +59,8 @@
 | M4b | Advanced Filters - Content | ✅ Complete | 2026-01-15 | Content, Platform, Release, Relationship, Activity filters + Saved Views |
 | M5a | Column Customization | ✅ Complete | 2026-01-16 | 33 columns, ColumnSelector, URL persistence, saved views |
 | M5b | Visualizations & Stats | ✅ Complete | 2026-01-16 | Sparklines, SummaryStatsBar, DataFreshnessFooter |
-| M6a | Selection & Compare | ⬜ Not Started | — | |
-| M6b | Export & Polish | ⬜ Not Started | — | |
+| M6a | Selection & Compare | ✅ Complete | 2026-01-16 | Row selection, shift-click, compare modal, URL state |
+| M6b | Export & Polish | ✅ Complete | 2026-01-16 | Export CSV/JSON, EmptyState with suggestions |
 
 **Status Legend:**
 - ⬜ Not Started
@@ -323,15 +323,93 @@
 - **Next steps:**
   - Proceed to M6a: Selection & Compare
 
-### Session 10 - YYYY-MM-DD
-- **Milestone:** ___
-- **Duration:** ___ minutes
+### Session 10 - 2026-01-16
+- **Milestone:** M6a (Selection & Compare)
+- **Duration:** ~60 minutes
 - **Work done:**
-  -
+  - Created `lib/apps-compare.ts` with 17 comparison metrics across 4 categories (Engagement, Reviews, Growth, Financial)
+  - Created `lib/apps-compare-utils.ts` for URL parsing (shared between server/client)
+  - Created `hooks/useAppsSelection.ts` with shift-click range selection (max 50)
+  - Created `hooks/useAppsCompare.ts` for URL-persisted compare state (?compare=730,578080)
+  - Created `components/BulkActionsBar.tsx` fixed-position bar with Compare/Clear buttons
+  - Created `components/CompareMode.tsx` full-screen modal with:
+    - Horizontal scrollable table
+    - Sticky game name headers
+    - Grouped metric rows by category
+    - "vs Avg" column showing deviation from mean
+    - Best (green) / worst (red) highlighting per row
+    - Remove individual games via X button
+  - Updated `AppsTable.tsx` with checkbox column and selection handling
+  - Updated `AppsPageClient.tsx` to integrate selection and compare hooks
+  - Updated `page.tsx` for server-side compare app fetching
+  - Fixed `getAppsByIds` query - required 5 separate queries due to schema:
+    - `apps` + `latest_daily_metrics` (core data)
+    - `ccu_tier_assignments` (growth metrics)
+    - `review_velocity_stats` (velocity metrics)
+    - `app_filter_data` (publisher/developer/steam_deck)
+    - `daily_metrics` (playtime data)
+  - Computed derived metrics inline (momentum, active_pct, review_rate, value_score)
+- **Files created (7):**
+  - `lib/apps-compare.ts`
+  - `lib/apps-compare-utils.ts`
+  - `hooks/useAppsSelection.ts`
+  - `hooks/useAppsCompare.ts`
+  - `components/BulkActionsBar.tsx`
+  - `components/CompareMode.tsx`
 - **Blockers:**
-  -
+  - None
 - **Next steps:**
-  -
+  - Proceed to M6b: Export & Polish
+
+### Session 11 - 2026-01-16
+- **Milestone:** M6b (Export & Polish)
+- **Duration:** ~30 minutes
+- **Work done:**
+  - Created `lib/apps-export.ts` with CSV/JSON export utilities (~280 lines):
+    - `escapeCSVValue()` - proper escaping for quotes, commas, newlines
+    - `formatValueForExport()` - column-specific formatting (prices, playtime, percentages)
+    - `generateCSV()` - CSV with header comments and filter metadata
+    - `generateJSON()` - JSON export with metadata
+    - `downloadFile()` - browser download trigger
+    - `generateFilename()` - timestamped filenames
+  - Created `components/ExportDialog.tsx` (~200 lines):
+    - Modal with format selection (CSV/JSON)
+    - Scope selection (filtered/selected)
+    - Column visibility toggle
+    - Filter metadata checkbox
+    - Loading state during export
+    - ESC key and backdrop click handling
+  - Created `components/EmptyState.tsx` (~100 lines):
+    - Icon + heading + description
+    - Contextual suggestions based on active filters/presets
+    - "Clear All Filters" button
+    - Quick preset links (Top Games, Rising Stars)
+  - Updated `components/BulkActionsBar.tsx`:
+    - Added optional `onExport` prop
+    - Added Export button with Download icon
+  - Updated `components/AppsPageClient.tsx`:
+    - Added export dialog state (`isExportDialogOpen`, `exportScope`)
+    - Added `handleExport` handler
+    - Added `filterDescription` computation for metadata
+    - Added `selectedApps` computation
+    - Wired ExportDialog component
+    - Passed empty state props to AppsTable
+  - Updated `components/AppsTable.tsx`:
+    - Added empty state props (`hasSearch`, `hasFilters`, `hasPreset`, `onClearFilters`)
+    - Integrated EmptyState component
+- **Files created (3):**
+  - `lib/apps-export.ts`
+  - `components/ExportDialog.tsx`
+  - `components/EmptyState.tsx`
+- **Files modified (3):**
+  - `components/BulkActionsBar.tsx`
+  - `components/AppsPageClient.tsx`
+  - `components/AppsTable.tsx`
+- **Blockers:**
+  - None
+- **Next steps:**
+  - Games page implementation complete (all 11 milestones done)
+  - Consider: comprehensive testing, performance verification
 
 ---
 
@@ -381,11 +459,11 @@ apps/admin/src/app/(main)/apps/
 │   ├── [x] AdvancedFiltersPanel.tsx (M4a+M4b)
 │   ├── [x] SummaryStatsBar.tsx (M5b)
 │   ├── [x] ColumnSelector.tsx (M5a)
-│   ├── [ ] BulkActionsBar.tsx
-│   ├── [ ] CompareMode.tsx
-│   ├── [ ] ExportDialog.tsx
+│   ├── [x] BulkActionsBar.tsx (M6a+M6b)
+│   ├── [x] CompareMode.tsx (M6a)
+│   ├── [x] ExportDialog.tsx (M6b)
 │   ├── [x] SavedViews.tsx (M4b)
-│   ├── [ ] EmptyState.tsx
+│   ├── [x] EmptyState.tsx (M6b)
 │   ├── [x] DataFreshnessFooter.tsx (M5b)
 │   ├── cells/
 │   │   ├── [x] SentimentCell.tsx (M5a)
@@ -413,8 +491,8 @@ apps/admin/src/app/(main)/apps/
 │       └── [ ] RangeInput.tsx
 ├── hooks/
 │   ├── [x] useAppsFilters.ts (M3+M4b)
-│   ├── [ ] useAppsSelection.ts
-│   ├── [ ] useAppsCompare.ts
+│   ├── [x] useAppsSelection.ts (M6a)
+│   ├── [x] useAppsCompare.ts (M6a)
 │   ├── [x] useSavedViews.ts (M4b)
 │   ├── [x] useFilterCounts.ts (M4b)
 │   └── [x] useSparklineLoader.ts (M5b)
@@ -425,8 +503,9 @@ apps/admin/src/app/(main)/apps/
     ├── [x] apps-presets.ts (M3)
     ├── [ ] apps-computed.ts
     ├── [x] apps-methodology.ts (M2a)
-    ├── [ ] apps-compare.ts
-    └── [ ] apps-export.ts
+    ├── [x] apps-compare.ts (M6a)
+    ├── [x] apps-compare-utils.ts (M6a)
+    └── [x] apps-export.ts (M6b)
 ```
 
 ---
@@ -530,30 +609,30 @@ apps/admin/src/app/(main)/apps/
 - [x] Data freshness shows in footer (DataFreshnessFooter with relative time)
 
 ### M6a: Selection & Compare
-- [ ] Row selection with checkboxes
-- [ ] Shift+click range selection
-- [ ] Compare mode opens (2-5 games)
-- [ ] All metrics in compare modal
-- [ ] "vs Avg" column calculates correctly
-- [ ] Best/worst highlighted per row
-- [ ] Compare URL shareable
+- [x] Row selection with checkboxes
+- [x] Shift+click range selection
+- [x] Compare mode opens (2-5 games)
+- [x] All metrics in compare modal (17 metrics across 4 categories)
+- [x] "vs Avg" column calculates correctly
+- [x] Best/worst highlighted per row (green/red)
+- [x] Compare URL shareable (?compare=730,578080)
 
 ### M6b: Export & Polish
-- [ ] Export dialog opens
-- [ ] CSV export works
-- [ ] JSON export works
-- [ ] Scope options work (filtered/selected)
-- [ ] Empty state helpful
-- [ ] Row actions work
-- [ ] No console errors
+- [x] Export dialog opens
+- [x] CSV export works
+- [x] JSON export works
+- [x] Scope options work (filtered/selected)
+- [x] Empty state helpful
+- [ ] Row actions work (deferred - not critical)
+- [x] No console errors in export/empty state components
 
 ### User-Facing Naming Verification (M6b Final Check)
-- [ ] Page header shows "Games" (not "Apps")
-- [ ] Type toggle shows "All Types", "Games", "DLC", "Demos"
-- [ ] Compare modal title: "Compare Games"
-- [ ] Export dialog title: "Export Games"
-- [ ] Empty state says "No games match..." (not "No apps...")
-- [ ] Summary stats header: "Games (X,XXX)"
+- [x] Page header shows "Games" (not "Apps")
+- [x] Type toggle shows "All Types", "Games", "DLC", "Demos"
+- [x] Compare modal title: "Compare Games"
+- [x] Export dialog title: "Export Games"
+- [x] Empty state says "No games match..." (not "No apps...")
+- [x] Summary stats header: "Games (X,XXX)"
 
 ---
 

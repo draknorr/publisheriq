@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { X, Filter, ChevronDown, Loader2 } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -15,12 +15,18 @@ import { SavedViews } from './SavedViews';
 import { ColumnSelector } from './ColumnSelector';
 import { SummaryStatsBar } from './SummaryStatsBar';
 import { DataFreshnessFooter } from './DataFreshnessFooter';
+import { BulkActionsBar } from './BulkActionsBar';
+import { CompareMode } from './CompareMode';
+import { ExportDialog } from './ExportDialog';
 import { useAppsFilters } from '../hooks/useAppsFilters';
 import { useFilterCounts } from '../hooks/useFilterCounts';
 import { useSavedViews, type SavedView } from '../hooks/useSavedViews';
 import { useSparklineLoader } from '../hooks/useSparklineLoader';
+import { useAppsSelection } from '../hooks/useAppsSelection';
+import { useAppsCompare } from '../hooks/useAppsCompare';
 import { useAppsQuery, buildFilterParamsFromUrl, DEFAULT_AGGREGATE_STATS } from '../hooks/useAppsQuery';
 import type { App, AppType, SortField, SortOrder, AggregateStats } from '../lib/apps-types';
+import type { FilterDescription } from '../lib/apps-export';
 import { formatCompactNumber } from '../lib/apps-queries';
 
 interface AppsPageClientProps {
@@ -30,6 +36,8 @@ interface AppsPageClientProps {
   initialOrder: SortOrder;
   initialSearch: string;
   aggregateStats: AggregateStats;
+  // M6a: Compare mode
+  compareApps?: App[];
 }
 
 export function AppsPageClient(props: AppsPageClientProps) {
@@ -43,6 +51,7 @@ export function AppsPageClient(props: AppsPageClientProps) {
 function AppsPageClientInner({
   initialData,
   aggregateStats: serverAggregateStats,
+  compareApps = [],
 }: AppsPageClientProps) {
   // Router for client-side navigation
   const router = useRouter();
@@ -65,6 +74,38 @@ function AppsPageClientInner({
   // Use React Query data if available, otherwise fall back to server data
   const apps = queryData ?? initialData;
   const aggregateStats = serverAggregateStats; // Aggregate stats still from server (could add separate query)
+
+  // M6a: Selection state management
+  const selection = useAppsSelection();
+
+  // M6a: Compare state management (URL-persisted)
+  const compare = useAppsCompare();
+
+  // M6a: Check if compare is valid (2-5 selected)
+  const canCompare = selection.selectedCount >= 2 && selection.selectedCount <= 5;
+
+  // M6b: Export dialog state
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<'filtered' | 'selected'>('filtered');
+
+  // M6a: Handle opening compare mode
+  const handleCompare = useCallback(() => {
+    if (canCompare) {
+      compare.openCompare(selection.getSelectedAppIds());
+    }
+  }, [canCompare, compare, selection]);
+
+  // M6b: Handle opening export dialog
+  const handleExport = useCallback(() => {
+    setExportScope(selection.selectedCount > 0 ? 'selected' : 'filtered');
+    setIsExportDialogOpen(true);
+  }, [selection.selectedCount]);
+
+  // M6b: Get selected apps for export
+  const selectedApps = useMemo(() => {
+    const selectedIds = selection.getSelectedAppIds();
+    return apps.filter((app) => selectedIds.includes(app.appid));
+  }, [apps, selection]);
 
   // Unified filter state management
   const {
@@ -125,6 +166,19 @@ function AppsPageClientInner({
     visibleColumns,
     setVisibleColumns,
   } = useAppsFilters();
+
+  // M6b: Build filter description for export metadata
+  const filterDescription: FilterDescription = useMemo(() => ({
+    type: type !== 'game' ? type : undefined,
+    search: search || undefined,
+    preset: activePreset || undefined,
+    quickFilters: activeQuickFilters.length > 0 ? activeQuickFilters : undefined,
+    minCcu: advancedFilters.minCcu,
+    minScore: advancedFilters.minScore,
+    minOwners: advancedFilters.minOwners,
+    minGrowth7d: advancedFilters.minGrowth7d,
+    minMomentum: advancedFilters.minMomentum,
+  }), [type, search, activePreset, activeQuickFilters, advancedFilters]);
 
   // M4b: Filter counts for lazy-loading dropdowns
   const {
@@ -447,11 +501,54 @@ function AppsPageClientInner({
         visibleColumns={visibleColumns}
         isLoading={isLoading && !apps.length}
         sparklineLoader={sparklineLoader}
+        // M6a: Selection props
+        isSelected={selection.isSelected}
+        isAllSelected={selection.isAllVisibleSelected(apps)}
+        isIndeterminate={selection.isIndeterminate(apps)}
+        onSelectApp={(appid, index, shiftKey) =>
+          selection.toggleSelection(appid, index, apps, shiftKey)
+        }
+        onSelectAll={() => selection.toggleAllVisible(apps)}
+        // M6b: Empty state props
+        hasSearch={!!search}
+        hasFilters={advancedFilterCount > 0}
+        hasPreset={activePreset}
+        onClearFilters={clearAllFilters}
       />
 
       {/* M5b: Data Freshness Footer */}
       <DataFreshnessFooter
         lastUpdated={apps.length > 0 ? apps[0].data_updated_at : null}
+      />
+
+      {/* M6a: Bulk Actions Bar (appears when items are selected) */}
+      <BulkActionsBar
+        selectedCount={selection.selectedCount}
+        canCompare={canCompare}
+        onCompare={handleCompare}
+        onExport={handleExport}
+        onClear={selection.clearSelection}
+      />
+
+      {/* M6a: Compare Mode Modal */}
+      {compare.isCompareOpen && compareApps.length >= 2 && (
+        <CompareMode
+          apps={compareApps}
+          aggregateStats={aggregateStats}
+          onClose={compare.closeCompare}
+          onRemove={compare.removeFromCompare}
+        />
+      )}
+
+      {/* M6b: Export Dialog */}
+      <ExportDialog
+        isOpen={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
+        apps={apps}
+        selectedApps={selectedApps}
+        visibleColumns={visibleColumns}
+        filterDescription={filterDescription}
+        defaultScope={exportScope}
       />
     </div>
   );

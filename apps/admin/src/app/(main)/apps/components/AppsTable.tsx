@@ -11,6 +11,7 @@ import {
 import { GrowthCell } from './GrowthCell';
 import { MomentumCell } from './MomentumCell';
 import { MethodologyTooltip } from './MethodologyTooltip';
+import { EmptyState } from './EmptyState';
 import {
   SentimentCell,
   ValueScoreCell,
@@ -38,6 +39,17 @@ interface AppsTableProps {
   visibleColumns?: AppColumnId[];
   isLoading?: boolean;
   sparklineLoader?: UseSparklineLoaderReturn;
+  // Selection props
+  isSelected?: (appid: number) => boolean;
+  isAllSelected?: boolean;
+  isIndeterminate?: boolean;
+  onSelectApp?: (appid: number, index: number, shiftKey: boolean) => void;
+  onSelectAll?: () => void;
+  // M6b: Empty state props
+  hasSearch?: boolean;
+  hasFilters?: boolean;
+  hasPreset?: string | null;
+  onClearFilters?: () => void;
 }
 
 interface SortHeaderProps {
@@ -392,21 +404,93 @@ function renderCell(
 }
 
 /**
+ * Checkbox cell for row selection
+ */
+function SelectionCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: () => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="flex items-center justify-center">
+      <input
+        type="checkbox"
+        checked={checked}
+        ref={(el) => {
+          if (el) el.indeterminate = indeterminate ?? false;
+        }}
+        onChange={onChange}
+        aria-label={ariaLabel}
+        className="w-4 h-4 rounded border-border-subtle text-accent-blue focus:ring-accent-blue focus:ring-offset-0 cursor-pointer"
+      />
+    </div>
+  );
+}
+
+/**
  * Desktop table row for a single app
  */
 function AppRow({
   app,
   rank,
+  index,
   columns,
   sparklineLoader,
+  isSelected,
+  onSelect,
 }: {
   app: App;
   rank: number;
+  index: number;
   columns: AppColumnId[];
   sparklineLoader?: UseSparklineLoaderReturn;
+  isSelected?: boolean;
+  onSelect?: (shiftKey: boolean) => void;
 }) {
+  const handleRowClick = (e: React.MouseEvent) => {
+    // Only handle clicks on the row itself, not on links or other interactive elements
+    if (
+      e.target instanceof HTMLAnchorElement ||
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLButtonElement
+    ) {
+      return;
+    }
+    // Only toggle selection if clicking on non-interactive area
+    if (onSelect && (e.target as HTMLElement).closest('td')?.classList.contains('select-cell')) {
+      return; // Already handled by checkbox
+    }
+  };
+
   return (
-    <tr className="hover:bg-surface-overlay transition-colors">
+    <tr
+      className={`hover:bg-surface-overlay transition-colors ${
+        isSelected ? 'bg-accent-blue/5' : ''
+      }`}
+      onClick={handleRowClick}
+    >
+      {/* Selection checkbox cell */}
+      {onSelect && (
+        <td
+          className="select-cell px-3 py-2 w-10"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(e.shiftKey);
+          }}
+        >
+          <SelectionCheckbox
+            checked={isSelected ?? false}
+            onChange={() => {}}
+            ariaLabel={`Select ${app.name}`}
+          />
+        </td>
+      )}
       {columns.map((columnId) => (
         <td
           key={columnId}
@@ -429,8 +513,19 @@ export function AppsTable({
   visibleColumns,
   isLoading = false,
   sparklineLoader,
+  isSelected,
+  isAllSelected = false,
+  isIndeterminate = false,
+  onSelectApp,
+  onSelectAll,
+  // M6b: Empty state props
+  hasSearch = false,
+  hasFilters = false,
+  hasPreset = null,
+  onClearFilters,
 }: AppsTableProps) {
   const columns = visibleColumns ?? DEFAULT_APP_COLUMNS;
+  const hasSelection = !!onSelectApp;
 
   if (isLoading) {
     return (
@@ -444,6 +539,20 @@ export function AppsTable({
   }
 
   if (apps.length === 0) {
+    // M6b: Use EmptyState component if clear filters handler is provided
+    if (onClearFilters) {
+      return (
+        <Card>
+          <EmptyState
+            hasSearch={hasSearch}
+            hasFilters={hasFilters}
+            hasPreset={hasPreset}
+            onClearFilters={onClearFilters}
+          />
+        </Card>
+      );
+    }
+    // Fallback simple empty state
     return (
       <Card className="p-8 text-center">
         <p className="text-text-secondary">No games found</p>
@@ -468,6 +577,17 @@ export function AppsTable({
         <table className="w-full">
           <thead className="bg-surface-elevated sticky top-0 z-10">
             <tr>
+              {/* Select-all checkbox header */}
+              {hasSelection && (
+                <th className="px-3 py-2 w-10">
+                  <SelectionCheckbox
+                    checked={isAllSelected}
+                    indeterminate={isIndeterminate}
+                    onChange={() => onSelectAll?.()}
+                    ariaLabel="Select all visible games"
+                  />
+                </th>
+              )}
               {columns.map((columnId) => {
                 const column = APP_COLUMN_DEFINITIONS[columnId];
                 if (!column) return null;
@@ -494,8 +614,15 @@ export function AppsTable({
                 key={app.appid}
                 app={app}
                 rank={index + 1}
+                index={index}
                 columns={columns}
                 sparklineLoader={sparklineLoader}
+                isSelected={isSelected?.(app.appid)}
+                onSelect={
+                  onSelectApp
+                    ? (shiftKey) => onSelectApp(app.appid, index, shiftKey)
+                    : undefined
+                }
               />
             ))}
           </tbody>
