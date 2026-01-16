@@ -5,7 +5,7 @@
 > **Spec Version:** 1.1 (revised Jan 2026)
 > **Reference Implementation:** /companies page (v2.5)
 > **Started:** 2026-01-15
-> **Last Updated:** 2026-01-15 (M4a complete)
+> **Last Updated:** 2026-01-15 (M4b complete)
 
 ---
 
@@ -56,7 +56,7 @@
 | M2b | Table & Columns | ✅ Complete | 2026-01-15 | 10 columns, sorting, mobile cards, bug checked |
 | M3 | Search, Presets & Quick Filters | ✅ Complete | 2026-01-15 | All 12 presets, 12 quick filters, search with 300ms debounce |
 | M4a | Advanced Filters - Metrics | ✅ Complete | 2026-01-15 | Live tested: panel toggle, filters, presets, badge all working |
-| M4b | Advanced Filters - Content | ⬜ Not Started | — | |
+| M4b | Advanced Filters - Content | ✅ Complete | 2026-01-15 | Content, Platform, Release, Relationship, Activity filters + Saved Views |
 | M5a | Column Customization | ⬜ Not Started | — | |
 | M5b | Visualizations & Stats | ⬜ Not Started | — | |
 | M6a | Selection & Compare | ⬜ Not Started | — | |
@@ -228,7 +228,40 @@
 - **Next steps:**
   - Proceed to M4b: Advanced Filters - Content & Context
 
-### Session 7 - YYYY-MM-DD
+### Session 7 - 2026-01-15
+- **Milestone:** M4b (Advanced Filters - Content & Context)
+- **Duration:** ~60 minutes
+- **Work done:**
+  - Created `useFilterCounts.ts` hook with 5-minute cache for lazy-loading filter counts
+  - Created `useSavedViews.ts` hook with localStorage persistence (max 10 views)
+  - Created `GenreTagFilter.tsx` - multi-select dropdown with search, counts, any/all mode
+  - Created `ContentFilters.tsx` - Genres, Tags, Categories filters with Workshop toggle
+  - Created `PlatformFilters.tsx` - Windows/Mac/Linux checkboxes, Steam Deck, Controller
+  - Created `ReleaseFilters.tsx` - Period presets, Age range slider, Early Access, Hype Duration
+  - Created `RelationshipFilters.tsx` - Publisher/Developer search, Self-published, Publisher Size, vs Publisher Avg
+  - Created `ActivityFilters.tsx` - CCU Tier buttons (Hot/Active/Quiet)
+  - Created `SavedViews.tsx` - Save/Load/Rename/Delete views dropdown
+  - Extended `useAppsFilters.ts` with all M4b URL params and actions
+  - Extended `AdvancedFiltersPanel.tsx` with 3 new rows: Content+Platform, Release+Relationship, Activity
+  - Updated `AppsPageClient.tsx` to wire all hooks and handlers
+  - Fixed DualRangeSlider prop mismatch (minLimit→absoluteMin)
+  - TypeScript compiles successfully
+- **Files created (9):**
+  - `hooks/useFilterCounts.ts`
+  - `hooks/useSavedViews.ts`
+  - `components/SavedViews.tsx`
+  - `components/filters/GenreTagFilter.tsx`
+  - `components/filters/ContentFilters.tsx`
+  - `components/filters/PlatformFilters.tsx`
+  - `components/filters/ReleaseFilters.tsx`
+  - `components/filters/RelationshipFilters.tsx`
+  - `components/filters/ActivityFilters.tsx`
+- **Blockers:**
+  - None
+- **Next steps:**
+  - Proceed to M5a: Column Customization
+
+### Session 8 - YYYY-MM-DD
 - **Milestone:** ___
 - **Duration:** ___ minutes
 - **Work done:**
@@ -283,13 +316,13 @@ apps/admin/src/app/(main)/apps/
 │   ├── [x] PresetViews.tsx (M3)
 │   ├── [x] QuickFilters.tsx (M3)
 │   ├── [x] SearchBar.tsx (M3)
-│   ├── [ ] AdvancedFiltersPanel.tsx
+│   ├── [x] AdvancedFiltersPanel.tsx (M4a+M4b)
 │   ├── [ ] SummaryStatsBar.tsx
 │   ├── [ ] ColumnSelector.tsx
 │   ├── [ ] BulkActionsBar.tsx
 │   ├── [ ] CompareMode.tsx
 │   ├── [ ] ExportDialog.tsx
-│   ├── [ ] SavedViews.tsx
+│   ├── [x] SavedViews.tsx (M4b)
 │   ├── [ ] EmptyState.tsx
 │   ├── [ ] DataFreshnessFooter.tsx
 │   ├── cells/
@@ -300,24 +333,24 @@ apps/admin/src/app/(main)/apps/
 │   │   ├── [ ] SteamDeckCell.tsx
 │   │   └── [ ] ActionsCell.tsx
 │   └── filters/
-│       ├── [ ] MetricRangeFilters.tsx (ADAPT)
-│       ├── [ ] GrowthFilters.tsx (ADAPT)
-│       ├── [ ] SentimentFilters.tsx (NEW)
-│       ├── [ ] EngagementFilters.tsx (NEW)
-│       ├── [ ] ContentFilters.tsx
-│       ├── [ ] PlatformFilters.tsx (ADAPT)
-│       ├── [ ] ReleaseFilters.tsx
-│       ├── [ ] RelationshipFilters.tsx
-│       ├── [ ] ActivityFilters.tsx
-│       ├── [ ] GenreTagFilter.tsx (COPY)
-│       ├── [ ] DualRangeSlider.tsx (COPY)
+│       ├── [x] MetricRangeFilters.tsx (M4a)
+│       ├── [x] GrowthFilters.tsx (M4a)
+│       ├── [x] SentimentFilters.tsx (M4a)
+│       ├── [x] EngagementFilters.tsx (M4a)
+│       ├── [x] ContentFilters.tsx (M4b)
+│       ├── [x] PlatformFilters.tsx (M4b)
+│       ├── [x] ReleaseFilters.tsx (M4b)
+│       ├── [x] RelationshipFilters.tsx (M4b)
+│       ├── [x] ActivityFilters.tsx (M4b)
+│       ├── [x] GenreTagFilter.tsx (M4b)
+│       ├── [x] DualRangeSlider.tsx (M4a)
 │       └── [ ] RangeInput.tsx
 ├── hooks/
-│   ├── [x] useAppsFilters.ts (M3)
+│   ├── [x] useAppsFilters.ts (M3+M4b)
 │   ├── [ ] useAppsSelection.ts
 │   ├── [ ] useAppsCompare.ts
-│   ├── [ ] useSavedViews.ts (ADAPT)
-│   ├── [ ] useFilterCounts.ts (ADAPT)
+│   ├── [x] useSavedViews.ts (M4b)
+│   ├── [x] useFilterCounts.ts (M4b)
 │   └── [ ] useSparklineLoader.ts (ADAPT)
 └── lib/
     ├── [x] apps-types.ts (M2a)
@@ -398,17 +431,17 @@ apps/admin/src/app/(main)/apps/
 - [x] Clear all works (resets URL and filters)
 
 ### M4b: Content & Context Filters
-- [ ] Filter counts load contextually
-- [ ] Genre filter works with counts
-- [ ] Tag filter works with search
-- [ ] Platform filters work
-- [ ] Steam Deck filter works
-- [ ] Release filters work
-- [ ] Relationship filters work
-- [ ] Activity tier filters work
-- [ ] Saved views: save works
-- [ ] Saved views: load works
-- [ ] Saved views: delete works
+- [x] Filter counts load contextually (useFilterCounts with 5-min cache)
+- [x] Genre filter works with counts (GenreTagFilter component)
+- [x] Tag filter works with search (GenreTagFilter with searchable dropdown)
+- [x] Platform filters work (Windows/Mac/Linux with any/all mode)
+- [x] Steam Deck filter works (verified/playable/unsupported)
+- [x] Release filters work (period presets, age slider, early access, hype)
+- [x] Relationship filters work (publisher/developer search, self-published, size, vs avg)
+- [x] Activity tier filters work (CCU Tier 1/2/3)
+- [x] Saved views: save works (localStorage persistence)
+- [x] Saved views: load works (reconstructs URL from saved filters)
+- [x] Saved views: delete works (with confirmation)
 
 ### M5a: Column Customization
 - [ ] Column selector toggles columns
