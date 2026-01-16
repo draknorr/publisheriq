@@ -228,6 +228,17 @@ pnpm --filter @publisheriq/ingestion price-sync
 pnpm --filter @publisheriq/ingestion alert-detection
 ```
 
+## Local Development
+
+```bash
+# Start admin dashboard (runs on http://localhost:3001)
+pnpm --filter admin dev
+```
+
+**Hot reload:** Next.js Fast Refresh auto-reloads component, style, and API route changes.
+
+**Requires restart:** Changes to `.env.local`, `next.config.js`, or `tsconfig.json`.
+
 ## Environment Variables
 
 ### Root `.env` (sync workers)
@@ -393,6 +404,43 @@ alert_severity: 'low', 'medium', 'high'
 | `user_alert_preferences` | Per-user global alert configuration |
 | `user_pin_alert_settings` | Per-pin alert overrides (NULL = inherit) |
 | `alert_detection_state` | Baseline metrics for change detection |
+
+## ⚠️ Database Scale & Query Performance
+
+**This is a large-scale database. Always optimize queries.**
+
+| Table | Approximate Rows | Notes |
+|-------|------------------|-------|
+| `apps` | ~200,000 | All Steam apps (games, DLC, demos, etc.) |
+| `daily_metrics` | ~15M+ | One row per app per day with metrics |
+| `ccu_snapshots` | ~5M+ | Hourly CCU samples, 30-day retention |
+| `review_deltas` | ~3M+ | Daily review changes per app |
+| `sync_status` | ~200,000 | One row per app |
+| `app_steam_tags` | ~1.5M+ | Many tags per game |
+| `publishers` / `developers` | ~50,000 each | Entity tables |
+
+**Query Rules:**
+1. **ALWAYS use LIMIT** - Never run unbounded queries. Start with `LIMIT 100` for exploration.
+2. **Use indexed columns in WHERE** - `appid`, `date`, `created_at`, `publisher_id`, `developer_id`
+3. **Prefer materialized views** - Use `publisher_metrics`, `developer_metrics`, `latest_daily_metrics` instead of aggregating raw tables
+4. **Use RPC functions** - Pre-optimized functions like `get_companies_with_filters()` handle pagination and indexes
+5. **Avoid COUNT(*) on large tables** - Use approximate counts or cached statistics when possible
+6. **Time-bound time-series queries** - Always filter `daily_metrics` and `ccu_snapshots` by date range
+
+**Anti-patterns to avoid:**
+```sql
+-- ❌ BAD: Full table scan
+SELECT * FROM apps WHERE name ILIKE '%counter%';
+
+-- ✅ GOOD: Use lookup RPC or limit results
+SELECT appid, name FROM apps WHERE name ILIKE '%counter%' LIMIT 50;
+
+-- ❌ BAD: Aggregating millions of rows
+SELECT appid, AVG(ccu) FROM daily_metrics GROUP BY appid;
+
+-- ✅ GOOD: Use materialized view or filter by date
+SELECT * FROM latest_daily_metrics WHERE ccu > 1000 LIMIT 100;
+```
 
 ## Chat System Architecture
 
@@ -646,6 +694,7 @@ Unified publishers/developers analytics page at `/companies`:
 | `get_companies_aggregate_stats()` | Summary statistics for context bar |
 | `get_company_sparkline_data()` | CCU time-series for sparklines |
 | `get_filter_option_counts()` | Dynamic filter dropdown counts |
+| `get_companies_by_ids()` | Fetch specific companies for compare mode |
 
 **Files:** `apps/admin/src/app/(main)/companies/`
 
