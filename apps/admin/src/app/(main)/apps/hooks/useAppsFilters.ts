@@ -26,6 +26,12 @@ import {
   isValidQuickFilterId,
   buildQuickFilterParams,
 } from '../lib/apps-presets';
+import {
+  type AppColumnId,
+  DEFAULT_APP_COLUMNS,
+  parseColumnsParam,
+  serializeColumnsParam,
+} from '../lib/apps-columns';
 import type { AppsAdvancedFiltersState } from '../components/AdvancedFiltersPanel';
 import type { GrowthPreset, SentimentPreset } from '../components/filters';
 
@@ -149,6 +155,10 @@ export interface UseAppsFiltersReturn {
   setVsPublisher: (value: number | undefined) => void;
   // M4b: Activity filter actions
   setCcuTier: (tier: CcuTier | undefined) => void;
+
+  // M5a: Column customization
+  visibleColumns: AppColumnId[];
+  setVisibleColumns: (columns: AppColumnId[]) => void;
 }
 
 /**
@@ -307,6 +317,12 @@ export function useAppsFilters(): UseAppsFiltersReturn {
 
   // M4b: Parse activity filters
   const ccuTier = parseCcuTier(searchParams.get('ccuTier'));
+
+  // M5a: Parse visible columns
+  const visibleColumns = useMemo(
+    () => parseColumnsParam(searchParams.get('columns')),
+    [searchParams]
+  );
 
   // M4a: Local state for advanced filters panel visibility
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -1176,6 +1192,20 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     [updateUrl]
   );
 
+  // ========================================
+  // M5a: Column customization
+  // ========================================
+
+  const setVisibleColumns = useCallback(
+    (columns: AppColumnId[]) => {
+      const serialized = serializeColumnsParam(columns);
+      updateUrl({
+        columns: serialized,
+      });
+    },
+    [updateUrl]
+  );
+
   return {
     isPending,
     type,
@@ -1284,5 +1314,8 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     setVsPublisher,
     // M4b: Activity filter actions
     setCcuTier,
+    // M5a: Column customization
+    visibleColumns,
+    setVisibleColumns,
   };
 }

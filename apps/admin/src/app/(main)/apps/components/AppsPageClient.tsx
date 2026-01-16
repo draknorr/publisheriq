@@ -12,6 +12,7 @@ import { PresetViews } from './PresetViews';
 import { QuickFilters } from './QuickFilters';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
 import { SavedViews } from './SavedViews';
+import { ColumnSelector } from './ColumnSelector';
 import { useAppsFilters } from '../hooks/useAppsFilters';
 import { useFilterCounts } from '../hooks/useFilterCounts';
 import { useSavedViews, type SavedView } from '../hooks/useSavedViews';
@@ -117,6 +118,9 @@ function AppsPageClientInner({
     setVsPublisher,
     // M4b: Activity filter actions
     setCcuTier,
+    // M5a: Column customization
+    visibleColumns,
+    setVisibleColumns,
   } = useAppsFilters();
 
   // M4b: Filter counts for lazy-loading dropdowns
@@ -162,12 +166,12 @@ function AppsPageClientInner({
     fetchCounts('category', type, filterCountContext);
   }, [fetchCounts, type, filterCountContext]);
 
-  // M4b: Save current view handler
+  // M4b: Save current view handler (M5a: includes columns)
   const handleSaveView = useCallback(
     (name: string) => {
-      saveView(name, advancedFilters, undefined, sort, order, type);
+      saveView(name, advancedFilters, visibleColumns, sort, order, type);
     },
-    [saveView, advancedFilters, sort, order, type]
+    [saveView, advancedFilters, visibleColumns, sort, order, type]
   );
 
   // M4b: Load saved view handler - reconstructs URL and navigates
@@ -229,6 +233,11 @@ function AppsPageClientInner({
       if (f.publisherSize !== undefined) params.set('publisherSize', f.publisherSize);
       if (f.minVsPublisher !== undefined) params.set('minVsPublisher', String(f.minVsPublisher));
       if (f.ccuTier !== undefined) params.set('ccuTier', String(f.ccuTier));
+
+      // M5a: Restore columns from saved view
+      if (view.columns && view.columns.length > 0) {
+        params.set('columns', view.columns.join(','));
+      }
 
       // Navigate to the constructed URL using client-side routing
       const queryString = params.toString();
@@ -362,6 +371,13 @@ function AppsPageClientInner({
           hasActiveFilters={hasActiveFilters || type !== 'game' || sort !== 'ccu_peak' || order !== 'desc'}
           disabled={isLoadingData}
         />
+
+        {/* M5a: Column Selector */}
+        <ColumnSelector
+          visibleColumns={visibleColumns}
+          onChange={setVisibleColumns}
+          disabled={isLoadingData}
+        />
       </div>
 
       {/* Row 6: Advanced Filters Panel (collapsible) */}
@@ -419,6 +435,7 @@ function AppsPageClientInner({
         sortField={sort}
         sortOrder={order}
         onSort={setSort}
+        visibleColumns={visibleColumns}
         isLoading={isLoading && !apps.length}
       />
     </div>

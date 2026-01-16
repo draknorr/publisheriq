@@ -2,10 +2,24 @@
 
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
-import { ReviewScoreBadge } from '@/components/data-display/TrendIndicator';
+import {
+  ReviewScoreBadge,
+  SteamDeckBadge,
+  VelocityTierBadge,
+  PlatformIcons,
+} from '@/components/data-display/TrendIndicator';
 import { GrowthCell } from './GrowthCell';
 import { MomentumCell } from './MomentumCell';
 import { MethodologyTooltip } from './MethodologyTooltip';
+import {
+  SentimentCell,
+  ValueScoreCell,
+  VsPublisherCell,
+  VelocityCell,
+  ControllerCell,
+  CCUTierCell,
+  AccelerationCell,
+} from './cells';
 import {
   APP_COLUMN_DEFINITIONS,
   DEFAULT_APP_COLUMNS,
@@ -166,10 +180,34 @@ function MobileAppCard({ app, rank }: { app: App; rank: number }) {
 }
 
 /**
+ * Format playtime in hours
+ */
+function formatPlaytime(minutes: number | null): string {
+  if (minutes === null || minutes === undefined) return '\u2014';
+  const hours = minutes / 60;
+  if (hours < 1) return `${minutes}m`;
+  return `${hours.toFixed(1)}h`;
+}
+
+/**
+ * Format days as human readable
+ */
+function formatDays(days: number | null): string {
+  if (days === null || days === undefined) return '\u2014';
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${(days / 365).toFixed(1)}y`;
+}
+
+/**
  * Render cell content based on column ID
  */
 function renderCell(columnId: AppColumnId, app: App, rank: number): React.ReactNode {
   switch (columnId) {
+    // ═══════════════════════════════════════════════════════════════════
+    // CORE
+    // ═══════════════════════════════════════════════════════════════════
     case 'rank':
       return rank;
     case 'name':
@@ -181,14 +219,22 @@ function renderCell(columnId: AppColumnId, app: App, rank: number): React.ReactN
           {app.name}
         </Link>
       );
-    case 'ccu_peak':
-      return formatCompactNumber(app.ccu_peak);
-    case 'ccu_growth_7d':
-      return <GrowthCell value={app.ccu_growth_7d_percent} />;
-    case 'momentum_score':
-      return <MomentumCell value={app.momentum_score} />;
-    case 'owners':
-      return formatCompactNumber(app.owners_midpoint);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ENGAGEMENT
+    // ═══════════════════════════════════════════════════════════════════
+    case 'avg_playtime_forever':
+      return formatPlaytime(app.average_playtime_forever);
+    case 'avg_playtime_2weeks':
+      return formatPlaytime(app.average_playtime_2weeks);
+    case 'active_player_pct':
+      return app.active_player_pct !== null
+        ? `${app.active_player_pct.toFixed(1)}%`
+        : '\u2014';
+
+    // ═══════════════════════════════════════════════════════════════════
+    // REVIEWS
+    // ═══════════════════════════════════════════════════════════════════
     case 'reviews':
       return (
         <>
@@ -200,6 +246,45 @@ function renderCell(columnId: AppColumnId, app: App, rank: number): React.ReactN
           )}
         </>
       );
+    case 'positive_percentage':
+      return app.positive_percentage !== null
+        ? <ReviewScoreBadge score={app.positive_percentage} />
+        : '\u2014';
+    case 'velocity_7d':
+      return <VelocityCell value={app.velocity_7d} />;
+    case 'velocity_30d':
+      return <VelocityCell value={app.velocity_30d} />;
+    case 'velocity_tier':
+      return app.velocity_tier
+        ? <VelocityTierBadge tier={app.velocity_tier} />
+        : '\u2014';
+    case 'sentiment_delta':
+      return <SentimentCell value={app.sentiment_delta} />;
+    case 'review_rate':
+      return app.review_rate !== null
+        ? `${app.review_rate.toFixed(1)}`
+        : '\u2014';
+
+    // ═══════════════════════════════════════════════════════════════════
+    // GROWTH
+    // ═══════════════════════════════════════════════════════════════════
+    case 'ccu_peak':
+      return formatCompactNumber(app.ccu_peak);
+    case 'ccu_growth_7d':
+      return <GrowthCell value={app.ccu_growth_7d_percent} />;
+    case 'ccu_growth_30d':
+      return <GrowthCell value={app.ccu_growth_30d_percent} />;
+    case 'momentum_score':
+      return <MomentumCell value={app.momentum_score} />;
+    case 'velocity_acceleration':
+      return <AccelerationCell value={app.velocity_acceleration} />;
+    case 'sparkline':
+      // Placeholder per M2b spec - actual sparklines implemented in M5b
+      return <span className="text-text-muted">{'\u2014'}</span>;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // FINANCIAL
+    // ═══════════════════════════════════════════════════════════════════
     case 'price':
       return (
         <>
@@ -209,11 +294,79 @@ function renderCell(columnId: AppColumnId, app: App, rank: number): React.ReactN
           )}
         </>
       );
+    case 'discount':
+      return app.current_discount_percent > 0
+        ? <DiscountBadge percent={app.current_discount_percent} />
+        : '\u2014';
+    case 'owners':
+      return formatCompactNumber(app.owners_midpoint);
+    case 'value_score':
+      return <ValueScoreCell value={app.value_score} isFree={app.is_free} />;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CONTEXT
+    // ═══════════════════════════════════════════════════════════════════
+    case 'publisher':
+      return app.publisher_name && app.publisher_id ? (
+        <Link
+          href={`/publishers/${app.publisher_id}`}
+          className="text-text-secondary hover:text-accent-blue transition-colors truncate block max-w-[140px]"
+          title={app.publisher_name}
+        >
+          {app.publisher_name}
+        </Link>
+      ) : (
+        '\u2014'
+      );
+    case 'developer':
+      return app.developer_name && app.developer_id ? (
+        <Link
+          href={`/developers/${app.developer_id}`}
+          className="text-text-secondary hover:text-accent-blue transition-colors truncate block max-w-[140px]"
+          title={app.developer_name}
+        >
+          {app.developer_name}
+        </Link>
+      ) : (
+        '\u2014'
+      );
+    case 'vs_publisher_avg':
+      return <VsPublisherCell value={app.vs_publisher_avg} />;
+    case 'publisher_game_count':
+      return app.publisher_game_count !== null
+        ? app.publisher_game_count
+        : '\u2014';
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TIMELINE
+    // ═══════════════════════════════════════════════════════════════════
     case 'release_date':
       return formatDate(app.release_date);
-    case 'sparkline':
-      // Placeholder per M2b spec - actual sparklines implemented in M5b
-      return <span className="text-text-muted">\u2014</span>;
+    case 'days_live':
+      return formatDays(app.days_live);
+    case 'hype_duration':
+      return app.hype_duration !== null
+        ? `${app.hype_duration}d`
+        : '\u2014';
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PLATFORM
+    // ═══════════════════════════════════════════════════════════════════
+    case 'steam_deck':
+      return app.steam_deck_category
+        ? <SteamDeckBadge category={app.steam_deck_category} showLabel />
+        : '\u2014';
+    case 'platforms':
+      return <PlatformIcons platforms={app.platforms} />;
+    case 'controller_support':
+      return <ControllerCell support={app.controller_support} />;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ACTIVITY
+    // ═══════════════════════════════════════════════════════════════════
+    case 'ccu_tier':
+      return <CCUTierCell tier={app.ccu_tier} />;
+
     default:
       return '\u2014';
   }
