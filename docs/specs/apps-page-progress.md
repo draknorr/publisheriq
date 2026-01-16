@@ -5,7 +5,7 @@
 > **Spec Version:** 1.1 (revised Jan 2026)
 > **Reference Implementation:** /companies page (v2.5)
 > **Started:** 2026-01-15
-> **Last Updated:** 2026-01-15 (M4b complete)
+> **Last Updated:** 2026-01-16 (M5a complete)
 
 ---
 
@@ -57,7 +57,7 @@
 | M3 | Search, Presets & Quick Filters | ✅ Complete | 2026-01-15 | All 12 presets, 12 quick filters, search with 300ms debounce |
 | M4a | Advanced Filters - Metrics | ✅ Complete | 2026-01-15 | Live tested: panel toggle, filters, presets, badge all working |
 | M4b | Advanced Filters - Content | ✅ Complete | 2026-01-15 | Content, Platform, Release, Relationship, Activity filters + Saved Views |
-| M5a | Column Customization | ⬜ Not Started | — | |
+| M5a | Column Customization | ✅ Complete | 2026-01-16 | 33 columns, ColumnSelector, URL persistence, saved views |
 | M5b | Visualizations & Stats | ⬜ Not Started | — | |
 | M6a | Selection & Compare | ⬜ Not Started | — | |
 | M6b | Export & Polish | ⬜ Not Started | — | |
@@ -261,7 +261,42 @@
 - **Next steps:**
   - Proceed to M5a: Column Customization
 
-### Session 8 - YYYY-MM-DD
+### Session 8 - 2026-01-16
+- **Milestone:** M5a (Column Customization)
+- **Duration:** ~45 minutes
+- **Work done:**
+  - Expanded `apps-columns.ts` from 10 to 33 columns across 9 categories
+  - Added column category system (core, engagement, reviews, growth, financial, context, timeline, platform, activity)
+  - Created 8 cell components in `components/cells/`:
+    - `SentimentCell.tsx` - sentiment delta with emoji/color thresholds
+    - `ValueScoreCell.tsx` - hours per dollar display
+    - `VsPublisherCell.tsx` - review score vs publisher average
+    - `VelocityCell.tsx` - review velocity with units
+    - `ControllerCell.tsx` - controller support badge
+    - `CCUTierCell.tsx` - CCU tier badge (Hot/Active/Quiet)
+    - `AccelerationCell.tsx` - velocity acceleration indicator
+    - `index.ts` - re-exports
+  - Created `ColumnSelector.tsx` dropdown with grouped columns and checkboxes
+  - Updated `AppsTable.tsx` with expanded renderCell switch for all 33 columns
+  - Added URL persistence for visible columns (`?columns=...`) in `useAppsFilters.ts`
+  - Updated saved views to include/restore column selection
+  - TypeScript compiles successfully
+- **Files created (9):**
+  - `components/ColumnSelector.tsx`
+  - `components/cells/SentimentCell.tsx`
+  - `components/cells/ValueScoreCell.tsx`
+  - `components/cells/VsPublisherCell.tsx`
+  - `components/cells/VelocityCell.tsx`
+  - `components/cells/ControllerCell.tsx`
+  - `components/cells/CCUTierCell.tsx`
+  - `components/cells/AccelerationCell.tsx`
+  - `components/cells/index.ts`
+- **Blockers:**
+  - None
+- **Next steps:**
+  - Proceed to M5b: Visualizations & Stats
+
+### Session 9 - YYYY-MM-DD
 - **Milestone:** ___
 - **Duration:** ___ minutes
 - **Work done:**
@@ -318,7 +353,7 @@ apps/admin/src/app/(main)/apps/
 │   ├── [x] SearchBar.tsx (M3)
 │   ├── [x] AdvancedFiltersPanel.tsx (M4a+M4b)
 │   ├── [ ] SummaryStatsBar.tsx
-│   ├── [ ] ColumnSelector.tsx
+│   ├── [x] ColumnSelector.tsx (M5a)
 │   ├── [ ] BulkActionsBar.tsx
 │   ├── [ ] CompareMode.tsx
 │   ├── [ ] ExportDialog.tsx
@@ -326,11 +361,15 @@ apps/admin/src/app/(main)/apps/
 │   ├── [ ] EmptyState.tsx
 │   ├── [ ] DataFreshnessFooter.tsx
 │   ├── cells/
-│   │   ├── [ ] SentimentCell.tsx (NEW)
-│   │   ├── [ ] PriceCell.tsx
-│   │   ├── [ ] ReviewsCell.tsx
+│   │   ├── [x] SentimentCell.tsx (M5a)
+│   │   ├── [x] ValueScoreCell.tsx (M5a)
+│   │   ├── [x] VsPublisherCell.tsx (M5a)
+│   │   ├── [x] VelocityCell.tsx (M5a)
+│   │   ├── [x] ControllerCell.tsx (M5a)
+│   │   ├── [x] CCUTierCell.tsx (M5a)
+│   │   ├── [x] AccelerationCell.tsx (M5a)
+│   │   ├── [x] index.ts (M5a)
 │   │   ├── [ ] SparklineCell.tsx
-│   │   ├── [ ] SteamDeckCell.tsx
 │   │   └── [ ] ActionsCell.tsx
 │   └── filters/
 │       ├── [x] MetricRangeFilters.tsx (M4a)
@@ -444,18 +483,18 @@ apps/admin/src/app/(main)/apps/
 - [x] Saved views: delete works (with confirmation)
 
 ### M5a: Column Customization
-- [ ] Column selector toggles columns
-- [ ] All optional columns render correctly
-- [ ] Insight columns work:
-  - [ ] Active Player %
-  - [ ] Sentiment Δ
-  - [ ] Review Rate
-  - [ ] Value Score
-  - [ ] vs Publisher Avg
-  - [ ] Hype Duration
-  - [ ] CCU Tier
-  - [ ] Velocity Tier
-- [ ] Column selection persists
+- [x] Column selector toggles columns
+- [x] All optional columns render correctly
+- [x] Insight columns work:
+  - [x] Active Player %
+  - [x] Sentiment Δ
+  - [x] Review Rate
+  - [x] Value Score
+  - [x] vs Publisher Avg
+  - [x] Hype Duration
+  - [x] CCU Tier
+  - [x] Velocity Tier
+- [x] Column selection persists (URL + saved views)
 
 ### M5b: Visualizations & Stats
 - [ ] Sparklines lazy-load (check Network tab)
