@@ -19,7 +19,9 @@ import {
   ControllerCell,
   CCUTierCell,
   AccelerationCell,
+  SparklineCell,
 } from './cells';
+import type { UseSparklineLoaderReturn } from '../hooks/useSparklineLoader';
 import {
   APP_COLUMN_DEFINITIONS,
   DEFAULT_APP_COLUMNS,
@@ -35,6 +37,7 @@ interface AppsTableProps {
   onSort: (field: SortField) => void;
   visibleColumns?: AppColumnId[];
   isLoading?: boolean;
+  sparklineLoader?: UseSparklineLoaderReturn;
 }
 
 interface SortHeaderProps {
@@ -203,7 +206,12 @@ function formatDays(days: number | null): string {
 /**
  * Render cell content based on column ID
  */
-function renderCell(columnId: AppColumnId, app: App, rank: number): React.ReactNode {
+function renderCell(
+  columnId: AppColumnId,
+  app: App,
+  rank: number,
+  sparklineLoader?: UseSparklineLoaderReturn
+): React.ReactNode {
   switch (columnId) {
     // ═══════════════════════════════════════════════════════════════════
     // CORE
@@ -279,7 +287,18 @@ function renderCell(columnId: AppColumnId, app: App, rank: number): React.ReactN
     case 'velocity_acceleration':
       return <AccelerationCell value={app.velocity_acceleration} />;
     case 'sparkline':
-      // Placeholder per M2b spec - actual sparklines implemented in M5b
+      // M5b: Lazy-loaded sparkline visualization
+      if (sparklineLoader) {
+        return (
+          <SparklineCell
+            appid={app.appid}
+            growthPercent={app.ccu_growth_7d_percent}
+            registerRow={sparklineLoader.registerRow}
+            getSparklineData={sparklineLoader.getSparklineData}
+            isLoading={sparklineLoader.isLoading}
+          />
+        );
+      }
       return <span className="text-text-muted">{'\u2014'}</span>;
 
     // ═══════════════════════════════════════════════════════════════════
@@ -379,10 +398,12 @@ function AppRow({
   app,
   rank,
   columns,
+  sparklineLoader,
 }: {
   app: App;
   rank: number;
   columns: AppColumnId[];
+  sparklineLoader?: UseSparklineLoaderReturn;
 }) {
   return (
     <tr className="hover:bg-surface-overlay transition-colors">
@@ -393,7 +414,7 @@ function AppRow({
             columnId === 'name' ? 'min-w-[200px]' : ''
           } ${columnId === 'rank' ? 'text-text-muted w-12' : ''}`}
         >
-          {renderCell(columnId, app, rank)}
+          {renderCell(columnId, app, rank, sparklineLoader)}
         </td>
       ))}
     </tr>
@@ -407,6 +428,7 @@ export function AppsTable({
   onSort,
   visibleColumns,
   isLoading = false,
+  sparklineLoader,
 }: AppsTableProps) {
   const columns = visibleColumns ?? DEFAULT_APP_COLUMNS;
 
@@ -473,6 +495,7 @@ export function AppsTable({
                 app={app}
                 rank={index + 1}
                 columns={columns}
+                sparklineLoader={sparklineLoader}
               />
             ))}
           </tbody>

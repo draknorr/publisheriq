@@ -58,7 +58,7 @@
 | M4a | Advanced Filters - Metrics | ✅ Complete | 2026-01-15 | Live tested: panel toggle, filters, presets, badge all working |
 | M4b | Advanced Filters - Content | ✅ Complete | 2026-01-15 | Content, Platform, Release, Relationship, Activity filters + Saved Views |
 | M5a | Column Customization | ✅ Complete | 2026-01-16 | 33 columns, ColumnSelector, URL persistence, saved views |
-| M5b | Visualizations & Stats | ⬜ Not Started | — | |
+| M5b | Visualizations & Stats | ✅ Complete | 2026-01-16 | Sparklines, SummaryStatsBar, DataFreshnessFooter |
 | M6a | Selection & Compare | ⬜ Not Started | — | |
 | M6b | Export & Polish | ⬜ Not Started | — | |
 
@@ -296,7 +296,34 @@
 - **Next steps:**
   - Proceed to M5b: Visualizations & Stats
 
-### Session 9 - YYYY-MM-DD
+### Session 9 - 2026-01-16
+- **Milestone:** M5b (Visualizations & Stats)
+- **Duration:** ~30 minutes
+- **Work done:**
+  - Created `hooks/useSparklineLoader.ts` with batch loading and IntersectionObserver
+  - Created `cells/SparklineCell.tsx` with loading/no-data/loaded states
+  - Created `components/SummaryStatsBar.tsx` displaying 9 aggregate metrics in two rows
+  - Created `components/DataFreshnessFooter.tsx` with relative time display
+  - Updated `AppsTable.tsx` to accept sparklineLoader prop and render SparklineCell
+  - Updated `AppsPageClient.tsx` to integrate all new components
+  - Updated `cells/index.ts` to export SparklineCell
+  - TypeScript compiles successfully
+- **Key implementation details:**
+  - Batch RPC calls: Apps sparkline RPC takes array of appids (more efficient than companies)
+  - 50ms debounce to collect visible rows before batch fetch
+  - Three-map caching: loaded, loading, elements refs
+  - Trend calculation: compare first/second half averages (±5% threshold)
+- **Files created (4):**
+  - `hooks/useSparklineLoader.ts`
+  - `components/cells/SparklineCell.tsx`
+  - `components/SummaryStatsBar.tsx`
+  - `components/DataFreshnessFooter.tsx`
+- **Blockers:**
+  - None
+- **Next steps:**
+  - Proceed to M6a: Selection & Compare
+
+### Session 10 - YYYY-MM-DD
 - **Milestone:** ___
 - **Duration:** ___ minutes
 - **Work done:**
@@ -352,14 +379,14 @@ apps/admin/src/app/(main)/apps/
 │   ├── [x] QuickFilters.tsx (M3)
 │   ├── [x] SearchBar.tsx (M3)
 │   ├── [x] AdvancedFiltersPanel.tsx (M4a+M4b)
-│   ├── [ ] SummaryStatsBar.tsx
+│   ├── [x] SummaryStatsBar.tsx (M5b)
 │   ├── [x] ColumnSelector.tsx (M5a)
 │   ├── [ ] BulkActionsBar.tsx
 │   ├── [ ] CompareMode.tsx
 │   ├── [ ] ExportDialog.tsx
 │   ├── [x] SavedViews.tsx (M4b)
 │   ├── [ ] EmptyState.tsx
-│   ├── [ ] DataFreshnessFooter.tsx
+│   ├── [x] DataFreshnessFooter.tsx (M5b)
 │   ├── cells/
 │   │   ├── [x] SentimentCell.tsx (M5a)
 │   │   ├── [x] ValueScoreCell.tsx (M5a)
@@ -369,7 +396,7 @@ apps/admin/src/app/(main)/apps/
 │   │   ├── [x] CCUTierCell.tsx (M5a)
 │   │   ├── [x] AccelerationCell.tsx (M5a)
 │   │   ├── [x] index.ts (M5a)
-│   │   ├── [ ] SparklineCell.tsx
+│   │   ├── [x] SparklineCell.tsx (M5b)
 │   │   └── [ ] ActionsCell.tsx
 │   └── filters/
 │       ├── [x] MetricRangeFilters.tsx (M4a)
@@ -390,7 +417,7 @@ apps/admin/src/app/(main)/apps/
 │   ├── [ ] useAppsCompare.ts
 │   ├── [x] useSavedViews.ts (M4b)
 │   ├── [x] useFilterCounts.ts (M4b)
-│   └── [ ] useSparklineLoader.ts (ADAPT)
+│   └── [x] useSparklineLoader.ts (M5b)
 └── lib/
     ├── [x] apps-types.ts (M2a)
     ├── [x] apps-queries.ts (M2a)
@@ -497,10 +524,10 @@ apps/admin/src/app/(main)/apps/
 - [x] Column selection persists (URL + saved views)
 
 ### M5b: Visualizations & Stats
-- [ ] Sparklines lazy-load (check Network tab)
-- [ ] Sparklines show 7-day trend
-- [ ] Summary stats update with filters
-- [ ] Data freshness shows in footer
+- [x] Sparklines lazy-load (IntersectionObserver + batch RPC)
+- [x] Sparklines show 7-day trend (TrendSparkline with calculated trend)
+- [x] Summary stats update with filters (aggregateStats from server)
+- [x] Data freshness shows in footer (DataFreshnessFooter with relative time)
 
 ### M6a: Selection & Compare
 - [ ] Row selection with checkboxes

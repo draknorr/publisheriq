@@ -13,9 +13,12 @@ import { QuickFilters } from './QuickFilters';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
 import { SavedViews } from './SavedViews';
 import { ColumnSelector } from './ColumnSelector';
+import { SummaryStatsBar } from './SummaryStatsBar';
+import { DataFreshnessFooter } from './DataFreshnessFooter';
 import { useAppsFilters } from '../hooks/useAppsFilters';
 import { useFilterCounts } from '../hooks/useFilterCounts';
 import { useSavedViews, type SavedView } from '../hooks/useSavedViews';
+import { useSparklineLoader } from '../hooks/useSparklineLoader';
 import { useAppsQuery, buildFilterParamsFromUrl, DEFAULT_AGGREGATE_STATS } from '../hooks/useAppsQuery';
 import type { App, AppType, SortField, SortOrder, AggregateStats } from '../lib/apps-types';
 import { formatCompactNumber } from '../lib/apps-queries';
@@ -138,6 +141,9 @@ function AppsPageClientInner({
     deleteView,
     renameView,
   } = useSavedViews();
+
+  // M5b: Sparkline lazy-loading
+  const sparklineLoader = useSparklineLoader();
 
   // M4b: Memoize context filter object to prevent callback recreation
   const filterCountContext = useMemo(() => ({
@@ -300,6 +306,9 @@ function AppsPageClientInner({
         </div>
       </div>
 
+      {/* M5b: Summary Stats Bar */}
+      <SummaryStatsBar stats={aggregateStats} isLoading={isFetching} />
+
       {/* Row 2: Search Bar */}
       <SearchBar
         initialValue={search}
@@ -437,6 +446,12 @@ function AppsPageClientInner({
         onSort={setSort}
         visibleColumns={visibleColumns}
         isLoading={isLoading && !apps.length}
+        sparklineLoader={sparklineLoader}
+      />
+
+      {/* M5b: Data Freshness Footer */}
+      <DataFreshnessFooter
+        lastUpdated={apps.length > 0 ? apps[0].data_updated_at : null}
       />
     </div>
   );

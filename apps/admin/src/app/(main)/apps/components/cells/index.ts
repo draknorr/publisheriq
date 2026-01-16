@@ -10,6 +10,7 @@ export { VelocityCell } from './VelocityCell';
 export { ControllerCell } from './ControllerCell';
 export { CCUTierCell } from './CCUTierCell';
 export { AccelerationCell } from './AccelerationCell';
+export { SparklineCell } from './SparklineCell';
 
 // Re-export shared components from data-display
 export {
