@@ -16,6 +16,8 @@ import type {
   QuickFilterId,
   PublisherSize,
   VelocityTier,
+  CcuTier,
+  FilterMode,
 } from '../lib/apps-types';
 import {
   QUICK_FILTERS,
@@ -77,6 +79,27 @@ export interface UseAppsFiltersReturn {
   minDiscount?: number;
   publisherSize?: PublisherSize;
 
+  // M4b: Content filters
+  genres: number[];
+  genreMode: FilterMode;
+  tags: number[];
+  tagMode: FilterMode;
+  categories: number[];
+  // M4b: Platform filters
+  platforms: string[];
+  platformMode: FilterMode;
+  controller?: string;
+  // M4b: Release filters
+  releaseYear?: number;
+  minHype?: number;
+  maxHype?: number;
+  // M4b: Relationship filters
+  publisherSearch?: string;
+  developerSearch?: string;
+  selfPublished?: boolean;
+  // M4b: Activity filters
+  ccuTier?: CcuTier;
+
   // Advanced filters aggregated state
   advancedFilters: AppsAdvancedFiltersState;
   advancedFilterCount: number;
@@ -98,6 +121,34 @@ export interface UseAppsFiltersReturn {
   applyGrowthPreset: (preset: GrowthPreset, period: '7d' | '30d') => void;
   applySentimentPreset: (preset: SentimentPreset) => void;
   toggleAdvanced: () => void;
+
+  // M4b: Content filter actions
+  setGenres: (ids: number[]) => void;
+  setGenreMode: (mode: FilterMode) => void;
+  setTags: (ids: number[]) => void;
+  setTagMode: (mode: FilterMode) => void;
+  setCategories: (ids: number[]) => void;
+  setHasWorkshop: (value: boolean | undefined) => void;
+  // M4b: Platform filter actions
+  setPlatforms: (platforms: string[]) => void;
+  setPlatformMode: (mode: FilterMode) => void;
+  setSteamDeck: (value: string | undefined) => void;
+  setController: (value: string | undefined) => void;
+  // M4b: Release filter actions
+  setReleaseYear: (year: number | undefined) => void;
+  setMinAge: (value: number | undefined) => void;
+  setMaxAge: (value: number | undefined) => void;
+  setEarlyAccess: (value: boolean | undefined) => void;
+  setMinHype: (value: number | undefined) => void;
+  setMaxHype: (value: number | undefined) => void;
+  // M4b: Relationship filter actions
+  setPublisherSearch: (value: string | undefined) => void;
+  setDeveloperSearch: (value: string | undefined) => void;
+  setSelfPublished: (value: boolean | undefined) => void;
+  setPublisherSize: (value: PublisherSize | undefined) => void;
+  setVsPublisher: (value: number | undefined) => void;
+  // M4b: Activity filter actions
+  setCcuTier: (tier: CcuTier | undefined) => void;
 }
 
 /**
@@ -126,6 +177,42 @@ function parseVelocityTier(value: string | null): VelocityTier | undefined {
     return value;
   }
   return undefined;
+}
+
+/**
+ * Parse comma-separated number array from URL
+ */
+function parseNumberArray(value: string | null): number[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n));
+}
+
+/**
+ * Parse comma-separated string array from URL
+ */
+function parseStringArray(value: string | null): string[] {
+  if (!value) return [];
+  return value.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Parse CcuTier from URL param
+ */
+function parseCcuTier(value: string | null): 1 | 2 | 3 | undefined {
+  if (!value) return undefined;
+  const num = parseInt(value, 10);
+  if (num === 1 || num === 2 || num === 3) return num;
+  return undefined;
+}
+
+/**
+ * Parse FilterMode from URL param
+ */
+function parseFilterMode(value: string | null): 'any' | 'all' {
+  return value === 'all' ? 'all' : 'any';
 }
 
 /**
@@ -195,6 +282,31 @@ export function useAppsFilters(): UseAppsFiltersReturn {
       ? (publisherSizeParam as PublisherSize)
       : undefined;
 
+  // M4b: Parse content filters
+  const genres = useMemo(() => parseNumberArray(searchParams.get('genres')), [searchParams]);
+  const genreMode = parseFilterMode(searchParams.get('genreMode'));
+  const tags = useMemo(() => parseNumberArray(searchParams.get('tags')), [searchParams]);
+  const tagMode = parseFilterMode(searchParams.get('tagMode'));
+  const categories = useMemo(() => parseNumberArray(searchParams.get('categories')), [searchParams]);
+
+  // M4b: Parse platform filters
+  const platforms = useMemo(() => parseStringArray(searchParams.get('platforms')), [searchParams]);
+  const platformMode = parseFilterMode(searchParams.get('platformMode'));
+  const controller = searchParams.get('controller') || undefined;
+
+  // M4b: Parse release filters
+  const releaseYear = parseNumber(searchParams.get('releaseYear'));
+  const minHype = parseNumber(searchParams.get('minHype'));
+  const maxHype = parseNumber(searchParams.get('maxHype'));
+
+  // M4b: Parse relationship filters
+  const publisherSearch = searchParams.get('publisherSearch') || undefined;
+  const developerSearch = searchParams.get('developerSearch') || undefined;
+  const selfPublished = parseBoolean(searchParams.get('selfPublished'));
+
+  // M4b: Parse activity filters
+  const ccuTier = parseCcuTier(searchParams.get('ccuTier'));
+
   // M4a: Local state for advanced filters panel visibility
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -236,7 +348,20 @@ export function useAppsFilters(): UseAppsFiltersReturn {
       hasWorkshop ||
       earlyAccess ||
       minDiscount ||
-      publisherSize
+      publisherSize ||
+      // M4b filters
+      genres.length > 0 ||
+      tags.length > 0 ||
+      categories.length > 0 ||
+      platforms.length > 0 ||
+      controller ||
+      releaseYear ||
+      minHype ||
+      maxHype ||
+      publisherSearch ||
+      developerSearch ||
+      selfPublished !== undefined ||
+      ccuTier
     );
   }, [
     search,
@@ -275,6 +400,19 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     earlyAccess,
     minDiscount,
     publisherSize,
+    // M4b deps
+    genres.length,
+    tags.length,
+    categories.length,
+    platforms.length,
+    controller,
+    releaseYear,
+    minHype,
+    maxHype,
+    publisherSearch,
+    developerSearch,
+    selfPublished,
+    ccuTier,
   ]);
 
   // M4a: Aggregated advanced filters state
@@ -303,12 +441,40 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     minActivePct,
     minReviewRate,
     minValueScore,
+    // M4b filters
+    genres,
+    genreMode,
+    tags,
+    tagMode,
+    categories,
+    hasWorkshop,
+    platforms,
+    platformMode,
+    steamDeck,
+    controller,
+    minAge,
+    maxAge,
+    releaseYear,
+    earlyAccess,
+    minHype,
+    maxHype,
+    publisherSearch,
+    developerSearch,
+    selfPublished,
+    publisherSize,
+    minVsPublisher,
+    ccuTier,
   }), [
     minCcu, maxCcu, minOwners, maxOwners, minReviews, maxReviews,
     minScore, maxScore, minPrice, maxPrice, minPlaytime, maxPlaytime,
     minGrowth7d, maxGrowth7d, minGrowth30d, maxGrowth30d,
     minMomentum, maxMomentum, minSentimentDelta, maxSentimentDelta,
     velocityTier, minActivePct, minReviewRate, minValueScore,
+    // M4b deps
+    genres, genreMode, tags, tagMode, categories, hasWorkshop,
+    platforms, platformMode, steamDeck, controller,
+    minAge, maxAge, releaseYear, earlyAccess, minHype, maxHype,
+    publisherSearch, developerSearch, selfPublished, publisherSize, minVsPublisher, ccuTier,
   ]);
 
   // M4a: Count of active advanced filters
@@ -338,6 +504,26 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     if (minActivePct !== undefined) count++;
     if (minReviewRate !== undefined) count++;
     if (minValueScore !== undefined) count++;
+    // M4b counts
+    if (genres.length > 0) count++;
+    if (tags.length > 0) count++;
+    if (categories.length > 0) count++;
+    if (hasWorkshop !== undefined) count++;
+    if (platforms.length > 0) count++;
+    if (steamDeck !== undefined) count++;
+    if (controller !== undefined) count++;
+    if (minAge !== undefined) count++;
+    if (maxAge !== undefined) count++;
+    if (releaseYear !== undefined) count++;
+    if (earlyAccess !== undefined) count++;
+    if (minHype !== undefined) count++;
+    if (maxHype !== undefined) count++;
+    if (publisherSearch !== undefined) count++;
+    if (developerSearch !== undefined) count++;
+    if (selfPublished !== undefined) count++;
+    if (publisherSize !== undefined) count++;
+    if (minVsPublisher !== undefined) count++;
+    if (ccuTier !== undefined) count++;
     return count;
   }, [
     minCcu, maxCcu, minOwners, maxOwners, minReviews, maxReviews,
@@ -345,6 +531,11 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     minGrowth7d, maxGrowth7d, minGrowth30d, maxGrowth30d,
     minMomentum, maxMomentum, minSentimentDelta, maxSentimentDelta,
     velocityTier, minActivePct, minReviewRate, minValueScore,
+    // M4b deps
+    genres.length, tags.length, categories.length, hasWorkshop,
+    platforms.length, steamDeck, controller,
+    minAge, maxAge, releaseYear, earlyAccess, minHype, maxHype,
+    publisherSearch, developerSearch, selfPublished, publisherSize, minVsPublisher, ccuTier,
   ]);
 
   // Ref for debouncing URL updates
@@ -641,6 +832,33 @@ export function useAppsFilters(): UseAppsFiltersReturn {
       minActivePct: null,
       minReviewRate: null,
       minValueScore: null,
+      // M4b: Content filters
+      genres: null,
+      genreMode: null,
+      tags: null,
+      tagMode: null,
+      categories: null,
+      hasWorkshop: null,
+      // M4b: Platform filters
+      platforms: null,
+      platformMode: null,
+      steamDeck: null,
+      controller: null,
+      // M4b: Release filters
+      minAge: null,
+      maxAge: null,
+      releaseYear: null,
+      earlyAccess: null,
+      minHype: null,
+      maxHype: null,
+      // M4b: Relationship filters
+      publisherSearch: null,
+      developerSearch: null,
+      selfPublished: null,
+      publisherSize: null,
+      minVsPublisher: null,
+      // M4b: Activity filters
+      ccuTier: null,
       // Clear preset as well
       preset: null,
     });
@@ -717,6 +935,246 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     setIsAdvancedOpen((prev) => !prev);
   }, []);
 
+  // ========================================
+  // M4b: Content filter actions
+  // ========================================
+
+  const setGenres = useCallback(
+    (ids: number[]) => {
+      updateUrl({
+        genres: ids.length > 0 ? ids.join(',') : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setGenreMode = useCallback(
+    (mode: FilterMode) => {
+      updateUrl({
+        genreMode: mode === 'all' ? 'all' : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setTags = useCallback(
+    (ids: number[]) => {
+      updateUrl({
+        tags: ids.length > 0 ? ids.join(',') : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setTagMode = useCallback(
+    (mode: FilterMode) => {
+      updateUrl({
+        tagMode: mode === 'all' ? 'all' : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setCategories = useCallback(
+    (ids: number[]) => {
+      updateUrl({
+        categories: ids.length > 0 ? ids.join(',') : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setHasWorkshop = useCallback(
+    (value: boolean | undefined) => {
+      updateUrl({
+        hasWorkshop: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  // ========================================
+  // M4b: Platform filter actions
+  // ========================================
+
+  const setPlatforms = useCallback(
+    (values: string[]) => {
+      updateUrl({
+        platforms: values.length > 0 ? values.join(',') : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setPlatformMode = useCallback(
+    (mode: FilterMode) => {
+      updateUrl({
+        platformMode: mode === 'all' ? 'all' : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setSteamDeck = useCallback(
+    (value: string | undefined) => {
+      updateUrl({
+        steamDeck: value || null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setController = useCallback(
+    (value: string | undefined) => {
+      updateUrl({
+        controller: value || null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  // ========================================
+  // M4b: Release filter actions
+  // ========================================
+
+  const setReleaseYear = useCallback(
+    (year: number | undefined) => {
+      updateUrl({
+        releaseYear: year !== undefined ? String(year) : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setMinAge = useCallback(
+    (value: number | undefined) => {
+      updateUrlDebounced({
+        minAge: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrlDebounced]
+  );
+
+  const setMaxAge = useCallback(
+    (value: number | undefined) => {
+      updateUrlDebounced({
+        maxAge: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrlDebounced]
+  );
+
+  const setEarlyAccess = useCallback(
+    (value: boolean | undefined) => {
+      updateUrl({
+        earlyAccess: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setMinHype = useCallback(
+    (value: number | undefined) => {
+      updateUrlDebounced({
+        minHype: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrlDebounced]
+  );
+
+  const setMaxHype = useCallback(
+    (value: number | undefined) => {
+      updateUrlDebounced({
+        maxHype: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrlDebounced]
+  );
+
+  // ========================================
+  // M4b: Relationship filter actions
+  // ========================================
+
+  const setPublisherSearch = useCallback(
+    (value: string | undefined) => {
+      updateUrlDebounced({
+        publisherSearch: value || null,
+        preset: null,
+      });
+    },
+    [updateUrlDebounced]
+  );
+
+  const setDeveloperSearch = useCallback(
+    (value: string | undefined) => {
+      updateUrlDebounced({
+        developerSearch: value || null,
+        preset: null,
+      });
+    },
+    [updateUrlDebounced]
+  );
+
+  const setSelfPublished = useCallback(
+    (value: boolean | undefined) => {
+      updateUrl({
+        selfPublished: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setPublisherSize = useCallback(
+    (value: PublisherSize | undefined) => {
+      updateUrl({
+        publisherSize: value || null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  const setVsPublisher = useCallback(
+    (value: number | undefined) => {
+      updateUrl({
+        minVsPublisher: value !== undefined ? String(value) : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  // ========================================
+  // M4b: Activity filter actions
+  // ========================================
+
+  const setCcuTier = useCallback(
+    (tier: CcuTier | undefined) => {
+      updateUrl({
+        ccuTier: tier !== undefined ? String(tier) : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
   return {
     isPending,
     type,
@@ -759,6 +1217,26 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     earlyAccess,
     minDiscount,
     publisherSize,
+    // M4b: Content filter values
+    genres,
+    genreMode,
+    tags,
+    tagMode,
+    categories,
+    // M4b: Platform filter values
+    platforms,
+    platformMode,
+    controller,
+    // M4b: Release filter values
+    releaseYear,
+    minHype,
+    maxHype,
+    // M4b: Relationship filter values
+    publisherSearch,
+    developerSearch,
+    selfPublished,
+    // M4b: Activity filter values
+    ccuTier,
     // M4a: Advanced filters state
     advancedFilters,
     advancedFilterCount,
@@ -778,5 +1256,32 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     applyGrowthPreset,
     applySentimentPreset,
     toggleAdvanced,
+    // M4b: Content filter actions
+    setGenres,
+    setGenreMode,
+    setTags,
+    setTagMode,
+    setCategories,
+    setHasWorkshop,
+    // M4b: Platform filter actions
+    setPlatforms,
+    setPlatformMode,
+    setSteamDeck,
+    setController,
+    // M4b: Release filter actions
+    setReleaseYear,
+    setMinAge,
+    setMaxAge,
+    setEarlyAccess,
+    setMinHype,
+    setMaxHype,
+    // M4b: Relationship filter actions
+    setPublisherSearch,
+    setDeveloperSearch,
+    setSelfPublished,
+    setPublisherSize,
+    setVsPublisher,
+    // M4b: Activity filter actions
+    setCcuTier,
   };
 }

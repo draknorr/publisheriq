@@ -95,6 +95,20 @@ export type SteamDeckCategory = 'verified' | 'playable' | 'unsupported' | 'unkno
 export type ControllerSupport = 'full' | 'partial' | null;
 
 /**
+ * Filter mode for multi-select filters (any = OR, all = AND)
+ */
+export type FilterMode = 'any' | 'all';
+
+/**
+ * Filter option from get_apps_filter_option_counts RPC
+ */
+export interface FilterOption {
+  option_id: number;
+  option_name: string;
+  app_count: number;
+}
+
+/**
  * App data returned from get_apps_with_filters RPC
  */
 export interface App {

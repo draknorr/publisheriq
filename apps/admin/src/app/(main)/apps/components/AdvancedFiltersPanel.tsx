@@ -7,13 +7,73 @@ import {
   GrowthFilters,
   SentimentFilters,
   EngagementFilters,
+  ContentFilters,
+  PlatformFilters,
+  ReleaseFilters,
+  RelationshipFilters,
+  ActivityFilters,
   type MetricFilters,
   type GrowthFilterValues,
   type SentimentFilterValues,
   type EngagementFilterValues,
   type GrowthPreset,
   type SentimentPreset,
+  type FilterMode,
 } from './filters';
+import type { FilterOption } from '../hooks/useFilterCounts';
+import type { PublisherSize, CcuTier } from '../lib/apps-types';
+
+/**
+ * M4b Content filter values
+ */
+export interface ContentFilterValues {
+  genres?: number[];
+  genreMode?: FilterMode;
+  tags?: number[];
+  tagMode?: FilterMode;
+  categories?: number[];
+  hasWorkshop?: boolean;
+}
+
+/**
+ * M4b Platform filter values
+ */
+export interface PlatformFilterValues {
+  platforms?: string[];
+  platformMode?: FilterMode;
+  steamDeck?: string;
+  controller?: string;
+}
+
+/**
+ * M4b Release filter values
+ */
+export interface ReleaseFilterValues {
+  minAge?: number;
+  maxAge?: number;
+  releaseYear?: number;
+  earlyAccess?: boolean;
+  minHype?: number;
+  maxHype?: number;
+}
+
+/**
+ * M4b Relationship filter values
+ */
+export interface RelationshipFilterValues {
+  publisherSearch?: string;
+  developerSearch?: string;
+  selfPublished?: boolean;
+  publisherSize?: PublisherSize;
+  minVsPublisher?: number;
+}
+
+/**
+ * M4b Activity filter values
+ */
+export interface ActivityFilterValues {
+  ccuTier?: CcuTier;
+}
 
 /**
  * Combined advanced filter state for Apps page
@@ -22,7 +82,12 @@ export interface AppsAdvancedFiltersState
   extends MetricFilters,
     GrowthFilterValues,
     SentimentFilterValues,
-    EngagementFilterValues {}
+    EngagementFilterValues,
+    ContentFilterValues,
+    PlatformFilterValues,
+    ReleaseFilterValues,
+    RelationshipFilterValues,
+    ActivityFilterValues {}
 
 interface AdvancedFiltersPanelProps {
   filters: AppsAdvancedFiltersState;
@@ -32,11 +97,53 @@ interface AdvancedFiltersPanelProps {
   onGrowthPreset: (preset: GrowthPreset, period: '7d' | '30d') => void;
   onSentimentPreset: (preset: SentimentPreset) => void;
   disabled?: boolean;
+
+  // M4b: Content filter props
+  genreOptions: FilterOption[];
+  genreLoading: boolean;
+  onGenreOpen: () => void;
+  onGenresChange: (ids: number[]) => void;
+  onGenreModeChange: (mode: FilterMode) => void;
+  tagOptions: FilterOption[];
+  tagLoading: boolean;
+  onTagOpen: () => void;
+  onTagsChange: (ids: number[]) => void;
+  onTagModeChange: (mode: FilterMode) => void;
+  categoryOptions: FilterOption[];
+  categoryLoading: boolean;
+  onCategoryOpen: () => void;
+  onCategoriesChange: (ids: number[]) => void;
+  onWorkshopChange: (value: boolean | undefined) => void;
+
+  // M4b: Platform filter props
+  onPlatformsChange: (platforms: string[]) => void;
+  onPlatformModeChange: (mode: FilterMode) => void;
+  onSteamDeckChange: (value: string | undefined) => void;
+  onControllerChange: (value: string | undefined) => void;
+
+  // M4b: Release filter props
+  onMinAgeChange: (value: number | undefined) => void;
+  onMaxAgeChange: (value: number | undefined) => void;
+  onReleaseYearChange: (year: number | undefined) => void;
+  onEarlyAccessChange: (value: boolean | undefined) => void;
+  onMinHypeChange: (value: number | undefined) => void;
+  onMaxHypeChange: (value: number | undefined) => void;
+
+  // M4b: Relationship filter props
+  onPublisherSearchChange: (value: string | undefined) => void;
+  onDeveloperSearchChange: (value: string | undefined) => void;
+  onSelfPublishedChange: (value: boolean | undefined) => void;
+  onPublisherSizeChange: (value: PublisherSize | undefined) => void;
+  onVsPublisherChange: (value: number | undefined) => void;
+
+  // M4b: Activity filter props
+  onCcuTierChange: (tier: CcuTier | undefined) => void;
 }
 
 /**
  * Advanced filters panel for Apps page
- * Collapsible panel with metric, growth, sentiment, and engagement filters
+ * Collapsible panel with metric, growth, sentiment, engagement filters (M4a)
+ * Plus content, platform, release, relationship, activity filters (M4b)
  */
 export function AdvancedFiltersPanel({
   filters,
@@ -46,6 +153,42 @@ export function AdvancedFiltersPanel({
   onGrowthPreset,
   onSentimentPreset,
   disabled = false,
+  // M4b: Content
+  genreOptions,
+  genreLoading,
+  onGenreOpen,
+  onGenresChange,
+  onGenreModeChange,
+  tagOptions,
+  tagLoading,
+  onTagOpen,
+  onTagsChange,
+  onTagModeChange,
+  categoryOptions,
+  categoryLoading,
+  onCategoryOpen,
+  onCategoriesChange,
+  onWorkshopChange,
+  // M4b: Platform
+  onPlatformsChange,
+  onPlatformModeChange,
+  onSteamDeckChange,
+  onControllerChange,
+  // M4b: Release
+  onMinAgeChange,
+  onMaxAgeChange,
+  onReleaseYearChange,
+  onEarlyAccessChange,
+  onMinHypeChange,
+  onMaxHypeChange,
+  // M4b: Relationship
+  onPublisherSearchChange,
+  onDeveloperSearchChange,
+  onSelfPublishedChange,
+  onPublisherSizeChange,
+  onVsPublisherChange,
+  // M4b: Activity
+  onCcuTierChange,
 }: AdvancedFiltersPanelProps) {
   // Create typed handlers for each filter section
   const handleMetricChange = useCallback(
@@ -134,7 +277,7 @@ export function AdvancedFiltersPanel({
       )}
 
       {/* Main content grid */}
-      <div className="p-4">
+      <div className="p-4 space-y-6">
         {/* Row 1: Metrics + Growth */}
         <div className="grid grid-cols-12 gap-6">
           {/* Metric Ranges - 8 columns */}
@@ -164,7 +307,7 @@ export function AdvancedFiltersPanel({
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-border-subtle my-6" />
+        <div className="h-px bg-border-subtle" />
 
         {/* Row 2: Sentiment + Engagement */}
         <div className="grid grid-cols-12 gap-6">
@@ -192,6 +335,124 @@ export function AdvancedFiltersPanel({
               disabled={disabled}
             />
           </div>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-border-subtle" />
+
+        {/* Row 3: Content + Platform (M4b) */}
+        <div className="grid grid-cols-12 gap-6">
+          {/* Content Filters - 8 columns */}
+          <div className="col-span-12 lg:col-span-8">
+            <h4 className="text-caption font-medium text-text-muted uppercase tracking-wide mb-3">
+              Content
+            </h4>
+            <ContentFilters
+              genres={filters.genres ?? []}
+              genreMode={filters.genreMode ?? 'any'}
+              genreOptions={genreOptions}
+              genreLoading={genreLoading}
+              onGenresChange={onGenresChange}
+              onGenreModeChange={onGenreModeChange}
+              onGenreOpen={onGenreOpen}
+              tags={filters.tags ?? []}
+              tagMode={filters.tagMode ?? 'any'}
+              tagOptions={tagOptions}
+              tagLoading={tagLoading}
+              onTagsChange={onTagsChange}
+              onTagModeChange={onTagModeChange}
+              onTagOpen={onTagOpen}
+              categories={filters.categories ?? []}
+              categoryOptions={categoryOptions}
+              categoryLoading={categoryLoading}
+              onCategoriesChange={onCategoriesChange}
+              onCategoryOpen={onCategoryOpen}
+              hasWorkshop={filters.hasWorkshop}
+              onWorkshopChange={onWorkshopChange}
+              disabled={disabled}
+            />
+          </div>
+
+          {/* Platform Filters - 4 columns */}
+          <div className="col-span-12 lg:col-span-4">
+            <h4 className="text-caption font-medium text-text-muted uppercase tracking-wide mb-3">
+              Platform
+            </h4>
+            <PlatformFilters
+              platforms={(filters.platforms ?? []) as ('windows' | 'macos' | 'linux')[]}
+              platformMode={filters.platformMode ?? 'any'}
+              onPlatformsChange={onPlatformsChange}
+              onPlatformModeChange={onPlatformModeChange}
+              steamDeck={filters.steamDeck as 'verified' | 'playable' | 'unsupported' | undefined}
+              onSteamDeckChange={onSteamDeckChange}
+              controller={filters.controller as 'full' | 'partial' | undefined}
+              onControllerChange={onControllerChange}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-border-subtle" />
+
+        {/* Row 4: Release + Relationship (M4b) */}
+        <div className="grid grid-cols-12 gap-6">
+          {/* Release Filters - 6 columns */}
+          <div className="col-span-12 lg:col-span-6">
+            <h4 className="text-caption font-medium text-text-muted uppercase tracking-wide mb-3">
+              Release
+            </h4>
+            <ReleaseFilters
+              minAge={filters.minAge}
+              maxAge={filters.maxAge}
+              releaseYear={filters.releaseYear}
+              earlyAccess={filters.earlyAccess}
+              minHype={filters.minHype}
+              maxHype={filters.maxHype}
+              onMinAgeChange={onMinAgeChange}
+              onMaxAgeChange={onMaxAgeChange}
+              onReleaseYearChange={onReleaseYearChange}
+              onEarlyAccessChange={onEarlyAccessChange}
+              onMinHypeChange={onMinHypeChange}
+              onMaxHypeChange={onMaxHypeChange}
+              disabled={disabled}
+            />
+          </div>
+
+          {/* Relationship Filters - 6 columns */}
+          <div className="col-span-12 lg:col-span-6">
+            <h4 className="text-caption font-medium text-text-muted uppercase tracking-wide mb-3">
+              Relationship
+            </h4>
+            <RelationshipFilters
+              publisherSearch={filters.publisherSearch}
+              developerSearch={filters.developerSearch}
+              selfPublished={filters.selfPublished}
+              publisherSize={filters.publisherSize}
+              minVsPublisher={filters.minVsPublisher}
+              onPublisherSearchChange={onPublisherSearchChange}
+              onDeveloperSearchChange={onDeveloperSearchChange}
+              onSelfPublishedChange={onSelfPublishedChange}
+              onPublisherSizeChange={onPublisherSizeChange}
+              onVsPublisherChange={onVsPublisherChange}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-border-subtle" />
+
+        {/* Row 5: Activity (M4b) */}
+        <div>
+          <h4 className="text-caption font-medium text-text-muted uppercase tracking-wide mb-3">
+            Activity
+          </h4>
+          <ActivityFilters
+            ccuTier={filters.ccuTier}
+            onCcuTierChange={onCcuTierChange}
+            disabled={disabled}
+          />
         </div>
       </div>
     </div>
