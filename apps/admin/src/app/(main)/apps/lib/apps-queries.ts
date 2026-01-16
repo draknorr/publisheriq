@@ -1,5 +1,5 @@
 import { getSupabase } from '@/lib/supabase';
-import type { App, AppsFilterParams, AggregateStats, CcuTier, VelocityTier } from './apps-types';
+import type { App, AppsFilterParams, AggregateStats, CcuTier, VelocityTier, SteamDeckCategory } from './apps-types';
 
 /**
  * Aggregate stats row shape from RPC
@@ -314,20 +314,34 @@ export async function getAppsByIds(appids: number[]): Promise<App[]> {
   const velocityMap = new Map<number, { v7d: number | null; v30d: number | null; tier: string | null }>();
   if (velocityData) {
     velocityData.forEach((row) => {
-      velocityMap.set(row.appid, {
-        v7d: row.velocity_7d,
-        v30d: row.velocity_30d,
-        tier: row.velocity_tier,
-      });
+      if (row.appid !== null) {
+        velocityMap.set(row.appid, {
+          v7d: row.velocity_7d,
+          v30d: row.velocity_30d,
+          tier: row.velocity_tier,
+        });
+      }
     });
   }
 
   // Query 4: app_filter_data for publisher/developer/steam_deck info
   // This materialized view pre-computes data that requires junction table joins
-  const { data: filterData } = await supabase
+  // Note: app_filter_data is a view not in generated types, using type assertion
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: filterData } = await (supabase as any)
     .from('app_filter_data')
     .select('appid, publisher_id, publisher_name, publisher_game_count, developer_id, developer_name, steam_deck_category')
-    .in('appid', appids);
+    .in('appid', appids) as {
+    data: Array<{
+      appid: number;
+      publisher_id: number | null;
+      publisher_name: string | null;
+      publisher_game_count: number | null;
+      developer_id: number | null;
+      developer_name: string | null;
+      steam_deck_category: SteamDeckCategory | null;
+    }> | null;
+  };
 
   const filterDataMap = new Map<number, {
     publisher_id: number | null;
@@ -335,7 +349,7 @@ export async function getAppsByIds(appids: number[]): Promise<App[]> {
     publisher_game_count: number | null;
     developer_id: number | null;
     developer_name: string | null;
-    steam_deck_category: string | null;
+    steam_deck_category: SteamDeckCategory | null;
   }>();
   if (filterData) {
     filterData.forEach((row) => {

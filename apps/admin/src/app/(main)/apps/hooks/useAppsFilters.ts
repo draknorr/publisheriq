@@ -20,7 +20,6 @@ import type {
   FilterMode,
 } from '../lib/apps-types';
 import {
-  QUICK_FILTERS,
   getPresetById,
   isValidPresetId,
   isValidQuickFilterId,
@@ -28,7 +27,6 @@ import {
 } from '../lib/apps-presets';
 import {
   type AppColumnId,
-  DEFAULT_APP_COLUMNS,
   parseColumnsParam,
   serializeColumnsParam,
 } from '../lib/apps-columns';

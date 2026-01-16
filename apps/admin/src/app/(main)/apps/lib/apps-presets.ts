@@ -6,11 +6,14 @@
 import type {
   PresetId,
   QuickFilterId,
+  UnifiedFilterId,
   SortField,
   SortOrder,
   AppsFilterParams,
   PublisherSize,
 } from './apps-types';
+
+export type { UnifiedFilterId } from './apps-types';
 
 /**
  * Preset filter values (subset of AppsFilterParams)
@@ -471,4 +474,184 @@ export function buildPresetFilterParams(
   if (filters.isFree !== undefined) params.isFree = filters.isFree;
 
   return params;
+}
+
+// ============================================================================
+// Unified Filter System
+// Combines presets (exclusive) and quick filters (stackable) into one system
+// ============================================================================
+
+/**
+ * Unified filter combining presets and quick filters
+ */
+export interface UnifiedFilter {
+  id: UnifiedFilterId;
+  type: 'preset' | 'quick';
+  label: string;
+  emoji?: string;
+  tooltip: string;
+  filters: PresetFilters | QuickFilterValues;
+  sort?: SortField;   // Only for presets
+  order?: SortOrder;  // Only for presets
+}
+
+/**
+ * Unified filters for the filter bar
+ * 4 key presets (shown with purple tint) + 12 quick filters (neutral gray)
+ */
+export const UNIFIED_FILTERS: UnifiedFilter[] = [
+  // Presets (shown first, purple tint when inactive)
+  {
+    id: 'top_games',
+    type: 'preset',
+    label: 'Top Games',
+    tooltip: 'Games with 1,000+ peak CCU, ranked by concurrent players',
+    filters: { minCcu: 1000 },
+    sort: 'ccu_peak',
+    order: 'desc',
+  },
+  {
+    id: 'rising_stars',
+    type: 'preset',
+    label: 'Rising Stars',
+    tooltip: 'Games with 25%+ weekly growth and under 500K owners',
+    filters: { minGrowth7d: 25, maxOwners: 500_000 },
+    sort: 'ccu_growth_7d_percent',
+    order: 'desc',
+  },
+  {
+    id: 'hidden_gems',
+    type: 'preset',
+    label: 'Hidden Gems',
+    emoji: '💎',
+    tooltip: 'Games with 90%+ positive reviews, under 50K owners',
+    filters: { minScore: 90, maxOwners: 50_000, minReviews: 100 },
+    sort: 'review_score',
+    order: 'desc',
+  },
+  {
+    id: 'breakout_hits',
+    type: 'preset',
+    label: 'Breakout Hits',
+    emoji: '🚀',
+    tooltip: 'Games with 50%+ weekly growth released in the last 90 days',
+    filters: { minGrowth7d: 50, maxAge: 90 },
+    sort: 'ccu_growth_7d_percent',
+    order: 'desc',
+  },
+
+  // Quick filters (neutral gray when inactive)
+  {
+    id: 'popular',
+    type: 'quick',
+    label: 'Popular',
+    tooltip: '1,000+ concurrent players',
+    filters: { minCcu: 1000 },
+  },
+  {
+    id: 'trending',
+    type: 'quick',
+    label: 'Trending ↑',
+    tooltip: '10%+ weekly growth',
+    filters: { minGrowth7d: 10 },
+  },
+  {
+    id: 'well_reviewed',
+    type: 'quick',
+    label: 'Well Reviewed',
+    tooltip: '85%+ positive reviews',
+    filters: { minScore: 85 },
+  },
+  {
+    id: 'free',
+    type: 'quick',
+    label: 'Free',
+    tooltip: 'Free to play',
+    filters: { isFree: true },
+  },
+  {
+    id: 'indie',
+    type: 'quick',
+    label: 'Indie',
+    tooltip: 'Publisher with <10 games',
+    filters: { publisherSize: 'indie' },
+  },
+  {
+    id: 'steam_deck',
+    type: 'quick',
+    label: 'Steam Deck',
+    tooltip: 'Verified or Playable on Steam Deck',
+    filters: { steamDeck: ['verified', 'playable'] },
+  },
+  {
+    id: 'momentum_up',
+    type: 'quick',
+    label: 'Momentum ↑',
+    tooltip: 'Momentum score 10+',
+    filters: { minMomentum: 10 },
+  },
+  {
+    id: 'sentiment_up',
+    type: 'quick',
+    label: 'Sentiment ↑',
+    tooltip: 'Improving sentiment (3%+ delta)',
+    filters: { minSentimentDelta: 3 },
+  },
+  {
+    id: 'workshop',
+    type: 'quick',
+    label: 'Workshop',
+    tooltip: 'Has Steam Workshop support',
+    filters: { hasWorkshop: true },
+  },
+  {
+    id: 'early_access',
+    type: 'quick',
+    label: 'Early Access',
+    tooltip: 'Currently in Early Access',
+    filters: { earlyAccess: true },
+  },
+  {
+    id: 'on_sale',
+    type: 'quick',
+    label: 'On Sale',
+    tooltip: 'Currently discounted',
+    filters: { minDiscount: 1 },
+  },
+  {
+    id: 'this_week',
+    type: 'quick',
+    label: 'This Week',
+    tooltip: 'Released in the last 7 days',
+    filters: { maxAge: 7 },
+  },
+];
+
+/**
+ * Get a unified filter by ID
+ */
+export function getUnifiedFilterById(id: UnifiedFilterId): UnifiedFilter | undefined {
+  return UNIFIED_FILTERS.find((f) => f.id === id);
+}
+
+/**
+ * Check if a filter ID is a preset
+ */
+export function isPresetId(id: string): id is PresetId {
+  const filter = UNIFIED_FILTERS.find((f) => f.id === id);
+  return filter?.type === 'preset';
+}
+
+/**
+ * Get all preset filters
+ */
+export function getPresetsOnly(): UnifiedFilter[] {
+  return UNIFIED_FILTERS.filter((f) => f.type === 'preset');
+}
+
+/**
+ * Get all quick filters
+ */
+export function getQuickFiltersOnly(): UnifiedFilter[] {
+  return UNIFIED_FILTERS.filter((f) => f.type === 'quick');
 }

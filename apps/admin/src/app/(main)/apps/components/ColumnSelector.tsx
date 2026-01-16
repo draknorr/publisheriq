@@ -35,11 +35,7 @@ export function ColumnSelector({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Count total selectable columns (excludes core columns)
-  const selectableColumnIds = (Object.keys(APP_COLUMN_DEFINITIONS) as AppColumnId[]).filter(
-    (id) => !CORE_COLUMNS.includes(id)
-  );
-  const totalColumns = selectableColumnIds.length;
+  // Count visible columns (excludes core columns which are always shown)
   const visibleCount = visibleColumns.filter((id) => !CORE_COLUMNS.includes(id)).length;
 
   const toggleColumn = (columnId: AppColumnId) => {

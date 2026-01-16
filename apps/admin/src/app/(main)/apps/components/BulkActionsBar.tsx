@@ -1,12 +1,14 @@
 'use client';
 
-import { Scale, X, Download } from 'lucide-react';
+import { Scale, X, Download, Pin, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface BulkActionsBarProps {
   selectedCount: number;
   canCompare: boolean; // 2-5 selected
   onCompare: () => void;
+  onPinAll?: () => void;
+  isPinning?: boolean;
   onExport?: () => void;
   onClear: () => void;
 }
@@ -19,6 +21,8 @@ export function BulkActionsBar({
   selectedCount,
   canCompare,
   onCompare,
+  onPinAll,
+  isPinning,
   onExport,
   onClear,
 }: BulkActionsBarProps) {
@@ -68,6 +72,27 @@ export function BulkActionsBar({
             <Scale className="w-4 h-4" />
             Compare
           </Button>
+
+          {/* Pin All button */}
+          {onPinAll && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onPinAll}
+              disabled={isPinning}
+              title={`Pin ${selectedCount} games to dashboard`}
+              className="gap-1.5"
+            >
+              {isPinning ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Pin className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">
+                {isPinning ? 'Pinning...' : 'Pin All'}
+              </span>
+            </Button>
+          )}
 
           {/* Export button */}
           {onExport && (

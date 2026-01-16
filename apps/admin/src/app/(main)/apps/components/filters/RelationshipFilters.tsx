@@ -1,6 +1,5 @@
 'use client';
 
-import { useCallback } from 'react';
 import { Search } from 'lucide-react';
 import type { PublisherSize } from '../../lib/apps-types';
 

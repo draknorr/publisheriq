@@ -69,6 +69,12 @@ export type QuickFilterId =
   | 'this_week';
 
 /**
+ * Unified filter ID (preset or quick filter)
+ * Used in the unified filter bar
+ */
+export type UnifiedFilterId = PresetId | QuickFilterId;
+
+/**
  * Publisher size filter values
  */
 export type PublisherSize = 'indie' | 'mid' | 'major';

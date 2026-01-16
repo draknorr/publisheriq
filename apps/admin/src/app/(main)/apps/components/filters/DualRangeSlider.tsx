@@ -128,6 +128,14 @@ export function DualRangeSlider({
   const minInputFocused = useRef(false);
   const maxInputFocused = useRef(false);
 
+  // Pending values during drag - only committed on pointer up
+  const pendingMinRef = useRef<number | undefined>(undefined);
+  const pendingMaxRef = useRef<number | undefined>(undefined);
+
+  // Local position state for smooth visual updates during drag
+  const [dragMinPosition, setDragMinPosition] = useState<number | null>(null);
+  const [dragMaxPosition, setDragMaxPosition] = useState<number | null>(null);
+
   // Parse input using custom parser or smart default
   const parseValue = useCallback(
     (value: string): number | undefined => {
@@ -150,13 +158,13 @@ export function DualRangeSlider({
     }
   }, [maxValue, formatValue]);
 
-  // Calculate thumb positions
-  const minPosition = minValue !== undefined
-    ? valueToPosition(minValue, absoluteMin, absoluteMax, scale)
-    : 0;
-  const maxPosition = maxValue !== undefined
-    ? valueToPosition(maxValue, absoluteMin, absoluteMax, scale)
-    : 1;
+  // Calculate thumb positions - use drag position during drag for smooth visuals
+  const minPosition = dragMinPosition !== null
+    ? dragMinPosition
+    : (minValue !== undefined ? valueToPosition(minValue, absoluteMin, absoluteMax, scale) : 0);
+  const maxPosition = dragMaxPosition !== null
+    ? dragMaxPosition
+    : (maxValue !== undefined ? valueToPosition(maxValue, absoluteMin, absoluteMax, scale) : 1);
 
   // Handle text input changes
   const handleMinInputChange = useCallback(
@@ -214,27 +222,45 @@ export function DualRangeSlider({
 
       if (dragging === 'min') {
         // Constrain min to not exceed max
-        const constrainedMax = maxValue ?? absoluteMax;
-        if (value <= constrainedMax) {
-          onMinChange(value);
+        const currentMaxPos = dragMaxPosition ?? (maxValue !== undefined ? valueToPosition(maxValue, absoluteMin, absoluteMax, scale) : 1);
+        if (position <= currentMaxPos) {
+          // Visual update only - don't call parent during drag
+          setLocalMin(formatValue(value));
+          setDragMinPosition(position);
+          pendingMinRef.current = value;
         }
       } else {
         // Constrain max to not go below min
-        const constrainedMin = minValue ?? absoluteMin;
-        if (value >= constrainedMin) {
-          onMaxChange(value);
+        const currentMinPos = dragMinPosition ?? (minValue !== undefined ? valueToPosition(minValue, absoluteMin, absoluteMax, scale) : 0);
+        if (position >= currentMinPos) {
+          // Visual update only - don't call parent during drag
+          setLocalMax(formatValue(value));
+          setDragMaxPosition(position);
+          pendingMaxRef.current = value;
         }
       }
     },
-    [dragging, disabled, absoluteMin, absoluteMax, scale, minValue, maxValue, onMinChange, onMaxChange]
+    [dragging, disabled, absoluteMin, absoluteMax, scale, minValue, maxValue, formatValue, dragMinPosition, dragMaxPosition]
   );
 
   const handlePointerUp = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       e.currentTarget.releasePointerCapture(e.pointerId);
+
+      // Commit pending values to parent on drag end
+      if (dragging === 'min' && pendingMinRef.current !== undefined) {
+        onMinChange(pendingMinRef.current);
+        pendingMinRef.current = undefined;
+        setDragMinPosition(null);
+      } else if (dragging === 'max' && pendingMaxRef.current !== undefined) {
+        onMaxChange(pendingMaxRef.current);
+        pendingMaxRef.current = undefined;
+        setDragMaxPosition(null);
+      }
+
       setDragging(null);
     },
-    []
+    [dragging, onMinChange, onMaxChange]
   );
 
   // Handle track click to move nearest thumb

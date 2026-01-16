@@ -18,10 +18,24 @@ export const methodology = {
   review_score:
     'Percentage of positive reviews. Calculated as (positive reviews / total reviews) * 100.',
 
+  positive_percentage:
+    'Percentage of positive reviews. Same as review score shown in badges.',
+
   price: 'Current Steam price. Shows discount percentage if on sale.',
+
+  discount: 'Current Steam discount percentage. Only shown when game is on sale.',
 
   playtime:
     'Average playtime across all owners (forever) in hours. Based on Steam API data.',
+
+  avg_playtime_forever:
+    'Average playtime across all players since release. Based on Steam API data.',
+
+  avg_playtime_2weeks:
+    'Average playtime in the last 2 weeks. Indicates current engagement level.',
+
+  sparkline:
+    '7-day CCU trend visualization. Green indicates growth, red indicates decline.',
 
   // Growth metrics
   ccu_growth_7d:

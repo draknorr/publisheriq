@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
+import { Check, Minus, Pin, ExternalLink } from 'lucide-react';
 import {
   ReviewScoreBadge,
   SteamDeckBadge,
@@ -134,19 +136,58 @@ function DiscountBadge({ percent }: { percent: number }) {
 /**
  * Mobile card view for a single app
  */
-function MobileAppCard({ app, rank }: { app: App; rank: number }) {
+function MobileAppCard({
+  app,
+  rank,
+  isPinned,
+  onPin,
+  isPinning,
+}: {
+  app: App;
+  rank: number;
+  isPinned: boolean;
+  onPin: () => void;
+  isPinning: boolean;
+}) {
   return (
-    <Link href={`/apps/${app.appid}`}>
-      <Card variant="interactive" padding="sm">
-        {/* Header: Rank + Name */}
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-text-muted text-caption">#{rank}</span>
-          <span className="text-body font-medium text-text-primary truncate">
-            {app.name}
-          </span>
+    <Card variant="interactive" padding="sm">
+      {/* Header: Rank + Name + Actions */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-text-muted text-caption">#{rank}</span>
+        <Link
+          href={`/apps/${app.appid}`}
+          className="text-body font-medium text-text-primary hover:text-accent-blue truncate flex-1"
+        >
+          {app.name}
+        </Link>
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={onPin}
+            disabled={isPinning}
+            className={`p-1.5 rounded transition-colors ${
+              isPinned
+                ? 'text-accent-blue bg-accent-blue/10'
+                : 'text-text-muted hover:text-accent-blue'
+            } ${isPinning ? 'opacity-50 cursor-wait' : ''}`}
+            title={isPinned ? 'Pinned' : 'Pin'}
+          >
+            <Pin className={`w-4 h-4 ${isPinned ? 'fill-current' : ''}`} />
+          </button>
+          <a
+            href={`https://store.steampowered.com/app/${app.appid}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded text-text-muted hover:text-accent-blue transition-colors"
+            title="Open on Steam"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
+      </div>
 
-        {/* 2-column metrics grid */}
+      {/* 2-column metrics grid */}
+      <Link href={`/apps/${app.appid}`} className="block">
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-body-sm">
           <div className="flex justify-between">
             <span className="text-text-tertiary">Peak CCU</span>
@@ -189,8 +230,8 @@ function MobileAppCard({ app, rank }: { app: App; rank: number }) {
             </span>
           </div>
         </div>
-      </Card>
-    </Link>
+      </Link>
+    </Card>
   );
 }
 
@@ -405,6 +446,7 @@ function renderCell(
 
 /**
  * Checkbox cell for row selection
+ * Uses custom button with Lucide icons to match /companies design
  */
 function SelectionCheckbox({
   checked,
@@ -418,17 +460,67 @@ function SelectionCheckbox({
   ariaLabel: string;
 }) {
   return (
-    <div className="flex items-center justify-center">
-      <input
-        type="checkbox"
-        checked={checked}
-        ref={(el) => {
-          if (el) el.indeterminate = indeterminate ?? false;
+    <button
+      onClick={onChange}
+      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+      style={{
+        backgroundColor: checked || indeterminate ? 'var(--accent-blue)' : 'transparent',
+        borderColor: checked || indeterminate ? 'var(--accent-blue)' : 'var(--border-subtle)',
+      }}
+      aria-label={ariaLabel}
+      title={checked ? 'Deselect' : 'Select'}
+    >
+      {checked && !indeterminate && <Check className="w-3 h-3 text-white" />}
+      {indeterminate && <Minus className="w-3 h-3 text-white" />}
+    </button>
+  );
+}
+
+/**
+ * Row actions for pin and external link
+ */
+function RowActions({
+  app,
+  isPinned,
+  onPin,
+  isPinning,
+}: {
+  app: App;
+  isPinned: boolean;
+  onPin: () => void;
+  isPinning: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {/* Pin button */}
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onPin();
         }}
-        onChange={onChange}
-        aria-label={ariaLabel}
-        className="w-4 h-4 rounded border-border-subtle text-accent-blue focus:ring-accent-blue focus:ring-offset-0 cursor-pointer"
-      />
+        disabled={isPinning}
+        className={`p-1.5 rounded transition-colors ${
+          isPinned
+            ? 'text-accent-blue bg-accent-blue/10 hover:bg-accent-blue/20'
+            : 'text-text-muted hover:text-accent-blue hover:bg-surface-overlay'
+        } ${isPinning ? 'opacity-50 cursor-wait' : ''}`}
+        title={isPinned ? 'Pinned to dashboard' : 'Pin to dashboard'}
+      >
+        <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
+      </button>
+
+      {/* Steam link */}
+      <a
+        href={`https://store.steampowered.com/app/${app.appid}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="p-1.5 rounded text-text-muted hover:text-accent-blue hover:bg-surface-overlay transition-colors"
+        title="Open on Steam"
+      >
+        <ExternalLink className="w-3.5 h-3.5" />
+      </a>
     </div>
   );
 }
@@ -439,19 +531,23 @@ function SelectionCheckbox({
 function AppRow({
   app,
   rank,
-  index,
   columns,
   sparklineLoader,
   isSelected,
   onSelect,
+  isPinned,
+  onPin,
+  isPinning,
 }: {
   app: App;
   rank: number;
-  index: number;
   columns: AppColumnId[];
   sparklineLoader?: UseSparklineLoaderReturn;
   isSelected?: boolean;
   onSelect?: (shiftKey: boolean) => void;
+  isPinned: boolean;
+  onPin: () => void;
+  isPinning: boolean;
 }) {
   const handleRowClick = (e: React.MouseEvent) => {
     // Only handle clicks on the row itself, not on links or other interactive elements
@@ -501,6 +597,15 @@ function AppRow({
           {renderCell(columnId, app, rank, sparklineLoader)}
         </td>
       ))}
+      {/* Actions column */}
+      <td className="px-3 py-2">
+        <RowActions
+          app={app}
+          isPinned={isPinned}
+          onPin={onPin}
+          isPinning={isPinning}
+        />
+      </td>
     </tr>
   );
 }
@@ -526,6 +631,54 @@ export function AppsTable({
 }: AppsTableProps) {
   const columns = visibleColumns ?? DEFAULT_APP_COLUMNS;
   const hasSelection = !!onSelectApp;
+
+  // Pin state management
+  const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set());
+  const [pinningIds, setPinningIds] = useState<Set<number>>(new Set());
+
+  const handlePin = useCallback(async (app: App) => {
+    const wasPinned = pinnedIds.has(app.appid);
+
+    // Optimistic update
+    setPinningIds((prev) => new Set(prev).add(app.appid));
+
+    try {
+      if (wasPinned) {
+        // Unpin
+        setPinnedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(app.appid);
+          return next;
+        });
+      } else {
+        // Pin
+        const response = await fetch('/api/pins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entity_type: 'game',
+            entity_id: app.appid,
+          }),
+        });
+
+        if (response.ok) {
+          setPinnedIds((prev) => new Set(prev).add(app.appid));
+        } else {
+          const error = await response.json().catch(() => ({}));
+          // If already pinned, mark as pinned
+          if (error.error?.includes('already pinned')) {
+            setPinnedIds((prev) => new Set(prev).add(app.appid));
+          }
+        }
+      }
+    } finally {
+      setPinningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(app.appid);
+        return next;
+      });
+    }
+  }, [pinnedIds]);
 
   if (isLoading) {
     return (
@@ -568,7 +721,14 @@ export function AppsTable({
       {/* Mobile Card View */}
       <div className="md:hidden space-y-2">
         {apps.map((app, index) => (
-          <MobileAppCard key={app.appid} app={app} rank={index + 1} />
+          <MobileAppCard
+            key={app.appid}
+            app={app}
+            rank={index + 1}
+            isPinned={pinnedIds.has(app.appid)}
+            onPin={() => handlePin(app)}
+            isPinning={pinningIds.has(app.appid)}
+          />
         ))}
       </div>
 
@@ -600,12 +760,16 @@ export function AppsTable({
                     currentSort={sortField}
                     currentOrder={sortOrder}
                     onSort={onSort}
-                    tooltipField={column.methodology}
+                    tooltipField={column.methodology ? columnId : undefined}
                     isDisabled={!column.sortable}
                     className={columnId === 'name' ? 'min-w-[200px]' : ''}
                   />
                 );
               })}
+              {/* Actions column header */}
+              <th className="px-3 py-2 text-left text-caption font-medium text-text-tertiary whitespace-nowrap">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle">
@@ -614,7 +778,6 @@ export function AppsTable({
                 key={app.appid}
                 app={app}
                 rank={index + 1}
-                index={index}
                 columns={columns}
                 sparklineLoader={sparklineLoader}
                 isSelected={isSelected?.(app.appid)}
@@ -623,6 +786,9 @@ export function AppsTable({
                     ? (shiftKey) => onSelectApp(app.appid, index, shiftKey)
                     : undefined
                 }
+                isPinned={pinnedIds.has(app.appid)}
+                onPin={() => handlePin(app)}
+                isPinning={pinningIds.has(app.appid)}
               />
             ))}
           </tbody>

@@ -7,7 +7,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransition, useCallback } from 'react';
-import type { SortField, SortOrder, AppType } from '../lib/apps-types';
+import type { SortField, SortOrder } from '../lib/apps-types';
 
 interface UseAppsSortReturn {
   sort: SortField;

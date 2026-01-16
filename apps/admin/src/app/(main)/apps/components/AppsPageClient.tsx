@@ -2,18 +2,14 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Filter, ChevronDown, Loader2 } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/Toast';
-import { PageHeader } from '@/components/layout';
 import { AppTypeToggle } from './AppTypeToggle';
 import { AppsTable } from './AppsTable';
 import { SearchBar } from './SearchBar';
-import { PresetViews } from './PresetViews';
-import { QuickFilters } from './QuickFilters';
+import { UnifiedFilterBar } from './UnifiedFilterBar';
+import { ContextBar } from './ContextBar';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
-import { SavedViews } from './SavedViews';
-import { ColumnSelector } from './ColumnSelector';
-import { SummaryStatsBar } from './SummaryStatsBar';
 import { DataFreshnessFooter } from './DataFreshnessFooter';
 import { BulkActionsBar } from './BulkActionsBar';
 import { CompareMode } from './CompareMode';
@@ -24,7 +20,7 @@ import { useSavedViews, type SavedView } from '../hooks/useSavedViews';
 import { useSparklineLoader } from '../hooks/useSparklineLoader';
 import { useAppsSelection } from '../hooks/useAppsSelection';
 import { useAppsCompare } from '../hooks/useAppsCompare';
-import { useAppsQuery, buildFilterParamsFromUrl, DEFAULT_AGGREGATE_STATS } from '../hooks/useAppsQuery';
+import { useAppsQuery, buildFilterParamsFromUrl } from '../hooks/useAppsQuery';
 import type { App, AppType, SortField, SortOrder, AggregateStats } from '../lib/apps-types';
 import type { FilterDescription } from '../lib/apps-export';
 import { formatCompactNumber } from '../lib/apps-queries';
@@ -68,7 +64,6 @@ function AppsPageClientInner({
     data: queryData,
     isLoading,
     isFetching,
-    error,
   } = useAppsQuery(filterParams);
 
   // Use React Query data if available, otherwise fall back to server data
@@ -327,12 +322,6 @@ function AppsPageClientInner({
 
   return (
     <div className={`space-y-4 ${isLoadingData ? 'opacity-60' : ''}`}>
-      {/* Page Header */}
-      <PageHeader
-        title="Games"
-        description="Browse and analyze Steam games, DLC, and demos"
-      />
-
       {/* Row 1: Type Toggle + Result Count */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <AppTypeToggle
@@ -360,9 +349,6 @@ function AppsPageClientInner({
         </div>
       </div>
 
-      {/* M5b: Summary Stats Bar */}
-      <SummaryStatsBar stats={aggregateStats} isLoading={isFetching} />
-
       {/* Row 2: Search Bar */}
       <SearchBar
         initialValue={search}
@@ -371,79 +357,38 @@ function AppsPageClientInner({
         disabled={isPending}
       />
 
-      {/* Row 3: Preset Views */}
-      <div>
-        <div className="text-caption text-text-muted mb-2">Presets</div>
-        <PresetViews
-          activePreset={activePreset}
-          onSelectPreset={applyPreset}
-          onClearPreset={clearPreset}
-          disabled={isLoadingData}
-        />
-      </div>
+      {/* Unified Filter Bar (presets, quick filters, tools) */}
+      <UnifiedFilterBar
+        activePreset={activePreset}
+        activeQuickFilters={activeQuickFilters}
+        onSelectPreset={applyPreset}
+        onClearPreset={clearPreset}
+        onToggleQuickFilter={toggleQuickFilter}
+        onClearAll={clearAllFilters}
+        isAdvancedOpen={isAdvancedOpen}
+        advancedFilterCount={advancedFilterCount}
+        onToggleAdvanced={toggleAdvanced}
+        visibleColumns={visibleColumns}
+        onColumnsChange={setVisibleColumns}
+        savedViews={savedViews}
+        savedViewsLoaded={savedViewsLoaded}
+        onSaveView={handleSaveView}
+        onLoadView={handleLoadView}
+        onDeleteView={deleteView}
+        onRenameView={renameView}
+        onResetView={clearAllFilters}
+        onExport={handleExport}
+        canExport={apps.length > 0}
+        hasActiveFilters={hasActiveFilters}
+        disabled={isLoadingData}
+      />
 
-      {/* Row 4: Quick Filters */}
-      <div>
-        <div className="text-caption text-text-muted mb-2">Quick Filters</div>
-        <QuickFilters
-          activeFilters={activeQuickFilters}
-          onToggle={toggleQuickFilter}
-          disabled={isLoadingData}
-        />
-      </div>
+      {/* Context Bar (inline stats when filters active) */}
+      {hasActiveFilters && (
+        <ContextBar stats={aggregateStats} isLoading={isFetching} />
+      )}
 
-      {/* Row 5: Advanced Filters Toggle + Saved Views */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={toggleAdvanced}
-          disabled={isLoadingData}
-          className={`
-            flex items-center gap-2 px-3 py-1.5 rounded-md text-body-sm font-medium
-            transition-colors duration-150
-            ${
-              isAdvancedOpen
-                ? 'bg-accent-primary/10 text-accent-primary border border-accent-primary/30'
-                : 'bg-surface-elevated text-text-secondary hover:text-text-primary border border-border-muted hover:border-border-prominent'
-            }
-            disabled:opacity-50 disabled:cursor-not-allowed
-          `}
-        >
-          <Filter className="w-4 h-4" />
-          Advanced Filters
-          {advancedFilterCount > 0 && (
-            <span className="px-1.5 py-0.5 bg-accent-primary text-white text-caption rounded-full min-w-[20px] text-center">
-              {advancedFilterCount}
-            </span>
-          )}
-          <ChevronDown
-            className={`w-4 h-4 transition-transform duration-200 ${
-              isAdvancedOpen ? 'rotate-180' : ''
-            }`}
-          />
-        </button>
-
-        {/* M4b: Saved Views dropdown */}
-        <SavedViews
-          views={savedViews}
-          isLoaded={savedViewsLoaded}
-          onSave={handleSaveView}
-          onLoad={handleLoadView}
-          onDelete={deleteView}
-          onRename={renameView}
-          onReset={clearAllFilters}
-          hasActiveFilters={hasActiveFilters || type !== 'game' || sort !== 'ccu_peak' || order !== 'desc'}
-          disabled={isLoadingData}
-        />
-
-        {/* M5a: Column Selector */}
-        <ColumnSelector
-          visibleColumns={visibleColumns}
-          onChange={setVisibleColumns}
-          disabled={isLoadingData}
-        />
-      </div>
-
-      {/* Row 6: Advanced Filters Panel (collapsible) */}
+      {/* Advanced Filters Panel (collapsible) */}
       {isAdvancedOpen && (
         <AdvancedFiltersPanel
           filters={advancedFilters}

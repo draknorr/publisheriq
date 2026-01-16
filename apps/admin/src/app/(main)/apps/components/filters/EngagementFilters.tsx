@@ -48,12 +48,23 @@ function MinSlider({
   const [localValue, setLocalValue] = useState<string>('');
   const inputFocused = useRef(false);
 
-  // Sync local state from props (when not focused)
+  // State for slider drag - deferred commit on release
+  const [localSliderValue, setLocalSliderValue] = useState<number>(min);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Sync local state from props (when not focused/dragging)
   useEffect(() => {
     if (!inputFocused.current) {
       setLocalValue(value !== undefined ? formatValue(value) : '');
     }
   }, [value, formatValue]);
+
+  // Sync slider value from props when not dragging
+  useEffect(() => {
+    if (!isDragging) {
+      setLocalSliderValue(value ?? min);
+    }
+  }, [value, min, isDragging]);
 
   const handleInputChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -70,19 +81,29 @@ function MinSlider({
     [onChange, min, max]
   );
 
+  // Visual update only during drag - no parent notification
   const handleSliderChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const parsed = parseFloat(e.target.value);
-      if (!isNaN(parsed) && parsed > min) {
-        onChange(parsed);
-      } else {
-        onChange(undefined);
+      if (!isNaN(parsed)) {
+        setLocalSliderValue(parsed);
+        setLocalValue(formatValue(parsed));
       }
     },
-    [onChange, min]
+    [formatValue]
   );
 
-  const sliderValue = value ?? min;
+  // Commit value to parent on drag end
+  const handleSliderCommit = useCallback(() => {
+    if (localSliderValue > min) {
+      onChange(localSliderValue);
+    } else {
+      onChange(undefined);
+    }
+    setIsDragging(false);
+  }, [localSliderValue, min, onChange]);
+
+  const sliderValue = isDragging ? localSliderValue : (value ?? min);
   const position = ((sliderValue - min) / (max - min)) * 100;
 
   return (
@@ -140,6 +161,10 @@ function MinSlider({
             step={step}
             value={sliderValue}
             onChange={handleSliderChange}
+            onMouseDown={() => setIsDragging(true)}
+            onMouseUp={handleSliderCommit}
+            onTouchStart={() => setIsDragging(true)}
+            onTouchEnd={handleSliderCommit}
             disabled={disabled}
             className={`
               absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer
