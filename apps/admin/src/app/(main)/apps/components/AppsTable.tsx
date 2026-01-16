@@ -20,6 +20,7 @@ interface AppsTableProps {
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
   visibleColumns?: AppColumnId[];
+  isLoading?: boolean;
 }
 
 interface SortHeaderProps {
@@ -252,8 +253,20 @@ export function AppsTable({
   sortOrder,
   onSort,
   visibleColumns,
+  isLoading = false,
 }: AppsTableProps) {
   const columns = visibleColumns ?? DEFAULT_APP_COLUMNS;
+
+  if (isLoading) {
+    return (
+      <Card className="p-8">
+        <div className="flex flex-col items-center justify-center text-center">
+          <div className="w-8 h-8 border-2 border-accent-primary/30 border-t-accent-primary rounded-full animate-spin mb-4" />
+          <p className="text-body text-text-secondary">Loading games...</p>
+        </div>
+      </Card>
+    );
+  }
 
   if (apps.length === 0) {
     return (

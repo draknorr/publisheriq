@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback } from 'react';
-import { X, Filter, ChevronDown } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { X, Filter, ChevronDown, Loader2 } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { PageHeader } from '@/components/layout';
 import { AppTypeToggle } from './AppTypeToggle';
@@ -14,6 +15,7 @@ import { SavedViews } from './SavedViews';
 import { useAppsFilters } from '../hooks/useAppsFilters';
 import { useFilterCounts } from '../hooks/useFilterCounts';
 import { useSavedViews, type SavedView } from '../hooks/useSavedViews';
+import { useAppsQuery, buildFilterParamsFromUrl, DEFAULT_AGGREGATE_STATS } from '../hooks/useAppsQuery';
 import type { App, AppType, SortField, SortOrder, AggregateStats } from '../lib/apps-types';
 import { formatCompactNumber } from '../lib/apps-queries';
 
@@ -36,8 +38,30 @@ export function AppsPageClient(props: AppsPageClientProps) {
 
 function AppsPageClientInner({
   initialData,
-  aggregateStats,
+  aggregateStats: serverAggregateStats,
 }: AppsPageClientProps) {
+  // Router for client-side navigation
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Build filter params from current URL for React Query
+  const filterParams = useMemo(
+    () => buildFilterParamsFromUrl(searchParams),
+    [searchParams]
+  );
+
+  // Fetch apps data using React Query with client-side caching
+  const {
+    data: queryData,
+    isLoading,
+    isFetching,
+    error,
+  } = useAppsQuery(filterParams);
+
+  // Use React Query data if available, otherwise fall back to server data
+  const apps = queryData ?? initialData;
+  const aggregateStats = serverAggregateStats; // Aggregate stats still from server (could add separate query)
+
   // Unified filter state management
   const {
     isPending,
@@ -111,18 +135,32 @@ function AppsPageClientInner({
     renameView,
   } = useSavedViews();
 
+  // M4b: Memoize context filter object to prevent callback recreation
+  const filterCountContext = useMemo(() => ({
+    minCcu: advancedFilters.minCcu,
+    minReviews: advancedFilters.minReviews,
+    minScore: advancedFilters.minScore,
+    minOwners: advancedFilters.minOwners,
+  }), [
+    advancedFilters.minCcu,
+    advancedFilters.minReviews,
+    advancedFilters.minScore,
+    advancedFilters.minOwners,
+  ]);
+
   // M4b: Lazy-load handlers for filter dropdowns
+  // BUG-005: Expanded context filters for more accurate counts
   const handleGenreOpen = useCallback(() => {
-    fetchCounts('genre', type, { minCcu: advancedFilters.minCcu });
-  }, [fetchCounts, type, advancedFilters.minCcu]);
+    fetchCounts('genre', type, filterCountContext);
+  }, [fetchCounts, type, filterCountContext]);
 
   const handleTagOpen = useCallback(() => {
-    fetchCounts('tag', type, { minCcu: advancedFilters.minCcu });
-  }, [fetchCounts, type, advancedFilters.minCcu]);
+    fetchCounts('tag', type, filterCountContext);
+  }, [fetchCounts, type, filterCountContext]);
 
   const handleCategoryOpen = useCallback(() => {
-    fetchCounts('category', type, { minCcu: advancedFilters.minCcu });
-  }, [fetchCounts, type, advancedFilters.minCcu]);
+    fetchCounts('category', type, filterCountContext);
+  }, [fetchCounts, type, filterCountContext]);
 
   // M4b: Save current view handler
   const handleSaveView = useCallback(
@@ -192,11 +230,11 @@ function AppsPageClientInner({
       if (f.minVsPublisher !== undefined) params.set('minVsPublisher', String(f.minVsPublisher));
       if (f.ccuTier !== undefined) params.set('ccuTier', String(f.ccuTier));
 
-      // Navigate to the constructed URL
+      // Navigate to the constructed URL using client-side routing
       const queryString = params.toString();
-      window.location.href = queryString ? `/apps?${queryString}` : '/apps';
+      router.push(queryString ? `/apps?${queryString}` : '/apps');
     },
-    []
+    [router]
   );
 
   // Get the display label based on current type
@@ -215,8 +253,11 @@ function AppsPageClientInner({
     }
   };
 
+  // Combined loading state: URL transition OR React Query fetching
+  const isLoadingData = isPending || isFetching;
+
   return (
-    <div className={`space-y-4 ${isPending ? 'opacity-60' : ''}`}>
+    <div className={`space-y-4 ${isLoadingData ? 'opacity-60' : ''}`}>
       {/* Page Header */}
       <PageHeader
         title="Games"
@@ -228,7 +269,7 @@ function AppsPageClientInner({
         <AppTypeToggle
           value={type}
           onChange={setType}
-          disabled={isPending}
+          disabled={isLoadingData}
         />
 
         {/* Result count + Clear button */}
@@ -236,14 +277,15 @@ function AppsPageClientInner({
           {hasActiveFilters && (
             <button
               onClick={clearAllFilters}
-              disabled={isPending}
+              disabled={isLoadingData}
               className="flex items-center gap-1 px-2 py-1 text-body-sm text-accent-red hover:text-accent-red/80 transition-colors disabled:opacity-50"
             >
               <X className="w-4 h-4" />
               Clear all
             </button>
           )}
-          <div className="text-body text-text-secondary">
+          <div className="flex items-center gap-2 text-body text-text-secondary">
+            {isFetching && <Loader2 className="w-4 h-4 animate-spin" />}
             {getTypeLabel()} ({formatCompactNumber(aggregateStats.total_games)})
           </div>
         </div>
@@ -264,7 +306,7 @@ function AppsPageClientInner({
           activePreset={activePreset}
           onSelectPreset={applyPreset}
           onClearPreset={clearPreset}
-          disabled={isPending}
+          disabled={isLoadingData}
         />
       </div>
 
@@ -274,7 +316,7 @@ function AppsPageClientInner({
         <QuickFilters
           activeFilters={activeQuickFilters}
           onToggle={toggleQuickFilter}
-          disabled={isPending}
+          disabled={isLoadingData}
         />
       </div>
 
@@ -282,7 +324,7 @@ function AppsPageClientInner({
       <div className="flex items-center gap-2">
         <button
           onClick={toggleAdvanced}
-          disabled={isPending}
+          disabled={isLoadingData}
           className={`
             flex items-center gap-2 px-3 py-1.5 rounded-md text-body-sm font-medium
             transition-colors duration-150
@@ -316,7 +358,9 @@ function AppsPageClientInner({
           onLoad={handleLoadView}
           onDelete={deleteView}
           onRename={renameView}
-          disabled={isPending}
+          onReset={clearAllFilters}
+          hasActiveFilters={hasActiveFilters || type !== 'game' || sort !== 'ccu_peak' || order !== 'desc'}
+          disabled={isLoadingData}
         />
       </div>
 
@@ -329,7 +373,7 @@ function AppsPageClientInner({
           onClearAll={clearAdvancedFilters}
           onGrowthPreset={applyGrowthPreset}
           onSentimentPreset={applySentimentPreset}
-          disabled={isPending}
+          disabled={isLoadingData}
           // M4b: Content filter props
           genreOptions={filterOptions.genre}
           genreLoading={filterLoading.genre}
@@ -371,10 +415,11 @@ function AppsPageClientInner({
 
       {/* Apps Table */}
       <AppsTable
-        apps={initialData}
+        apps={apps}
         sortField={sort}
         sortOrder={order}
         onSort={setSort}
+        isLoading={isLoading && !apps.length}
       />
     </div>
   );

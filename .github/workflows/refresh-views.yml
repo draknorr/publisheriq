@@ -4,6 +4,8 @@ on:
   schedule:
     # Run at 5:00 AM UTC daily (after steamspy-sync at 2:15 AM and histogram-sync at 4:15 AM)
     - cron: '0 5 * * *'
+    # Also run every 6 hours for app_filter_data (content changes rarely but need periodic refresh)
+    - cron: '0 */6 * * *'
   workflow_dispatch: # Allow manual trigger
   workflow_run:
     workflows: ["SteamSpy Sync", "Trends Calculation"]
@@ -29,8 +31,10 @@ jobs:
           echo "Refreshing materialized views..."
 
           # Refresh views in dependency order with 5 minute timeout each
+          # app_filter_data is refreshed every 6 hours for Games page performance
           VIEWS=(
             "latest_daily_metrics"
+            "app_filter_data"
             "publisher_metrics"
             "developer_metrics"
             "publisher_year_metrics"
@@ -38,6 +42,14 @@ jobs:
             "publisher_game_metrics"
             "developer_game_metrics"
             "monthly_game_metrics"
+            # Filter option count views (for Games page filter dropdowns)
+            "mv_tag_counts"
+            "mv_genre_counts"
+            "mv_category_counts"
+            "mv_steam_deck_counts"
+            "mv_ccu_tier_counts"
+            "mv_velocity_tier_counts"
+            "mv_apps_aggregate_stats"
           )
 
           for view in "${VIEWS[@]}"; do

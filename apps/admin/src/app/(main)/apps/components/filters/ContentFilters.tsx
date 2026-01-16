@@ -173,6 +173,8 @@ function CategoryDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Track if we've already fetched for this open session
+  const hasFetchedRef = useRef(false);
 
   // Filter options by search
   const filteredOptions = useMemo(() => {
@@ -188,11 +190,22 @@ function CategoryDropdown({
       .filter(Boolean);
   }, [categories, options]);
 
+  // Handle dropdown open - only trigger fetch when transitioning from closed to open
   const handleOpen = useCallback(() => {
     if (disabled) return;
+    if (!isOpen && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      onOpen();
+    }
     setIsOpen(true);
-    onOpen();
-  }, [onOpen, disabled]);
+  }, [onOpen, disabled, isOpen]);
+
+  // Reset fetch flag when dropdown closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasFetchedRef.current = false;
+    }
+  }, [isOpen]);
 
   // Close on outside click
   useEffect(() => {

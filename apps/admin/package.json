@@ -17,6 +17,7 @@
     "@publisheriq/qdrant": "workspace:*",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
+    "@tanstack/react-query": "^5.62.16",
     "cmdk": "^1.1.1",
     "framer-motion": "^11.15.0",
     "geist": "^1.5.1",

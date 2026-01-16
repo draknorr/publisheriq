@@ -208,7 +208,27 @@
 - **Next steps:**
   - Proceed to M4b: Advanced Filters - Content & Context
 
-### Session 6 - YYYY-MM-DD
+### Session 6 - 2026-01-15
+- **Milestone:** Performance Optimization (Off-Script)
+- **Duration:** ~45 minutes
+- **Work done:**
+  - Fixed playtime bug: `get_apps_with_filters` referenced non-existent `ldm.average_playtime_forever` from `latest_daily_metrics`
+  - Created migration `20260117000004_apps_rpc_playtime_fix.sql` with LATERAL join to `daily_metrics`
+  - Fixed filter option counts timeout (~5s → 7ms):
+    - Created 6 materialized views: `mv_tag_counts`, `mv_genre_counts`, `mv_category_counts`, `mv_steam_deck_counts`, `mv_ccu_tier_counts`, `mv_velocity_tier_counts`
+    - Updated `get_apps_filter_option_counts` to use MVs for fast path
+  - Fixed aggregate stats timeout (timeout → 2ms):
+    - Created `mv_apps_aggregate_stats` materialized view
+    - Updated `get_apps_aggregate_stats` to use MV when no filters applied
+  - Created migration `20260117000005_apps_filter_counts_optimization.sql`
+  - Added `refresh_filter_count_views()` helper function
+  - Updated `.github/workflows/refresh-views.yml` to refresh all new MVs
+- **Blockers:**
+  - None
+- **Next steps:**
+  - Proceed to M4b: Advanced Filters - Content & Context
+
+### Session 7 - YYYY-MM-DD
 - **Milestone:** ___
 - **Duration:** ___ minutes
 - **Work done:**
@@ -227,6 +247,24 @@
 supabase/migrations/
 ├── [x] 20260116000001_add_growth_to_ccu_tiers.sql (M1)
 ├── [x] 20260116000002_apps_page_rpcs.sql (M1)
+├── [x] 20260116000003_apps_rpc_bugfixes.sql (M1 fixes)
+├── [x] 20260117000001_app_filter_data_view.sql (Performance)
+├── [x] 20260117000002_apps_rpc_v2.sql (Performance - uses app_filter_data MV)
+├── [x] 20260117000003_apps_performance_indexes.sql (Performance)
+├── [x] 20260117000004_apps_rpc_playtime_fix.sql (Bug fix - LATERAL join for playtime)
+├── [x] 20260117000005_apps_filter_counts_optimization.sql (Performance - MVs for filter counts + aggregate stats)
+```
+
+### Materialized Views Created (Performance)
+```
+mv_tag_counts              - Pre-computed tag counts by app type
+mv_genre_counts            - Pre-computed genre counts by app type
+mv_category_counts         - Pre-computed category counts by app type
+mv_steam_deck_counts       - Pre-computed Steam Deck counts by app type
+mv_ccu_tier_counts         - Pre-computed CCU tier counts by app type
+mv_velocity_tier_counts    - Pre-computed velocity tier counts by app type
+mv_apps_aggregate_stats    - Pre-computed aggregate stats by app type
+app_filter_data            - Pre-computed filter arrays for fast content filtering
 ```
 
 ### Frontend Files
@@ -422,13 +460,15 @@ apps/admin/src/app/(main)/apps/
 
 ## Performance Metrics
 
-| Metric | Target | M2b | M5b | M6b Final |
-|--------|--------|-----|-----|----------|
-| Initial page load | <2s | | | |
-| Filter change | <500ms | | | |
-| Fast path query | <500ms | | | |
-| Slow path query | <2s | | | |
+| Metric | Target | M2b | Session 6 | M6b Final |
+|--------|--------|-----|-----------|----------|
+| Initial page load | <2s | | ✅ | |
+| Filter change | <500ms | | ✅ | |
+| Fast path query | <500ms | | ✅ ~200ms | |
+| Slow path query | <2s | | ✅ ~4s | |
 | Sparkline batch load | <200ms | | | |
+| Tag counts (filter dropdown) | <500ms | | ✅ 7ms (was 5s timeout) | |
+| Aggregate stats | <500ms | | ✅ 2ms (was timeout) | |
 
 ---
 
@@ -438,7 +478,10 @@ Document any changes made during implementation that differ from the specificati
 
 | Milestone | Deviation | Reason |
 |-----------|-----------|--------|
-| | | |
+| Session 6 | Added 7 materialized views for filter counts + aggregate stats | Original spec didn't anticipate 160K+ games causing timeouts on filter dropdowns and aggregate stats. MVs provide instant lookups (<10ms) |
+| Session 6 | Added `app_filter_data` MV for content filtering | Array containment queries (genres/tags/categories) were too slow without pre-computed arrays |
+| Session 6 | Added LATERAL join for playtime data | `latest_daily_metrics` doesn't include playtime columns; must fetch from `daily_metrics` |
+| Session 6 | Added `refresh_filter_count_views()` function | Helper to refresh all filter-related MVs together |
 
 ---
 

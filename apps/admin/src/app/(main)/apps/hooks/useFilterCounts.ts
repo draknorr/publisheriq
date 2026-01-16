@@ -54,6 +54,16 @@ export function useFilterCounts() {
 
   const cache = useRef<Record<string, CacheEntry>>({});
 
+  // Track in-flight requests to prevent duplicate fetches
+  const inFlight = useRef<Record<FilterType, boolean>>({
+    genre: false,
+    tag: false,
+    category: false,
+    steam_deck: false,
+    platform: false,
+    ccu_tier: false,
+  });
+
   /**
    * Build a cache key from filter type and context.
    * Keys are sorted to ensure consistent cache hits regardless of property order.
@@ -81,7 +91,7 @@ export function useFilterCounts() {
 
   /**
    * Fetch counts for a filter type with optional contextual filters.
-   * Results are cached for 5 minutes.
+   * Results are cached for 5 minutes. Prevents duplicate in-flight requests.
    */
   const fetchCounts = useCallback(
     async (
@@ -94,9 +104,21 @@ export function useFilterCounts() {
       // Check cache first
       const cached = cache.current[cacheKey];
       if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        setData((prev) => ({ ...prev, [filterType]: cached.data }));
+        // Only update state if data actually changed (avoid re-renders)
+        if (data[filterType] !== cached.data) {
+          setData((prev) => ({ ...prev, [filterType]: cached.data }));
+        }
         return cached.data;
       }
+
+      // Skip if request already in-flight for this filter type
+      if (inFlight.current[filterType]) {
+        // Return existing data while waiting
+        return data[filterType];
+      }
+
+      // Mark as in-flight
+      inFlight.current[filterType] = true;
 
       // Set loading state
       setLoading((prev) => ({ ...prev, [filterType]: true }));
@@ -113,11 +135,7 @@ export function useFilterCounts() {
           p_min_owners: contextFilters?.minOwners,
         };
 
-        console.log(`Fetching ${filterType} counts with params:`, rpcParams);
-
         const response = await supabase.rpc('get_apps_filter_option_counts', rpcParams);
-
-        console.log(`Raw RPC response for ${filterType}:`, response);
 
         const { data: result, error } = response;
 
@@ -128,8 +146,6 @@ export function useFilterCounts() {
 
         const options = (result ?? []) as FilterOption[];
 
-        console.log(`${filterType} counts result:`, options?.length ?? 0, 'options');
-
         // Cache the result
         cache.current[cacheKey] = { data: options, timestamp: Date.now() };
 
@@ -138,10 +154,12 @@ export function useFilterCounts() {
 
         return options;
       } finally {
+        // Clear in-flight flag
+        inFlight.current[filterType] = false;
         setLoading((prev) => ({ ...prev, [filterType]: false }));
       }
     },
-    []
+    [data]
   );
 
   /**

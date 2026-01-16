@@ -622,6 +622,66 @@ p_type TEXT DEFAULT 'game',
 -- Pass current filters for contextual counts
 ```
 
+### Performance Optimization: Materialized Views
+
+> **Added January 2026:** With 160K+ games, real-time aggregations caused timeouts. Solution: pre-computed materialized views.
+
+#### Filter Count MVs (refreshed daily)
+
+| View | Purpose | Query Time |
+|------|---------|------------|
+| `mv_tag_counts` | Tag counts by app type | <10ms |
+| `mv_genre_counts` | Genre counts by app type | <10ms |
+| `mv_category_counts` | Category counts by app type | <10ms |
+| `mv_steam_deck_counts` | Steam Deck status counts | <10ms |
+| `mv_ccu_tier_counts` | CCU tier counts | <10ms |
+| `mv_velocity_tier_counts` | Velocity tier counts | <10ms |
+
+#### Aggregate Stats MV
+
+| View | Purpose | Query Time |
+|------|---------|------------|
+| `mv_apps_aggregate_stats` | Pre-computed totals, averages, trending counts by app type | <10ms |
+
+#### Content Filter MV
+
+| View | Purpose | Query Time |
+|------|---------|------------|
+| `app_filter_data` | Pre-computed arrays (genre_ids, tag_ids, category_ids, platform_array) with GIN indexes | Enables <500ms content filtering |
+
+#### Fast Path vs Slow Path
+
+```sql
+-- Fast path: No filters → read from MV (<10ms)
+IF NOT v_has_filters THEN
+  RETURN QUERY SELECT * FROM mv_apps_aggregate_stats WHERE app_type = p_type;
+ELSE
+  -- Slow path: Filters applied → compute on-the-fly (~4s)
+  RETURN QUERY WITH computed AS (...) SELECT ...;
+END IF;
+```
+
+#### Refresh Schedule
+
+All MVs refreshed via `.github/workflows/refresh-views.yml`:
+- **Daily at 5:00 AM UTC** (after nightly syncs)
+- **Every 6 hours** for `app_filter_data`
+- Helper function: `refresh_filter_count_views()` refreshes all filter MVs together
+
+#### Playtime Data
+
+`latest_daily_metrics` does NOT include playtime columns. Must use LATERAL join to `daily_metrics`:
+
+```sql
+LEFT JOIN LATERAL (
+  SELECT dm.average_playtime_forever, dm.average_playtime_2weeks
+  FROM daily_metrics dm
+  WHERE dm.appid = a.appid
+  ORDER BY dm.metric_date DESC
+  LIMIT 1
+) dm_playtime ON true
+```
+
 ### File Structure
 
 > **Naming:** Files and code use "apps" (technical). UI text uses "Games" (user-facing).

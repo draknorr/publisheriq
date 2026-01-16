@@ -210,9 +210,10 @@ function parseCcuTier(value: string | null): 1 | 2 | 3 | undefined {
 
 /**
  * Parse FilterMode from URL param
+ * Default is 'all' so adding more tags/genres narrows results (intuitive behavior)
  */
 function parseFilterMode(value: string | null): 'any' | 'all' {
-  return value === 'all' ? 'all' : 'any';
+  return value === 'any' ? 'any' : 'all';
 }
 
 /**
@@ -611,7 +612,7 @@ export function useAppsFilters(): UseAppsFiltersReturn {
         startTransition(() => {
           router.push(url, { scroll: false });
         });
-      }, 300); // 300ms debounce per spec
+      }, 400); // 400ms debounce for better batching of rapid filter changes
     },
     [router, searchParams]
   );
@@ -952,7 +953,7 @@ export function useAppsFilters(): UseAppsFiltersReturn {
   const setGenreMode = useCallback(
     (mode: FilterMode) => {
       updateUrl({
-        genreMode: mode === 'all' ? 'all' : null,
+        genreMode: mode === 'any' ? 'any' : null, // 'all' is default, only save 'any' to URL
         preset: null,
       });
     },
@@ -972,7 +973,7 @@ export function useAppsFilters(): UseAppsFiltersReturn {
   const setTagMode = useCallback(
     (mode: FilterMode) => {
       updateUrl({
-        tagMode: mode === 'all' ? 'all' : null,
+        tagMode: mode === 'any' ? 'any' : null, // 'all' is default, only save 'any' to URL
         preset: null,
       });
     },
@@ -1016,7 +1017,7 @@ export function useAppsFilters(): UseAppsFiltersReturn {
   const setPlatformMode = useCallback(
     (mode: FilterMode) => {
       updateUrl({
-        platformMode: mode === 'all' ? 'all' : null,
+        platformMode: mode === 'any' ? 'any' : null, // 'all' is default, only save 'any' to URL
         preset: null,
       });
     },

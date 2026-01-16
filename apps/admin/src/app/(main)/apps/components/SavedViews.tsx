@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, Bookmark, Trash2, Edit2, Check, X, Plus } from 'lucide-react';
+import { ChevronDown, Bookmark, Trash2, Edit2, Check, X, Plus, RotateCcw } from 'lucide-react';
 import type { SavedView } from '../hooks/useSavedViews';
 
 interface SavedViewsProps {
@@ -11,6 +11,8 @@ interface SavedViewsProps {
   onLoad: (view: SavedView) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onReset: () => void;
+  hasActiveFilters: boolean;
   disabled?: boolean;
 }
 
@@ -24,6 +26,8 @@ export function SavedViews({
   onLoad,
   onDelete,
   onRename,
+  onReset,
+  hasActiveFilters,
   disabled = false,
 }: SavedViewsProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -201,6 +205,23 @@ export function SavedViews({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Reset filters button */}
+          {hasActiveFilters && (
+            <div className="border-t border-border-subtle p-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onReset();
+                  setIsOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-body-sm text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset all filters
+              </button>
             </div>
           )}
         </div>

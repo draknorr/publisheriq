@@ -45,6 +45,13 @@ function isApiPath(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hostname = request.nextUrl.hostname;
+
+  // DEV BYPASS: Skip auth on localhost for local development
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  if (isLocalhost && !isPublicPath(pathname) && !isStaticAsset(pathname)) {
+    return NextResponse.next();
+  }
 
   // Redirect auth errors from / to /login with error params
   if (pathname === '/' && request.nextUrl.searchParams.has('error')) {

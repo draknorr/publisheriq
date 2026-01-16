@@ -40,6 +40,8 @@ export function GenreTagFilter({
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Track if we've already fetched for this open session
+  const hasFetchedRef = useRef(false);
 
   // Cleanup debounce timeout on unmount
   useEffect(() => {
@@ -80,12 +82,22 @@ export function GenreTagFilter({
     return selected.map((id) => optionMap.get(id) ?? `ID:${id}`);
   }, [selected, optionMap]);
 
-  // Handle dropdown open
+  // Handle dropdown open - only trigger fetch when transitioning from closed to open
   const handleOpen = useCallback(() => {
     if (disabled) return;
+    if (!isOpen && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      onOpen();
+    }
     setIsOpen(true);
-    onOpen();
-  }, [onOpen, disabled]);
+  }, [onOpen, disabled, isOpen]);
+
+  // Reset fetch flag when dropdown closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasFetchedRef.current = false;
+    }
+  }, [isOpen]);
 
   // Handle clicking outside to close
   useEffect(() => {
