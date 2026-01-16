@@ -23,6 +23,8 @@ interface CacheEntry {
 interface ContextFilters {
   minCcu?: number;
   minReviews?: number;
+  minScore?: number;
+  minOwners?: number;
 }
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -53,14 +55,28 @@ export function useFilterCounts() {
   const cache = useRef<Record<string, CacheEntry>>({});
 
   /**
-   * Build a cache key from filter type and context
+   * Build a cache key from filter type and context.
+   * Keys are sorted to ensure consistent cache hits regardless of property order.
    */
   const buildCacheKey = (
     filterType: FilterType,
     appType: AppType,
     context?: ContextFilters
   ): string => {
-    return `${filterType}-${appType}-${JSON.stringify(context ?? {})}`;
+    const sortedContext = context
+      ? JSON.stringify(
+          Object.keys(context)
+            .sort()
+            .reduce((acc, key) => {
+              const value = context[key as keyof ContextFilters];
+              if (value !== undefined) {
+                acc[key] = value;
+              }
+              return acc;
+            }, {} as Record<string, unknown>)
+        )
+      : '{}';
+    return `${filterType}-${appType}-${sortedContext}`;
   };
 
   /**
@@ -88,13 +104,20 @@ export function useFilterCounts() {
       try {
         const supabase = getSupabase();
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const response = await (supabase.rpc as any)('get_apps_filter_option_counts', {
+        const rpcParams = {
           p_filter_type: filterType,
           p_type: appType,
           p_min_ccu: contextFilters?.minCcu,
           p_min_reviews: contextFilters?.minReviews,
-        });
+          p_min_score: contextFilters?.minScore,
+          p_min_owners: contextFilters?.minOwners,
+        };
+
+        console.log(`Fetching ${filterType} counts with params:`, rpcParams);
+
+        const response = await supabase.rpc('get_apps_filter_option_counts', rpcParams);
+
+        console.log(`Raw RPC response for ${filterType}:`, response);
 
         const { data: result, error } = response;
 
@@ -104,6 +127,8 @@ export function useFilterCounts() {
         }
 
         const options = (result ?? []) as FilterOption[];
+
+        console.log(`${filterType} counts result:`, options?.length ?? 0, 'options');
 
         // Cache the result
         cache.current[cacheKey] = { data: options, timestamp: Date.now() };

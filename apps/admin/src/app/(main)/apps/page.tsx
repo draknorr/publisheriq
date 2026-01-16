@@ -145,12 +145,16 @@ export default async function AppsPage({
   let fetchError: string | null = null;
 
   try {
-    const [appsResult, statsResult] = await Promise.all([
-      getApps(filterParams),
-      getAggregateStats(filterParams),
-    ]);
-    apps = appsResult;
-    aggregateStats = statsResult;
+    // Fetch apps first (critical for page render)
+    apps = await getApps(filterParams);
+
+    // Fetch aggregate stats separately - don't block page on timeout
+    try {
+      aggregateStats = await getAggregateStats(filterParams);
+    } catch (statsError) {
+      console.error('Failed to fetch aggregate stats (non-blocking):', statsError);
+      // Use defaults - page will still render
+    }
   } catch (error) {
     console.error('Failed to fetch apps:', error);
     fetchError = error instanceof Error ? error.message : 'Unknown error';

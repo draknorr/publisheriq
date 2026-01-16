@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { List } from 'react-window';
 import { ChevronDown, X, Search, Check } from 'lucide-react';
 import type { FilterOption } from '../../hooks/useFilterCounts';
 
@@ -36,19 +37,48 @@ export function GenreTagFilter({
 }: GenreTagFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Filter options by search query
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle search input with debounce
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value); // Immediate UI update
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+    }, 150); // 150ms debounce
+  }, []);
+
+  // Filter options by debounced search query
   const filteredOptions = useMemo(() => {
-    if (!search) return options;
-    const lower = search.toLowerCase();
+    if (!debouncedSearch) return options;
+    const lower = debouncedSearch.toLowerCase();
     return options.filter((o) => o.option_name.toLowerCase().includes(lower));
-  }, [options, search]);
+  }, [options, debouncedSearch]);
 
-  // Get names for selected IDs (for badges)
+  // Create a Map for O(1) lookups
+  const optionMap = useMemo(() => {
+    return new Map(options.map((o) => [o.option_id, o.option_name]));
+  }, [options]);
+
+  // Get names for selected IDs (for badges) - O(1) Map lookup
   const selectedNames = useMemo(() => {
-    return selected.map((id) => options.find((o) => o.option_id === id)?.option_name ?? `ID:${id}`);
-  }, [selected, options]);
+    return selected.map((id) => optionMap.get(id) ?? `ID:${id}`);
+  }, [selected, optionMap]);
 
   // Handle dropdown open
   const handleOpen = useCallback(() => {
@@ -63,6 +93,7 @@ export function GenreTagFilter({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setSearch('');
+        setDebouncedSearch('');
       }
     };
 
@@ -179,7 +210,7 @@ export function GenreTagFilter({
                 <input
                   type="text"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   placeholder={`Search ${label.toLowerCase()}...`}
                   className="w-full h-8 pl-8 pr-3 rounded bg-surface-elevated border border-border-subtle text-body-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary"
                   autoFocus
@@ -187,8 +218,8 @@ export function GenreTagFilter({
               </div>
             </div>
 
-            {/* Options */}
-            <div className="max-h-52 overflow-y-auto">
+            {/* Options - Virtualized for performance */}
+            <div className="h-52">
               {isLoading ? (
                 <div className="px-3 py-4 text-center text-body-sm text-text-muted">
                   Loading {filterType}s...
@@ -198,35 +229,43 @@ export function GenreTagFilter({
                   No {filterType}s found
                 </div>
               ) : (
-                filteredOptions.map((option) => {
-                  const isSelected = selected.includes(option.option_id);
-                  return (
-                    <button
-                      key={option.option_id}
-                      type="button"
-                      onClick={() => handleToggle(option.option_id)}
-                      className={`w-full px-3 py-2 flex items-center justify-between text-body-sm transition-colors ${
-                        isSelected
-                          ? 'bg-accent-primary/10 text-text-primary'
-                          : 'text-text-secondary hover:bg-surface-elevated'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className={`w-4 h-4 flex items-center justify-center ${
-                            isSelected ? '' : 'opacity-0'
-                          }`}
-                        >
-                          <Check className="h-4 w-4 text-accent-primary" />
+                <List<Record<string, never>>
+                  className="h-52"
+                  rowCount={filteredOptions.length}
+                  rowHeight={40}
+                  rowProps={{}}
+                  rowComponent={({ index, style }) => {
+                    const option = filteredOptions[index];
+                    const isSelected = selected.includes(option.option_id);
+                    return (
+                      <button
+                        key={option.option_id}
+                        type="button"
+                        style={style}
+                        onClick={() => handleToggle(option.option_id)}
+                        className={`w-full px-3 flex items-center justify-between text-body-sm transition-colors ${
+                          isSelected
+                            ? 'bg-accent-primary/10 text-text-primary'
+                            : 'text-text-secondary hover:bg-surface-elevated'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`w-4 h-4 flex items-center justify-center ${
+                              isSelected ? '' : 'opacity-0'
+                            }`}
+                          >
+                            <Check className="h-4 w-4 text-accent-primary" />
+                          </span>
+                          {option.option_name}
                         </span>
-                        {option.option_name}
-                      </span>
-                      <span className="text-caption text-text-muted">
-                        {option.app_count.toLocaleString()}
-                      </span>
-                    </button>
-                  );
-                })
+                        <span className="text-caption text-text-muted">
+                          {option.app_count.toLocaleString()}
+                        </span>
+                      </button>
+                    );
+                  }}
+                />
               )}
             </div>
           </div>

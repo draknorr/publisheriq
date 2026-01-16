@@ -679,6 +679,8 @@ export type Database = {
         Row: {
           appid: number
           ccu_fetch_status: string | null
+          ccu_growth_30d_percent: number | null
+          ccu_growth_7d_percent: number | null
           ccu_skip_until: string | null
           ccu_tier: number
           last_ccu_synced: string | null
@@ -691,6 +693,8 @@ export type Database = {
         Insert: {
           appid: number
           ccu_fetch_status?: string | null
+          ccu_growth_30d_percent?: number | null
+          ccu_growth_7d_percent?: number | null
           ccu_skip_until?: string | null
           ccu_tier?: number
           last_ccu_synced?: string | null
@@ -703,6 +707,8 @@ export type Database = {
         Update: {
           appid?: number
           ccu_fetch_status?: string | null
+          ccu_growth_30d_percent?: number | null
+          ccu_growth_7d_percent?: number | null
           ccu_skip_until?: string | null
           ccu_tier?: number
           last_ccu_synced?: string | null
@@ -1899,6 +1905,12 @@ export type Database = {
       developer_metrics: {
         Row: {
           avg_review_score: number | null
+          best_steam_deck_category:
+            | Database["public"]["Enums"]["steam_deck_category"]
+            | null
+          category_ids: number[] | null
+          ccu_growth_30d_percent: number | null
+          ccu_growth_7d_percent: number | null
           computed_at: string | null
           developer_id: number | null
           developer_name: string | null
@@ -1908,9 +1920,14 @@ export type Database = {
           games_trending_down: number | null
           games_trending_stable: number | null
           games_trending_up: number | null
+          genre_ids: number[] | null
           is_trending: boolean | null
+          platform_array: string[] | null
           positive_reviews: number | null
           revenue_estimate_cents: number | null
+          review_velocity_30d: number | null
+          review_velocity_7d: number | null
+          tag_ids: number[] | null
           total_ccu: number | null
           total_owners: number | null
           total_reviews: number | null
@@ -2051,6 +2068,12 @@ export type Database = {
       publisher_metrics: {
         Row: {
           avg_review_score: number | null
+          best_steam_deck_category:
+            | Database["public"]["Enums"]["steam_deck_category"]
+            | null
+          category_ids: number[] | null
+          ccu_growth_30d_percent: number | null
+          ccu_growth_7d_percent: number | null
           computed_at: string | null
           estimated_weekly_hours: number | null
           game_count: number | null
@@ -2058,11 +2081,16 @@ export type Database = {
           games_trending_down: number | null
           games_trending_stable: number | null
           games_trending_up: number | null
+          genre_ids: number[] | null
           is_trending: boolean | null
+          platform_array: string[] | null
           positive_reviews: number | null
           publisher_id: number | null
           publisher_name: string | null
           revenue_estimate_cents: number | null
+          review_velocity_30d: number | null
+          review_velocity_7d: number | null
+          tag_ids: number[] | null
           total_ccu: number | null
           total_owners: number | null
           total_reviews: number | null
@@ -2183,6 +2211,62 @@ export type Database = {
           new_balance: number
           refunded: number
           success: boolean
+        }[]
+      }
+      get_app_sparkline_data: {
+        Args: { p_appids: number[]; p_days?: number }
+        Returns: {
+          appid: number
+          sparkline_data: Json
+        }[]
+      }
+      get_apps_aggregate_stats: {
+        Args: {
+          p_categories?: number[]
+          p_ccu_tier?: number
+          p_genres?: number[]
+          p_max_ccu?: number
+          p_max_growth_7d?: number
+          p_max_owners?: number
+          p_max_price?: number
+          p_max_reviews?: number
+          p_max_score?: number
+          p_min_ccu?: number
+          p_min_growth_7d?: number
+          p_min_owners?: number
+          p_min_price?: number
+          p_min_reviews?: number
+          p_min_score?: number
+          p_search?: string
+          p_steam_deck?: string
+          p_tags?: number[]
+          p_type?: string
+        }
+        Returns: {
+          avg_ccu: number
+          avg_momentum: number
+          avg_score: number
+          avg_value_score: number
+          sentiment_declining_count: number
+          sentiment_improving_count: number
+          total_games: number
+          trending_down_count: number
+          trending_up_count: number
+        }[]
+      }
+      get_apps_filter_option_counts: {
+        Args: {
+          p_filter_type: string
+          p_min_ccu?: number
+          p_min_owners?: number
+          p_min_reviews?: number
+          p_min_score?: number
+          p_type?: string
+        }
+        Returns: {
+          app_count: number
+          option_id: number
+          option_name: string
         }[]
       }
       get_apps_for_embedding: {
@@ -2309,20 +2393,135 @@ export type Database = {
           priority_score: number
         }[]
       }
+      get_apps_with_filters: {
+        Args: {
+          p_categories?: number[]
+          p_ccu_tier?: number
+          p_controller?: string
+          p_developer_search?: string
+          p_early_access?: boolean
+          p_genre_mode?: string
+          p_genres?: number[]
+          p_has_workshop?: boolean
+          p_limit?: number
+          p_max_age?: number
+          p_max_ccu?: number
+          p_max_growth_30d?: number
+          p_max_growth_7d?: number
+          p_max_hype?: number
+          p_max_momentum?: number
+          p_max_owners?: number
+          p_max_playtime?: number
+          p_max_price?: number
+          p_max_reviews?: number
+          p_max_score?: number
+          p_max_sentiment_delta?: number
+          p_min_active_pct?: number
+          p_min_age?: number
+          p_min_ccu?: number
+          p_min_growth_30d?: number
+          p_min_growth_7d?: number
+          p_min_hype?: number
+          p_min_momentum?: number
+          p_min_owners?: number
+          p_min_playtime?: number
+          p_min_price?: number
+          p_min_review_rate?: number
+          p_min_reviews?: number
+          p_min_score?: number
+          p_min_sentiment_delta?: number
+          p_min_value_score?: number
+          p_min_vs_publisher?: number
+          p_offset?: number
+          p_platform_mode?: string
+          p_platforms?: string[]
+          p_publisher_search?: string
+          p_publisher_size?: string
+          p_release_year?: number
+          p_search?: string
+          p_self_published?: boolean
+          p_sort_field?: string
+          p_sort_order?: string
+          p_steam_deck?: string
+          p_tag_mode?: string
+          p_tags?: number[]
+          p_type?: string
+          p_velocity_tier?: string
+        }
+        Returns: {
+          active_player_pct: number
+          appid: number
+          average_playtime_2weeks: number
+          average_playtime_forever: number
+          ccu_growth_30d_percent: number
+          ccu_growth_7d_percent: number
+          ccu_peak: number
+          ccu_tier: number
+          controller_support: string
+          current_discount_percent: number
+          data_updated_at: string
+          days_live: number
+          developer_id: number
+          developer_name: string
+          hype_duration: number
+          is_free: boolean
+          metric_date: string
+          momentum_score: number
+          name: string
+          owners_max: number
+          owners_midpoint: number
+          owners_min: number
+          platforms: string
+          positive_percentage: number
+          positive_reviews: number
+          price_cents: number
+          publisher_game_count: number
+          publisher_id: number
+          publisher_name: string
+          release_date: string
+          release_state: string
+          review_rate: number
+          review_score: number
+          sentiment_delta: number
+          steam_deck_category: string
+          total_reviews: number
+          type: string
+          value_score: number
+          velocity_30d: number
+          velocity_7d: number
+          velocity_acceleration: number
+          velocity_tier: string
+          vs_publisher_avg: number
+        }[]
+      }
       get_companies_aggregate_stats: {
         Args: {
           p_categories?: number[]
+          p_genre_mode?: string
           p_genres?: number[]
+          p_max_ccu?: number
           p_max_games?: number
+          p_max_growth_30d?: number
+          p_max_growth_7d?: number
+          p_max_hours?: number
+          p_max_owners?: number
+          p_max_revenue?: number
+          p_max_reviews?: number
+          p_max_score?: number
           p_min_ccu?: number
           p_min_games?: number
+          p_min_growth_30d?: number
+          p_min_growth_7d?: number
           p_min_hours?: number
           p_min_owners?: number
           p_min_revenue?: number
           p_min_reviews?: number
           p_min_score?: number
+          p_platform_mode?: string
+          p_platforms?: string[]
           p_search?: string
           p_status?: string
+          p_steam_deck?: string
           p_tags?: number[]
           p_type?: string
         }
@@ -2501,6 +2700,19 @@ export type Database = {
           velocity_acceleration: number
         }[]
       }
+      get_histogram_appids:
+        | {
+            Args: never
+            Returns: {
+              appid: number
+            }[]
+          }
+        | {
+            Args: { p_limit?: number; p_offset?: number }
+            Returns: {
+              appid: number
+            }[]
+          }
       get_pics_data_stats: {
         Args: never
         Returns: {
