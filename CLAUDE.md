@@ -125,7 +125,8 @@ publisheriq/
 │   └── admin/                     # Next.js 15 dashboard
 │       ├── src/app/               # App router pages
 │       │   ├── (main)/insights/   # Insights dashboard (v2.2)
-│       │   └── (main)/companies/  # Companies page (v2.5) - unified pub/dev view
+│       │   ├── (main)/companies/  # Companies page (v2.5) - unified pub/dev view
+│       │   └── (main)/apps/       # Games page (v2.6) - game discovery & analytics
 │       ├── src/components/        # React components (theme, ui, data-display)
 │       └── src/lib/               # Utilities, LLM integration
 │           ├── llm/               # Chat system
@@ -367,6 +368,17 @@ alert_severity: 'low', 'medium', 'high'
 | `publisher_game_metrics` | Per-game publisher data | View (auto) |
 | `developer_game_metrics` | Per-game developer data | View (auto) |
 | `review_velocity_stats` | Velocity metrics per app | Daily via `refresh_mat_views()` |
+
+### Games Page Materialized Views (v2.6)
+| View | Purpose | Refresh |
+|------|---------|---------|
+| `app_filter_data` | Pre-computed content arrays for O(1) filtering | Every 6 hours |
+| `mv_tag_counts` | Tag counts by app type | Daily via `refresh_filter_count_views()` |
+| `mv_genre_counts` | Genre counts by app type | Daily via `refresh_filter_count_views()` |
+| `mv_category_counts` | Category counts by app type | Daily via `refresh_filter_count_views()` |
+| `mv_steam_deck_counts` | Steam Deck counts by app type | Daily via `refresh_filter_count_views()` |
+| `mv_ccu_tier_counts` | CCU tier distribution by app type | Daily via `refresh_filter_count_views()` |
+| `mv_apps_aggregate_stats` | Pre-computed summary stats by app type | Daily via `refresh_filter_count_views()` |
 
 ### Operational
 | Table | Purpose |
@@ -697,6 +709,37 @@ Unified publishers/developers analytics page at `/companies`:
 | `get_companies_by_ids()` | Fetch specific companies for compare mode |
 
 **Files:** `apps/admin/src/app/(main)/companies/`
+
+## Games Page (v2.6)
+
+Comprehensive game discovery and analytics page at `/apps`:
+
+| Feature | Description |
+|---------|-------------|
+| **Type Toggle** | All Types / Games / DLC / Demos |
+| **Presets** | 12 presets: Top Games, Rising Stars, Hidden Gems, Momentum, Comeback Stories, etc. |
+| **Quick Filters** | 12 stackable filters: Popular, Trending, Well Reviewed, Free, Indie, Steam Deck, etc. |
+| **Advanced Filters** | 9 categories: metrics, growth, sentiment, engagement, content, platform, release, relationship, activity |
+| **Columns** | 33 columns across 9 categories with toggle visibility |
+| **Computed Metrics** | 6 novel metrics: Momentum, Sentiment Delta, Active %, Review Rate, Value Score, vs Publisher Avg |
+| **Compare Mode** | Side-by-side comparison of 2-5 games |
+| **Export** | CSV/JSON with configurable columns |
+| **Saved Views** | localStorage persistence for filter configs (max 10) |
+
+**RPC Functions:**
+| Function | Purpose |
+|----------|---------|
+| `get_apps_with_filters()` | Main query with two-path optimization (~200ms fast, ~4s slow) |
+| `get_apps_aggregate_stats()` | Summary statistics for stats bar |
+| `get_app_sparkline_data()` | CCU time-series for sparklines |
+| `get_apps_filter_option_counts()` | Dynamic filter dropdown counts |
+
+**Materialized Views (7):**
+- `app_filter_data` - pre-computed content arrays (6hr refresh)
+- `mv_tag_counts`, `mv_genre_counts`, `mv_category_counts` - filter counts (daily)
+- `mv_steam_deck_counts`, `mv_ccu_tier_counts`, `mv_apps_aggregate_stats` - tier counts (daily)
+
+**Files:** `apps/admin/src/app/(main)/apps/`
 
 ## Common Patterns
 

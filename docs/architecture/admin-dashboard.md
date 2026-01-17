@@ -62,6 +62,21 @@ InsightsPage               # CCU analytics dashboard
 │   └── TopGameCard[]
 └── TrendingGamesTab       # Fastest growing games
     └── TopGameCard[]
+
+# Games Page (v2.6)
+AppsPage                   # Game discovery dashboard
+├── AppsPageClient         # Main client orchestrator
+├── AppTypeToggle          # Games/DLC/Demos toggle
+├── SearchBar              # Name search
+├── UnifiedFilterBar       # Presets + quick filters
+├── AdvancedFiltersPanel   # 9 filter categories
+├── SummaryStatsBar        # Aggregate statistics
+├── ColumnSelector         # Column visibility
+├── SavedViews             # Filter presets
+├── AppsTable              # Data table with cells
+├── BulkActionsBar         # Selection actions
+├── CompareMode            # Game comparison modal
+└── ExportDialog           # CSV/JSON export
 ```
 
 ### Data Flow
@@ -381,6 +396,8 @@ Located at `/admin/usage`. Shows:
 | `apps/admin/src/app/(main)/admin/users/page.tsx` | User management (v2.1) |
 | `apps/admin/src/app/(main)/admin/waitlist/page.tsx` | Waitlist approval (v2.1) |
 | `apps/admin/src/app/(main)/admin/usage/page.tsx` | Usage analytics (v2.1) |
+| `apps/admin/src/app/(main)/apps/page.tsx` | Games page (v2.6) |
+| `apps/admin/src/app/(main)/apps/[appid]/page.tsx` | Game detail page (v2.6) |
 
 ---
 
@@ -566,6 +583,9 @@ Columns hide on smaller screens:
 ## Related Documentation
 
 - [Design System Architecture](./design-system.md) - UI components and theming
+- [Games Page Architecture](./games-page.md) - Games page technical details (v2.6)
 - [Chat Interface Guide](../guides/chat-interface.md) - Chat system documentation
+- [Games Page User Guide](../guides/games-page.md) - Games page usage guide (v2.6)
 - [v2.0 Release Notes](../releases/v2.0-new-design.md) - Complete changelog
 - [v2.2 Release Notes](../releases/v2.2-ccu-steamspy.md) - CCU tiered tracking
+- [v2.6 Release Notes](../releases/v2.6-games-page.md) - Games page release (v2.6)

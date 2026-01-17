@@ -1123,6 +1123,84 @@ SELECT update_review_velocity_tiers();   -- Sync to sync_status
 
 ---
 
+### Games Page Materialized Views (v2.6+)
+
+Pre-computed views for the Games page at `/apps` with two-path optimization.
+
+#### app_filter_data
+
+Pre-computed content arrays for O(1) filtering in `get_apps_with_filters()`.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `appid` | INTEGER | Primary key |
+| `genre_ids` | INT[] | Pre-computed genre IDs |
+| `tag_ids` | INT[] | Pre-computed tag IDs |
+| `category_ids` | INT[] | Pre-computed category IDs |
+| `has_workshop` | BOOLEAN | Workshop support flag |
+| `platform_array` | TEXT[] | ['windows', 'macos', 'linux'] |
+| `steam_deck_category` | TEXT | 'verified', 'playable', 'unsupported', 'unknown' |
+| `publisher_id` | INTEGER | Primary publisher ID |
+| `publisher_name` | TEXT | Publisher name |
+| `publisher_game_count` | INTEGER | Publisher's total games |
+| `developer_id` | INTEGER | Primary developer ID |
+| `developer_name` | TEXT | Developer name |
+
+**GIN Indexes**:
+- `idx_app_filter_data_genre_ids` on `genre_ids`
+- `idx_app_filter_data_tag_ids` on `tag_ids`
+- `idx_app_filter_data_category_ids` on `category_ids`
+- `idx_app_filter_data_platform_array` on `platform_array`
+
+**Refreshed**: Every 6 hours via GitHub Action
+
+**Query Pattern**:
+```sql
+-- Array containment for content filtering
+WHERE afd.genre_ids @> ARRAY[1,2,3]::INT[]   -- Contains ALL (All mode)
+WHERE afd.genre_ids && ARRAY[1,2,3]::INT[]   -- Overlaps ANY (Any mode)
+```
+
+---
+
+#### Filter Count Views
+
+Pre-computed counts for fast filter dropdown options (<10ms).
+
+| View | Columns | Purpose |
+|------|---------|---------|
+| `mv_tag_counts` | app_type, tag_id, tag_name, app_count | Tag filter options |
+| `mv_genre_counts` | app_type, genre_id, genre_name, app_count | Genre filter options |
+| `mv_category_counts` | app_type, category_id, category_name, app_count | Category filter options |
+| `mv_steam_deck_counts` | app_type, steam_deck_category, app_count | Steam Deck filter options |
+| `mv_ccu_tier_counts` | app_type, ccu_tier, app_count | CCU tier filter options |
+| `mv_velocity_tier_counts` | app_type, velocity_tier, app_count | Velocity tier filter options |
+
+**Refreshed**: Daily via `refresh_filter_count_views()`
+
+---
+
+#### mv_apps_aggregate_stats
+
+Pre-computed summary statistics for the Games page stats bar.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `app_type` | TEXT | 'game', 'dlc', 'demo', or 'all' |
+| `total_games` | BIGINT | Total count |
+| `avg_ccu` | DECIMAL | Average peak CCU |
+| `avg_score` | DECIMAL | Average review score % |
+| `avg_momentum` | DECIMAL | Average momentum score |
+| `trending_up_count` | INTEGER | Games with >10% 7d growth |
+| `trending_down_count` | INTEGER | Games with <-10% 7d growth |
+| `sentiment_improving_count` | INTEGER | Games with >3% sentiment delta |
+| `sentiment_declining_count` | INTEGER | Games with <-3% sentiment delta |
+| `avg_value_score` | DECIMAL | Average value score |
+
+**Refreshed**: Daily via `refresh_filter_count_views()`
+
+---
+
 ## Query Tips
 
 1. **Latest metrics**: Always filter `daily_metrics` to most recent date per app:
