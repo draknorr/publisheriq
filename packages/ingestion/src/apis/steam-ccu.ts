@@ -151,11 +151,13 @@ export interface CCUBatchResultWithStatus {
  *
  * @param appids - Array of Steam app IDs to fetch
  * @param onProgress - Optional callback for progress updates
+ * @param shouldStop - Optional callback to check if we should stop early (for graceful shutdown)
  * @returns Map of appid to CCUResultWithStatus
  */
 export async function fetchSteamCCUBatchWithStatus(
   appids: number[],
-  onProgress?: (processed: number, total: number) => void
+  onProgress?: (processed: number, total: number) => void,
+  shouldStop?: () => boolean
 ): Promise<CCUBatchResultWithStatus> {
   const results = new Map<number, CCUResultWithStatus>();
   let validCount = 0;
@@ -163,6 +165,18 @@ export async function fetchSteamCCUBatchWithStatus(
   let errorCount = 0;
 
   for (let i = 0; i < appids.length; i++) {
+    // Check for graceful shutdown before each request
+    if (shouldStop?.()) {
+      log.info('Graceful shutdown requested, stopping batch early', {
+        processed: i,
+        total: appids.length,
+        validCount,
+        invalidCount,
+        errorCount,
+      });
+      break;
+    }
+
     const appid = appids[i];
     const result = await fetchSteamCCUWithStatus(appid);
 
@@ -183,6 +197,7 @@ export async function fetchSteamCCUBatchWithStatus(
 
   log.info('Batch CCU fetch with status complete', {
     total: appids.length,
+    processed: results.size,
     validCount,
     invalidCount,
     errorCount,
