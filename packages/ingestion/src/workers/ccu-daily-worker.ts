@@ -65,34 +65,9 @@ async function getTier3Games(
     .eq('ccu_tier', 3)
     .gt('ccu_skip_until', now);
 
-  // Try RPC function for partitioned query (more efficient)
-  // Cast to any because RPC may not be in generated types yet
-  if (isPartitioned) {
-    const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
-      'get_tier3_games_partitioned',
-      {
-        p_limit: limit,
-        p_partition_count: partitionCount,
-        p_partition_id: partitionId,
-      }
-    );
-
-    if (!rpcError && rpcData && Array.isArray(rpcData) && rpcData.length > 0) {
-      const appids = (rpcData as { appid: number }[]).map((r) => r.appid);
-      log.info('Using partitioned RPC for Tier 3 games', {
-        partition: `${partitionId}/${partitionCount}`,
-        count: appids.length,
-        skipped: skippedCount ?? 0,
-      });
-      return { appids, skippedCount: skippedCount ?? 0 };
-    }
-
-    if (rpcError) {
-      log.warn('Partitioned RPC failed, falling back to pagination', { error: rpcError.message });
-    }
-  }
-
   // Paginate through Tier 3 games, excluding skipped apps
+  // Note: We use client-side pagination instead of RPC because PostgREST
+  // limits RPC results to 1000 rows regardless of the function's LIMIT clause
   // Cast to any because ccu_tier_assignments may not be in generated types yet
   const allAppids: number[] = [];
   let offset = 0;
