@@ -6,6 +6,7 @@ This directory contains historical implementation plans and technical documents 
 
 | File | Original Purpose | Date Archived |
 |------|-----------------|---------------|
+| [publishers-developers-pages.md](publishers-developers-pages.md) | Separate pub/dev pages architecture (deprecated by Companies page v2.5) | Jan 2026 |
 | [pics-data-reference.md](pics-data-reference.md) | PICS data field reference | Dec 2025 |
 | [pics-implementation-plan.md](pics-implementation-plan.md) | PICS service implementation plan | Dec 2025 |
 | [steam-implementation-overview.md](steam-implementation-overview.md) | Original architecture overview | Dec 2025 |

@@ -17,21 +17,29 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ## Latest Release
 
-**[v2.5 - Companies Page](releases/v2.5-companies-page.md)** (January 15, 2026)
+**[v2.6 - Games Page](releases/v2.6-games-page.md)** (January 16, 2026)
 
-**Unified Companies Dashboard**
-- Browse publishers and developers in one unified view with type toggle
-- 9 filter categories with 25+ parameters (metrics, growth, content, platforms, Steam Deck)
-- 17 customizable columns across 7 metric categories
-- Compare mode: side-by-side comparison of 2-5 companies
+**Comprehensive Game Discovery**
+- Browse all Steam apps (games, DLC, demos) with type toggle
+- 12 discovery presets: Top Games, Rising Stars, Hidden Gems, Momentum, etc.
+- 12 stackable quick filters: Popular, Trending, Well Reviewed, Free, Indie, Steam Deck, etc.
+- 9 advanced filter categories with 30+ parameters
+- 33 customizable columns across 9 metric categories
+- 6 novel computed metrics: Momentum, Sentiment Delta, Active %, Review Rate, Value Score, vs Publisher Avg
+- Compare mode: side-by-side comparison of 2-5 games
 - CSV/JSON export with configurable columns
-- Saved views for filter configurations
-- Computed ratio columns: Revenue/Game, Owners/Game, Reviews/1K Owners
+- Saved views for filter configurations (max 10)
 - Inline CCU sparkline visualizations
 
 ---
 
 ## Previous Releases
+
+**[v2.5 - Companies Page](releases/v2.5-companies-page.md)** (January 15, 2026)
+
+- Unified publishers and developers in one view with type toggle
+- 9 filter categories with 25+ parameters
+- 17 customizable columns, compare mode, export, saved views
 
 **[v2.4 - Personalization & Chat Enhancements](releases/v2.4-personalization.md)** (January 12, 2026)
 
@@ -93,6 +101,7 @@ Understand how PublisherIQ works:
 - **[Design System](architecture/design-system.md)** - Theme system, color palette, typography, components
 - **[Admin Dashboard](architecture/admin-dashboard.md)** - Dashboard architecture and RPC optimizations
 - **[Companies Page](architecture/companies-page.md)** - Unified publishers/developers page architecture
+- **[Games Page](architecture/games-page.md)** - Game discovery page architecture and computed metrics
 - **[Chat Data System](architecture/chat-data-system.md)** - Complete chat/LLM architecture, Cube.js schemas, and tools
 - **[Data Sources](architecture/data-sources.md)** - Steam APIs, SteamSpy, PICS service
 - **[Database Schema](architecture/database-schema.md)** - Tables, relationships, SQL patterns
@@ -116,6 +125,7 @@ Deploy PublisherIQ to production:
 
 How-to guides for common tasks:
 
+- **[Games Page](guides/games-page.md)** - Using the game discovery and analytics page
 - **[Companies Page](guides/companies-page.md)** - Using the unified publishers/developers page
 - **[Theming](guides/theming.md)** - Using and customizing light/dark themes
 - **[Chat Interface](guides/chat-interface.md)** - Natural language queries via Cube.js with entity linking
