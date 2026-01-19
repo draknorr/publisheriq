@@ -38,8 +38,8 @@ export const BATCH_SIZES = {
   /** Number of apps per page from SteamSpy "all" endpoint */
   STEAMSPY_PAGE: 1000,
 
-  /** Number of apps to fetch from Storefront API per worker run */
-  STOREFRONT_BATCH: 1500,
+  /** Number of apps to fetch from Storefront API per worker run (fits within 45min timeout at 0.33 req/sec) */
+  STOREFRONT_BATCH: 800,
 
   /** Number of apps to fetch reviews for per worker run (targets ~42min at 1 req/sec) */
   REVIEWS_BATCH: 2500,
