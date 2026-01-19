@@ -107,7 +107,14 @@ async function main(): Promise<void> {
       totalInterpolated,
     });
   } catch (error) {
-    log.error('Interpolation failed', { error });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    log.error('Interpolation failed', {
+      error: errorMessage,
+      stack: errorStack,
+      durationSeconds: ((Date.now() - startTime) / 1000).toFixed(2),
+    });
 
     if (job) {
       await supabase
@@ -115,7 +122,7 @@ async function main(): Promise<void> {
         .update({
           status: 'failed',
           completed_at: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : String(error),
+          error_message: errorMessage,
         })
         .eq('id', job.id);
     }

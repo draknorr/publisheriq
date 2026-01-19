@@ -19,7 +19,15 @@ function shouldLog(level: LogLevel): boolean {
 
 function formatMessage(level: LogLevel, message: string, context?: LogContext): string {
   const timestamp = new Date().toISOString();
-  const contextStr = context ? ` ${JSON.stringify(context)}` : '';
+  // Use a replacer function to properly serialize Error objects
+  // (Error properties are not enumerable, so JSON.stringify outputs {} without this)
+  const contextStr = context
+    ? ` ${JSON.stringify(context, (key, value) =>
+        value instanceof Error
+          ? { message: value.message, stack: value.stack, name: value.name }
+          : value
+      )}`
+    : '';
   return `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}`;
 }
 
