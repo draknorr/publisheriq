@@ -502,5 +502,5 @@ ORDER BY date DESC;
 
 ## Related Documentation
 
-- [Database Schema](../architecture/database-schema.md) - Full schema reference
-- [Chat Interface](../guides/chat-interface.md) - Using natural language queries
+- [Database Schema](../developer-guide/architecture/database-schema.md) - Full schema reference
+- [Chat Interface](../user-guide/chat-interface.md) - Using natural language queries

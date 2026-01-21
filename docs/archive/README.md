@@ -19,9 +19,9 @@ This directory contains historical implementation plans and technical documents 
 These documents were created during the initial development and contain valuable historical context. However, they have been replaced by the current documentation structure:
 
 - **Implementation plans** → Now reflected in current codebase state
-- **Architecture overviews** → Consolidated in [/docs/architecture/](../architecture/)
-- **API references** → Updated in [/docs/reference/](../reference/)
-- **Troubleshooting notes** → Moved to [/docs/guides/troubleshooting.md](../guides/troubleshooting.md)
+- **Architecture overviews** → Consolidated in [/docs/developer-guide/architecture/](../developer-guide/architecture/)
+- **API references** → Updated in [/docs/api/](../api/) and [/docs/reference/](../reference/)
+- **Troubleshooting notes** → Moved to [/docs/admin-guide/troubleshooting.md](../admin-guide/troubleshooting.md)
 
 ## Using Archived Docs
 

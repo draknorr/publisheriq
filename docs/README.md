@@ -1,17 +1,21 @@
 # PublisherIQ Documentation
 
-Welcome to the PublisherIQ documentation. This guide covers everything you need to set up, deploy, and work with the Steam data acquisition platform.
+Welcome to the PublisherIQ documentation. This guide covers everything you need to use, administer, and develop the Steam data acquisition platform.
 
-## Quick Navigation
+**New here?** Start with [START-HERE.md](START-HERE.md) to find the right documentation for your role.
 
-| Section | Description |
-|---------|-------------|
-| [Getting Started](getting-started/) | Installation, setup, and first run |
-| [Architecture](architecture/) | System design, data sources, database schema |
-| [Deployment](deployment/) | Vercel, Railway, GitHub Actions, Supabase |
-| [Guides](guides/) | User guides and tutorials |
-| [Reference](reference/) | API specs, data dictionaries, rate limits |
-| [Releases](releases/) | Version release notes and changelogs |
+---
+
+## Documentation Structure
+
+| Section | Audience | Description |
+|---------|----------|-------------|
+| [User Guide](user-guide/) | End Users | How to use PublisherIQ features |
+| [Admin Guide](admin-guide/) | Administrators | System monitoring, user management, troubleshooting |
+| [Developer Guide](developer-guide/) | Developers | Architecture, setup, deployment, contributing |
+| [API](api/) | Developers | Internal and external API documentation |
+| [Reference](reference/) | All | Data dictionaries, SQL patterns, metrics |
+| [Releases](releases/) | All | Version release notes and changelogs |
 
 ---
 
@@ -33,128 +37,105 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ---
 
-## Previous Releases
+## User Guide
 
-**[v2.5 - Companies Page](releases/v2.5-companies-page.md)** (January 15, 2026)
+Learn how to use PublisherIQ:
 
-- Unified publishers and developers in one view with type toggle
-- 9 filter categories with 25+ parameters
-- 17 customizable columns, compare mode, export, saved views
-
-**[v2.4 - Personalization & Chat Enhancements](releases/v2.4-personalization.md)** (January 12, 2026)
-
-- Pin games, publishers, developers to your personalized dashboard
-- 8 alert types with configurable preferences and sensitivity
-- New `search_by_concept` and `discover_trending` LLM tools
-- Embedding optimization: 1536 → 512 dimensions (~90% storage savings)
-
-**[v2.3 - Embedding Optimization](releases/v2.3-embedding-optimization.md)** (January 11, 2026)
-
-- 10x faster embedding sync throughput through batch optimization
-- Async Qdrant writes with end-of-sync verification
-- OpenAI retry logic: 3 retries with exponential backoff
-- Workflow timeout reduced from 120 to 60 minutes
-
-**[v2.2 - CCU & SteamSpy Improvements](releases/v2.2-ccu-steamspy.md)** (January 9, 2026)
-
-- Tiered CCU tracking: Tier 1 (hourly), Tier 2 (2-hourly), Tier 3 (3x daily rotation)
-- Exact CCU from Steam's GetNumberOfCurrentPlayers API
-- SteamSpy supplementary fetch for missing games
-- Reviews API 3x faster, batch size 2x larger
-- Priority calculation fix for never-synced apps
-
-**[v2.1 - Velocity & Auth](releases/v2.1-velocity-auth.md)** (January 8, 2026)
-
-- Velocity-based review sync scheduling (4h/12h/24h/72h tiers)
-- User authentication with magic links
-- Credit-based usage tracking
-- New LLM tool: `lookup_games`
-
-**[v2.0 - New Design](releases/v2.0-new-design.md)** (January 2026)
-
-Major visual and functional overhaul including:
-- Complete design system with dual light/dark themes
-- 66% query reduction in admin dashboard
-- New estimated played hours metrics
-- Enhanced chat/LLM capabilities with Cube.js semantic layer
-- Mobile-responsive layouts
-- Vector similarity search via Qdrant Cloud
+- **[Getting Started](user-guide/getting-started.md)** - First run and overview
+- **[Global Search](user-guide/search.md)** - Quick search with ⌘K
+- **[Keyboard Shortcuts](user-guide/keyboard-shortcuts.md)** - All keyboard shortcuts
+- **[Insights Page](user-guide/insights-page.md)** - Top games, newest releases, trending
+- **[Games Page](user-guide/games-page.md)** - Game discovery and analytics
+- **[Companies Page](user-guide/companies-page.md)** - Publishers and developers
+- **[Chat Interface](user-guide/chat-interface.md)** - Natural language queries
+- **[Chat Query Examples](user-guide/chat-query-examples.md)** - 60+ example queries
+- **[Search & Discovery](user-guide/search-discovery.md)** - Concept search and similarity
+- **[Personalization](user-guide/personalization.md)** - Pinning, alerts, and notifications
+- **[Account](user-guide/account.md)** - Profile and transactions
+- **[Credit System](user-guide/credit-system.md)** - How credits work
+- **[Theming](user-guide/theming.md)** - Light and dark themes
 
 ---
 
-## Getting Started
+## Admin Guide
 
-New to PublisherIQ? Start here:
+Manage and monitor PublisherIQ:
 
-1. **[Prerequisites](getting-started/prerequisites.md)** - Tools and accounts you'll need
-2. **[Installation](getting-started/installation.md)** - Clone and set up the project
-3. **[Environment Setup](getting-started/environment-setup.md)** - Configure all environment variables
-4. **[First Run](getting-started/first-run.md)** - Verify everything works
-
----
-
-## Architecture
-
-Understand how PublisherIQ works:
-
-- **[System Overview](architecture/overview.md)** - High-level architecture and component diagram
-- **[Design System](architecture/design-system.md)** - Theme system, color palette, typography, components
-- **[Admin Dashboard](architecture/admin-dashboard.md)** - Dashboard architecture and RPC optimizations
-- **[Companies Page](architecture/companies-page.md)** - Unified publishers/developers page architecture
-- **[Games Page](architecture/games-page.md)** - Game discovery page architecture and computed metrics
-- **[Chat Data System](architecture/chat-data-system.md)** - Complete chat/LLM architecture, Cube.js schemas, and tools
-- **[Data Sources](architecture/data-sources.md)** - Steam APIs, SteamSpy, PICS service
-- **[Database Schema](architecture/database-schema.md)** - Tables, relationships, SQL patterns
-- **[Sync Pipeline](architecture/sync-pipeline.md)** - How data flows through the system
+- **[Overview](admin-guide/overview.md)** - Admin quick start
+- **[Dashboard](admin-guide/dashboard.md)** - System health, users, analytics
+- **[Chat Logs](admin-guide/chat-logs.md)** - Query debugging
+- **[Troubleshooting](admin-guide/troubleshooting.md)** - Common issues
 
 ---
 
-## Deployment
+## Developer Guide
 
-Deploy PublisherIQ to production:
+Contribute to or deploy PublisherIQ:
 
-- **[Vercel](deployment/vercel.md)** - Deploy the admin dashboard
-- **[Fly.io](deployment/flyio.md)** - Deploy the Cube.js semantic layer
-- **[Railway](deployment/railway.md)** - Deploy the PICS service
-- **[GitHub Actions](deployment/github-actions.md)** - Configure scheduled sync jobs
-- **[Supabase](deployment/supabase.md)** - Set up the database
+### Setup
+- **[Prerequisites](developer-guide/prerequisites.md)** - Required tools
+- **[Installation](developer-guide/installation.md)** - Clone and install
+- **[Environment Setup](developer-guide/setup.md)** - Configure variables
+
+### Architecture
+- **[System Overview](developer-guide/architecture/overview.md)** - High-level design
+- **[Database Schema](developer-guide/architecture/database-schema.md)** - Tables and SQL
+- **[Sync Pipeline](developer-guide/architecture/sync-pipeline.md)** - Data flow
+- **[Chat Data System](developer-guide/architecture/chat-data-system.md)** - LLM and Cube.js
+- **[Design System](developer-guide/architecture/design-system.md)** - UI and themes
+- **[Data Sources](developer-guide/architecture/data-sources.md)** - External APIs
+
+### Features
+- **[Games Page](developer-guide/features/games-page.md)** - Technical details
+- **[Companies Page](developer-guide/features/companies-page.md)** - Implementation
+- **[Admin Dashboard](developer-guide/features/admin-dashboard.md)** - Architecture
+- **[Personalization](developer-guide/features/personalization.md)** - Pins and alerts
+- **[Smart Query Suggestions](developer-guide/features/smart-query-suggestions.md)** - Autocomplete
+
+### Workers
+- **[Overview](developer-guide/workers/overview.md)** - Worker system
+- **[Running Workers](developer-guide/workers/running-workers.md)** - Manual execution
+- **[Adding Workers](developer-guide/workers/adding-workers.md)** - Create new workers
+
+### Deployment
+- **[Vercel](developer-guide/deployment/vercel.md)** - Dashboard deployment
+- **[Fly.io](developer-guide/deployment/fly-io.md)** - Cube.js deployment
+- **[Railway](developer-guide/deployment/railway.md)** - PICS service
+- **[Supabase](developer-guide/deployment/supabase.md)** - Database setup
+- **[GitHub Actions](developer-guide/deployment/github-actions.md)** - Scheduled syncs
 
 ---
 
-## Guides
+## API Documentation
 
-How-to guides for common tasks:
-
-- **[Games Page](guides/games-page.md)** - Using the game discovery and analytics page
-- **[Companies Page](guides/companies-page.md)** - Using the unified publishers/developers page
-- **[Theming](guides/theming.md)** - Using and customizing light/dark themes
-- **[Chat Interface](guides/chat-interface.md)** - Natural language queries via Cube.js with entity linking
-- **[Chat Query Examples](guides/chat-query-examples.md)** - 60+ example queries organized by use case
-- **[Personalization](guides/personalization.md)** - Pinning items and managing alerts
-- **[Admin: Chat Logs](guides/admin-chat-logs.md)** - Analytics and debugging for chat queries
-- **[Running Workers](guides/running-workers.md)** - Manual worker execution
-- **[Adding New Workers](guides/adding-new-worker.md)** - Developer guide for new sync jobs
-- **[Troubleshooting](guides/troubleshooting.md)** - Common issues and solutions
-
----
-
-## Features
-
-Feature documentation for specific capabilities:
-
-- **[Smart Query Suggestions](features/smart-query-suggestions.md)** - Type-ahead autocomplete and post-response chips
+- **[Overview](api/overview.md)** - API navigation
+- **[Streaming API](api/streaming-api.md)** - Chat SSE protocol
+- **[Internal API](api/internal-api.md)** - Dashboard endpoints
+- **[Steam API](api/steam-api.md)** - External API specs
+- **[Rate Limits](api/rate-limits.md)** - All rate limits
 
 ---
 
 ## Reference
 
-Technical reference documentation:
+Technical lookup documentation:
 
-- **[New Metrics](reference/new-metrics.md)** - Estimated played hours and monthly metrics
-- **[API Endpoints](reference/api-endpoints.md)** - Steam API specifications
+- **[New Metrics](reference/new-metrics.md)** - Estimated played hours
 - **[PICS Data Fields](reference/pics-data-fields.md)** - PICS field reference
-- **[Rate Limits](reference/rate-limits.md)** - All API rate limits
-- **[SQL Examples](reference/sql-examples.md)** - Query patterns for the chat interface
+- **[SQL Examples](reference/sql-examples.md)** - Query patterns
+- **[Data Gaps Analysis](reference/data-gaps-analysis.md)** - Coverage analysis
+- **[Data Sources Comprehensive](reference/data-sources-comprehensive.md)** - Full API reference
+
+---
+
+## Previous Releases
+
+- **[v2.5 - Companies Page](releases/v2.5-companies-page.md)** - Unified publishers/developers
+- **[v2.4 - Personalization](releases/v2.4-personalization.md)** - Pins and alerts
+- **[v2.3 - Embedding Optimization](releases/v2.3-embedding-optimization.md)** - 10x faster sync
+- **[v2.2 - CCU & SteamSpy](releases/v2.2-ccu-steamspy.md)** - Tiered CCU tracking
+- **[v2.1 - Velocity & Auth](releases/v2.1-velocity-auth.md)** - Auth and velocity sync
+- **[v2.0 - New Design](releases/v2.0-new-design.md)** - Design system overhaul
 
 ---
 
@@ -162,34 +143,25 @@ Technical reference documentation:
 
 ```
 publisheriq/
-├── apps/admin/           # Next.js 15 admin dashboard (Vercel)
+├── apps/admin/                # Next.js 15 admin dashboard (Vercel)
 ├── packages/
-│   ├── cube/             # Cube.js semantic layer models (Fly.io)
-│   ├── database/         # Supabase client + types
-│   ├── ingestion/        # Data collection workers + embedding sync
-│   ├── qdrant/           # Vector database client (Qdrant Cloud)
-│   └── shared/           # Utilities and constants
-├── services/pics-service/# Python PICS microservice (Railway)
-├── supabase/migrations/  # Database schema (Supabase)
-├── docs/                 # This documentation
-└── .github/workflows/    # Scheduled sync jobs (GitHub Actions)
+│   ├── cube/                  # Cube.js semantic layer (Fly.io)
+│   ├── database/              # Supabase client + types
+│   ├── ingestion/             # Data collection workers
+│   ├── qdrant/                # Vector database client
+│   └── shared/                # Utilities and constants
+├── services/pics-service/     # Python PICS microservice (Railway)
+├── supabase/migrations/       # Database schema (Supabase)
+├── docs/                      # This documentation
+│   ├── user-guide/            # End user documentation
+│   ├── admin-guide/           # Administrator documentation
+│   ├── developer-guide/       # Developer documentation
+│   ├── api/                   # API documentation
+│   ├── reference/             # Technical references
+│   ├── releases/              # Release notes
+│   └── archive/               # Historical documents
+└── .github/workflows/         # Scheduled sync jobs
 ```
-
-**Deployment Architecture:**
-- **Dashboard**: Vercel (Next.js 15)
-- **Semantic Layer**: Fly.io (Cube.js)
-- **Database**: Supabase (PostgreSQL)
-- **Vector Search**: Qdrant Cloud
-- **PICS Service**: Railway (Python)
-- **Scheduled Syncs**: GitHub Actions
-
-See individual package READMEs for more details:
-- [apps/admin/README.md](../apps/admin/README.md)
-- [packages/database/README.md](../packages/database/README.md)
-- [packages/ingestion/README.md](../packages/ingestion/README.md)
-- [packages/qdrant/README.md](../packages/qdrant/README.md)
-- [packages/shared/README.md](../packages/shared/README.md)
-- [services/pics-service/README.md](../services/pics-service/README.md)
 
 ---
 

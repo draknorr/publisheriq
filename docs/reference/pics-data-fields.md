@@ -309,6 +309,6 @@ PICS data is stored in these tables:
 
 ## Related Documentation
 
-- [Data Sources](../architecture/data-sources.md) - Source hierarchy
-- [Railway Deployment](../deployment/railway.md) - PICS service setup
-- [Database Schema](../architecture/database-schema.md) - Full schema
+- [Data Sources](../developer-guide/architecture/data-sources.md) - Source hierarchy
+- [Railway Deployment](../developer-guide/deployment/railway.md) - PICS service setup
+- [Database Schema](../developer-guide/architecture/database-schema.md) - Full schema

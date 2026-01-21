@@ -308,5 +308,5 @@ The following indexes exist for performance optimization:
 ## Related Documentation
 
 - [v2.0 Release Notes](../releases/v2.0-new-design.md) - Complete changelog
-- [Database Schema](../architecture/database-schema.md) - Full schema reference
-- [Chat Interface Guide](../guides/chat-interface.md) - Using the chat system
+- [Database Schema](../developer-guide/architecture/database-schema.md) - Full schema reference
+- [Chat Interface Guide](../user-guide/chat-interface.md) - Using the chat system
