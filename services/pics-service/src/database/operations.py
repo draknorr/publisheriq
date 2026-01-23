@@ -198,13 +198,19 @@ class PICSDatabase:
         apps_with_storefront_dates = self._get_apps_with_storefront_dates(appids_to_process)
         logger.info(f"{len(apps_with_storefront_dates)} apps have storefront release dates (will not overwrite)")
 
+        # Get apps that have been synced via storefront API (authoritative for is_free)
+        # PICS should only set is_free as a fallback when storefront hasn't synced yet
+        apps_with_storefront_sync = self._get_apps_with_storefront_sync(appids_to_process)
+        logger.info(f"{len(apps_with_storefront_sync)} apps have storefront sync (will not overwrite is_free)")
+
         # Prepare app records
         app_records = []
         appid_to_app = {}  # Track which apps we're processing
         build_failures = 0
         for app in apps_to_process:
-            has_storefront = app.appid in apps_with_storefront_dates
-            record = self._build_app_record(app, has_storefront_date=has_storefront)
+            has_storefront_date = app.appid in apps_with_storefront_dates
+            has_storefront_sync = app.appid in apps_with_storefront_sync
+            record = self._build_app_record(app, has_storefront_date=has_storefront_date, has_storefront_sync=has_storefront_sync)
             if record:
                 app_records.append(record)
                 appid_to_app[app.appid] = app
@@ -288,7 +294,35 @@ class PICSDatabase:
 
         return has_raw_date
 
-    def _build_app_record(self, app: ExtractedPICSData, has_storefront_date: bool = False) -> Optional[Dict[str, Any]]:
+    def _get_apps_with_storefront_sync(self, appids: List[int]) -> Set[int]:
+        """Get appids that have been synced via storefront API.
+
+        The storefront API is authoritative for is_free. PICS should only
+        set is_free as a fallback when storefront hasn't synced the app yet.
+        """
+        if not appids:
+            return set()
+
+        has_storefront_sync: Set[int] = set()
+        batch_size = 1000
+
+        for i in range(0, len(appids), batch_size):
+            batch = appids[i : i + batch_size]
+            try:
+                result = (
+                    self._db.client.table("sync_status")
+                    .select("appid")
+                    .in_("appid", batch)
+                    .not_.is_("last_storefront_sync", "null")
+                    .execute()
+                )
+                has_storefront_sync.update(r["appid"] for r in result.data)
+            except Exception as e:
+                logger.error(f"Failed to check storefront sync status: {e}")
+
+        return has_storefront_sync
+
+    def _build_app_record(self, app: ExtractedPICSData, has_storefront_date: bool = False, has_storefront_sync: bool = False) -> Optional[Dict[str, Any]]:
         """Build a database record from extracted PICS data."""
         try:
             # Use PICS type if available, otherwise infer from other data
@@ -322,7 +356,9 @@ class PICSDatabase:
                 "content_descriptors": app.content_descriptors if app.content_descriptors else None,
                 "languages": app.languages if app.languages else None,
                 "has_workshop": app.has_workshop,
-                "is_free": app.is_free,
+                # is_free from PICS - only as fallback when storefront hasn't synced yet
+                # Storefront API is authoritative for is_free
+                **({"is_free": app.is_free} if not has_storefront_sync else {}),
                 # Release date from PICS - only as fallback when storefront data is missing
                 # Storefront API is authoritative for release dates
                 **(

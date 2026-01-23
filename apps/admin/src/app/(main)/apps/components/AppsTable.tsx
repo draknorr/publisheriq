@@ -134,6 +134,17 @@ function DiscountBadge({ percent }: { percent: number }) {
 }
 
 /**
+ * Free badge for free games
+ */
+function FreeBadge() {
+  return (
+    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent-green/15 text-accent-green rounded">
+      Free
+    </span>
+  );
+}
+
+/**
  * Mobile card view for a single app
  */
 function MobileAppCard({
@@ -223,9 +234,15 @@ function MobileAppCard({
           <div className="flex justify-between">
             <span className="text-text-tertiary">Price</span>
             <span className="text-text-secondary">
-              {formatPrice(app.price_cents)}
-              {app.current_discount_percent > 0 && (
-                <DiscountBadge percent={app.current_discount_percent} />
+              {app.is_free ? (
+                <FreeBadge />
+              ) : (
+                <>
+                  {formatPrice(app.price_cents)}
+                  {app.current_discount_percent > 0 && (
+                    <DiscountBadge percent={app.current_discount_percent} />
+                  )}
+                </>
               )}
             </span>
           </div>
@@ -358,6 +375,9 @@ function renderCell(
     // FINANCIAL
     // ═══════════════════════════════════════════════════════════════════
     case 'price':
+      if (app.is_free) {
+        return <FreeBadge />;
+      }
       return (
         <>
           <span>{formatPrice(app.price_cents)}</span>
