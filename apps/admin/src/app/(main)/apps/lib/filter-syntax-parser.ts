@@ -14,12 +14,18 @@ import {
   getFilterByShortcut,
   FILTER_REGISTRY,
 } from './filter-registry';
+import {
+  QUICK_FILTERS,
+  PRESETS,
+  type AppsQuickFilter,
+  type AppsPreset,
+} from './apps-presets';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type ParsedFilterType = 'range' | 'boolean' | 'content' | 'search';
+export type ParsedFilterType = 'range' | 'boolean' | 'content' | 'search' | 'quick_filter' | 'preset';
 
 export interface ParsedRangeFilter {
   type: 'range';
@@ -52,11 +58,25 @@ export interface ParsedSearchFilter {
   displayText: string;
 }
 
+export interface ParsedQuickFilter {
+  type: 'quick_filter';
+  quickFilter: AppsQuickFilter;
+  displayText: string;
+}
+
+export interface ParsedPreset {
+  type: 'preset';
+  preset: AppsPreset;
+  displayText: string;
+}
+
 export type ParsedFilter =
   | ParsedRangeFilter
   | ParsedBooleanFilter
   | ParsedContentFilter
-  | ParsedSearchFilter;
+  | ParsedSearchFilter
+  | ParsedQuickFilter
+  | ParsedPreset;
 
 export interface ParseResult {
   success: boolean;
@@ -111,7 +131,15 @@ export function parseFilterSyntax(input: string): ParseResult {
   const bareBoolean = parseBareBoolean(trimmed);
   if (bareBoolean.success) return bareBoolean;
 
-  // 7. Generate suggestions if no match
+  // 7. Try quick filter by name: "indie", "popular", "trending"
+  const quickFilter = parseQuickFilter(trimmed);
+  if (quickFilter.success) return quickFilter;
+
+  // 8. Try preset by name: "rising stars", "hidden gems"
+  const preset = parsePreset(trimmed);
+  if (preset.success) return preset;
+
+  // 9. Generate suggestions if no match
   return {
     success: false,
     error: 'Could not parse filter',
@@ -406,6 +434,65 @@ function parseBareBoolean(input: string): ParseResult {
   };
 }
 
+/**
+ * Normalize a string for matching: lowercase, remove spaces/underscores/hyphens/arrows
+ */
+function normalizeForMatch(str: string): string {
+  return str.toLowerCase().replace(/[\s_\-↑↓]+/g, '');
+}
+
+/**
+ * Parse quick filter by name: "indie", "popular", "trending"
+ */
+function parseQuickFilter(input: string): ParseResult {
+  const normalized = normalizeForMatch(input);
+
+  const match = QUICK_FILTERS.find((qf) => {
+    const normalizedId = normalizeForMatch(qf.id);
+    const normalizedLabel = normalizeForMatch(qf.label);
+    return normalizedId === normalized || normalizedLabel === normalized;
+  });
+
+  if (match) {
+    return {
+      success: true,
+      filter: {
+        type: 'quick_filter',
+        quickFilter: match,
+        displayText: match.label,
+      },
+    };
+  }
+
+  return { success: false };
+}
+
+/**
+ * Parse preset by name: "rising stars", "hidden gems", "top games"
+ */
+function parsePreset(input: string): ParseResult {
+  const normalized = normalizeForMatch(input);
+
+  const match = PRESETS.find((p) => {
+    const normalizedId = normalizeForMatch(p.id);
+    const normalizedLabel = normalizeForMatch(p.label);
+    return normalizedId === normalized || normalizedLabel === normalized;
+  });
+
+  if (match) {
+    return {
+      success: true,
+      filter: {
+        type: 'preset',
+        preset: match,
+        displayText: match.label,
+      },
+    };
+  }
+
+  return { success: false };
+}
+
 // ============================================================================
 // Display Formatting
 // ============================================================================
@@ -508,6 +595,29 @@ function levenshteinDistance(a: string, b: string): number {
  */
 function generateSuggestions(input: string): string[] {
   const suggestions: string[] = [];
+  const normalizedInput = normalizeForMatch(input);
+
+  // Find quick filters that match the input
+  const matchingQuickFilters = QUICK_FILTERS.filter((qf) => {
+    const normalizedId = normalizeForMatch(qf.id);
+    const normalizedLabel = normalizeForMatch(qf.label);
+    return normalizedId.includes(normalizedInput) || normalizedLabel.includes(normalizedInput);
+  });
+
+  for (const qf of matchingQuickFilters.slice(0, 2)) {
+    suggestions.push(qf.id);
+  }
+
+  // Find presets that match the input
+  const matchingPresets = PRESETS.filter((p) => {
+    const normalizedId = normalizeForMatch(p.id);
+    const normalizedLabel = normalizeForMatch(p.label);
+    return normalizedId.includes(normalizedInput) || normalizedLabel.includes(normalizedInput);
+  });
+
+  for (const p of matchingPresets.slice(0, 2)) {
+    suggestions.push(p.id.replace(/_/g, ' '));
+  }
 
   // Find filters that start with the input
   const startsWith = FILTER_REGISTRY.filter((f) =>

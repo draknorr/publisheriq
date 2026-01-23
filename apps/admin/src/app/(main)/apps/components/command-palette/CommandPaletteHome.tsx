@@ -33,6 +33,7 @@ import type { FilterOption } from '../../hooks/useFilterCounts';
 import type { PresetId, QuickFilterId } from '../../lib/apps-types';
 import { PRESETS, QUICK_FILTERS } from '../../lib/apps-presets';
 import { getMetricFilters } from '../../lib/filter-registry';
+import type { ParsedQuickFilter, ParsedPreset } from '../../lib/filter-syntax-parser';
 
 // ============================================================================
 // Types
@@ -112,11 +113,30 @@ export function CommandPaletteHome({
     setSearchInput(e.target.value);
   };
 
+  // Handle applying the parsed filter (handles quick_filter and preset types)
+  const handleApplyParsedFilter = () => {
+    if (!parsedFilter?.success || !parsedFilter.filter) return;
+
+    const filter = parsedFilter.filter;
+
+    if (filter.type === 'quick_filter') {
+      const qf = (filter as ParsedQuickFilter).quickFilter;
+      onToggleQuickFilter(qf.id);
+      close();
+    } else if (filter.type === 'preset') {
+      const p = (filter as ParsedPreset).preset;
+      onApplyPreset(p.id);
+      close();
+    } else {
+      applyParsedFilter();
+    }
+  };
+
   // Handle Enter key in search
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && parsedFilter?.success) {
       e.preventDefault();
-      applyParsedFilter();
+      handleApplyParsedFilter();
     }
   };
 
@@ -168,7 +188,7 @@ export function CommandPaletteHome({
       {/* Parsed Filter Preview */}
       {parsedFilter?.success && parsedFilter.filter && (
         <button
-          onClick={applyParsedFilter}
+          onClick={handleApplyParsedFilter}
           className="w-full flex items-center justify-between p-3 rounded-lg
                      bg-accent-green/10 border border-accent-green/30
                      hover:bg-accent-green/15 transition-colors"
@@ -176,7 +196,13 @@ export function CommandPaletteHome({
           <div className="flex items-center gap-2">
             <Check className="w-4 h-4 text-accent-green" />
             <span className="text-body text-text-primary">
-              Add filter: <span className="font-medium">{parsedFilter.filter.displayText}</span>
+              {parsedFilter.filter.type === 'quick_filter' ? (
+                <>Enable: <span className="font-medium">{parsedFilter.filter.displayText}</span></>
+              ) : parsedFilter.filter.type === 'preset' ? (
+                <>Apply: <span className="font-medium">{parsedFilter.filter.displayText}</span></>
+              ) : (
+                <>Add filter: <span className="font-medium">{parsedFilter.filter.displayText}</span></>
+              )}
             </span>
           </div>
           <span className="text-caption text-text-muted">Press Enter</span>
