@@ -4,6 +4,16 @@
 
 ---
 
+This codebase will outlive you. Every shortcut you take becomes
+someone else's burden. Every hack compounds into technical debt
+that slows the whole team down.
+
+You are not just writing code. You are shaping the future of this
+project. The patterns you establish will be copied. The corners
+you cut will be cut again.
+
+Fight entropy. Leave the codebase better than you found it
+
 ## ❓ When Uncertain, Ask
 
 **Don't assume - ask questions using AskUserQuestion with clear options.**
@@ -69,24 +79,72 @@ supabase db push
 
 ## Direct Database Access (psql)
 
-### Prerequisites
-PostgreSQL client is installed via Homebrew:
+### ⚠️ CRITICAL: psql is NOT in PATH
+
+**psql is installed via Homebrew but NOT in the shell PATH.** You MUST use the full path in every command:
+
 ```bash
-brew install libpq
-echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+# ✅ CORRECT - Always use full path
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
+
+# ❌ WRONG - Will fail with "command not found"
+source .env && psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
 ```
 
-### Running SQL Queries
+### psql Command Template (copy this exactly)
 ```bash
-# Load DATABASE_URL from .env and run interactive session
-source .env && psql "$DATABASE_URL"
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "YOUR_SQL_HERE"
+```
 
-# Single query
-source .env && psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
+### Example Queries
+```bash
+# Count apps
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
 
-# Query with formatted output
-source .env && psql "$DATABASE_URL" -c "SELECT name, game_count FROM publishers ORDER BY game_count DESC LIMIT 10;"
+# Get app by appid
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT appid, name, type, is_released, release_date FROM apps WHERE appid = 123456;"
+
+# Get daily metrics
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT appid, metric_date, ccu_peak, total_reviews FROM daily_metrics WHERE appid = 123456 ORDER BY metric_date DESC LIMIT 10;"
+
+# List table columns (use information_schema, NOT \d)
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'apps' ORDER BY ordinal_position;"
+```
+
+### Key Table Schemas (actual column names)
+
+**apps** - Steam apps with metadata:
+```
+appid, name, type, is_released, is_delisted, release_date, release_date_raw,
+platforms, controller_support, is_free, current_price_cents, current_discount_percent,
+metacritic_score, metacritic_url, pics_review_score, pics_review_percentage,
+parent_appid, created_at, updated_at, last_content_update
+```
+⚠️ NO `description` or `short_description` column exists!
+
+**daily_metrics** - Daily snapshots (use `metric_date` NOT `date`):
+```
+id, appid, metric_date, ccu_peak, ccu_source, total_reviews, positive_reviews,
+negative_reviews, review_score, review_score_desc, owners_min, owners_max,
+price_cents, discount_percent, average_playtime_forever, average_playtime_2weeks
+```
+
+**sync_status** - Per-app sync tracking:
+```
+appid, refresh_tier, priority_score, last_storefront_sync, last_reviews_sync,
+last_steamspy_sync, last_histogram_sync, last_ccu_synced, ccu_tier,
+consecutive_errors, storefront_accessible, created_at, updated_at
+```
+
+**ccu_snapshots** - Hourly CCU samples:
+```
+id, appid, recorded_at, ccu, source
+```
+
+### Why \d commands fail
+psql meta-commands like `\d table_name` try to connect via Unix socket. Use `information_schema.columns` instead:
+```sql
+SELECT column_name FROM information_schema.columns WHERE table_name = 'your_table';
 ```
 
 ### Supabase CLI Docker Requirements
