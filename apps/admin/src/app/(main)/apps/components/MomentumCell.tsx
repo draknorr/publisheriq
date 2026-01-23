@@ -71,6 +71,16 @@ export function MomentumCell({ value, showEmoji = true }: MomentumCellProps) {
     return <span className="text-text-muted">&mdash;</span>;
   }
 
+  // Momentum > 500 implies CCU growth > 1000% (from near-zero baseline) - show "NEW" instead
+  if (value > 500) {
+    return (
+      <span className="inline-flex items-center gap-1 text-semantic-info font-semibold">
+        {showEmoji && <span>🆕</span>}
+        <span>NEW</span>
+      </span>
+    );
+  }
+
   const { icon, colorClass, prefix } = getMomentumConfig(value);
   const formattedValue = `${prefix}${Math.abs(value).toFixed(1)}`;
 
