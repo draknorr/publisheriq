@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Loader2, Command } from 'lucide-react';
+import { Loader2, Command } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppTypeToggle } from './AppTypeToggle';
 import { AppsTable } from './AppsTable';
@@ -391,34 +391,16 @@ function AppsPageClientInner({
 
   return (
     <div className={`space-y-4 ${isLoadingData ? 'opacity-60' : ''}`}>
-      {/* Row 1: Type Toggle + Result Count */}
+      {/* Row 1: Type Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <AppTypeToggle
           value={type}
           onChange={setType}
           disabled={isLoadingData}
         />
-
-        {/* Result count + Clear button */}
-        <div className="flex items-center gap-3">
-          {hasActiveFilters && (
-            <button
-              onClick={clearAllFilters}
-              disabled={isLoadingData}
-              className="flex items-center gap-1 px-2 py-1 text-body-sm text-accent-red hover:text-accent-red/80 transition-colors disabled:opacity-50"
-            >
-              <X className="w-4 h-4" />
-              Clear all
-            </button>
-          )}
-          <div className="flex items-center gap-2 text-body text-text-secondary">
-            {isFetching && <Loader2 className="w-4 h-4 animate-spin" />}
-            {getTypeLabel()} ({formatCompactNumber(aggregateStats.total_games)})
-          </div>
-        </div>
       </div>
 
-      {/* Row 2: Search Bar with ⌘K hint */}
+      {/* Row 2: Search Bar with Filters button */}
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <SearchBar
@@ -430,15 +412,18 @@ function AppsPageClientInner({
         </div>
         <button
           onClick={commandPalette.open}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg
-                     bg-surface-elevated border border-border-subtle
-                     hover:border-border-prominent transition-colors
-                     text-body-sm text-text-secondary"
+          className="flex items-center gap-2 px-4 py-2 rounded-md
+                     bg-accent-primary text-white font-medium
+                     shadow-[0_2px_8px_rgba(212,113,106,0.3)]
+                     hover:bg-accent-primary-hover hover:shadow-[0_4px_12px_rgba(212,113,106,0.4)]
+                     active:shadow-[0_1px_4px_rgba(212,113,106,0.3)]
+                     transition-all duration-150
+                     text-body-sm"
           title="Open filter palette (⌘K)"
         >
           <Command className="w-4 h-4" />
-          <span className="hidden sm:inline">Filters</span>
-          <kbd className="hidden sm:inline px-1.5 py-0.5 rounded bg-surface border border-border-subtle text-[10px]">
+          <span>Filters</span>
+          <kbd className="px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-medium">
             ⌘K
           </kbd>
         </button>
