@@ -213,9 +213,9 @@ function MobileAppCard({
             <span className="text-text-tertiary">Reviews</span>
             <span className="text-text-secondary">
               {formatCompactNumber(app.total_reviews)}
-              {app.review_score !== null && (
+              {app.positive_percentage !== null && (
                 <span className="ml-1">
-                  <ReviewScoreBadge score={app.review_score} />
+                  <ReviewScoreBadge score={app.positive_percentage} />
                 </span>
               )}
             </span>
@@ -300,9 +300,9 @@ function renderCell(
       return (
         <>
           <span>{formatCompactNumber(app.total_reviews)}</span>
-          {app.review_score !== null && (
+          {app.positive_percentage !== null && (
             <span className="ml-1">
-              <ReviewScoreBadge score={app.review_score} />
+              <ReviewScoreBadge score={app.positive_percentage} />
             </span>
           )}
         </>
