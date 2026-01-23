@@ -129,8 +129,10 @@ export interface UseAppsFiltersReturn {
   // M4b: Content filter actions
   setGenres: (ids: number[]) => void;
   setGenreMode: (mode: FilterMode) => void;
+  setGenresWithMode: (ids: number[], mode: FilterMode) => void;
   setTags: (ids: number[]) => void;
   setTagMode: (mode: FilterMode) => void;
+  setTagsWithMode: (ids: number[], mode: FilterMode) => void;
   setCategories: (ids: number[]) => void;
   setHasWorkshop: (value: boolean | undefined) => void;
   // M4b: Platform filter actions
@@ -673,6 +675,7 @@ export function useAppsFilters(): UseAppsFiltersReturn {
 
   /**
    * Toggle a quick filter on/off
+   * Quick filters STACK with existing filters (including presets) using AND logic
    */
   const toggleQuickFilter = useCallback(
     (filterId: QuickFilterId) => {
@@ -688,35 +691,85 @@ export function useAppsFilters(): UseAppsFiltersReturn {
       // Build filter params from all active quick filters
       const filterParams = buildQuickFilterParams(newFilters);
 
-      // Build URL updates
+      // Build URL updates - preserve preset and existing filters!
       const updates: Record<string, string | null> = {
         filters: newFilters.length > 0 ? newFilters.join(',') : null,
-        preset: null, // Clear preset when quick filters change
+        // Don't clear preset - quick filters stack with presets
       };
 
-      // Set filter values from merged quick filters
-      updates.minCcu = filterParams.minCcu !== undefined ? String(filterParams.minCcu) : null;
-      updates.minGrowth7d =
-        filterParams.minGrowth7d !== undefined ? String(filterParams.minGrowth7d) : null;
-      updates.minScore = filterParams.minScore !== undefined ? String(filterParams.minScore) : null;
-      updates.minMomentum =
-        filterParams.minMomentum !== undefined ? String(filterParams.minMomentum) : null;
-      updates.minSentimentDelta =
-        filterParams.minSentimentDelta !== undefined
-          ? String(filterParams.minSentimentDelta)
-          : null;
-      updates.minDiscount =
-        filterParams.minDiscount !== undefined ? String(filterParams.minDiscount) : null;
-      updates.maxAge = filterParams.maxAge !== undefined ? String(filterParams.maxAge) : null;
-      updates.isFree = filterParams.isFree ? 'true' : null;
-      updates.hasWorkshop = filterParams.hasWorkshop ? 'true' : null;
-      updates.earlyAccess = filterParams.earlyAccess ? 'true' : null;
-      updates.publisherSize = filterParams.publisherSize || null;
-      updates.steamDeck = filterParams.steamDeck || null;
+      // For quick filter values, merge with existing values using MAX for mins, MIN for maxes
+      // This allows stacking of multiple quick filters AND preset filters
+
+      // minCcu: take max of existing and quick filter (more restrictive)
+      if (filterParams.minCcu !== undefined) {
+        const existingMinCcu = minCcu ?? 0;
+        updates.minCcu = String(Math.max(existingMinCcu, filterParams.minCcu));
+      } else if (newFilters.length === 0) {
+        // Only clear if no quick filters active
+        updates.minCcu = minCcu !== undefined ? String(minCcu) : null;
+      }
+
+      // minGrowth7d: take max (more restrictive)
+      if (filterParams.minGrowth7d !== undefined) {
+        const existingMinGrowth7d = minGrowth7d ?? -Infinity;
+        updates.minGrowth7d = String(Math.max(existingMinGrowth7d, filterParams.minGrowth7d));
+      } else if (newFilters.length === 0) {
+        updates.minGrowth7d = minGrowth7d !== undefined ? String(minGrowth7d) : null;
+      }
+
+      // minScore: take max (more restrictive)
+      if (filterParams.minScore !== undefined) {
+        const existingMinScore = minScore ?? 0;
+        updates.minScore = String(Math.max(existingMinScore, filterParams.minScore));
+      } else if (newFilters.length === 0) {
+        updates.minScore = minScore !== undefined ? String(minScore) : null;
+      }
+
+      // minMomentum: take max (more restrictive)
+      if (filterParams.minMomentum !== undefined) {
+        const existingMinMomentum = minMomentum ?? -Infinity;
+        updates.minMomentum = String(Math.max(existingMinMomentum, filterParams.minMomentum));
+      } else if (newFilters.length === 0) {
+        updates.minMomentum = minMomentum !== undefined ? String(minMomentum) : null;
+      }
+
+      // minSentimentDelta: take max (more restrictive)
+      if (filterParams.minSentimentDelta !== undefined) {
+        const existingMinSentimentDelta = minSentimentDelta ?? -Infinity;
+        updates.minSentimentDelta = String(Math.max(existingMinSentimentDelta, filterParams.minSentimentDelta));
+      } else if (newFilters.length === 0) {
+        updates.minSentimentDelta = minSentimentDelta !== undefined ? String(minSentimentDelta) : null;
+      }
+
+      // minDiscount: take max (more restrictive)
+      if (filterParams.minDiscount !== undefined) {
+        const existingMinDiscount = minDiscount ?? 0;
+        updates.minDiscount = String(Math.max(existingMinDiscount, filterParams.minDiscount));
+      } else if (newFilters.length === 0) {
+        updates.minDiscount = minDiscount !== undefined ? String(minDiscount) : null;
+      }
+
+      // maxAge: take min (more restrictive)
+      if (filterParams.maxAge !== undefined) {
+        const existingMaxAge = maxAge ?? Infinity;
+        updates.maxAge = String(Math.min(existingMaxAge, filterParams.maxAge));
+      } else if (newFilters.length === 0) {
+        updates.maxAge = maxAge !== undefined ? String(maxAge) : null;
+      }
+
+      // Boolean filters: OR logic (if any quick filter wants true, set true)
+      // But preserve existing value if quick filter doesn't specify
+      updates.isFree = filterParams.isFree ? 'true' : (isFree ? 'true' : null);
+      updates.hasWorkshop = filterParams.hasWorkshop ? 'true' : (hasWorkshop ? 'true' : null);
+      updates.earlyAccess = filterParams.earlyAccess ? 'true' : (earlyAccess ? 'true' : null);
+
+      // String filters: quick filter takes precedence, otherwise preserve existing
+      updates.publisherSize = filterParams.publisherSize || publisherSize || null;
+      updates.steamDeck = filterParams.steamDeck || steamDeck || null;
 
       updateUrl(updates);
     },
-    [activeQuickFilters, updateUrl]
+    [activeQuickFilters, updateUrl, minCcu, minGrowth7d, minScore, minMomentum, minSentimentDelta, minDiscount, maxAge, isFree, hasWorkshop, earlyAccess, publisherSize, steamDeck]
   );
 
   /**
@@ -974,6 +1027,21 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     [updateUrl]
   );
 
+  /**
+   * Set genres and mode in a single URL update to avoid race condition
+   * Used by command palette which sets both values at once
+   */
+  const setGenresWithMode = useCallback(
+    (ids: number[], mode: FilterMode) => {
+      updateUrl({
+        genres: ids.length > 0 ? ids.join(',') : null,
+        genreMode: mode === 'any' ? 'any' : null,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
   const setTags = useCallback(
     (ids: number[]) => {
       updateUrl({
@@ -988,6 +1056,21 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     (mode: FilterMode) => {
       updateUrl({
         tagMode: mode === 'any' ? 'any' : null, // 'all' is default, only save 'any' to URL
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  /**
+   * Set tags and mode in a single URL update to avoid race condition
+   * Used by command palette which sets both values at once
+   */
+  const setTagsWithMode = useCallback(
+    (ids: number[], mode: FilterMode) => {
+      updateUrl({
+        tags: ids.length > 0 ? ids.join(',') : null,
+        tagMode: mode === 'any' ? 'any' : null,
         preset: null,
       });
     },
@@ -1288,8 +1371,10 @@ export function useAppsFilters(): UseAppsFiltersReturn {
     // M4b: Content filter actions
     setGenres,
     setGenreMode,
+    setGenresWithMode,
     setTags,
     setTagMode,
+    setTagsWithMode,
     setCategories,
     setHasWorkshop,
     // M4b: Platform filter actions
