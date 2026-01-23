@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Command } from 'lucide-react';
+import { Command } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppTypeToggle } from './AppTypeToggle';
 import { AppsTable } from './AppsTable';
@@ -28,7 +28,6 @@ import { useCommandPaletteShortcut } from '../hooks/useKeyboardShortcut';
 import type { App, AppType, SortField, SortOrder, AggregateStats } from '../lib/apps-types';
 import type { FilterDescription } from '../lib/apps-export';
 import type { FilterMode } from '../lib/apps-types';
-import { formatCompactNumber } from '../lib/apps-queries';
 
 interface AppsPageClientProps {
   initialData: App[];
@@ -66,14 +65,15 @@ function AppsPageClientInner({
 
   // Fetch apps data using React Query with client-side caching
   const {
-    data: queryData,
+    apps: queryApps,
+    stats: queryStats,
     isLoading,
     isFetching,
   } = useAppsQuery(filterParams);
 
   // Use React Query data if available, otherwise fall back to server data
-  const apps = queryData ?? initialData;
-  const aggregateStats = serverAggregateStats; // Aggregate stats still from server (could add separate query)
+  const apps = queryApps ?? initialData;
+  const aggregateStats = queryStats ?? serverAggregateStats;
 
   // M6a: Selection state management
   const selection = useAppsSelection();
@@ -336,22 +336,6 @@ function AppsPageClientInner({
     },
     [router]
   );
-
-  // Get the display label based on current type
-  const getTypeLabel = (): string => {
-    switch (type) {
-      case 'all':
-        return 'Apps';
-      case 'game':
-        return 'Games';
-      case 'dlc':
-        return 'DLC';
-      case 'demo':
-        return 'Demos';
-      default:
-        return 'Games';
-    }
-  };
 
   // Combined loading state: URL transition OR React Query fetching
   const isLoadingData = isPending || isFetching;

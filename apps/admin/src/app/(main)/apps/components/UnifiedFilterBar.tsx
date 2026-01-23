@@ -63,8 +63,11 @@ export function UnifiedFilterBar({
   onClearPreset,
   onToggleQuickFilter,
   onClearAll,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Kept for API compatibility
   isAdvancedOpen,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Kept for API compatibility
   advancedFilterCount,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Kept for API compatibility
   onToggleAdvanced,
   visibleColumns,
   onColumnsChange,
