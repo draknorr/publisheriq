@@ -90,7 +90,7 @@ function SortHeader({
       <button
         onClick={handleClick}
         className={`hover:text-text-primary transition-colors ${
-          isActive ? 'text-accent-blue' : ''
+          isActive ? 'text-accent-primary' : ''
         }`}
         disabled={isDisabled}
         title={isDisabled ? 'This column cannot be sorted' : undefined}
@@ -448,8 +448,8 @@ export function CompaniesTable({
                 <div
                   className="w-5 h-5 rounded border transition-colors flex items-center justify-center"
                   style={{
-                    backgroundColor: isSelected ? 'var(--accent-blue)' : 'transparent',
-                    borderColor: isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                    backgroundColor: isSelected ? 'var(--accent-primary)' : 'transparent',
+                    borderColor: isSelected ? 'var(--accent-primary)' : 'var(--border-subtle)',
                   }}
                 >
                   {isSelected && <Check className="w-3 h-3 text-white" />}
@@ -532,10 +532,10 @@ export function CompaniesTable({
                 <th className="px-3 py-2 w-10">
                   <button
                     onClick={() => onToggleAllVisible?.(sortedCompanies)}
-                    className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+                    className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-primary"
                     style={{
-                      backgroundColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-blue)' : 'transparent',
-                      borderColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                      backgroundColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-primary)' : 'transparent',
+                      borderColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-primary)' : 'var(--border-subtle)',
                     }}
                     title={isAllVisibleSelected ? 'Deselect all' : 'Select all visible'}
                   >
@@ -591,7 +591,7 @@ export function CompaniesTable({
               <tr
                 key={`${company.type}-${company.id}`}
                 className={`hover:bg-surface-overlay transition-colors ${
-                  isSelected ? 'bg-accent-blue/5' : ''
+                  isSelected ? 'bg-accent-primary/5' : ''
                 }`}
               >
                 {/* M6a: Selection checkbox */}
@@ -607,10 +607,10 @@ export function CompaniesTable({
                           e.shiftKey
                         )
                       }
-                      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+                      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-primary"
                       style={{
-                        backgroundColor: isSelected ? 'var(--accent-blue)' : 'transparent',
-                        borderColor: isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                        backgroundColor: isSelected ? 'var(--accent-primary)' : 'transparent',
+                        borderColor: isSelected ? 'var(--accent-primary)' : 'var(--border-subtle)',
                       }}
                     >
                       {isSelected && <Check className="w-3 h-3 text-white" />}

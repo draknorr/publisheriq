@@ -4,7 +4,7 @@ module.exports = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  darkMode: 'class',
+  darkMode: ['class', '[data-theme="dark"]'],
   theme: {
     extend: {
       // Color palette using CSS variables for dual theme support
@@ -15,12 +15,15 @@ module.exports = {
           raised: 'var(--surface-raised)',
           elevated: 'var(--surface-elevated)',
           overlay: 'var(--surface-overlay)',
+          sunken: 'var(--surface-sunken)',
         },
         // Border hierarchy
         border: {
           subtle: 'var(--border-subtle)',
           muted: 'var(--border-muted)',
           prominent: 'var(--border-prominent)',
+          strong: 'var(--border-strong)',
+          focus: 'var(--border-focus)',
         },
         // Text hierarchy
         text: {
@@ -29,11 +32,12 @@ module.exports = {
           tertiary: 'var(--text-tertiary)',
           muted: 'var(--text-muted)',
         },
-        // Primary accent (teal)
+        // Primary accent (coral)
         accent: {
           primary: 'var(--accent-primary)',
           'primary-hover': 'var(--accent-primary-hover)',
           'primary-muted': 'var(--accent-primary-muted)',
+          'primary-subtle': 'var(--accent-primary-subtle)',
           // Semantic colors
           blue: 'var(--accent-blue)',
           green: 'var(--accent-green)',
@@ -50,11 +54,36 @@ module.exports = {
           negative: 'var(--trend-negative)',
           neutral: 'var(--trend-neutral)',
         },
+        // Semantic colors for status/feedback
+        semantic: {
+          success: 'var(--semantic-success)',
+          'success-text': 'var(--semantic-success-text)',
+          'success-subtle': 'var(--semantic-success-muted)',
+          error: 'var(--semantic-error)',
+          'error-text': 'var(--semantic-error-text)',
+          'error-subtle': 'var(--semantic-error-muted)',
+          warning: 'var(--semantic-warning)',
+          'warning-subtle': 'var(--semantic-warning-muted)',
+          info: 'var(--semantic-info)',
+          'info-subtle': 'var(--semantic-info-muted)',
+        },
+        // Chart colors
+        chart: {
+          1: 'var(--chart-1)',
+          2: 'var(--chart-2)',
+          3: 'var(--chart-3)',
+          4: 'var(--chart-4)',
+          5: 'var(--chart-5)',
+          6: 'var(--chart-6)',
+          grid: 'var(--chart-grid)',
+          axis: 'var(--chart-axis)',
+        },
       },
       // Typography
+      // Uses CSS variables that fall back to Geist fonts (Phase 1 compatibility)
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'JetBrains Mono', 'Menlo', 'Monaco', 'monospace'],
+        sans: ['var(--font-sans)', 'var(--font-geist-sans)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-mono)', 'var(--font-geist-mono)', 'Menlo', 'Monaco', 'monospace'],
       },
       fontSize: {
         'display-lg': ['3rem', { lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '600' }],
@@ -68,15 +97,20 @@ module.exports = {
         'caption': ['0.75rem', { lineHeight: '1.35', letterSpacing: '0.01em', fontWeight: '500' }],
         'caption-sm': ['0.6875rem', { lineHeight: '1.3', letterSpacing: '0.02em', fontWeight: '500' }],
       },
-      // Shadows
+      // Shadows - theme-aware via CSS variables
       boxShadow: {
+        'xs': 'var(--shadow-xs)',
+        'sm': 'var(--shadow-sm)',
+        'md': 'var(--shadow-md)',
+        'focus': 'var(--shadow-focus)',
+        // Legacy shadows (keep for compatibility)
         'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
-        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',
+        'card': 'var(--card-shadow)',
         'elevated': '0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.08)',
         'overlay': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
         'glow-primary': '0 0 20px var(--accent-primary-muted)',
-        'glow-green': '0 0 20px rgba(16, 185, 129, 0.15)',
-        'glow-red': '0 0 20px rgba(239, 68, 68, 0.15)',
+        'glow-green': '0 0 20px rgba(45, 138, 110, 0.15)',
+        'glow-red': '0 0 20px rgba(181, 77, 66, 0.15)',
       },
       // Border radius
       borderRadius: {

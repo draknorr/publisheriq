@@ -39,7 +39,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               text-body text-text-primary placeholder:text-text-muted
               transition-colors duration-150
               hover:border-border-prominent
-              focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue
+              focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary
               disabled:opacity-50 disabled:cursor-not-allowed
               ${leftIcon ? 'pl-9' : 'pl-3'}
               ${rightIcon ? 'pr-9' : 'pr-3'}

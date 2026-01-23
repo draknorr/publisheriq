@@ -42,20 +42,20 @@ export function TrendingGamesTab({ games, timeRange }: TrendingGamesTabProps) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-accent-green/15">
-              <TrendingUp className="h-5 w-5 text-accent-green" />
+            <div className="p-2 rounded-lg bg-semantic-success-subtle">
+              <TrendingUp className="h-5 w-5 text-semantic-success" />
             </div>
             <div>
               <p className="text-caption text-text-muted">Avg Growth</p>
-              <p className="text-heading font-semibold text-accent-green">+{avgGrowth}%</p>
+              <p className="text-heading font-semibold text-trend-positive">+{avgGrowth}%</p>
             </div>
           </div>
         </Card>
 
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-accent-orange/15">
-              <Flame className="h-5 w-5 text-accent-orange" />
+            <div className="p-2 rounded-lg bg-semantic-warning-subtle">
+              <Flame className="h-5 w-5 text-semantic-warning" />
             </div>
             <div>
               <p className="text-caption text-text-muted">High Growth (&gt;50%)</p>
@@ -66,8 +66,8 @@ export function TrendingGamesTab({ games, timeRange }: TrendingGamesTabProps) {
 
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-accent-cyan/15">
-              <ArrowUp className="h-5 w-5 text-accent-cyan" />
+            <div className="p-2 rounded-lg bg-accent-primary-subtle">
+              <ArrowUp className="h-5 w-5 text-accent-primary" />
             </div>
             <div>
               <p className="text-caption text-text-muted">Top Gainer</p>

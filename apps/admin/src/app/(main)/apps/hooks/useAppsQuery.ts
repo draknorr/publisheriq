@@ -91,6 +91,9 @@ function buildSearchParams(params: AppsFilterParams): URLSearchParams {
   // Activity filters
   if (params.ccuTier !== undefined) searchParams.set('ccuTier', String(params.ccuTier));
 
+  // Boolean filters
+  if (params.isFree !== undefined) searchParams.set('isFree', String(params.isFree));
+
   return searchParams;
 }
 
@@ -249,6 +252,9 @@ export function buildFilterParamsFromUrl(searchParams: URLSearchParams): AppsFil
 
     // Activity filters
     ccuTier: parseNumber(searchParams.get('ccuTier')) as AppsFilterParams['ccuTier'],
+
+    // Boolean filters
+    isFree: parseBoolean(searchParams.get('isFree')),
   };
 }
 

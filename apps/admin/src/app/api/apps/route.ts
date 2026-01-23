@@ -109,7 +109,14 @@ export async function GET(request: NextRequest) {
 
     // Activity filters
     ccuTier: parseNumber(searchParams.get('ccuTier')) as AppsFilterParams['ccuTier'],
+
+    // Boolean filters
+    isFree: parseBoolean(searchParams.get('isFree')),
   };
+
+  // NOTE: isFree filter requires adding p_is_free parameter to get_apps_with_filters RPC
+  // For now, the isFree filter is parsed but not applied at the database level
+  // TODO: Add p_is_free parameter to database function to filter on apps.is_free column
 
   try {
     const supabase = getSupabase();

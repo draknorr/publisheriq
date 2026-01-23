@@ -48,7 +48,7 @@ export function BulkActionsBar({
           aria-live="polite"
           className="flex items-center gap-2 pr-3 border-r border-border-subtle"
         >
-          <div className="w-5 h-5 rounded bg-accent-blue flex items-center justify-center">
+          <div className="w-5 h-5 rounded bg-accent-primary flex items-center justify-center">
             <span className="text-white text-caption font-medium" aria-hidden="true">
               {selectedCount > 9 ? '9+' : selectedCount}
             </span>

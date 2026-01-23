@@ -24,7 +24,7 @@ function getGrowthConfig(value: number): GrowthConfig {
   if (value >= 50) {
     return {
       icon: '\u{1F680}', // rocket emoji
-      colorClass: 'text-[#22c55e] font-semibold',
+      colorClass: 'text-semantic-success font-semibold',
       prefix: '+',
     };
   }

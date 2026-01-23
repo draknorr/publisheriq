@@ -91,7 +91,7 @@ function SortHeader({
       <button
         onClick={handleClick}
         className={`hover:text-text-primary transition-colors ${
-          isActive ? 'text-accent-blue' : ''
+          isActive ? 'text-accent-primary' : ''
         } ${isDisabled ? 'cursor-default hover:text-text-tertiary' : ''}`}
         disabled={isDisabled}
         title={isDisabled ? 'This column cannot be sorted' : undefined}
@@ -462,10 +462,10 @@ function SelectionCheckbox({
   return (
     <button
       onClick={onChange}
-      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-primary"
       style={{
-        backgroundColor: checked || indeterminate ? 'var(--accent-blue)' : 'transparent',
-        borderColor: checked || indeterminate ? 'var(--accent-blue)' : 'var(--border-subtle)',
+        backgroundColor: checked || indeterminate ? 'var(--accent-primary)' : 'transparent',
+        borderColor: checked || indeterminate ? 'var(--accent-primary)' : 'var(--border-subtle)',
       }}
       aria-label={ariaLabel}
       title={checked ? 'Deselect' : 'Select'}
@@ -567,7 +567,7 @@ function AppRow({
   return (
     <tr
       className={`hover:bg-surface-overlay transition-colors ${
-        isSelected ? 'bg-accent-blue/5' : ''
+        isSelected ? 'bg-accent-primary/5' : ''
       }`}
       onClick={handleRowClick}
     >

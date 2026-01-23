@@ -9,17 +9,21 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface DataPoint {
   [key: string]: string | number;
 }
+
+// Chart color type
+type ChartColor = 'coral' | 'green' | 'amber' | 'teal' | 'purple' | 'pink' | 'blue' | 'red' | 'cyan' | 'orange';
 
 interface BarChartProps {
   data: DataPoint[];
   xKey: string;
   yKey: string;
   height?: number;
-  color?: 'blue' | 'green' | 'red' | 'purple' | 'cyan' | 'orange';
+  color?: ChartColor;
   showGrid?: boolean;
   showXAxis?: boolean;
   showYAxis?: boolean;
@@ -30,13 +34,57 @@ interface BarChartProps {
   className?: string;
 }
 
-const colorMap = {
-  blue: '#3b82f6',
-  green: '#22c55e',
-  red: '#ef4444',
-  purple: '#a855f7',
-  cyan: '#06b6d4',
-  orange: '#f97316',
+// Light theme colors
+const lightColors: Record<string, string> = {
+  coral: '#D4716A',
+  green: '#2D8A6E',
+  amber: '#D97706',
+  teal: '#0E7490',
+  purple: '#7C3AED',
+  pink: '#EC4899',
+  // Legacy aliases
+  blue: '#0E7490',
+  red: '#9C4338',
+  cyan: '#D4716A',
+  orange: '#D97706',
+};
+
+// Dark theme colors
+const darkColors: Record<string, string> = {
+  coral: '#E07D75',
+  green: '#5DD4A8',
+  amber: '#FBBF24',
+  teal: '#38BDF8',
+  purple: '#A78BFA',
+  pink: '#F472B6',
+  // Legacy aliases
+  blue: '#38BDF8',
+  red: '#CF7F76',
+  cyan: '#E07D75',
+  orange: '#FBBF24',
+};
+
+// Theme-aware chart styling
+const lightTheme = {
+  grid: '#E8E4DE',
+  tick: '#7A756D',
+  tooltipBg: '#FFFFFF',
+  tooltipBorder: '#E8E4DE',
+  tooltipLabel: '#5C5752',
+  tooltipText: '#2D2A26',
+  positive: '#2D8A6E',
+  negative: '#B54D42',
+};
+
+const darkTheme = {
+  grid: '#332F2A',
+  tick: '#8A847A',
+  tooltipBg: '#211F1C',
+  tooltipBorder: '#3D3935',
+  tooltipLabel: '#B5B0A8',
+  tooltipText: '#E8E4DE',
+  positive: '#5DD4A8',
+  negative: '#CF7F76',
 };
 
 export function BarChartComponent({
@@ -44,7 +92,7 @@ export function BarChartComponent({
   xKey,
   yKey,
   height = 200,
-  color = 'blue',
+  color = 'coral',
   showGrid = true,
   showXAxis = true,
   showYAxis = true,
@@ -54,6 +102,11 @@ export function BarChartComponent({
   formatTooltip,
   className = '',
 }: BarChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const colors = isDark ? darkColors : lightColors;
+  const theme = isDark ? darkTheme : lightTheme;
+
   if (!data || data.length === 0) {
     return (
       <div
@@ -65,7 +118,7 @@ export function BarChartComponent({
     );
   }
 
-  const fill = colorMap[color];
+  const fill = colors[color] || colors.coral;
 
   return (
     <div className={className} style={{ height }}>
@@ -78,7 +131,7 @@ export function BarChartComponent({
           {showGrid && (
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="#36363e"
+              stroke={theme.grid}
               horizontal={!horizontal}
               vertical={horizontal}
             />
@@ -89,7 +142,7 @@ export function BarChartComponent({
                 type="number"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#8e8e96', fontSize: 11 }}
+                tick={{ fill: theme.tick, fontSize: 11 }}
                 tickFormatter={formatYAxis}
               />
               <YAxis
@@ -97,7 +150,7 @@ export function BarChartComponent({
                 type="category"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#8e8e96', fontSize: 11 }}
+                tick={{ fill: theme.tick, fontSize: 11 }}
                 tickFormatter={formatXAxis}
                 width={80}
               />
@@ -109,7 +162,7 @@ export function BarChartComponent({
                   dataKey={xKey}
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: '#8e8e96', fontSize: 11 }}
+                  tick={{ fill: theme.tick, fontSize: 11 }}
                   tickFormatter={formatXAxis}
                   dy={8}
                 />
@@ -118,7 +171,7 @@ export function BarChartComponent({
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: '#8e8e96', fontSize: 11 }}
+                  tick={{ fill: theme.tick, fontSize: 11 }}
                   tickFormatter={formatYAxis}
                   width={50}
                 />
@@ -127,13 +180,13 @@ export function BarChartComponent({
           )}
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1a1a1f',
-              border: '1px solid #36363e',
+              backgroundColor: theme.tooltipBg,
+              border: `1px solid ${theme.tooltipBorder}`,
               borderRadius: '8px',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             }}
-            labelStyle={{ color: '#b4b4bc', marginBottom: '4px' }}
-            itemStyle={{ color: '#f4f4f5' }}
+            labelStyle={{ color: theme.tooltipLabel, marginBottom: '4px' }}
+            itemStyle={{ color: theme.tooltipText }}
             formatter={(value: number | undefined) => {
               if (value === undefined) return ['—', ''];
               return [
@@ -141,7 +194,7 @@ export function BarChartComponent({
                 '',
               ];
             }}
-            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+            cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}
           />
           <Bar
             dataKey={yKey}
@@ -226,6 +279,10 @@ export function StackedBarChart({
   formatYAxis,
   className = '',
 }: StackedBarChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const theme = isDark ? darkTheme : lightTheme;
+
   if (!data || data.length === 0) {
     return (
       <div
@@ -247,7 +304,7 @@ export function StackedBarChart({
           {showGrid && (
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="#36363e"
+              stroke={theme.grid}
               vertical={false}
             />
           )}
@@ -256,7 +313,7 @@ export function StackedBarChart({
               dataKey={xKey}
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#8e8e96', fontSize: 11 }}
+              tick={{ fill: theme.tick, fontSize: 11 }}
               tickFormatter={formatXAxis}
               dy={8}
             />
@@ -265,26 +322,26 @@ export function StackedBarChart({
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#8e8e96', fontSize: 11 }}
+              tick={{ fill: theme.tick, fontSize: 11 }}
               tickFormatter={formatYAxis}
               width={50}
             />
           )}
           <Tooltip
             content={<StackedTooltip />}
-            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+            cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}
           />
           <Bar
             dataKey={positiveKey}
             stackId="stack"
-            fill="#22c55e"
+            fill={theme.positive}
             radius={[0, 0, 0, 0]}
             name="Positive"
           />
           <Bar
             dataKey={negativeKey}
             stackId="stack"
-            fill="#ef4444"
+            fill={theme.negative}
             radius={[4, 4, 0, 0]}
             name="Negative"
           />

@@ -13,23 +13,23 @@ interface ValueScoreCellProps {
 
 function getValueConfig(value: number): { colorClass: string } {
   if (value >= 10) {
-    return { colorClass: 'text-[#00d084] font-semibold' }; // Excellent value
+    return { colorClass: 'text-semantic-success font-semibold' }; // Excellent value
   }
   if (value >= 5) {
-    return { colorClass: 'text-accent-green' }; // Great value
+    return { colorClass: 'text-trend-positive' }; // Great value
   }
   if (value >= 2) {
-    return { colorClass: 'text-lime-400' }; // Good value
+    return { colorClass: 'text-semantic-success/70' }; // Good value
   }
   if (value >= 1) {
-    return { colorClass: 'text-accent-yellow' }; // Average value
+    return { colorClass: 'text-semantic-warning' }; // Average value
   }
   return { colorClass: 'text-text-tertiary' }; // Below average
 }
 
 export function ValueScoreCell({ value, isFree }: ValueScoreCellProps) {
   if (isFree) {
-    return <span className="text-accent-green font-medium">Free</span>;
+    return <span className="text-semantic-success font-medium">Free</span>;
   }
 
   if (value === null || value === undefined) {
