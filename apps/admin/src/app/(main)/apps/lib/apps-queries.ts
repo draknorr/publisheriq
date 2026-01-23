@@ -462,6 +462,7 @@ export async function getAppsByIds(appids: number[]): Promise<App[]> {
       name: r.name,
       type: r.type,
       is_free: r.is_free,
+      is_delisted: r.is_delisted ?? false,
       ccu_peak: ccuPeak,
       owners_min: metrics?.owners_min ?? 0,
       owners_max: metrics?.owners_max ?? 0,

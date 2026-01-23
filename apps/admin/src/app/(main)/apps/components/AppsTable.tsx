@@ -145,6 +145,28 @@ function FreeBadge() {
 }
 
 /**
+ * Delisted badge for games no longer sold on Steam
+ */
+function DelistedBadge() {
+  return (
+    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-text-muted/15 text-text-muted rounded">
+      Delisted
+    </span>
+  );
+}
+
+/**
+ * Varies badge for games with variable pricing (bundles only, no base price)
+ */
+function VariesBadge() {
+  return (
+    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent-blue/15 text-accent-blue rounded">
+      Varies
+    </span>
+  );
+}
+
+/**
  * Mobile card view for a single app
  */
 function MobileAppCard({
@@ -236,6 +258,10 @@ function MobileAppCard({
             <span className="text-text-secondary">
               {app.is_free ? (
                 <FreeBadge />
+              ) : app.is_delisted ? (
+                <DelistedBadge />
+              ) : app.price_cents === null ? (
+                <VariesBadge />
               ) : (
                 <>
                   {formatPrice(app.price_cents)}
@@ -377,6 +403,13 @@ function renderCell(
     case 'price':
       if (app.is_free) {
         return <FreeBadge />;
+      }
+      if (app.is_delisted) {
+        return <DelistedBadge />;
+      }
+      // Null price but not free = variable pricing (bundles only, no base price)
+      if (app.price_cents === null) {
+        return <VariesBadge />;
       }
       return (
         <>

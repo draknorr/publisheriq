@@ -122,6 +122,7 @@ export interface App {
   name: string;
   type: string;
   is_free: boolean;
+  is_delisted: boolean;
 
   // Core metrics
   ccu_peak: number;
