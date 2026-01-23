@@ -12,7 +12,7 @@
  * - Metric filter shortcuts
  */
 
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import {
   Search,
   ChevronRight,
@@ -26,11 +26,12 @@ import {
   Loader2,
   Check,
   Zap,
+  X,
 } from 'lucide-react';
 import type { UseCommandPaletteReturn } from '../../hooks/useCommandPalette';
 import type { FilterOption } from '../../hooks/useFilterCounts';
 import type { PresetId, QuickFilterId } from '../../lib/apps-types';
-import { getPresetsOnly, getQuickFiltersOnly } from '../../lib/apps-presets';
+import { PRESETS, QUICK_FILTERS } from '../../lib/apps-presets';
 import { getMetricFilters } from '../../lib/filter-registry';
 
 // ============================================================================
@@ -90,10 +91,21 @@ export function CommandPaletteHome({
     }
   }, [genreOptions.length, onGenresOpen]);
 
+  // State for presets expansion
+  const [presetsExpanded, setPresetsExpanded] = useState(false);
+
   // Get presets and quick filters
-  const presets = useMemo(() => getPresetsOnly().slice(0, 4), []);
-  const quickFilters = useMemo(() => getQuickFiltersOnly(), []);
+  const presets = useMemo(() => PRESETS, []);
+  const visiblePresets = presetsExpanded ? presets : presets.slice(0, 6);
+  const quickFilters = useMemo(() => QUICK_FILTERS, []);
   const metricFilters = useMemo(() => getMetricFilters().slice(0, 5), []);
+
+  // Quick filter groupings for organized display
+  const quickFilterGroups = useMemo(() => [
+    { label: 'Discovery', ids: ['popular', 'trending', 'well_reviewed', 'free'] },
+    { label: 'Platform', ids: ['indie', 'steam_deck', 'momentum_up', 'sentiment_up'] },
+    { label: 'Status', ids: ['workshop', 'early_access', 'on_sale', 'this_week'] },
+  ], []);
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,21 +139,30 @@ export function CommandPaletteHome({
 
   return (
     <div className="p-4 space-y-4">
-      {/* Search Input */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={searchInput}
-          onChange={handleSearchChange}
-          onKeyDown={handleSearchKeyDown}
-          placeholder="Search filters, tags, or type ccu > 50000..."
-          className="w-full pl-10 pr-4 py-2.5 rounded-lg
-                     bg-surface-elevated border border-border-subtle
-                     text-body text-text-primary placeholder:text-text-muted
-                     focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
-        />
+      {/* Search Input with Close Button */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchInput}
+            onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search filters, tags, or type ccu > 50000..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg
+                       bg-surface-elevated border border-border-subtle
+                       text-body text-text-primary placeholder:text-text-muted
+                       focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
+          />
+        </div>
+        <button
+          onClick={close}
+          className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors"
+          aria-label="Close palette"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Parsed Filter Preview */}
@@ -185,64 +206,79 @@ export function CommandPaletteHome({
 
       {/* Quick Presets */}
       <section>
-        <h3 className="text-caption font-medium text-text-secondary mb-2 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" />
-          Presets
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {presets.map((preset) => {
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-caption font-medium text-text-secondary flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Presets
+          </h3>
+          <button
+            onClick={() => setPresetsExpanded(!presetsExpanded)}
+            className="text-caption text-accent-primary hover:underline"
+          >
+            {presetsExpanded ? 'Show less' : `Show all ${presets.length}`}
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {visiblePresets.map((preset) => {
             const isActive = activePreset === preset.id;
             return (
               <button
                 key={preset.id}
                 onClick={() => handlePresetClick(preset.id as PresetId)}
                 className={`
-                  flex items-center gap-2 px-3 py-2 rounded-lg text-left
+                  flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-body-sm
                   transition-colors
                   ${isActive
-                    ? 'bg-accent-purple/20 border border-accent-purple/40 text-accent-purple'
-                    : 'bg-surface-elevated border border-border-subtle hover:border-accent-purple/30 text-text-primary'
+                    ? 'bg-accent-primary/15 border border-accent-primary/30 text-accent-primary'
+                    : 'bg-surface-elevated border border-border-subtle hover:border-border-prominent text-text-primary'
                   }
                 `}
               >
-                {preset.emoji && <span className="text-base">{preset.emoji}</span>}
-                <div className="min-w-0 flex-1">
-                  <div className="text-body-sm font-medium truncate">{preset.label}</div>
-                </div>
-                {isActive && <Check className="w-4 h-4 flex-shrink-0" />}
+                {preset.emoji && <span className="text-sm">{preset.emoji}</span>}
+                <span className="font-medium truncate">{preset.label}</span>
               </button>
             );
           })}
         </div>
       </section>
 
-      {/* Quick Filters */}
+      {/* Quick Filters - Grouped by Category */}
       <section>
         <h3 className="text-caption font-medium text-text-secondary mb-2 flex items-center gap-1.5">
           <Zap className="w-3.5 h-3.5" />
           Quick Filters
         </h3>
-        <div className="flex flex-wrap gap-2">
-          {quickFilters.map((filter) => {
-            const isActive = activeQuickFilters.includes(filter.id as QuickFilterId);
-            return (
-              <button
-                key={filter.id}
-                onClick={() => handleQuickFilterClick(filter.id as QuickFilterId)}
-                title={filter.tooltip}
-                className={`
-                  px-2.5 py-1.5 rounded-md text-body-sm font-medium
-                  transition-colors
-                  ${isActive
-                    ? 'bg-accent-primary text-white'
-                    : 'bg-surface-elevated border border-border-subtle hover:border-border-prominent text-text-primary'
-                  }
-                `}
-              >
-                {filter.label}
-              </button>
-            );
-          })}
+        <div className="space-y-2">
+          {quickFilterGroups.map((group) => (
+            <div key={group.label} className="flex items-start gap-2">
+              <span className="text-[10px] uppercase tracking-wide text-text-muted w-[60px] flex-shrink-0 pt-1.5">
+                {group.label}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {group.ids.map((id) => {
+                  const filter = quickFilters.find((f) => f.id === id);
+                  if (!filter) return null;
+                  const isActive = activeQuickFilters.includes(id as QuickFilterId);
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => handleQuickFilterClick(id as QuickFilterId)}
+                      title={filter.description}
+                      className={`
+                        px-2 py-1 rounded-md text-caption font-medium transition-colors
+                        ${isActive
+                          ? 'bg-accent-primary/20 text-accent-primary'
+                          : 'bg-surface-elevated border border-border-subtle hover:border-border-prominent text-text-primary'
+                        }
+                      `}
+                    >
+                      {filter.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -270,18 +306,17 @@ export function CommandPaletteHome({
             <Loader2 className="w-5 h-5 animate-spin text-text-muted" />
           </div>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {genreOptions.slice(0, 20).map((genre) => {
+          <div className="grid grid-cols-4 gap-1.5">
+            {genreOptions.slice(0, 8).map((genre) => {
               const isSelected = selectedGenres.includes(genre.option_id);
               return (
                 <button
                   key={genre.option_id}
                   onClick={() => toggleGenre(genre.option_id)}
                   className={`
-                    px-2 py-1 rounded-md text-caption
-                    transition-colors
+                    px-2 py-1.5 rounded-md text-caption text-center transition-colors
                     ${isSelected
-                      ? 'bg-accent-primary text-white'
+                      ? 'bg-accent-primary/20 text-accent-primary'
                       : 'bg-surface-elevated border border-border-subtle hover:border-border-prominent text-text-primary'
                     }
                   `}
@@ -296,7 +331,10 @@ export function CommandPaletteHome({
 
       {/* Browse Navigation */}
       <section className="space-y-2">
-        <h3 className="text-caption font-medium text-text-secondary">Browse Content</h3>
+        <h3 className="text-caption font-medium text-text-secondary flex items-center gap-1.5">
+          <Tag className="w-3.5 h-3.5" />
+          Browse Content
+        </h3>
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => navigateTo('tags')}
@@ -327,7 +365,10 @@ export function CommandPaletteHome({
 
       {/* Metric Shortcuts */}
       <section>
-        <h3 className="text-caption font-medium text-text-secondary mb-2">Metric Filters</h3>
+        <h3 className="text-caption font-medium text-text-secondary mb-2 flex items-center gap-1.5">
+          <TrendingUp className="w-3.5 h-3.5" />
+          Metric Filters
+        </h3>
         <div className="space-y-1">
           {metricFilters.map((filter) => {
             const icon = getMetricIcon(filter.shortcut);

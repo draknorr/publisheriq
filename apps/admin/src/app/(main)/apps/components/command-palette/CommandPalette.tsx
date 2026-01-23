@@ -9,7 +9,6 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { X } from 'lucide-react';
 import { CommandPaletteHome } from './CommandPaletteHome';
 import { CommandPaletteTags } from './CommandPaletteTags';
 import { CommandPaletteGenres } from './CommandPaletteGenres';
@@ -161,17 +160,6 @@ export function CommandPalette({
           aria-modal="true"
           aria-label="Filter command palette"
         >
-          {/* Close button (top right) */}
-          <button
-            onClick={close}
-            className="absolute top-3 right-3 p-1.5 rounded-md text-text-muted
-                       hover:text-text-primary hover:bg-surface-elevated
-                       transition-colors z-10"
-            aria-label="Close palette"
-          >
-            <X className="w-4 h-4" />
-          </button>
-
           {/* View content */}
           <div className="max-h-[70vh] overflow-y-auto">
             {view === 'home' && (
