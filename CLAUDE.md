@@ -715,13 +715,72 @@ Three-tier polling with Steam API for exact player counts:
 
 **Workflow:** 60-minute timeout (reduced from 120 after optimizations)
 
-## Design System (v2.0)
+## Design System (v2.7)
 
+Comprehensive theming system with warm stone color palette and CSS variable-based components.
+
+### Core Configuration
 - **Themes:** Light (default) + Dark with system preference detection
+- **Dark Mode:** Supports both `.dark` class and `[data-theme="dark"]` attribute
 - **Persistence:** localStorage key `publisheriq-theme`
-- **Fonts:** Geist Sans, Geist Mono
-- **Color Tokens:** CSS variables (--surface, --text-primary, --accent-*, --trend-*)
-- **Components:** ThemeProvider, ThemeToggle, CollapsibleSection, DenseMetricGrid, StatusBar
+
+### Typography
+| Font | Variable | Usage |
+|------|----------|-------|
+| DM Sans Variable | `--font-sans` | Primary UI text |
+| JetBrains Mono Variable | `--font-mono` | Code, data display |
+
+**Utility Classes:**
+- `.font-data` - Monospace with tabular numbers for data tables
+
+### Color Palette - Warm Stone Theme
+
+**Light Theme:**
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--surface` | `#FAF9F7` | Base background (warm off-white) |
+| `--surface-raised` | `#FFFFFF` | Elevated surfaces |
+| `--accent-primary` | `#D4716A` | Primary actions (dusty coral) |
+| `--text-primary` | `#2D2A26` | Main text |
+| `--border-muted` | `#E8E4DE` | Subtle borders |
+
+**Dark Theme:**
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--surface` | `#1A1816` | Base background (warm dark) |
+| `--accent-primary` | `#E07D75` | Primary actions (coral) |
+
+### CSS Variable Categories
+- **Surface:** `--surface-sunken`, `--surface-base`, `--surface-elevated`
+- **Border:** `--border-muted`, `--border-prominent`, `--border-strong`, `--border-focus`
+- **Text:** `--text-primary`, `--text-secondary`, `--text-tertiary`, `--text-placeholder`
+- **Semantic:** `--semantic-success`, `--semantic-error`, `--semantic-warning`, `--semantic-info`
+- **Shadows:** `--shadow-xs` through `--shadow-xl` (theme-aware)
+- **Interactive:** `--interactive-hover`, `--interactive-active`, `--interactive-selected`
+- **Component-specific:** `--input-*`, `--badge-*`, `--table-*`, `--card-*`
+
+### Border Radius
+| Token | Value | Change |
+|-------|-------|--------|
+| `rounded` (default) | 6px | was 8px |
+| `rounded-lg` | 8px | was 12px |
+| `rounded-md` | 6px | standard component radius |
+
+### Component Updates (v2.7)
+- **Badge:** CSS variable-based variants (`--badge-{variant}-bg/text`)
+- **Button:** Refined radius (`rounded-md`)
+- **Input:** CSS variables + primary accent focus
+- **FilterPill:** Card-like appearance (`rounded-md` vs `rounded-full`)
+
+### New Components
+- **ActiveFilterBar:** Color-coded filter chips with category grouping, overflow handling, command palette integration
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `apps/admin/src/app/globals.css` | CSS variables and base styles |
+| `apps/admin/tailwind.config.cjs` | Theme configuration |
+| `apps/admin/src/components/ui/` | Reusable UI components |
 
 ## Insights Dashboard (v2.2+)
 

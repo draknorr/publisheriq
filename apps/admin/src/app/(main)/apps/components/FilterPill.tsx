@@ -30,7 +30,7 @@ export function FilterPill({
   // Build className based on state
   const getClassName = () => {
     const base = [
-      'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-body-sm',
+      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm',
       'font-medium whitespace-nowrap transition-all duration-150',
       'border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2',
     ];

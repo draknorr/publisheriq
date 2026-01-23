@@ -22,7 +22,7 @@
   --surface: #FAF9F7;
   --surface-raised: #FFFFFF;
   --surface-elevated: #F8F6F3;
-  --surface-overlay: #27272a;
+  --surface-overlay: rgba(255, 255, 255, 0.95);
   --surface-sunken: #F5F3EF;
 
   /* Surface aliases for compatibility */
@@ -104,35 +104,52 @@
   --shadow-xs: 0 1px 2px rgba(45, 42, 38, 0.04);
   --shadow-sm: 0 2px 4px rgba(45, 42, 38, 0.06), 0 1px 2px rgba(45, 42, 38, 0.04);
   --shadow-md: 0 4px 8px rgba(45, 42, 38, 0.08), 0 2px 4px rgba(45, 42, 38, 0.04);
+  --shadow-lg: 0 8px 16px rgba(45, 42, 38, 0.10), 0 4px 8px rgba(45, 42, 38, 0.06);
+  --shadow-xl: 0 16px 32px rgba(45, 42, 38, 0.12), 0 8px 16px rgba(45, 42, 38, 0.08);
   --shadow-focus: 0 0 0 3px rgba(212, 113, 106, 0.25);
+  --shadow-inset: inset 0 1px 2px rgba(45, 42, 38, 0.06);
+
+  /* Interactive states */
+  --interactive-hover: rgba(45, 42, 38, 0.04);
+  --interactive-active: rgba(45, 42, 38, 0.08);
+  --interactive-selected: rgba(212, 113, 106, 0.08);
+  --interactive-disabled: #F5F3EF;
+
+  /* Scrollbar */
+  --scrollbar-track: #F5F3EF;
+  --scrollbar-thumb: #D5D0C8;
+  --scrollbar-thumb-hover: #C9C4BC;
 
   /* Component-specific tokens */
   /* Table */
-  --table-header-bg: var(--surface-raised);
-  --table-row-hover: var(--surface-raised);
-  --table-row-selected: var(--accent-primary-muted);
-  --table-border: var(--border-subtle);
+  --table-header-bg: #F8F6F3;
+  --table-row-hover: rgba(45, 42, 38, 0.02);
+  --table-row-selected: rgba(212, 113, 106, 0.06);
+  --table-row-stripe: rgba(45, 42, 38, 0.015);
+  --table-border: #F0EDE8;
 
   /* Sidebar */
-  --sidebar-bg: var(--surface);
-  --sidebar-item-hover: var(--surface-raised);
-  --sidebar-item-active: var(--accent-primary-muted);
+  --sidebar-bg: #FFFFFF;
+  --sidebar-item-hover: rgba(45, 42, 38, 0.04);
+  --sidebar-item-active: rgba(212, 113, 106, 0.08);
   --sidebar-text: var(--text-secondary);
   --sidebar-text-active: var(--accent-primary);
 
   /* Card */
-  --card-bg: var(--surface);
-  --card-border: var(--border-subtle);
+  --card-bg: #FFFFFF;
+  --card-border: #E8E4DE;
+  --card-hover-border: #DDD8D0;
   --card-shadow: var(--shadow-sm);
 
   /* Input */
-  --input-bg: var(--surface);
-  --input-border: var(--border-muted);
+  --input-bg: #FFFFFF;
+  --input-border: #DDD8D0;
+  --input-border-hover: #C9C4BC;
   --input-border-focus: var(--accent-primary);
   --input-placeholder: var(--text-muted);
 
   /* Badge */
-  --badge-default-bg: var(--surface-elevated);
+  --badge-default-bg: #F5F3EF;
   --badge-default-text: var(--text-secondary);
   --badge-primary-bg: var(--accent-primary-muted);
   --badge-primary-text: var(--accent-primary);
@@ -244,35 +261,52 @@
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.16);
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.20), 0 1px 2px rgba(0, 0, 0, 0.12);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.16);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.28), 0 4px 8px rgba(0, 0, 0, 0.20);
+  --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.32), 0 8px 16px rgba(0, 0, 0, 0.24);
   --shadow-focus: 0 0 0 3px rgba(224, 125, 117, 0.3);
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  /* Interactive states */
+  --interactive-hover: rgba(232, 228, 222, 0.04);
+  --interactive-active: rgba(232, 228, 222, 0.08);
+  --interactive-selected: rgba(224, 125, 117, 0.12);
+  --interactive-disabled: #252320;
+
+  /* Scrollbar */
+  --scrollbar-track: #252320;
+  --scrollbar-thumb: #433F38;
+  --scrollbar-thumb-hover: #524D45;
 
   /* Component-specific tokens */
   /* Table */
-  --table-header-bg: var(--surface-raised);
-  --table-row-hover: var(--surface-raised);
-  --table-row-selected: var(--accent-primary-muted);
-  --table-border: var(--border-subtle);
+  --table-header-bg: #252320;
+  --table-row-hover: rgba(232, 228, 222, 0.02);
+  --table-row-selected: rgba(224, 125, 117, 0.08);
+  --table-row-stripe: rgba(232, 228, 222, 0.015);
+  --table-border: #292623;
 
   /* Sidebar */
-  --sidebar-bg: var(--surface);
-  --sidebar-item-hover: var(--surface-raised);
-  --sidebar-item-active: var(--accent-primary-muted);
+  --sidebar-bg: #211F1C;
+  --sidebar-item-hover: rgba(232, 228, 222, 0.04);
+  --sidebar-item-active: rgba(224, 125, 117, 0.12);
   --sidebar-text: var(--text-secondary);
   --sidebar-text-active: var(--accent-primary);
 
   /* Card */
-  --card-bg: var(--surface);
-  --card-border: var(--border-subtle);
+  --card-bg: #211F1C;
+  --card-border: #332F2A;
+  --card-hover-border: #3D3935;
   --card-shadow: var(--shadow-sm);
 
   /* Input */
-  --input-bg: var(--surface);
-  --input-border: var(--border-muted);
+  --input-bg: #252320;
+  --input-border: #3D3935;
+  --input-border-hover: #4A453E;
   --input-border-focus: var(--accent-primary);
   --input-placeholder: var(--text-muted);
 
   /* Badge */
-  --badge-default-bg: var(--surface-elevated);
+  --badge-default-bg: #292623;
   --badge-default-text: var(--text-secondary);
   --badge-primary-bg: var(--accent-primary-muted);
   --badge-primary-text: var(--accent-primary);
@@ -351,7 +385,7 @@
   /* Custom scrollbar */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--border-muted) transparent;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
 
   .scrollbar-thin::-webkit-scrollbar {
@@ -360,16 +394,16 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--scrollbar-track);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: var(--border-muted);
+    background-color: var(--scrollbar-thumb);
     border-radius: 4px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: var(--border-prominent);
+    background-color: var(--scrollbar-thumb-hover);
   }
 
   /* Hide scrollbar but keep scrolling */

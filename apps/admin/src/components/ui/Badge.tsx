@@ -20,11 +20,11 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: 'bg-surface-overlay text-text-secondary',
-  primary: 'bg-accent-primary/15 text-accent-primary',
-  success: 'bg-accent-green/15 text-accent-green',
-  warning: 'bg-accent-yellow/15 text-accent-yellow',
-  error: 'bg-accent-red/15 text-accent-red',
+  default: 'bg-[var(--badge-default-bg)] text-[var(--badge-default-text)]',
+  primary: 'bg-[var(--badge-primary-bg)] text-[var(--badge-primary-text)]',
+  success: 'bg-[var(--badge-success-bg)] text-[var(--badge-success-text)]',
+  warning: 'bg-[var(--badge-warning-bg)] text-[var(--badge-warning-text)]',
+  error: 'bg-[var(--badge-error-bg)] text-[var(--badge-error-text)]',
   info: 'bg-accent-blue/15 text-accent-blue',
   purple: 'bg-accent-purple/15 text-accent-purple',
   cyan: 'bg-accent-cyan/15 text-accent-cyan',

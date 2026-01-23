@@ -462,10 +462,10 @@ function SelectionCheckbox({
   return (
     <button
       onClick={onChange}
-      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-primary"
+      className="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors hover:border-accent-primary"
       style={{
-        backgroundColor: checked || indeterminate ? 'var(--accent-primary)' : 'transparent',
-        borderColor: checked || indeterminate ? 'var(--accent-primary)' : 'var(--border-subtle)',
+        backgroundColor: checked || indeterminate ? 'var(--accent-primary)' : 'var(--input-bg)',
+        borderColor: checked || indeterminate ? 'var(--accent-primary)' : 'var(--input-border)',
       }}
       aria-label={ariaLabel}
       title={checked ? 'Deselect' : 'Select'}

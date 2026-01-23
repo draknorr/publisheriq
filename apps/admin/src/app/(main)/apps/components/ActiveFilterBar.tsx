@@ -462,7 +462,7 @@ export function ActiveFilterBar({
                   e.stopPropagation();
                   handleChipRemove(chip);
                 }}
-                className="hover:bg-black/10 rounded p-0.5 -mr-0.5"
+                className="hover:bg-interactive-hover rounded p-0.5 -mr-0.5"
               >
                 <X className="w-3 h-3" />
               </button>
