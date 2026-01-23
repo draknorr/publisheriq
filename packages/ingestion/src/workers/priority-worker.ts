@@ -22,6 +22,9 @@ interface AppForPriority {
   // Sync timestamps to determine if app has ever been synced
   last_reviews_sync: string | null;
   last_steamspy_sync: string | null;
+  // Release state from apps table - used to detect fresh releases
+  is_released: boolean;
+  release_date: string | null;
 }
 
 function calculatePriorityScore(app: AppForPriority): number {
@@ -74,9 +77,23 @@ function calculatePriorityScore(app: AppForPriority): number {
     priority += 5;
   }
 
+  // Check if this might be a fresh release with stale data
+  // Games marked is_released=true but with no release_date likely just released
+  // and need syncing to get their actual release date
+  const potentialFreshRelease = app.is_released && !app.release_date;
+
+  // Check if this is a recently released game (within last 7 days)
+  const recentRelease =
+    app.release_date && new Date(app.release_date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Give potential/recent fresh releases a moderate priority to ensure they get synced
+  if (potentialFreshRelease || recentRelease) {
+    priority = Math.max(priority, 50); // Ensure at least daily syncing
+  }
+
   // Dead game penalty - ONLY apply to apps that have been synced at least once
-  // Apps with no metrics data shouldn't be penalized - they just need to be synced
-  if (!neverSynced && ccu === 0 && velocity7d < 0.1) {
+  // Skip for potential/recent fresh releases - they likely just have stale data
+  if (!neverSynced && !potentialFreshRelease && !recentRelease && ccu === 0 && velocity7d < 0.1) {
     priority -= 50;
   }
 
@@ -187,6 +204,12 @@ async function main(): Promise<void> {
         .select('appid, review_velocity_7d, review_velocity_30d, trend_30d_change_pct')
         .in('appid', appids);
 
+      // Get release state from apps table (for fresh release detection)
+      const { data: appsData } = await supabase
+        .from('apps')
+        .select('appid, is_released, release_date')
+        .in('appid', appids);
+
       // Build lookup maps
       const metricsMap = new Map<number, { ccu_peak: number | null; total_reviews: number | null }>();
       if (metricsData) {
@@ -207,6 +230,16 @@ async function main(): Promise<void> {
             review_velocity_7d: t.review_velocity_7d,
             review_velocity_30d: t.review_velocity_30d,
             trend_30d_change_pct: t.trend_30d_change_pct,
+          });
+        }
+      }
+
+      const appsMap = new Map<number, { is_released: boolean; release_date: string | null }>();
+      if (appsData) {
+        for (const a of appsData) {
+          appsMap.set(a.appid, {
+            is_released: a.is_released ?? false,
+            release_date: a.release_date,
           });
         }
       }
@@ -234,12 +267,17 @@ async function main(): Promise<void> {
           last_reviews_sync: null,
           last_steamspy_sync: null,
         };
+        const appReleaseState = appsMap.get(appid) ?? {
+          is_released: false,
+          release_date: null,
+        };
 
         const app: AppForPriority = {
           appid,
           ...metrics,
           ...trends,
           ...syncStatus,
+          ...appReleaseState,
         };
 
         const priority = calculatePriorityScore(app);
