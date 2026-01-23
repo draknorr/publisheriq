@@ -455,10 +455,8 @@ function AppsPageClientInner({
         disabled={isLoadingData}
       />
 
-      {/* Context Bar (inline stats when filters active) */}
-      {hasActiveFilters && (
-        <ContextBar stats={aggregateStats} isLoading={isFetching} />
-      )}
+      {/* Context Bar (always visible stats) */}
+      <ContextBar stats={aggregateStats} isLoading={isFetching} />
 
       {/* Active Filter Bar (shows current filters as chips) */}
       {(advancedFilterCount > 0 || activePreset || activeQuickFilters.length > 0) && (
