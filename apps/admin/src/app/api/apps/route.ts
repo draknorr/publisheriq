@@ -3,6 +3,83 @@ import { getSupabase } from '@/lib/supabase';
 import type { AppsFilterParams } from '@/app/(main)/apps/lib/apps-types';
 
 /**
+ * In-memory cache for default view results.
+ * When no filters are applied, the database must scan all ~200K apps which takes 5+ seconds.
+ * Caching the default view (Top 50 by CCU) provides instant response when clearing filters.
+ */
+const defaultViewCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Check if this is a default view request (no filters applied).
+ * Default view = type filter only + default sort (ccu_peak desc) + first page
+ */
+function isDefaultView(params: AppsFilterParams): boolean {
+  return (
+    // No search
+    !params.search &&
+    // No metric filters
+    params.minCcu === undefined &&
+    params.maxCcu === undefined &&
+    params.minOwners === undefined &&
+    params.maxOwners === undefined &&
+    params.minReviews === undefined &&
+    params.maxReviews === undefined &&
+    params.minScore === undefined &&
+    params.maxScore === undefined &&
+    params.minPrice === undefined &&
+    params.maxPrice === undefined &&
+    params.minPlaytime === undefined &&
+    params.maxPlaytime === undefined &&
+    // No growth filters
+    params.minGrowth7d === undefined &&
+    params.maxGrowth7d === undefined &&
+    params.minGrowth30d === undefined &&
+    params.maxGrowth30d === undefined &&
+    params.minMomentum === undefined &&
+    params.maxMomentum === undefined &&
+    // No sentiment filters
+    params.minSentimentDelta === undefined &&
+    params.maxSentimentDelta === undefined &&
+    params.velocityTier === undefined &&
+    // No engagement filters
+    params.minActivePct === undefined &&
+    params.minReviewRate === undefined &&
+    params.minValueScore === undefined &&
+    // No content filters
+    !params.genres?.length &&
+    !params.tags?.length &&
+    !params.categories?.length &&
+    params.hasWorkshop === undefined &&
+    // No platform filters
+    !params.platforms?.length &&
+    params.steamDeck === undefined &&
+    params.controller === undefined &&
+    // No release filters
+    params.minAge === undefined &&
+    params.maxAge === undefined &&
+    params.releaseYear === undefined &&
+    params.earlyAccess === undefined &&
+    params.minHype === undefined &&
+    params.maxHype === undefined &&
+    // No relationship filters
+    !params.publisherSearch &&
+    !params.developerSearch &&
+    params.selfPublished === undefined &&
+    params.minVsPublisher === undefined &&
+    params.publisherSize === undefined &&
+    // No activity filters
+    params.ccuTier === undefined &&
+    // No boolean filters
+    params.isFree === undefined &&
+    // Default sort and first page
+    params.sort === 'ccu_peak' &&
+    params.order === 'desc' &&
+    (params.offset ?? 0) === 0
+  );
+}
+
+/**
  * API route for fetching apps data
  * Used by client-side React Query for data fetching
  */
@@ -118,6 +195,15 @@ export async function GET(request: NextRequest) {
   // For now, the isFree filter is parsed but not applied at the database level
   // TODO: Add p_is_free parameter to database function to filter on apps.is_free column
 
+  // Check cache for default view (no filters = expensive full table scan)
+  const cacheKey = `default-${params.type}`;
+  if (isDefaultView(params)) {
+    const cached = defaultViewCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json(cached.data);
+    }
+  }
+
   try {
     const supabase = getSupabase();
 
@@ -195,7 +281,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ data: data ?? [] });
+    const result = { data: data ?? [] };
+
+    // Cache default view results for fast subsequent loads
+    if (isDefaultView(params)) {
+      defaultViewCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    }
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error in apps API:', error);
     return NextResponse.json(
