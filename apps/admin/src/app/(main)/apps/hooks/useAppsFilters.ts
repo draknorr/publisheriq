@@ -628,7 +628,7 @@ export function useAppsFilters(): UseAppsFiltersReturn {
         startTransition(() => {
           router.push(url, { scroll: false });
         });
-      }, 400); // 400ms debounce for better batching of rapid filter changes
+      }, 700); // 700ms debounce - gives medium-paced typers time to finish
     },
     [router, searchParams]
   );
@@ -662,9 +662,18 @@ export function useAppsFilters(): UseAppsFiltersReturn {
 
   /**
    * Set search query (debounced)
+   * Requires minimum 3 characters to prevent overwhelming queries
+   * (e.g., "s" matches ~180K+ apps and crashes the server)
    */
   const setSearch = useCallback(
     (query: string) => {
+      // Allow clearing (0 chars) or full searches (3+ chars)
+      // Ignore 1-2 char queries entirely to prevent:
+      // 1. Overwhelming database queries
+      // 2. Unnecessary URL transitions that cause spinner/focus issues
+      if (query.length > 0 && query.length < 3) {
+        return; // Do nothing for partial queries
+      }
       updateUrlDebounced({
         search: query || null,
         preset: null, // Clear preset when search changes
