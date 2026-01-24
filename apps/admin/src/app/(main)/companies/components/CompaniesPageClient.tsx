@@ -8,16 +8,19 @@ import { CompaniesTable } from './CompaniesTable';
 import { SearchBar } from './SearchBar';
 import { UnifiedFilterBar } from './UnifiedFilterBar';
 import { ContextBar } from './ContextBar';
-import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
+import { ActiveFilterBar } from './ActiveFilterBar';
+import { CommandPalette } from './command-palette';
 import { BulkActionsBar } from './BulkActionsBar';
 import { CompareMode } from './CompareMode';
 import { ExportDialog } from './ExportDialog';
 import { EmptyState } from './EmptyState';
-import { useCompaniesFilters } from '../hooks/useCompaniesFilters';
+import { useCompaniesFilters, type AdvancedFiltersState } from '../hooks/useCompaniesFilters';
 import { useSparklineLoader } from '../hooks/useSparklineLoader';
 import { useCompaniesSelection } from '../hooks/useCompaniesSelection';
 import { useCompaniesCompare } from '../hooks/useCompaniesCompare';
-import type { Company, CompanyType, SortField, SortOrder, SavedView } from '../lib/companies-types';
+import { useCommandPalette, useCommandPaletteShortcut } from '../hooks/useCommandPalette';
+import { useFilterCounts } from '../hooks/useFilterCounts';
+import type { Company, CompanyType, SortField, SortOrder, SavedView, PresetId, QuickFilterId } from '../lib/companies-types';
 import type { AggregateStats } from '../lib/companies-queries';
 
 interface CompaniesPageClientProps {
@@ -66,7 +69,6 @@ function CompaniesPageClientInner({
     activeQuickFilters,
     advancedFilters,
     advancedFilterCount,
-    isAdvancedOpen,
     visibleColumns,
     setType,
     setSort,
@@ -77,25 +79,38 @@ function CompaniesPageClientInner({
     clearAllFilters,
     // M4a
     setAdvancedFilter,
-    clearAdvancedFilters,
-    applyGrowthPreset,
-    toggleAdvanced,
     // M4b
     setGenres,
     setGenreMode,
     setTags,
     setCategories,
-    setSteamDeck,
-    setPlatforms,
-    setPlatformMode,
-    setStatus,
-    setRelationship,
     // M5
     setColumns,
   } = useCompaniesFilters();
 
   // Sparkline lazy loader
   const sparklineLoader = useSparklineLoader();
+
+  // Filter counts for command palette content views
+  const filterCounts = useFilterCounts();
+
+  // Command palette state
+  const commandPalette = useCommandPalette({
+    initialTags: advancedFilters.tags,
+    initialTagMode: advancedFilters.genreMode ?? 'any', // Reuse genre mode for tags
+    initialGenres: advancedFilters.genres,
+    initialGenreMode: advancedFilters.genreMode ?? 'all',
+    initialCategories: advancedFilters.categories,
+    onApplyTags: setTags,
+    onApplyGenres: (genres, mode) => {
+      setGenres(genres);
+      setGenreMode(mode);
+    },
+    onApplyCategories: setCategories,
+  });
+
+  // Global keyboard shortcut for command palette
+  useCommandPaletteShortcut(commandPalette.toggle);
 
   // M6a: Selection state
   const selection = useCompaniesSelection();
@@ -181,6 +196,14 @@ function CompaniesPageClientInner({
     activeQuickFilters.length > 0 ||
     advancedFilterCount > 0;
 
+  // Handler for clearing individual advanced filter fields from ActiveFilterBar
+  const handleClearAdvancedFilter = useCallback(
+    (field: keyof AdvancedFiltersState) => {
+      setAdvancedFilter(field, undefined);
+    },
+    [setAdvancedFilter]
+  );
+
   /**
    * Apply a saved view by building and navigating to the URL
    */
@@ -260,9 +283,6 @@ function CompaniesPageClientInner({
         onClearPreset={clearPreset}
         onToggleQuickFilter={toggleQuickFilter}
         onClearAll={clearAllFilters}
-        isAdvancedOpen={isAdvancedOpen}
-        advancedFilterCount={advancedFilterCount}
-        onToggleAdvanced={toggleAdvanced}
         visibleColumns={visibleColumns}
         onColumnsChange={setColumns}
         companyType={initialType}
@@ -275,39 +295,35 @@ function CompaniesPageClientInner({
           setIsExportDialogOpen(true);
         }}
         canExport={initialData.length > 0}
+        onOpenPalette={commandPalette.open}
         hasActiveFilters={hasActiveFilters}
         disabled={isPending}
       />
 
-      {/* Row 3: Context Bar (conditional - shows stats when filters active) */}
-      {(isAdvancedOpen || advancedFilterCount > 0) && (
+      {/* Row 3: Active Filter Bar (shows when filters are active) */}
+      {hasActiveFilters && (
+        <ActiveFilterBar
+          activePreset={activePreset}
+          activeQuickFilters={activeQuickFilters}
+          advancedFilters={advancedFilters}
+          genreOptions={filterCounts.data.genre}
+          tagOptions={filterCounts.data.tag}
+          categoryOptions={filterCounts.data.category}
+          resultCount={initialData.length}
+          onClearPreset={clearPreset}
+          onToggleQuickFilter={toggleQuickFilter}
+          onClearAdvancedFilter={handleClearAdvancedFilter}
+          onClearAll={clearAllFilters}
+          onOpenPalette={commandPalette.open}
+        />
+      )}
+
+      {/* Row 4: Context Bar (conditional - shows stats when filters active) */}
+      {advancedFilterCount > 0 && (
         <ContextBar
           stats={aggregateStats}
           isLoading={isPending}
         />
-      )}
-
-      {/* Advanced Filters Panel (M4a + M4b) - conditionally rendered */}
-      {isAdvancedOpen && (
-        <AdvancedFiltersPanel
-        filters={advancedFilters}
-        activeCount={advancedFilterCount}
-        companyType={initialType}
-        onFilterChange={setAdvancedFilter}
-        onClearAll={clearAdvancedFilters}
-        onGrowthPreset={applyGrowthPreset}
-        // M4b handlers
-        onGenresChange={setGenres}
-        onGenreModeChange={setGenreMode}
-        onTagsChange={setTags}
-        onCategoriesChange={setCategories}
-        onSteamDeckChange={setSteamDeck}
-        onPlatformsChange={setPlatforms}
-        onPlatformModeChange={setPlatformMode}
-        onStatusChange={setStatus}
-        onRelationshipChange={setRelationship}
-        disabled={isPending}
-      />
       )}
 
       {/* Companies Table (M5: dynamic columns + sparklines) */}
@@ -378,6 +394,24 @@ function CompaniesPageClientInner({
           minGames: advancedFilters.minGames,
         }}
         defaultScope={exportScope}
+      />
+
+      {/* Command Palette Modal */}
+      <CommandPalette
+        palette={commandPalette}
+        tagOptions={filterCounts.data.tag}
+        genreOptions={filterCounts.data.genre}
+        categoryOptions={filterCounts.data.category}
+        tagsLoading={filterCounts.loading.tag}
+        genresLoading={filterCounts.loading.genre}
+        categoriesLoading={filterCounts.loading.category}
+        onTagsOpen={() => filterCounts.fetchCounts('tag', initialType)}
+        onGenresOpen={() => filterCounts.fetchCounts('genre', initialType)}
+        onCategoriesOpen={() => filterCounts.fetchCounts('category', initialType)}
+        activePreset={activePreset}
+        activeQuickFilters={activeQuickFilters}
+        onApplyPreset={(id) => applyPreset(id as PresetId)}
+        onToggleQuickFilter={(id) => toggleQuickFilter(id as QuickFilterId)}
       />
     </div>
   );

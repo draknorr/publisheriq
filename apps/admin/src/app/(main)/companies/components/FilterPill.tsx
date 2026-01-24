@@ -14,9 +14,9 @@ interface FilterPillProps {
  * Reusable pill component for unified filter system.
  *
  * Visual states:
- * - Inactive preset: Purple tint with dot indicator
- * - Inactive quick filter: Neutral gray
- * - Active (either): Teal accent
+ * - Inactive preset: Card-like with purple left accent bar
+ * - Inactive quick filter: Subtle surface
+ * - Active (either): Solid coral with shadow
  */
 export function FilterPill({
   label,
@@ -30,7 +30,7 @@ export function FilterPill({
   // Build className based on state
   const getClassName = () => {
     const base = [
-      'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-body-sm',
+      'relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm',
       'font-medium whitespace-nowrap transition-all duration-150',
       'border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2',
     ];
@@ -42,18 +42,24 @@ export function FilterPill({
       base.push('cursor-pointer');
     }
 
-    // Active state (same for both preset and quick)
+    // Active state (same for both preset and quick) - solid coral with shadow
     if (isActive) {
-      base.push('bg-accent-primary/20 text-accent-primary border-accent-primary/40 shadow-sm');
+      base.push(
+        'bg-accent-primary text-white border-accent-primary',
+        'shadow-[0_2px_8px_rgba(212,113,106,0.3)]'
+      );
     }
-    // Inactive preset state (purple tint)
+    // Inactive preset state - card-like with purple accent on hover
     else if (isPreset) {
-      base.push('bg-accent-purple/5 text-text-secondary border-accent-purple/20');
+      base.push('bg-surface-raised text-text-primary border-border-muted shadow-sm');
       if (!disabled) {
-        base.push('hover:border-accent-purple/40 hover:bg-accent-purple/10');
+        base.push(
+          'hover:border-accent-purple/50 hover:shadow-md',
+          'hover:bg-gradient-to-r hover:from-accent-purple/5 hover:to-transparent'
+        );
       }
     }
-    // Inactive quick filter state (neutral)
+    // Inactive quick filter state (subtle surface)
     else {
       base.push('bg-surface-elevated text-text-secondary border-border-subtle');
       if (!disabled) {
@@ -71,12 +77,15 @@ export function FilterPill({
       className={getClassName()}
       title={tooltip}
     >
+      {/* Purple left accent bar for inactive presets */}
+      {isPreset && !isActive && (
+        <span
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full bg-accent-purple/60"
+          aria-hidden="true"
+        />
+      )}
       {emoji && <span className="text-sm">{emoji}</span>}
       <span>{label}</span>
-      {/* Dot indicator for inactive presets to distinguish them */}
-      {isPreset && !isActive && (
-        <span className="w-1.5 h-1.5 rounded-full bg-accent-purple/50 ml-0.5" />
-      )}
     </button>
   );
 }

@@ -8,6 +8,22 @@ export type { ColumnId } from './companies-columns';
 export type CompanyType = 'all' | 'publisher' | 'developer';
 
 /**
+ * Command Palette types
+ */
+export type CommandPaletteView = 'home' | 'tags' | 'genres' | 'categories';
+
+export interface CommandPaletteState {
+  isOpen: boolean;
+  view: CommandPaletteView;
+  searchInput: string;
+  pendingTags: number[];
+  pendingGenres: number[];
+  pendingCategories: number[];
+  tagMode: 'any' | 'all';
+  genreMode: 'any' | 'all';
+}
+
+/**
  * M4b: Content & Relationship filter types
  */
 export type SteamDeckFilterValue = 'verified' | 'playable' | null | undefined;
