@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { Command } from 'lucide-react';
 import { ToastProvider, useToastActions } from '@/components/ui/Toast';
 import { CompanyTypeToggle } from './CompanyTypeToggle';
 import { CompaniesTable } from './CompaniesTable';
@@ -267,12 +268,39 @@ function CompaniesPageClientInner({
 
   return (
     <div className={`space-y-3 ${isPending ? 'opacity-60 pointer-events-none' : ''}`}>
-      {/* Row 1: Type Toggle + Search */}
+      {/* Row 1: Type Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <CompanyTypeToggle value={initialType} onChange={setType} disabled={isPending} />
-        <div className="w-full sm:max-w-md">
-          <SearchBar initialValue={initialSearch} onSearch={setSearch} isPending={isPending} placeholder="Filter by Name" />
+      </div>
+
+      {/* Row 2: Search Bar with Filters button */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <SearchBar
+            initialValue={initialSearch}
+            onSearch={setSearch}
+            isPending={isPending}
+            placeholder="Search companies by name..."
+          />
         </div>
+        <button
+          onClick={commandPalette.open}
+          className="flex items-center gap-2 px-4 py-2 rounded-md
+                     bg-accent-primary text-white font-medium
+                     shadow-[0_2px_8px_rgba(212,113,106,0.3)]
+                     hover:bg-accent-primary-hover hover:shadow-[0_4px_12px_rgba(212,113,106,0.4)]
+                     active:shadow-[0_1px_4px_rgba(212,113,106,0.3)]
+                     transition-all duration-150
+                     text-body-sm"
+          title="Open filter palette (⌘K)"
+          disabled={isPending}
+        >
+          <Command className="w-4 h-4" />
+          <span>Filters</span>
+          <kbd className="px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-medium">
+            ⌘K
+          </kbd>
+        </button>
       </div>
 
       {/* Row 2: Unified Filter Bar (Presets + Quick Filters + Tools) */}
@@ -295,7 +323,6 @@ function CompaniesPageClientInner({
           setIsExportDialogOpen(true);
         }}
         canExport={initialData.length > 0}
-        onOpenPalette={commandPalette.open}
         hasActiveFilters={hasActiveFilters}
         disabled={isPending}
       />

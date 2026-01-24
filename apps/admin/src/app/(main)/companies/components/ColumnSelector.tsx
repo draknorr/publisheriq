@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Check, RotateCcw } from 'lucide-react';
+import { ChevronDown, Check, RotateCcw, Columns } from 'lucide-react';
 import {
   COLUMN_DEFINITIONS,
   COLUMN_CATEGORIES,
@@ -46,9 +46,7 @@ export function ColumnSelector({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Count total selectable columns (only applicable ones for current type)
-  const applicableColumnIds = (Object.keys(COLUMN_DEFINITIONS) as ColumnId[]).filter(isColumnApplicable);
-  const totalColumns = applicableColumnIds.length;
+  // Count visible columns (only applicable ones for current type)
   const visibleCount = visibleColumns.filter(isColumnApplicable).length;
 
   const toggleColumn = (columnId: ColumnId) => {
@@ -75,8 +73,9 @@ export function ColumnSelector({
         disabled={disabled}
         className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-subtle bg-surface hover:bg-surface-elevated transition-colors disabled:opacity-50"
       >
+        <Columns className="w-4 h-4 text-text-muted" />
         <span className="text-body-sm text-text-secondary">
-          Columns: {visibleCount} of {totalColumns}
+          Columns ({visibleCount})
         </span>
         <ChevronDown
           className={`w-4 h-4 text-text-muted transition-transform ${

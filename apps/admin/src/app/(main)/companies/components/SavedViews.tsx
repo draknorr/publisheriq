@@ -70,20 +70,20 @@ export function SavedViews({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-body-sm border transition-colors ${
-          views.length > 0
-            ? 'border-accent-primary/30 bg-accent-primary/5 text-accent-primary hover:bg-accent-primary/10'
-            : 'border-border-subtle bg-surface-elevated text-text-secondary hover:border-border-prominent'
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-body-sm transition-colors ${
+          isOpen
+            ? 'bg-accent-primary/10 text-accent-primary'
+            : 'bg-surface-elevated text-text-secondary hover:text-text-primary border border-border-muted hover:border-border-prominent'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       >
         <Bookmark className="h-4 w-4" />
-        <span>Saved Views</span>
+        <span>Views</span>
         {views.length > 0 && (
-          <span className="px-1.5 py-0.5 rounded bg-accent-primary/20 text-caption">
+          <span className="px-1.5 py-0.5 rounded bg-accent-primary/20 text-accent-primary text-caption">
             {views.length}
           </span>
         )}
-        <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Dropdown Panel */}
