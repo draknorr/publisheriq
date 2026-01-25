@@ -206,10 +206,6 @@ export async function GET(request: NextRequest) {
     isFree: parseBoolean(searchParams.get('isFree')),
   };
 
-  // NOTE: isFree filter requires adding p_is_free parameter to get_apps_with_filters RPC
-  // For now, the isFree filter is parsed but not applied at the database level
-  // TODO: Add p_is_free parameter to database function to filter on apps.is_free column
-
   // Check cache for default view (no filters = expensive full table scan)
   const cacheKey = `default-${params.type}`;
   if (isDefaultView(params)) {
@@ -222,95 +218,100 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
 
-    // Fetch apps data and aggregate stats in parallel
-    const [appsResult, statsResult] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.rpc as any)('get_apps_with_filters', {
-        p_type: params.type,
-        p_sort_field: params.sort,
-        p_sort_order: params.order,
-        p_limit: params.limit ?? 50,
-        p_offset: params.offset ?? 0,
-        p_search: params.search,
-        // Metric filters
-        p_min_ccu: params.minCcu,
-        p_max_ccu: params.maxCcu,
-        p_min_owners: params.minOwners,
-        p_max_owners: params.maxOwners,
-        p_min_reviews: params.minReviews,
-        p_max_reviews: params.maxReviews,
-        p_min_score: params.minScore,
-        p_max_score: params.maxScore,
-        p_min_price: params.minPrice,
-        p_max_price: params.maxPrice,
-        p_min_playtime: params.minPlaytime,
-        p_max_playtime: params.maxPlaytime,
-        // Growth filters
-        p_min_growth_7d: params.minGrowth7d,
-        p_max_growth_7d: params.maxGrowth7d,
-        p_min_growth_30d: params.minGrowth30d,
-        p_max_growth_30d: params.maxGrowth30d,
-        p_min_momentum: params.minMomentum,
-        p_max_momentum: params.maxMomentum,
-        // Sentiment filters
-        p_min_sentiment_delta: params.minSentimentDelta,
-        p_max_sentiment_delta: params.maxSentimentDelta,
-        p_velocity_tier: params.velocityTier,
-        // Engagement filters
-        p_min_active_pct: params.minActivePct,
-        p_min_review_rate: params.minReviewRate,
-        p_min_value_score: params.minValueScore,
-        // Content filters
-        p_genres: params.genres,
-        p_genre_mode: params.genreMode ?? 'all', // Default 'all' so adding tags narrows results
-        p_tags: params.tags,
-        p_tag_mode: params.tagMode ?? 'all', // Default 'all' so adding tags narrows results
-        p_categories: params.categories,
-        p_has_workshop: params.hasWorkshop,
-        // Platform filters
-        p_platforms: params.platforms,
-        p_platform_mode: params.platformMode ?? 'all', // Default 'all' so adding platforms narrows results
-        p_steam_deck: params.steamDeck,
-        p_controller: params.controller,
-        // Release filters
-        p_min_age: params.minAge,
-        p_max_age: params.maxAge,
-        p_release_year: params.releaseYear,
-        p_early_access: params.earlyAccess,
-        p_min_hype: params.minHype,
-        p_max_hype: params.maxHype,
-        // Relationship filters
-        p_publisher_search: params.publisherSearch,
-        p_developer_search: params.developerSearch,
-        p_self_published: params.selfPublished,
-        p_min_vs_publisher: params.minVsPublisher,
-        p_publisher_size: params.publisherSize,
-        // Activity filters
-        p_ccu_tier: params.ccuTier,
-      }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.rpc as any)('get_apps_aggregate_stats', {
-        p_type: params.type,
-        p_search: params.search,
-        p_min_ccu: params.minCcu,
-        p_max_ccu: params.maxCcu,
-        p_min_owners: params.minOwners,
-        p_max_owners: params.maxOwners,
-        p_min_reviews: params.minReviews,
-        p_max_reviews: params.maxReviews,
-        p_min_score: params.minScore,
-        p_max_score: params.maxScore,
-        p_min_price: params.minPrice,
-        p_max_price: params.maxPrice,
-        p_min_growth_7d: params.minGrowth7d,
-        p_max_growth_7d: params.maxGrowth7d,
-        p_genres: params.genres,
-        p_tags: params.tags,
-        p_categories: params.categories,
-        p_steam_deck: params.steamDeck,
-        p_ccu_tier: params.ccuTier,
-      }),
-    ]);
+    // Fetch apps data first (main query)
+    // NOTE: Sequential execution prevents connection pool exhaustion under concurrent load.
+    // Parallel execution (Promise.all) caused PGRST003 timeouts because each query
+    // requires its own connection, and N users × 2 connections can exhaust the pool.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const appsResult = await (supabase.rpc as any)('get_apps_with_filters', {
+      p_type: params.type,
+      p_sort_field: params.sort,
+      p_sort_order: params.order,
+      p_limit: params.limit ?? 50,
+      p_offset: params.offset ?? 0,
+      p_search: params.search,
+      // Metric filters
+      p_min_ccu: params.minCcu,
+      p_max_ccu: params.maxCcu,
+      p_min_owners: params.minOwners,
+      p_max_owners: params.maxOwners,
+      p_min_reviews: params.minReviews,
+      p_max_reviews: params.maxReviews,
+      p_min_score: params.minScore,
+      p_max_score: params.maxScore,
+      p_min_price: params.minPrice,
+      p_max_price: params.maxPrice,
+      p_min_playtime: params.minPlaytime,
+      p_max_playtime: params.maxPlaytime,
+      // Growth filters
+      p_min_growth_7d: params.minGrowth7d,
+      p_max_growth_7d: params.maxGrowth7d,
+      p_min_growth_30d: params.minGrowth30d,
+      p_max_growth_30d: params.maxGrowth30d,
+      p_min_momentum: params.minMomentum,
+      p_max_momentum: params.maxMomentum,
+      // Sentiment filters
+      p_min_sentiment_delta: params.minSentimentDelta,
+      p_max_sentiment_delta: params.maxSentimentDelta,
+      p_velocity_tier: params.velocityTier,
+      // Engagement filters
+      p_min_active_pct: params.minActivePct,
+      p_min_review_rate: params.minReviewRate,
+      p_min_value_score: params.minValueScore,
+      // Content filters
+      p_genres: params.genres,
+      p_genre_mode: params.genreMode ?? 'all', // Default 'all' so adding tags narrows results
+      p_tags: params.tags,
+      p_tag_mode: params.tagMode ?? 'all', // Default 'all' so adding tags narrows results
+      p_categories: params.categories,
+      p_has_workshop: params.hasWorkshop,
+      // Platform filters
+      p_platforms: params.platforms,
+      p_platform_mode: params.platformMode ?? 'all', // Default 'all' so adding platforms narrows results
+      p_steam_deck: params.steamDeck,
+      p_controller: params.controller,
+      // Release filters
+      p_min_age: params.minAge,
+      p_max_age: params.maxAge,
+      p_release_year: params.releaseYear,
+      p_early_access: params.earlyAccess,
+      p_min_hype: params.minHype,
+      p_max_hype: params.maxHype,
+      // Relationship filters
+      p_publisher_search: params.publisherSearch,
+      p_developer_search: params.developerSearch,
+      p_self_published: params.selfPublished,
+      p_min_vs_publisher: params.minVsPublisher,
+      p_publisher_size: params.publisherSize,
+      // Activity filters
+      p_ccu_tier: params.ccuTier,
+      // Boolean filters
+      p_is_free: params.isFree,
+    });
+
+    // Then fetch aggregate stats (fast query, ~50ms)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const statsResult = await (supabase.rpc as any)('get_apps_aggregate_stats', {
+      p_type: params.type,
+      p_search: params.search,
+      p_min_ccu: params.minCcu,
+      p_max_ccu: params.maxCcu,
+      p_min_owners: params.minOwners,
+      p_max_owners: params.maxOwners,
+      p_min_reviews: params.minReviews,
+      p_max_reviews: params.maxReviews,
+      p_min_score: params.minScore,
+      p_max_score: params.maxScore,
+      p_min_price: params.minPrice,
+      p_max_price: params.maxPrice,
+      p_min_growth_7d: params.minGrowth7d,
+      p_max_growth_7d: params.maxGrowth7d,
+      p_genres: params.genres,
+      p_tags: params.tags,
+      p_categories: params.categories,
+      p_steam_deck: params.steamDeck,
+      p_ccu_tier: params.ccuTier,
+    });
 
     if (appsResult.error) {
       console.error('Error fetching apps:', appsResult.error);
