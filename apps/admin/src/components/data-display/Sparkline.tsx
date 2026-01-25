@@ -81,6 +81,47 @@ export function Sparkline({
   const colorMap = resolvedTheme === 'dark' ? darkColors : lightColors;
   const { stroke, fill } = colorMap[color] || colorMap.coral;
 
+  // When both width and height are explicit numbers, render without ResponsiveContainer
+  // to avoid "width(-1) and height(-1) should be greater than 0" warnings
+  if (typeof width === 'number' && typeof height === 'number') {
+    if (variant === 'line') {
+      return (
+        <div className={className}>
+          <LineChart data={chartData} width={width} height={height}>
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={stroke}
+              strokeWidth={1.5}
+              dot={false}
+            />
+          </LineChart>
+        </div>
+      );
+    }
+
+    return (
+      <div className={className}>
+        <AreaChart data={chartData} width={width} height={height}>
+          <defs>
+            <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={fill} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={fill} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={stroke}
+            strokeWidth={1.5}
+            fill={`url(#gradient-${color})`}
+          />
+        </AreaChart>
+      </div>
+    );
+  }
+
+  // Use ResponsiveContainer for flexible sizing
   if (variant === 'line') {
     return (
       <div className={className} style={{ height, width }}>

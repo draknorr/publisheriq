@@ -87,6 +87,8 @@ export async function getApps(params: AppsFilterParams): Promise<App[]> {
     p_publisher_size: params.publisherSize,
     // Activity filters
     p_ccu_tier: params.ccuTier,
+    // Boolean filters
+    p_is_free: params.isFree,
   });
 
   if (error) {
@@ -98,14 +100,97 @@ export async function getApps(params: AppsFilterParams): Promise<App[]> {
 }
 
 /**
+ * Check if params represent a "default" query with no filters applied
+ * Used to determine if we can use the fast materialized view
+ */
+function isDefaultQuery(params: AppsFilterParams): boolean {
+  return (
+    !params.search &&
+    params.minCcu === undefined &&
+    params.maxCcu === undefined &&
+    params.minOwners === undefined &&
+    params.maxOwners === undefined &&
+    params.minReviews === undefined &&
+    params.maxReviews === undefined &&
+    params.minScore === undefined &&
+    params.maxScore === undefined &&
+    params.minPrice === undefined &&
+    params.maxPrice === undefined &&
+    params.minPlaytime === undefined &&
+    params.maxPlaytime === undefined &&
+    params.minGrowth7d === undefined &&
+    params.maxGrowth7d === undefined &&
+    params.minGrowth30d === undefined &&
+    params.maxGrowth30d === undefined &&
+    params.minMomentum === undefined &&
+    params.maxMomentum === undefined &&
+    params.minSentimentDelta === undefined &&
+    params.maxSentimentDelta === undefined &&
+    !params.velocityTier &&
+    params.minActivePct === undefined &&
+    params.minReviewRate === undefined &&
+    params.minValueScore === undefined &&
+    (!params.genres || params.genres.length === 0) &&
+    (!params.tags || params.tags.length === 0) &&
+    (!params.categories || params.categories.length === 0) &&
+    !params.hasWorkshop &&
+    (!params.platforms || params.platforms.length === 0) &&
+    !params.steamDeck &&
+    !params.controller &&
+    params.minAge === undefined &&
+    params.maxAge === undefined &&
+    !params.releaseYear &&
+    params.earlyAccess === undefined &&
+    params.minHype === undefined &&
+    params.maxHype === undefined &&
+    !params.publisherSearch &&
+    !params.developerSearch &&
+    params.selfPublished === undefined &&
+    params.minVsPublisher === undefined &&
+    !params.publisherSize &&
+    !params.ccuTier &&
+    params.isFree === undefined
+  );
+}
+
+/**
  * Fetch aggregate statistics for filtered apps
- * Note: Uses type assertion until database types are regenerated after migration
+ * Uses pre-computed materialized view for default queries (~400ms)
+ * Falls back to RPC for filtered queries (~2.8s)
  */
 export async function getAggregateStats(
   params: AppsFilterParams
 ): Promise<AggregateStats> {
   const supabase = getSupabase();
+  const appType = params.type || 'game';
 
+  // For default queries (no filters), use the fast materialized view
+  if (isDefaultQuery(params)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from('mv_apps_aggregate_stats')
+      .select('*')
+      .eq('app_type', appType)
+      .single();
+
+    if (!error && data) {
+      return {
+        total_games: Number(data.total_games) || 0,
+        avg_ccu: data.avg_ccu ? Number(data.avg_ccu) : null,
+        avg_score: data.avg_score ? Number(data.avg_score) : null,
+        avg_momentum: data.avg_momentum ? Number(data.avg_momentum) : null,
+        trending_up_count: Number(data.trending_up_count) || 0,
+        trending_down_count: Number(data.trending_down_count) || 0,
+        sentiment_improving_count: Number(data.sentiment_improving_count) || 0,
+        sentiment_declining_count: Number(data.sentiment_declining_count) || 0,
+        avg_value_score: data.avg_value_score ? Number(data.avg_value_score) : null,
+      };
+    }
+    // If materialized view query fails, fall through to RPC
+    console.warn('Materialized view query failed, falling back to RPC:', error?.message);
+  }
+
+  // For filtered queries, use the RPC
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)('get_apps_aggregate_stats', {
     p_type: params.type,
@@ -240,271 +325,80 @@ export function getAppTypeLabel(type: string): string {
  * Fetch specific apps by their IDs for comparison mode
  * Preserves order of input IDs in output
  *
- * Note: Uses multiple queries because growth/velocity metrics come from
- * different tables (ccu_tier_assignments, review_velocity_stats) that
- * the Supabase client can't easily JOIN.
+ * Uses the optimized get_apps_by_ids RPC that consolidates
+ * 5 sequential queries into a single database round-trip.
+ * Expected performance: ~100ms vs ~500ms with individual queries.
  */
 export async function getAppsByIds(appids: number[]): Promise<App[]> {
   if (appids.length === 0) return [];
 
   const supabase = getSupabase();
 
-  // Query 1: Apps with basic metrics from latest_daily_metrics
-  // Note: average_playtime columns come from daily_metrics, not apps
-  const { data: appsData, error: appsError } = await supabase
-    .from('apps')
-    .select(
-      `
-      appid,
-      name,
-      type,
-      is_free,
-      current_price_cents,
-      current_discount_percent,
-      release_date,
-      release_state,
-      platforms,
-      controller_support,
-      latest_daily_metrics!inner (
-        ccu_peak,
-        owners_min,
-        owners_max,
-        owners_midpoint,
-        total_reviews,
-        positive_reviews,
-        review_score,
-        positive_percentage,
-        price_cents,
-        metric_date
-      )
-    `
-    )
-    .in('appid', appids);
-
-  if (appsError) {
-    console.error('Error fetching apps by IDs:', appsError);
-    throw new Error(`Failed to fetch apps by IDs: ${appsError.message}`);
-  }
-
-  if (!appsData || appsData.length === 0) return [];
-
-  // Query 2: CCU tier assignments (growth metrics)
-  const { data: ccuData } = await supabase
-    .from('ccu_tier_assignments')
-    .select('appid, ccu_growth_7d_percent, ccu_growth_30d_percent, ccu_tier')
-    .in('appid', appids);
-
-  const ccuMap = new Map<number, { growth7d: number | null; growth30d: number | null; tier: number | null }>();
-  if (ccuData) {
-    ccuData.forEach((row) => {
-      ccuMap.set(row.appid, {
-        growth7d: row.ccu_growth_7d_percent,
-        growth30d: row.ccu_growth_30d_percent,
-        tier: row.ccu_tier,
-      });
-    });
-  }
-
-  // Query 3: Review velocity stats
-  const { data: velocityData } = await supabase
-    .from('review_velocity_stats')
-    .select('appid, velocity_7d, velocity_30d, velocity_tier')
-    .in('appid', appids);
-
-  const velocityMap = new Map<number, { v7d: number | null; v30d: number | null; tier: string | null }>();
-  if (velocityData) {
-    velocityData.forEach((row) => {
-      if (row.appid !== null) {
-        velocityMap.set(row.appid, {
-          v7d: row.velocity_7d,
-          v30d: row.velocity_30d,
-          tier: row.velocity_tier,
-        });
-      }
-    });
-  }
-
-  // Query 4: app_filter_data for publisher/developer/steam_deck info
-  // This materialized view pre-computes data that requires junction table joins
-  // Note: app_filter_data is a view not in generated types, using type assertion
+  // Use the optimized RPC that returns all data in one query
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: filterData } = await (supabase as any)
-    .from('app_filter_data')
-    .select('appid, publisher_id, publisher_name, publisher_game_count, developer_id, developer_name, steam_deck_category')
-    .in('appid', appids) as {
-    data: Array<{
-      appid: number;
-      publisher_id: number | null;
-      publisher_name: string | null;
-      publisher_game_count: number | null;
-      developer_id: number | null;
-      developer_name: string | null;
-      steam_deck_category: SteamDeckCategory | null;
-    }> | null;
-  };
+  const { data, error } = await (supabase.rpc as any)('get_apps_by_ids', {
+    p_appids: appids,
+  });
 
-  const filterDataMap = new Map<number, {
-    publisher_id: number | null;
-    publisher_name: string | null;
-    publisher_game_count: number | null;
-    developer_id: number | null;
-    developer_name: string | null;
-    steam_deck_category: SteamDeckCategory | null;
-  }>();
-  if (filterData) {
-    filterData.forEach((row) => {
-      filterDataMap.set(row.appid, {
-        publisher_id: row.publisher_id,
-        publisher_name: row.publisher_name,
-        publisher_game_count: row.publisher_game_count,
-        developer_id: row.developer_id,
-        developer_name: row.developer_name,
-        steam_deck_category: row.steam_deck_category,
-      });
-    });
+  if (error) {
+    console.error('Error fetching apps by IDs:', error);
+    throw new Error(`Failed to fetch apps by IDs: ${error.message}`);
   }
 
-  // Query 5: Playtime from daily_metrics (latest record per app)
-  // Using RPC would be better, but for now fetch raw and filter
-  const { data: playtimeData } = await supabase
-    .from('daily_metrics')
-    .select('appid, average_playtime_forever, average_playtime_2weeks, metric_date')
-    .in('appid', appids)
-    .order('metric_date', { ascending: false });
+  if (!data || data.length === 0) return [];
 
-  // Get latest playtime per app
-  const playtimeMap = new Map<number, { forever: number | null; twoWeeks: number | null }>();
-  if (playtimeData) {
-    playtimeData.forEach((row) => {
-      // Only set if not already present (we're ordered desc by date)
-      if (!playtimeMap.has(row.appid)) {
-        playtimeMap.set(row.appid, {
-          forever: row.average_playtime_forever,
-          twoWeeks: row.average_playtime_2weeks,
-        });
-      }
-    });
-  }
-
-  // Transform to App shape and compute derived metrics
+  // Transform RPC result to App shape and preserve order
   const appsMap = new Map<number, App>();
-  const now = new Date();
 
-  for (const row of appsData) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = row as any;
-    const metrics = r.latest_daily_metrics;
-    const filterInfo = filterDataMap.get(r.appid);
-
-    // Get growth metrics from ccu_tier_assignments
-    const ccuTier = ccuMap.get(r.appid);
-    const growth7d = ccuTier?.growth7d ?? null;
-    const growth30d = ccuTier?.growth30d ?? null;
-    const tier = ccuTier?.tier ?? null;
-
-    // Get velocity metrics from review_velocity_stats
-    const velocity = velocityMap.get(r.appid);
-    const velocity7d = velocity?.v7d ?? null;
-    const velocity30d = velocity?.v30d ?? null;
-    const velocityTier = velocity?.tier ?? null;
-
-    // Calculate days_live
-    let daysLive: number | null = null;
-    let hypeDuration: number | null = null;
-    if (r.release_date) {
-      const releaseDate = new Date(r.release_date);
-      daysLive = Math.floor(
-        (now.getTime() - releaseDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (r.release_state === 'prerelease' && daysLive < 0) {
-        hypeDuration = Math.abs(daysLive);
-        daysLive = null;
-      }
-    }
-
-    // Compute derived metrics (matching RPC logic)
-    const ownersMid = metrics?.owners_midpoint ?? 0;
-    const ccuPeak = metrics?.ccu_peak ?? 0;
-    const totalReviews = metrics?.total_reviews ?? 0;
-    const playtime = playtimeMap.get(r.appid);
-    const playtimeForever = playtime?.forever ?? null;
-    const playtime2Weeks = playtime?.twoWeeks ?? null;
-    const priceCents = metrics?.price_cents ?? r.current_price_cents ?? 0;
-
-    // Active player percentage: (CCU / owners) * 100
-    const activePlayerPct =
-      ownersMid > 0 ? Math.round((ccuPeak / ownersMid) * 10000) / 100 : null;
-
-    // Review rate: reviews per 1K owners
-    const reviewRate =
-      ownersMid > 0 ? Math.round((totalReviews / ownersMid) * 100000) / 100 : null;
-
-    // Value score: hours per dollar (only for paid games)
-    const valueScore =
-      !r.is_free && priceCents > 0 && playtimeForever && playtimeForever > 0
-        ? Math.round(((playtimeForever / 60) / (priceCents / 100)) * 100) / 100
-        : null;
-
-    // Velocity acceleration: 7d - 30d velocity
-    const velocityAccel =
-      velocity7d !== null && velocity30d !== null
-        ? Math.round((velocity7d - velocity30d) * 10000) / 10000
-        : null;
-
-    // Momentum score: (growth_7d + velocity_acceleration) / 2
-    const momentumScore =
-      growth7d !== null
-        ? Math.round((growth7d + (velocityAccel ?? 0)) * 100) / 200
-        : null;
-
+  for (const row of data) {
     const app: App = {
-      appid: r.appid,
-      name: r.name,
-      type: r.type,
-      is_free: r.is_free,
-      is_delisted: r.is_delisted ?? false,
-      ccu_peak: ccuPeak,
-      owners_min: metrics?.owners_min ?? 0,
-      owners_max: metrics?.owners_max ?? 0,
-      owners_midpoint: ownersMid,
-      total_reviews: totalReviews,
-      positive_reviews: metrics?.positive_reviews ?? 0,
-      review_score: metrics?.review_score ?? null,
-      positive_percentage: metrics?.positive_percentage ?? null,
-      price_cents: priceCents,
-      current_discount_percent: r.current_discount_percent ?? 0,
-      average_playtime_forever: playtimeForever,
-      average_playtime_2weeks: playtime2Weeks,
-      ccu_growth_7d_percent: growth7d,
-      ccu_growth_30d_percent: growth30d,
-      ccu_tier: tier as CcuTier | null,
-      velocity_7d: velocity7d,
-      velocity_30d: velocity30d,
-      velocity_tier: velocityTier as VelocityTier | null,
-      sentiment_delta: null, // Would need app_trends join to compute
-      momentum_score: momentumScore,
-      velocity_acceleration: velocityAccel,
-      active_player_pct: activePlayerPct,
-      review_rate: reviewRate,
-      value_score: valueScore,
-      vs_publisher_avg: null, // Would need publisher_metrics join to compute
-      release_date: r.release_date,
-      days_live: daysLive,
-      hype_duration: hypeDuration,
-      release_state: r.release_state,
-      platforms: r.platforms,
-      steam_deck_category: filterInfo?.steam_deck_category ?? null,
-      controller_support: r.controller_support,
-      publisher_id: filterInfo?.publisher_id ?? null,
-      publisher_name: filterInfo?.publisher_name ?? null,
-      publisher_game_count: filterInfo?.publisher_game_count ?? null,
-      developer_id: filterInfo?.developer_id ?? null,
-      developer_name: filterInfo?.developer_name ?? null,
-      metric_date: metrics?.metric_date ?? null,
-      data_updated_at: null,
+      appid: row.appid,
+      name: row.name,
+      type: row.type,
+      is_free: row.is_free,
+      is_delisted: row.is_delisted ?? false,
+      ccu_peak: row.ccu_peak ?? 0,
+      owners_min: row.owners_min ?? 0,
+      owners_max: row.owners_max ?? 0,
+      owners_midpoint: row.owners_midpoint ?? 0,
+      total_reviews: row.total_reviews ?? 0,
+      positive_reviews: row.positive_reviews ?? 0,
+      review_score: row.review_score ?? null,
+      positive_percentage: row.positive_percentage ?? null,
+      price_cents: row.price_cents ?? 0,
+      current_discount_percent: row.current_discount_percent ?? 0,
+      average_playtime_forever: row.average_playtime_forever ?? null,
+      average_playtime_2weeks: row.average_playtime_2weeks ?? null,
+      ccu_growth_7d_percent: row.ccu_growth_7d_percent ?? null,
+      ccu_growth_30d_percent: row.ccu_growth_30d_percent ?? null,
+      ccu_tier: row.ccu_tier as CcuTier | null,
+      velocity_7d: row.velocity_7d ?? null,
+      velocity_30d: row.velocity_30d ?? null,
+      velocity_tier: row.velocity_tier as VelocityTier | null,
+      sentiment_delta: row.sentiment_delta ?? null,
+      momentum_score: row.momentum_score ?? null,
+      velocity_acceleration: row.velocity_acceleration ?? null,
+      active_player_pct: row.active_player_pct ?? null,
+      review_rate: row.review_rate ?? null,
+      value_score: row.value_score ?? null,
+      vs_publisher_avg: row.vs_publisher_avg ?? null,
+      release_date: row.release_date ?? null,
+      days_live: row.days_live ?? null,
+      hype_duration: row.hype_duration ?? null,
+      release_state: row.release_state ?? null,
+      platforms: row.platforms ?? null,
+      steam_deck_category: row.steam_deck_category as SteamDeckCategory | null,
+      controller_support: row.controller_support ?? null,
+      publisher_id: row.publisher_id ?? null,
+      publisher_name: row.publisher_name ?? null,
+      publisher_game_count: row.publisher_game_count ?? null,
+      developer_id: row.developer_id ?? null,
+      developer_name: row.developer_name ?? null,
+      metric_date: row.metric_date ?? null,
+      data_updated_at: row.data_updated_at ?? null,
     };
 
-    appsMap.set(r.appid, app);
+    appsMap.set(row.appid, app);
   }
 
   // Return in original order
