@@ -719,9 +719,116 @@ momentum_score := COALESCE(ccu_growth_7d_pct, 0) +
 
 ---
 
+## Command Palette Integration (v2.7)
+
+The Games page integrates with the Command Palette for unified filtering.
+
+### Architecture
+
+```
+/apps/
+├── components/
+│   └── command-palette/
+│       ├── CommandPalette.tsx            # Main wrapper, keyboard handling
+│       ├── CommandPaletteHome.tsx        # Home view with search, presets, quick filters
+│       ├── CommandPaletteTags.tsx        # Tags browser with counts
+│       ├── CommandPaletteGenres.tsx      # Genres browser with counts
+│       └── CommandPaletteCategories.tsx  # Categories browser
+│
+├── lib/
+│   ├── filter-registry.ts                # 40+ filter definitions with metadata
+│   └── filter-syntax-parser.ts           # Syntax parsing and validation
+│
+├── hooks/
+│   ├── useCommandPalette.ts              # Palette state management
+│   └── useKeyboardShortcut.ts            # ⌘K keyboard listener
+│
+└── components/
+    └── ActiveFilterBar.tsx               # Color-coded filter chip display
+```
+
+### Filter Registry
+
+Defines 40+ filters across 9 categories:
+
+```typescript
+interface FilterDefinition {
+  id: string;                    // Unique identifier
+  label: string;                 // Display name
+  shortLabel?: string;           // Compact display name
+  category: FilterCategory;      // metric, growth, sentiment, engagement,
+                                 // content, platform, release, relationship, activity
+  type: FilterType;              // range, boolean, content, select
+  shortcuts: string[];           // CLI-style shortcuts: ['ccu', 'players']
+  urlParam: string;              // URL parameter name
+  chipColor: ChipColor;          // Active filter bar color
+  rangeConfig?: RangeConfig;     // Min/max, step, format for range filters
+}
+```
+
+### Filter Syntax Parser
+
+Converts user input to structured filter objects:
+
+```typescript
+// Input parsing examples
+parseSyntax('ccu > 50000')      // → { field: 'minCcu', value: 50000 }
+parseSyntax('ccu 1000-50000')   // → { field: 'minCcu', value: 1000 }, { field: 'maxCcu', value: 50000 }
+parseSyntax('free:yes')         // → { field: 'isFree', value: true }
+parseSyntax('genre:action')     // → { field: 'genres', value: [genreId] }
+parseSyntax('rising stars')     // → { preset: 'rising_stars' }
+```
+
+**Parser Features:**
+- Fuzzy matching for shortcuts and presets
+- Error recovery with suggestions
+- Case-insensitive matching
+- Number parsing with K/M suffixes (e.g., `50K` → `50000`)
+
+### Active Filter Bar
+
+Displays applied filters as color-coded chips:
+
+| Category | Color Token | Examples |
+|----------|-------------|----------|
+| preset | `--accent-purple` | Rising Stars, High Momentum |
+| quickFilter | `--accent-primary` | Popular, Trending, Free |
+| metric | `--accent-blue` | CCU > 1,000, Score >= 90 |
+| content | `--accent-green` | Genre: Action, Tag: Roguelike |
+| platform | `--accent-orange` | Steam Deck: Verified |
+| release | `--accent-yellow` | Released: Last 30 days |
+| relationship | `--accent-pink` | Publisher: Valve |
+| activity | `--text-tertiary` | CCU Tier: Hot |
+
+### Keyboard Handling
+
+```typescript
+// useKeyboardShortcut.ts
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      setIsOpen(true);
+    }
+    if (e.key === 'Escape' && isOpen) {
+      if (currentView !== 'home') {
+        setCurrentView('home');
+      } else {
+        setIsOpen(false);
+      }
+    }
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [isOpen, currentView]);
+```
+
+---
+
 ## Related Documentation
 
 - [v2.6 Release Notes](../../releases/v2.6-games-page.md) - Full changelog
+- [v2.7 Release Notes](../../releases/v2.7-design-command-palette.md) - Command Palette and Design System
 - [Games Page User Guide](../../user-guide/games-page.md) - Usage instructions
 - [Games Page Spec](../../specs/archived/apps-page-spec.md) - Original specification
 - [Games Page Progress](../../specs/archived/apps-page-progress.md) - Implementation log

@@ -65,6 +65,60 @@ Use the search bar to find companies by name:
 
 ---
 
+## Command Palette
+
+The command palette provides unified filtering through a single interface. Press **⌘K** (Mac) or **Ctrl+K** (Windows/Linux) to open it.
+
+### Home View
+
+When opened, you'll see:
+- **Search input** with filter syntax parsing
+- **Presets** (Market Leaders, Rising Indies, Breakout, Growing)
+- **Quick Filters** grouped by category
+- **Genre chips** for filtering by catalog content
+- **Browse navigation** to Tags, Genres, Categories
+
+### Filter Syntax Examples
+
+Type directly in the search input:
+
+| Expression | Result |
+|------------|--------|
+| `games > 10` | Companies with 10+ games |
+| `revenue > 1000000` | Over $1M estimated revenue |
+| `owners > 100000` | Over 100K total owners |
+| `growth > 10` | 10%+ weekly growth |
+| `genre:action` | Companies with action games |
+| `tag:indie` | Companies with indie-tagged games |
+| `deck:verified` | Companies with Deck-verified games |
+| `market leaders` | Apply preset by name |
+
+### Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| **↑** / **↓** | Navigate through options |
+| **Enter** | Apply selection |
+| **Escape** | Close or go back |
+| **Backspace** (empty) | Return to home view |
+
+### Active Filter Bar
+
+Applied filters appear as color-coded chips below the filter bar:
+
+| Color | Category |
+|-------|----------|
+| **Purple** | Presets (Market Leaders, Rising Indies) |
+| **Coral** | Quick Filters (Major 10+, Prolific 5+) |
+| **Blue** | Metric filters (games, owners, revenue) |
+| **Green** | Content filters (tags, genres, categories) |
+| **Orange** | Platform filters (Steam Deck, platforms) |
+| **Gray** | Status filters (Active, Dormant) |
+
+Click any chip to modify, or click **X** to remove.
+
+---
+
 ## Using Preset Views
 
 Presets are pre-configured filter combinations for common use cases:
@@ -499,3 +553,4 @@ Share the full URL with colleagues to give them the exact same view.
 - [Personalization](./personalization.md) - Pinning and alerts
 - [Companies Page Architecture](../developer-guide/features/companies-page.md) - Technical details
 - [v2.5 Release Notes](../releases/v2.5-companies-page.md) - Full feature list
+- [v2.7 Release Notes](../releases/v2.7-design-command-palette.md) - Command Palette and Design System

@@ -490,9 +490,72 @@ interface ColumnDefinition {
 
 ---
 
+## Command Palette Integration (v2.7)
+
+The Companies page integrates with the Command Palette for unified filtering.
+
+### Architecture
+
+The Command Palette is shared between Games and Companies pages:
+
+```
+/companies/
+├── components/
+│   └── command-palette/              # Shared with /apps
+│       ├── CommandPalette.tsx        # Main wrapper
+│       ├── CommandPaletteHome.tsx    # Home view (company-specific presets)
+│       └── ...
+│
+└── lib/
+    └── companies-filter-registry.ts  # Company-specific filter definitions
+```
+
+### Filter Registry (Companies)
+
+Company-specific filters:
+
+| Filter | Shortcut | Type | Description |
+|--------|----------|------|-------------|
+| Game Count | `games` | range | Number of published games |
+| Total Owners | `owners` | range | Total estimated owners |
+| Peak CCU | `ccu` | range | Total concurrent users |
+| Revenue | `revenue` | range | Estimated gross revenue |
+| Growth 7d | `growth` | range | Weekly CCU growth % |
+| Genres | `genre` | content | Games with genre |
+| Tags | `tag` | content | Games with tag |
+| Steam Deck | `deck` | select | Deck compatibility |
+| Status | `active` | boolean | Active vs dormant |
+
+### Filter Syntax Examples
+
+```
+games > 10          # Companies with 10+ games
+revenue > 1000000   # Over $1M estimated revenue
+growth > 10         # 10%+ weekly growth
+genre:action        # Companies with action games
+deck:verified       # Companies with Deck-verified games
+market leaders      # Apply Market Leaders preset
+```
+
+### Active Filter Bar
+
+Company-specific category colors:
+
+| Category | Color | Examples |
+|----------|-------|----------|
+| preset | Purple | Market Leaders, Rising Indies |
+| quickFilter | Coral | Major 10+, Prolific 5+ |
+| metric | Blue | Games > 10, Revenue > $1M |
+| content | Green | Genre: Action |
+| platform | Orange | Steam Deck: Verified |
+| status | Gray | Status: Active |
+
+---
+
 ## Related Documentation
 
 - [v2.5 Release Notes](../../releases/v2.5-companies-page.md) - Full changelog
+- [v2.7 Release Notes](../../releases/v2.7-design-command-palette.md) - Command Palette and Design System
 - [Companies Page User Guide](../../user-guide/companies-page.md) - Usage instructions
 - [Companies Page Spec](../../specs/archived/companies-page-spec.md) - Original specification
 - [Publishers & Developers Pages](../../archive/publishers-developers-pages.md) - Legacy pages (deprecated)

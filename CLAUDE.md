@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data acquisition platform with natural language chat interface. Last updated: January 15, 2026.
+> Steam data acquisition platform with natural language chat interface. Last updated: January 25, 2026.
 
 ---
 
@@ -782,6 +782,39 @@ Comprehensive theming system with warm stone color palette and CSS variable-base
 | `apps/admin/tailwind.config.cjs` | Theme configuration |
 | `apps/admin/src/components/ui/` | Reusable UI components |
 
+## Command Palette (v2.7)
+
+Unified filtering interface accessible via ⌘K on Games and Companies pages.
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `apps/admin/src/lib/filter-registry.ts` | Filter definitions (40+) |
+| `apps/admin/src/lib/filter-syntax-parser.ts` | Syntax parsing |
+| `apps/admin/src/components/command-palette/` | UI components |
+| `apps/admin/src/hooks/useCommandPalette.ts` | State management |
+| `apps/admin/src/components/ActiveFilterBar.tsx` | Filter chips |
+
+### Filter Syntax Examples
+| Syntax | Description |
+|--------|-------------|
+| `ccu > 50000` | Range filter (greater than) |
+| `ccu 1000-50000` | Range filter (between) |
+| `free:yes` | Boolean filter |
+| `genre:action` | Content filter |
+| `rising stars` | Preset by name |
+
+### Active Filter Bar Colors
+| Category | Color |
+|----------|-------|
+| Preset | Purple |
+| Quick Filter | Coral |
+| Metric | Blue |
+| Content | Green |
+| Platform | Orange |
+| Release | Amber |
+| Relationship | Pink |
+
 ## Insights Dashboard (v2.2+)
 
 CCU analytics page at `/insights` with sparkline visualizations:
@@ -925,3 +958,5 @@ Full documentation in `/docs/`:
 - [v2.3 Release Notes](docs/releases/v2.3-embedding-optimization.md) - 10x embedding sync
 - [v2.4 Release Notes](docs/releases/v2.4-personalization.md) - Personalization, concept search, trending
 - [v2.5 Release Notes](docs/releases/v2.5-companies-page.md) - Unified Companies page
+- [v2.6 Release Notes](docs/releases/v2.6-games-page.md) - Games page with computed metrics
+- [v2.7 Release Notes](docs/releases/v2.7-design-command-palette.md) - Command Palette and Design System
