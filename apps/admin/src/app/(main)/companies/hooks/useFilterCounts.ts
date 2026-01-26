@@ -40,6 +40,14 @@ export function useFilterCounts() {
 
   const cache = useRef<Record<string, CacheEntry>>({});
 
+  // Track in-flight requests to prevent duplicate concurrent calls
+  const inFlight = useRef<Record<FilterType, boolean>>({
+    genre: false,
+    tag: false,
+    category: false,
+    steam_deck: false,
+  });
+
   /**
    * Build a cache key from filter type and context
    */
@@ -70,22 +78,19 @@ export function useFilterCounts() {
         return cached.data;
       }
 
+      // Prevent duplicate concurrent requests
+      if (inFlight.current[filterType]) {
+        return data[filterType];
+      }
+      inFlight.current[filterType] = true;
+
       // Set loading state
       setLoading((prev) => ({ ...prev, [filterType]: true }));
 
       try {
         const supabase = getSupabase();
 
-        const rpcParams = {
-          p_filter_type: filterType,
-          p_company_type: companyType,
-          p_min_games: contextFilters?.minGames,
-          p_min_revenue: contextFilters?.minRevenue,
-          p_status: contextFilters?.status ?? undefined,
-        };
-        console.log(`Fetching ${filterType} counts with params:`, rpcParams);
-
-        const response = await supabase.rpc('get_filter_option_counts', {
+        const { data: result, error } = await supabase.rpc('get_filter_option_counts', {
           p_filter_type: filterType,
           p_company_type: companyType,
           p_min_games: contextFilters?.minGames,
@@ -93,16 +98,11 @@ export function useFilterCounts() {
           p_status: contextFilters?.status ?? undefined,
         });
 
-        console.log(`Raw RPC response for ${filterType}:`, response);
-
-        const { data: result, error } = response;
-
         if (error) {
           console.error(`Error fetching ${filterType} counts:`, error);
           throw error;
         }
 
-        console.log(`${filterType} counts result:`, result?.length ?? 0, 'options');
         const options = (result ?? []) as FilterOption[];
 
         // Cache the result
@@ -113,6 +113,7 @@ export function useFilterCounts() {
 
         return options;
       } finally {
+        inFlight.current[filterType] = false;
         setLoading((prev) => ({ ...prev, [filterType]: false }));
       }
     },

@@ -15,6 +15,9 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { parseFilterSyntax, filterToUrlParams, type ParseResult } from '../lib/filter-syntax-parser';
 import type { CommandPaletteView } from '../lib/companies-types';
 
+// Stable empty array for default values to avoid reference instability
+const EMPTY_NUMBER_ARRAY: number[] = [];
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -90,11 +93,11 @@ export function useCommandPalette(
   options: UseCommandPaletteOptions = {}
 ): UseCommandPaletteReturn {
   const {
-    initialTags = [],
+    initialTags = EMPTY_NUMBER_ARRAY,
     initialTagMode = 'any',
-    initialGenres = [],
+    initialGenres = EMPTY_NUMBER_ARRAY,
     initialGenreMode = 'all',
-    initialCategories = [],
+    initialCategories = EMPTY_NUMBER_ARRAY,
     onApplyFilter,
     onApplyTags,
     onApplyGenres,

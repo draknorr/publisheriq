@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react';
 import { MetricSliderGrid, type MetricFilters } from './filters/MetricSliderGrid';
 import { GrowthSliderRow, type GrowthFilterValues } from './filters/GrowthSliderRow';
@@ -68,12 +68,12 @@ export function AdvancedFiltersPanel({
   const [timePeriodExpanded, setTimePeriodExpanded] = useState(false);
   const { data: filterOptions, loading: filterLoading, fetchCounts } = useFilterCounts();
 
-  // Build contextual filters for count queries
-  const contextFilters = {
+  // Build contextual filters for count queries (memoized to prevent callback recreation)
+  const contextFilters = useMemo(() => ({
     minGames: filters.minGames,
     minRevenue: filters.minRevenue,
     status: filters.status,
-  };
+  }), [filters.minGames, filters.minRevenue, filters.status]);
 
   const handleMetricChange = useCallback(
     (field: keyof MetricFilters, value: number | undefined) => {
