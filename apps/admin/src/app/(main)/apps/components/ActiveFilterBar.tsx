@@ -37,7 +37,7 @@ interface ActiveFilterBarProps {
   // Result count
   resultCount?: number;
   // Actions
-  onRemoveFilter: (filterKey: string, value?: number) => void;
+  onRemoveFilter: (filterKey: string, value?: number | string) => void;
   onClearAll: () => void;
   onOpenPalette?: () => void;
 }
@@ -413,7 +413,9 @@ export function ActiveFilterBar({
     if (chip.key === 'preset') {
       onRemoveFilter('preset');
     } else if (chip.key.startsWith('quick:')) {
-      onRemoveFilter('quickFilter', undefined);
+      // Extract the quick filter ID and pass it to the handler
+      const quickFilterId = chip.key.split(':')[1];
+      onRemoveFilter('quickFilter', quickFilterId);
     } else if (chip.key.startsWith('genre:')) {
       const genreId = parseInt(chip.key.split(':')[1]);
       onRemoveFilter('genre', genreId);

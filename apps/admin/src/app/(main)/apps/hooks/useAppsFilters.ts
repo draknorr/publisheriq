@@ -328,57 +328,58 @@ export function useAppsFilters(): UseAppsFiltersReturn {
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
   // Check if any filters are active
+  // Note: Boolean filters must use !== undefined check to detect false values
   const hasActiveFilters = useMemo(() => {
     return !!(
       search ||
       activePreset ||
       activeQuickFilters.length > 0 ||
-      minCcu ||
-      maxCcu ||
-      minOwners ||
-      maxOwners ||
-      minReviews ||
-      maxReviews ||
-      minScore ||
-      maxScore ||
-      minPrice ||
-      maxPrice ||
-      minPlaytime ||
-      maxPlaytime ||
-      minGrowth7d ||
-      maxGrowth7d ||
-      minGrowth30d ||
-      maxGrowth30d ||
-      minMomentum ||
-      maxMomentum ||
-      minSentimentDelta ||
-      maxSentimentDelta ||
-      velocityTier ||
-      minActivePct ||
-      minReviewRate ||
-      minValueScore ||
-      minVsPublisher ||
-      minAge ||
-      maxAge ||
-      isFree ||
-      steamDeck ||
-      hasWorkshop ||
-      earlyAccess ||
-      minDiscount ||
-      publisherSize ||
+      minCcu !== undefined ||
+      maxCcu !== undefined ||
+      minOwners !== undefined ||
+      maxOwners !== undefined ||
+      minReviews !== undefined ||
+      maxReviews !== undefined ||
+      minScore !== undefined ||
+      maxScore !== undefined ||
+      minPrice !== undefined ||
+      maxPrice !== undefined ||
+      minPlaytime !== undefined ||
+      maxPlaytime !== undefined ||
+      minGrowth7d !== undefined ||
+      maxGrowth7d !== undefined ||
+      minGrowth30d !== undefined ||
+      maxGrowth30d !== undefined ||
+      minMomentum !== undefined ||
+      maxMomentum !== undefined ||
+      minSentimentDelta !== undefined ||
+      maxSentimentDelta !== undefined ||
+      velocityTier !== undefined ||
+      minActivePct !== undefined ||
+      minReviewRate !== undefined ||
+      minValueScore !== undefined ||
+      minVsPublisher !== undefined ||
+      minAge !== undefined ||
+      maxAge !== undefined ||
+      isFree !== undefined ||
+      steamDeck !== undefined ||
+      hasWorkshop !== undefined ||
+      earlyAccess !== undefined ||
+      minDiscount !== undefined ||
+      publisherSize !== undefined ||
       // M4b filters
       genres.length > 0 ||
       tags.length > 0 ||
       categories.length > 0 ||
       platforms.length > 0 ||
-      controller ||
-      releaseYear ||
-      minHype ||
-      maxHype ||
-      publisherSearch ||
-      developerSearch ||
+      controller !== undefined ||
+      releaseYear !== undefined ||
+      minHype !== undefined ||
+      maxHype !== undefined ||
+      publisherSearch !== undefined ||
+      developerSearch !== undefined ||
       selfPublished !== undefined ||
-      ccuTier
+      ccuTier !== undefined
     );
   }, [
     search,

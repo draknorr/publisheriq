@@ -25,7 +25,7 @@ import { useAppsCompare } from '../hooks/useAppsCompare';
 import { useAppsQuery, buildFilterParamsFromUrl } from '../hooks/useAppsQuery';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useCommandPaletteShortcut } from '../hooks/useKeyboardShortcut';
-import type { App, AppType, SortField, SortOrder, AggregateStats } from '../lib/apps-types';
+import type { App, AppType, SortField, SortOrder, AggregateStats, QuickFilterId } from '../lib/apps-types';
 import type { FilterDescription } from '../lib/apps-export';
 import type { FilterMode } from '../lib/apps-types';
 
@@ -341,21 +341,22 @@ function AppsPageClientInner({
   const isLoadingData = isPending || isFetching;
 
   // Handler for removing individual filters from ActiveFilterBar
-  const handleRemoveFilter = useCallback((filterKey: string, value?: number) => {
+  const handleRemoveFilter = useCallback((filterKey: string, value?: number | string) => {
     if (filterKey === 'preset') {
       clearPreset();
-    } else if (filterKey === 'quickFilter') {
-      // Quick filters are handled by toggling - this clears the first one
-      if (activeQuickFilters.length > 0) {
-        toggleQuickFilter(activeQuickFilters[0]);
-      }
-    } else if (filterKey.startsWith('genre:') && value !== undefined) {
+    } else if (filterKey === 'quickFilter' && typeof value === 'string') {
+      // Remove specific quick filter by ID
+      toggleQuickFilter(value as QuickFilterId);
+    } else if (filterKey === 'genre' && typeof value === 'number') {
+      // Remove specific genre by ID
       const newGenres = (advancedFilters.genres || []).filter((id) => id !== value);
       setGenres(newGenres);
-    } else if (filterKey.startsWith('tag:') && value !== undefined) {
+    } else if (filterKey === 'tag' && typeof value === 'number') {
+      // Remove specific tag by ID
       const newTags = (advancedFilters.tags || []).filter((id) => id !== value);
       setTags(newTags);
-    } else if (filterKey.startsWith('category:') && value !== undefined) {
+    } else if (filterKey === 'category' && typeof value === 'number') {
+      // Remove specific category by ID
       const newCategories = (advancedFilters.categories || []).filter((id) => id !== value);
       setCategories(newCategories);
     } else {
@@ -364,7 +365,6 @@ function AppsPageClientInner({
     }
   }, [
     clearPreset,
-    activeQuickFilters,
     toggleQuickFilter,
     advancedFilters,
     setGenres,

@@ -89,6 +89,8 @@ export async function getApps(params: AppsFilterParams): Promise<App[]> {
     p_ccu_tier: params.ccuTier,
     // Boolean filters
     p_is_free: params.isFree,
+    // Discount filter
+    p_min_discount: params.minDiscount,
   });
 
   if (error) {
@@ -149,7 +151,8 @@ function isDefaultQuery(params: AppsFilterParams): boolean {
     params.minVsPublisher === undefined &&
     !params.publisherSize &&
     !params.ccuTier &&
-    params.isFree === undefined
+    params.isFree === undefined &&
+    params.minDiscount === undefined
   );
 }
 
@@ -190,11 +193,13 @@ export async function getAggregateStats(
     console.warn('Materialized view query failed, falling back to RPC:', error?.message);
   }
 
-  // For filtered queries, use the RPC
+  // For filtered queries, use the RPC with full filter set
+  // Bug #3 fix: Pass all filters to ensure stats match table results
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)('get_apps_aggregate_stats', {
     p_type: params.type,
     p_search: params.search,
+    // Metric filters
     p_min_ccu: params.minCcu,
     p_max_ccu: params.maxCcu,
     p_min_owners: params.minOwners,
@@ -205,12 +210,51 @@ export async function getAggregateStats(
     p_max_score: params.maxScore,
     p_min_price: params.minPrice,
     p_max_price: params.maxPrice,
+    p_min_playtime: params.minPlaytime,
+    p_max_playtime: params.maxPlaytime,
+    p_is_free: params.isFree,
+    p_min_discount: params.minDiscount,
+    // Growth filters
     p_min_growth_7d: params.minGrowth7d,
     p_max_growth_7d: params.maxGrowth7d,
+    p_min_growth_30d: params.minGrowth30d,
+    p_max_growth_30d: params.maxGrowth30d,
+    p_min_momentum: params.minMomentum,
+    p_max_momentum: params.maxMomentum,
+    // Sentiment filters
+    p_min_sentiment_delta: params.minSentimentDelta,
+    p_max_sentiment_delta: params.maxSentimentDelta,
+    p_velocity_tier: params.velocityTier,
+    // Engagement filters
+    p_min_active_pct: params.minActivePct,
+    p_min_review_rate: params.minReviewRate,
+    p_min_value_score: params.minValueScore,
+    p_min_vs_publisher: params.minVsPublisher,
+    // Content filters
     p_genres: params.genres,
+    p_genre_mode: params.genreMode ?? 'all',
     p_tags: params.tags,
+    p_tag_mode: params.tagMode ?? 'all',
     p_categories: params.categories,
+    p_has_workshop: params.hasWorkshop,
+    // Platform filters
+    p_platforms: params.platforms,
+    p_platform_mode: params.platformMode ?? 'all',
     p_steam_deck: params.steamDeck,
+    p_controller: params.controller,
+    // Release filters
+    p_min_age: params.minAge,
+    p_max_age: params.maxAge,
+    p_release_year: params.releaseYear,
+    p_early_access: params.earlyAccess,
+    p_min_hype: params.minHype,
+    p_max_hype: params.maxHype,
+    // Relationship filters
+    p_publisher_search: params.publisherSearch,
+    p_developer_search: params.developerSearch,
+    p_self_published: params.selfPublished,
+    p_publisher_size: params.publisherSize,
+    // Activity filters
     p_ccu_tier: params.ccuTier,
   });
 
@@ -262,7 +306,8 @@ export async function getAggregateStats(
  * Format large numbers compactly (e.g., 1.2M, 5.6K)
  */
 export function formatCompactNumber(n: number | null | undefined): string {
-  if (n === null || n === undefined || n === 0) return '—';
+  if (n === null || n === undefined) return '—';
+  if (n === 0) return '0';
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
