@@ -27,21 +27,21 @@ function getMomentumConfig(value: number): MomentumConfig {
   if (value >= 20) {
     return {
       icon: '\u{1F680}\u{1F680}', // double rocket emoji
-      colorClass: 'text-[#22c55e] font-semibold',
+      colorClass: 'text-semantic-success font-semibold',
       prefix: '+',
     };
   }
   if (value >= 10) {
     return {
       icon: '\u{1F680}', // rocket emoji
-      colorClass: 'text-accent-green',
+      colorClass: 'text-trend-positive',
       prefix: '+',
     };
   }
   if (value >= 0) {
     return {
       icon: '\u2197', // up-right arrow
-      colorClass: 'text-lime-400',
+      colorClass: 'text-semantic-success/70',
       prefix: '+',
     };
   }
@@ -55,13 +55,13 @@ function getMomentumConfig(value: number): MomentumConfig {
   if (value > -20) {
     return {
       icon: '\u2198', // down-right arrow
-      colorClass: 'text-accent-orange',
+      colorClass: 'text-semantic-warning',
       prefix: '',
     };
   }
   return {
     icon: '\u{1F4C9}', // chart down emoji
-    colorClass: 'text-accent-red font-semibold',
+    colorClass: 'text-trend-negative font-semibold',
     prefix: '',
   };
 }
@@ -69,6 +69,16 @@ function getMomentumConfig(value: number): MomentumConfig {
 export function MomentumCell({ value, showEmoji = true }: MomentumCellProps) {
   if (value === null || value === undefined) {
     return <span className="text-text-muted">&mdash;</span>;
+  }
+
+  // Momentum > 500 implies CCU growth > 1000% (from near-zero baseline) - show "NEW" instead
+  if (value > 500) {
+    return (
+      <span className="inline-flex items-center gap-1 text-semantic-info font-semibold">
+        {showEmoji && <span>🆕</span>}
+        <span>NEW</span>
+      </span>
+    );
   }
 
   const { icon, colorClass, prefix } = getMomentumConfig(value);

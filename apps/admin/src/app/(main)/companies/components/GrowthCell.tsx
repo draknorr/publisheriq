@@ -24,7 +24,7 @@ function getGrowthConfig(value: number): GrowthConfig {
   if (value >= 50) {
     return {
       icon: '\u{1F680}', // rocket emoji
-      colorClass: 'text-[#22c55e] font-semibold',
+      colorClass: 'text-semantic-success font-semibold',
       prefix: '+',
     };
   }
@@ -59,6 +59,16 @@ function getGrowthConfig(value: number): GrowthConfig {
 export function GrowthCell({ value, showEmoji = true }: GrowthCellProps) {
   if (value === null || value === undefined) {
     return <span className="text-text-muted">&mdash;</span>;
+  }
+
+  // Growth > 1000% indicates coming from near-zero baseline - show "NEW" instead
+  if (value > 1000) {
+    return (
+      <span className="inline-flex items-center gap-1 text-semantic-info font-semibold">
+        {showEmoji && <span>🆕</span>}
+        <span>NEW</span>
+      </span>
+    );
   }
 
   const { icon, colorClass, prefix } = getGrowthConfig(value);

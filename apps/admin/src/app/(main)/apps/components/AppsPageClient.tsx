@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Loader2 } from 'lucide-react';
+import { Command } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppTypeToggle } from './AppTypeToggle';
 import { AppsTable } from './AppsTable';
@@ -10,10 +10,12 @@ import { SearchBar } from './SearchBar';
 import { UnifiedFilterBar } from './UnifiedFilterBar';
 import { ContextBar } from './ContextBar';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
+import { ActiveFilterBar } from './ActiveFilterBar';
 import { DataFreshnessFooter } from './DataFreshnessFooter';
 import { BulkActionsBar } from './BulkActionsBar';
 import { CompareMode } from './CompareMode';
 import { ExportDialog } from './ExportDialog';
+import { CommandPalette } from './command-palette';
 import { useAppsFilters } from '../hooks/useAppsFilters';
 import { useFilterCounts } from '../hooks/useFilterCounts';
 import { useSavedViews, type SavedView } from '../hooks/useSavedViews';
@@ -21,9 +23,11 @@ import { useSparklineLoader } from '../hooks/useSparklineLoader';
 import { useAppsSelection } from '../hooks/useAppsSelection';
 import { useAppsCompare } from '../hooks/useAppsCompare';
 import { useAppsQuery, buildFilterParamsFromUrl } from '../hooks/useAppsQuery';
+import { useCommandPalette } from '../hooks/useCommandPalette';
+import { useCommandPaletteShortcut } from '../hooks/useKeyboardShortcut';
 import type { App, AppType, SortField, SortOrder, AggregateStats } from '../lib/apps-types';
 import type { FilterDescription } from '../lib/apps-export';
-import { formatCompactNumber } from '../lib/apps-queries';
+import type { FilterMode } from '../lib/apps-types';
 
 interface AppsPageClientProps {
   initialData: App[];
@@ -61,14 +65,15 @@ function AppsPageClientInner({
 
   // Fetch apps data using React Query with client-side caching
   const {
-    data: queryData,
+    apps: queryApps,
+    stats: queryStats,
     isLoading,
     isFetching,
   } = useAppsQuery(filterParams);
 
   // Use React Query data if available, otherwise fall back to server data
-  const apps = queryData ?? initialData;
-  const aggregateStats = serverAggregateStats; // Aggregate stats still from server (could add separate query)
+  const apps = queryApps ?? initialData;
+  const aggregateStats = queryStats ?? serverAggregateStats;
 
   // M6a: Selection state management
   const selection = useAppsSelection();
@@ -133,8 +138,10 @@ function AppsPageClientInner({
     // M4b: Content filter actions
     setGenres,
     setGenreMode,
+    setGenresWithMode,
     setTags,
     setTagMode,
+    setTagsWithMode,
     setCategories,
     setHasWorkshop,
     // M4b: Platform filter actions
@@ -193,6 +200,35 @@ function AppsPageClientInner({
 
   // M5b: Sparkline lazy-loading
   const sparklineLoader = useSparklineLoader();
+
+  // Command Palette state management
+  const commandPalette = useCommandPalette({
+    initialTags: advancedFilters.tags || [],
+    initialTagMode: advancedFilters.tagMode || 'any',
+    initialGenres: advancedFilters.genres || [],
+    initialGenreMode: advancedFilters.genreMode || 'all',
+    initialCategories: advancedFilters.categories || [],
+    onApplyFilter: useCallback((params: Record<string, string>) => {
+      // Apply parsed filter from syntax (e.g., "ccu > 1000")
+      Object.entries(params).forEach(([key, value]) => {
+        setAdvancedFilter(key as keyof typeof advancedFilters, value);
+      });
+    }, [setAdvancedFilter]),
+    onApplyTags: useCallback((tags: number[], mode: 'any' | 'all') => {
+      // Use combined setter to avoid race condition with separate updateUrl calls
+      setTagsWithMode(tags, mode as FilterMode);
+    }, [setTagsWithMode]),
+    onApplyGenres: useCallback((genres: number[], mode: 'any' | 'all') => {
+      // Use combined setter to avoid race condition with separate updateUrl calls
+      setGenresWithMode(genres, mode as FilterMode);
+    }, [setGenresWithMode]),
+    onApplyCategories: useCallback((categories: number[]) => {
+      setCategories(categories);
+    }, [setCategories]),
+  });
+
+  // Global keyboard shortcut for command palette (⌘K / Ctrl+K)
+  useCommandPaletteShortcut(commandPalette.toggle);
 
   // M4b: Memoize context filter object to prevent callback recreation
   const filterCountContext = useMemo(() => ({
@@ -301,61 +337,81 @@ function AppsPageClientInner({
     [router]
   );
 
-  // Get the display label based on current type
-  const getTypeLabel = (): string => {
-    switch (type) {
-      case 'all':
-        return 'Apps';
-      case 'game':
-        return 'Games';
-      case 'dlc':
-        return 'DLC';
-      case 'demo':
-        return 'Demos';
-      default:
-        return 'Games';
-    }
-  };
-
   // Combined loading state: URL transition OR React Query fetching
   const isLoadingData = isPending || isFetching;
 
+  // Handler for removing individual filters from ActiveFilterBar
+  const handleRemoveFilter = useCallback((filterKey: string, value?: number) => {
+    if (filterKey === 'preset') {
+      clearPreset();
+    } else if (filterKey === 'quickFilter') {
+      // Quick filters are handled by toggling - this clears the first one
+      if (activeQuickFilters.length > 0) {
+        toggleQuickFilter(activeQuickFilters[0]);
+      }
+    } else if (filterKey.startsWith('genre:') && value !== undefined) {
+      const newGenres = (advancedFilters.genres || []).filter((id) => id !== value);
+      setGenres(newGenres);
+    } else if (filterKey.startsWith('tag:') && value !== undefined) {
+      const newTags = (advancedFilters.tags || []).filter((id) => id !== value);
+      setTags(newTags);
+    } else if (filterKey.startsWith('category:') && value !== undefined) {
+      const newCategories = (advancedFilters.categories || []).filter((id) => id !== value);
+      setCategories(newCategories);
+    } else {
+      // Clear the filter by setting it to undefined
+      setAdvancedFilter(filterKey as keyof typeof advancedFilters, undefined);
+    }
+  }, [
+    clearPreset,
+    activeQuickFilters,
+    toggleQuickFilter,
+    advancedFilters,
+    setGenres,
+    setTags,
+    setCategories,
+    setAdvancedFilter,
+  ]);
+
   return (
     <div className={`space-y-4 ${isLoadingData ? 'opacity-60' : ''}`}>
-      {/* Row 1: Type Toggle + Result Count */}
+      {/* Row 1: Type Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <AppTypeToggle
           value={type}
           onChange={setType}
           disabled={isLoadingData}
         />
-
-        {/* Result count + Clear button */}
-        <div className="flex items-center gap-3">
-          {hasActiveFilters && (
-            <button
-              onClick={clearAllFilters}
-              disabled={isLoadingData}
-              className="flex items-center gap-1 px-2 py-1 text-body-sm text-accent-red hover:text-accent-red/80 transition-colors disabled:opacity-50"
-            >
-              <X className="w-4 h-4" />
-              Clear all
-            </button>
-          )}
-          <div className="flex items-center gap-2 text-body text-text-secondary">
-            {isFetching && <Loader2 className="w-4 h-4 animate-spin" />}
-            {getTypeLabel()} ({formatCompactNumber(aggregateStats.total_games)})
-          </div>
-        </div>
       </div>
 
-      {/* Row 2: Search Bar */}
-      <SearchBar
-        initialValue={search}
-        onSearch={setSearch}
-        isPending={isPending}
-        disabled={isPending}
-      />
+      {/* Row 2: Search Bar with Filters button */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <SearchBar
+            initialValue={search}
+            onSearch={setSearch}
+            isPending={isPending}
+            disabled={isPending}
+          />
+        </div>
+        <button
+          onClick={commandPalette.open}
+          className="flex items-center gap-2 px-4 py-2 rounded-md
+                     bg-accent-primary text-white font-medium
+                     shadow-[0_2px_8px_rgba(212,113,106,0.3)]
+                     hover:bg-accent-primary-hover hover:shadow-[0_4px_12px_rgba(212,113,106,0.4)]
+                     active:shadow-[0_1px_4px_rgba(212,113,106,0.3)]
+                     transition-all duration-150
+                     text-body-sm"
+          title="Open filter palette (⌘K)"
+        >
+          <Command className="w-4 h-4" />
+          <span>Filters</span>
+          <kbd className="px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-medium">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
 
       {/* Unified Filter Bar (presets, quick filters, tools) */}
       <UnifiedFilterBar
@@ -383,9 +439,23 @@ function AppsPageClientInner({
         disabled={isLoadingData}
       />
 
-      {/* Context Bar (inline stats when filters active) */}
-      {hasActiveFilters && (
-        <ContextBar stats={aggregateStats} isLoading={isFetching} />
+      {/* Context Bar (always visible stats) */}
+      <ContextBar stats={aggregateStats} isLoading={isFetching} />
+
+      {/* Active Filter Bar (shows current filters as chips) */}
+      {(advancedFilterCount > 0 || activePreset || activeQuickFilters.length > 0) && (
+        <ActiveFilterBar
+          filters={advancedFilters}
+          activePreset={activePreset}
+          activeQuickFilters={activeQuickFilters}
+          genreOptions={filterOptions.genre}
+          tagOptions={filterOptions.tag}
+          categoryOptions={filterOptions.category}
+          resultCount={aggregateStats.total_games}
+          onRemoveFilter={handleRemoveFilter}
+          onClearAll={clearAllFilters}
+          onOpenPalette={commandPalette.open}
+        />
       )}
 
       {/* Advanced Filters Panel (collapsible) */}
@@ -494,6 +564,24 @@ function AppsPageClientInner({
         visibleColumns={visibleColumns}
         filterDescription={filterDescription}
         defaultScope={exportScope}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        palette={commandPalette}
+        tagOptions={filterOptions.tag}
+        genreOptions={filterOptions.genre}
+        categoryOptions={filterOptions.category}
+        tagsLoading={filterLoading.tag}
+        genresLoading={filterLoading.genre}
+        categoriesLoading={filterLoading.category}
+        onTagsOpen={handleTagOpen}
+        onGenresOpen={handleGenreOpen}
+        onCategoriesOpen={handleCategoryOpen}
+        activePreset={activePreset}
+        activeQuickFilters={activeQuickFilters}
+        onApplyPreset={applyPreset}
+        onToggleQuickFilter={toggleQuickFilter}
       />
     </div>
   );

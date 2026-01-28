@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Download, SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FilterPill } from './FilterPill';
 import { ColumnSelector } from './ColumnSelector';
@@ -21,11 +21,6 @@ interface UnifiedFilterBarProps {
   onClearPreset: () => void;
   onToggleQuickFilter: (filterId: QuickFilterId) => void;
   onClearAll: () => void;
-
-  // Advanced filters
-  isAdvancedOpen: boolean;
-  advancedFilterCount: number;
-  onToggleAdvanced: () => void;
 
   // Tools - Column Selector
   visibleColumns: ColumnId[];
@@ -61,9 +56,6 @@ export function UnifiedFilterBar({
   onClearPreset,
   onToggleQuickFilter,
   onClearAll,
-  isAdvancedOpen,
-  advancedFilterCount,
-  onToggleAdvanced,
   visibleColumns,
   onColumnsChange,
   companyType,
@@ -133,41 +125,8 @@ export function UnifiedFilterBar({
     return activeQuickFilters.includes(filter.id as QuickFilterId);
   };
 
-  // Advanced toggle button styles
-  const advancedButtonClass = [
-    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm font-medium',
-    'transition-colors flex-shrink-0',
-    'border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2',
-    isAdvancedOpen
-      ? 'bg-accent-primary/10 text-accent-primary border-accent-primary/30'
-      : 'bg-surface-elevated text-text-secondary border-border-subtle hover:border-border-prominent',
-    disabled ? 'opacity-50 cursor-not-allowed' : '',
-  ].join(' ');
-
-  const badgeClass = [
-    'px-1.5 py-0.5 rounded text-caption font-medium',
-    isAdvancedOpen
-      ? 'bg-accent-primary/20 text-accent-primary'
-      : 'bg-accent-blue/15 text-accent-blue',
-  ].join(' ');
-
   return (
     <div className="flex items-center gap-2">
-      {/* Advanced Filters Toggle - Always visible */}
-      <button onClick={onToggleAdvanced} disabled={disabled} className={advancedButtonClass}>
-        <SlidersHorizontal className="w-4 h-4" />
-        <span className="hidden sm:inline">Filters</span>
-        {advancedFilterCount > 0 && (
-          <span className={badgeClass}>{advancedFilterCount}</span>
-        )}
-        <ChevronDown
-          className={`w-3.5 h-3.5 transition-transform duration-200 ${isAdvancedOpen ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      {/* Divider */}
-      <div className="h-6 w-px bg-border-subtle flex-shrink-0" />
-
       {/* Scrollable filter pills with arrow indicators */}
       <div className="flex-1 flex items-center gap-1 min-w-0">
         {/* Left scroll arrow */}

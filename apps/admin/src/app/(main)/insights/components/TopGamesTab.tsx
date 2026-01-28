@@ -45,8 +45,8 @@ export function TopGamesTab({ games, timeRange }: TopGamesTabProps) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-accent-cyan/15">
-              <Users className="h-5 w-5 text-accent-cyan" />
+            <div className="p-2 rounded-lg bg-accent-primary-subtle">
+              <Users className="h-5 w-5 text-accent-primary" />
             </div>
             <div>
               <p className="text-caption text-text-muted">Total Peak CCU</p>
@@ -59,8 +59,8 @@ export function TopGamesTab({ games, timeRange }: TopGamesTabProps) {
 
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-accent-green/15">
-              <TrendingUp className="h-5 w-5 text-accent-green" />
+            <div className="p-2 rounded-lg bg-semantic-success-subtle">
+              <TrendingUp className="h-5 w-5 text-semantic-success" />
             </div>
             <div>
               <p className="text-caption text-text-muted">Avg Review Score</p>
@@ -73,8 +73,8 @@ export function TopGamesTab({ games, timeRange }: TopGamesTabProps) {
 
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-accent-purple/15">
-              <Trophy className="h-5 w-5 text-accent-purple" />
+            <div className="p-2 rounded-lg bg-chart-5/15">
+              <Trophy className="h-5 w-5 text-chart-5" />
             </div>
             <div>
               <p className="text-caption text-text-muted">Top Game</p>

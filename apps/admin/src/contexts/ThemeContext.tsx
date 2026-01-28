@@ -21,6 +21,24 @@ function getSystemTheme(): ResolvedTheme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+/**
+ * Apply theme to document element.
+ * Sets data-theme attribute (new primary method) and .dark class (Phase 1 backward compatibility).
+ */
+function applyTheme(resolved: ResolvedTheme): void {
+  const root = document.documentElement;
+
+  // Set data-theme attribute (new primary method)
+  root.setAttribute('data-theme', resolved);
+
+  // Also set/remove .dark class for Phase 1 backward compatibility
+  if (resolved === 'dark') {
+    root.classList.add('dark');
+  } else {
+    root.classList.remove('dark');
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system');
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('light');
@@ -43,7 +61,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return;
 
-    const root = document.documentElement;
     let resolved: ResolvedTheme;
 
     if (theme === 'system') {
@@ -53,12 +70,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
 
     setResolvedTheme(resolved);
-
-    if (resolved === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
+    applyTheme(resolved);
   }, [theme, mounted]);
 
   // Listen for system theme changes
@@ -71,12 +83,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (theme === 'system') {
         const resolved = e.matches ? 'dark' : 'light';
         setResolvedTheme(resolved);
-
-        if (resolved === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        applyTheme(resolved);
       }
     };
 

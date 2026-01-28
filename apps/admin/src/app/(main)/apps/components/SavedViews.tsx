@@ -101,7 +101,7 @@ export function SavedViews({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-1 z-50 w-72 bg-surface-raised border border-border-muted rounded-lg shadow-lg overflow-hidden">
+        <div className="absolute top-full right-0 mt-1 z-50 w-80 bg-surface-raised border border-border-muted rounded-lg shadow-lg overflow-hidden">
           {/* Create new view */}
           <div className="p-3 border-b border-border-subtle">
             <label className="text-caption font-medium text-text-secondary mb-1.5 block">

@@ -68,6 +68,62 @@ Use the search bar to find games by name:
 
 ---
 
+## Command Palette
+
+The command palette provides unified filtering through a single interface. Press **⌘K** (Mac) or **Ctrl+K** (Windows/Linux) to open it.
+
+### Home View
+
+When opened, you'll see:
+- **Search input** with filter syntax parsing
+- **Presets** (6 visible, expandable to all 12)
+- **Quick Filters** grouped by category
+- **Genre chips** (8 visible, browse for more)
+- **Browse navigation** to Tags, Genres, Categories
+
+### Filter Syntax Examples
+
+Type directly in the search input:
+
+| Expression | Result |
+|------------|--------|
+| `ccu > 50000` | Games with 50K+ players |
+| `score >= 90` | 90%+ positive reviews |
+| `ccu 1000-50000` | CCU between 1K and 50K |
+| `price < 20` | Under $20 |
+| `free` | Free-to-play games |
+| `genre:action` | Action games |
+| `tag:roguelike` | Games with roguelike tag |
+| `deck:verified` | Steam Deck verified |
+| `rising stars` | Apply preset by name |
+
+### Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| **↑** / **↓** | Navigate through options |
+| **Enter** | Apply selection |
+| **Escape** | Close or go back |
+| **Backspace** (empty) | Return to home view |
+
+### Active Filter Bar
+
+Applied filters appear as color-coded chips below the filter bar:
+
+| Color | Category |
+|-------|----------|
+| **Purple** | Presets (Rising Stars, High Momentum) |
+| **Coral** | Quick Filters (Popular, Trending) |
+| **Blue** | Metric filters (CCU, reviews, score) |
+| **Green** | Content filters (tags, genres, categories) |
+| **Orange** | Platform filters (Steam Deck, platforms) |
+| **Amber** | Release filters (time periods, age) |
+| **Pink** | Relationship filters (publisher, developer) |
+
+Click any chip to modify, or click **X** to remove.
+
+---
+
 ## Using Preset Views
 
 Presets are pre-configured filter combinations for common discovery patterns.
@@ -775,3 +831,4 @@ All filters are stored in the URL for bookmarking and sharing. This enables:
 - [Personalization](./personalization.md) - Pinning and alerts
 - [Games Page Architecture](../developer-guide/features/games-page.md) - Technical details
 - [v2.6 Release Notes](../releases/v2.6-games-page.md) - Full feature list
+- [v2.7 Release Notes](../releases/v2.7-design-command-palette.md) - Command Palette and Design System

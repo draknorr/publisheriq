@@ -46,7 +46,7 @@ export const methodology = {
 
   // Insight metrics
   momentum_score:
-    'Combined trajectory signal: (CCU Growth 7d + Review Velocity Acceleration) / 2. Positive values indicate both player count and review activity are trending up.',
+    'Combined trajectory: (CCU Growth % + Velocity Change %) / 2. Both components are percentages, making values comparable across all games. Positive = growing, negative = declining.',
 
   sentiment_delta:
     'Change in positive review percentage: recent period vs prior period. Positive = improving perception, negative = declining (potential review bomb).',
@@ -56,7 +56,7 @@ export const methodology = {
   velocity_30d: 'Average new reviews per day over the last 30 days.',
 
   velocity_acceleration:
-    'Velocity 7d minus Velocity 30d. Positive = review rate increasing, negative = review rate slowing.',
+    'Percentage change in review velocity: ((7d - 30d) / 30d) × 100. Positive = review rate increasing, negative = slowing. Comparable across all games.',
 
   active_player_pct:
     'Peak CCU divided by estimated owners. Shows what percentage of owners are actively playing now.',

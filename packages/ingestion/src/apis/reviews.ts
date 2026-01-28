@@ -66,7 +66,7 @@ export interface ReviewSummary {
 export async function fetchReviewSummary(appid: number): Promise<ReviewSummary | null> {
   await rateLimiters.reviews.acquire();
 
-  const url = `${API_URLS.STEAM_STORE}/appreviews/${appid}?json=1&num_per_page=0`;
+  const url = `${API_URLS.STEAM_STORE}/appreviews/${appid}?json=1&num_per_page=0&filter=all&language=all&review_type=all&purchase_type=all`;
 
   try {
     const response = await withRetry(async () => {

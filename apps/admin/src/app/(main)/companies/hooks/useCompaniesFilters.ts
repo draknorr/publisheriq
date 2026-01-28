@@ -27,6 +27,9 @@ import {
   serializeColumnsParam,
 } from '../lib/companies-columns';
 
+// Stable empty array to avoid reference changes triggering re-renders
+const EMPTY_NUMBER_ARRAY: number[] = [];
+
 /**
  * Extended advanced filters state for M4b
  */
@@ -257,11 +260,11 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
       period: VALID_PERIODS.includes(periodParam as TimePeriod)
         ? (periodParam as TimePeriod)
         : undefined,
-      // Content filters (M4b)
-      genres: parseNumberArray(searchParams.get('genres')),
+      // Content filters (M4b) - use stable empty array when undefined
+      genres: parseNumberArray(searchParams.get('genres')) ?? EMPTY_NUMBER_ARRAY,
       genreMode: parseFilterMode(searchParams.get('genreMode')),
-      tags: parseNumberArray(searchParams.get('tags')),
-      categories: parseNumberArray(searchParams.get('categories')),
+      tags: parseNumberArray(searchParams.get('tags')) ?? EMPTY_NUMBER_ARRAY,
+      categories: parseNumberArray(searchParams.get('categories')) ?? EMPTY_NUMBER_ARRAY,
       steamDeck: parseSteamDeck(searchParams.get('steamDeck')),
       platforms: parsePlatforms(searchParams.get('platforms')),
       platformMode: parseFilterMode(searchParams.get('platformMode')),

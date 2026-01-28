@@ -1,6 +1,98 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
-import type { AppsFilterParams } from '@/app/(main)/apps/lib/apps-types';
+import type { AppsFilterParams, AggregateStats } from '@/app/(main)/apps/lib/apps-types';
+
+/**
+ * Default aggregate stats (used as fallback when stats query fails)
+ */
+const DEFAULT_STATS: AggregateStats = {
+  total_games: 0,
+  avg_ccu: null,
+  avg_score: null,
+  avg_momentum: null,
+  trending_up_count: 0,
+  trending_down_count: 0,
+  sentiment_improving_count: 0,
+  sentiment_declining_count: 0,
+  avg_value_score: null,
+};
+
+/**
+ * In-memory cache for default view results.
+ * When no filters are applied, the database must scan all ~200K apps which takes 5+ seconds.
+ * Caching the default view (Top 50 by CCU) provides instant response when clearing filters.
+ */
+const defaultViewCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Check if this is a default view request (no filters applied).
+ * Default view = type filter only + default sort (ccu_peak desc) + first page
+ */
+function isDefaultView(params: AppsFilterParams): boolean {
+  return (
+    // No search
+    !params.search &&
+    // No metric filters
+    params.minCcu === undefined &&
+    params.maxCcu === undefined &&
+    params.minOwners === undefined &&
+    params.maxOwners === undefined &&
+    params.minReviews === undefined &&
+    params.maxReviews === undefined &&
+    params.minScore === undefined &&
+    params.maxScore === undefined &&
+    params.minPrice === undefined &&
+    params.maxPrice === undefined &&
+    params.minPlaytime === undefined &&
+    params.maxPlaytime === undefined &&
+    // No growth filters
+    params.minGrowth7d === undefined &&
+    params.maxGrowth7d === undefined &&
+    params.minGrowth30d === undefined &&
+    params.maxGrowth30d === undefined &&
+    params.minMomentum === undefined &&
+    params.maxMomentum === undefined &&
+    // No sentiment filters
+    params.minSentimentDelta === undefined &&
+    params.maxSentimentDelta === undefined &&
+    params.velocityTier === undefined &&
+    // No engagement filters
+    params.minActivePct === undefined &&
+    params.minReviewRate === undefined &&
+    params.minValueScore === undefined &&
+    // No content filters
+    !params.genres?.length &&
+    !params.tags?.length &&
+    !params.categories?.length &&
+    params.hasWorkshop === undefined &&
+    // No platform filters
+    !params.platforms?.length &&
+    params.steamDeck === undefined &&
+    params.controller === undefined &&
+    // No release filters
+    params.minAge === undefined &&
+    params.maxAge === undefined &&
+    params.releaseYear === undefined &&
+    params.earlyAccess === undefined &&
+    params.minHype === undefined &&
+    params.maxHype === undefined &&
+    // No relationship filters
+    !params.publisherSearch &&
+    !params.developerSearch &&
+    params.selfPublished === undefined &&
+    params.minVsPublisher === undefined &&
+    params.publisherSize === undefined &&
+    // No activity filters
+    params.ccuTier === undefined &&
+    // No boolean filters
+    params.isFree === undefined &&
+    // Default sort and first page
+    params.sort === 'ccu_peak' &&
+    params.order === 'desc' &&
+    (params.offset ?? 0) === 0
+  );
+}
 
 /**
  * API route for fetching apps data
@@ -109,14 +201,29 @@ export async function GET(request: NextRequest) {
 
     // Activity filters
     ccuTier: parseNumber(searchParams.get('ccuTier')) as AppsFilterParams['ccuTier'],
+
+    // Boolean filters
+    isFree: parseBoolean(searchParams.get('isFree')),
   };
+
+  // Check cache for default view (no filters = expensive full table scan)
+  const cacheKey = `default-${params.type}`;
+  if (isDefaultView(params)) {
+    const cached = defaultViewCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json(cached.data);
+    }
+  }
 
   try {
     const supabase = getSupabase();
 
-    // Fetch apps data
+    // Fetch apps data first (main query)
+    // NOTE: Sequential execution prevents connection pool exhaustion under concurrent load.
+    // Parallel execution (Promise.all) caused PGRST003 timeouts because each query
+    // requires its own connection, and N users × 2 connections can exhaust the pool.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.rpc as any)('get_apps_with_filters', {
+    const appsResult = await (supabase.rpc as any)('get_apps_with_filters', {
       p_type: params.type,
       p_sort_field: params.sort,
       p_sort_order: params.order,
@@ -178,17 +285,70 @@ export async function GET(request: NextRequest) {
       p_publisher_size: params.publisherSize,
       // Activity filters
       p_ccu_tier: params.ccuTier,
+      // Boolean filters
+      p_is_free: params.isFree,
     });
 
-    if (error) {
-      console.error('Error fetching apps:', error);
+    // Then fetch aggregate stats (fast query, ~50ms)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const statsResult = await (supabase.rpc as any)('get_apps_aggregate_stats', {
+      p_type: params.type,
+      p_search: params.search,
+      p_min_ccu: params.minCcu,
+      p_max_ccu: params.maxCcu,
+      p_min_owners: params.minOwners,
+      p_max_owners: params.maxOwners,
+      p_min_reviews: params.minReviews,
+      p_max_reviews: params.maxReviews,
+      p_min_score: params.minScore,
+      p_max_score: params.maxScore,
+      p_min_price: params.minPrice,
+      p_max_price: params.maxPrice,
+      p_min_growth_7d: params.minGrowth7d,
+      p_max_growth_7d: params.maxGrowth7d,
+      p_genres: params.genres,
+      p_tags: params.tags,
+      p_categories: params.categories,
+      p_steam_deck: params.steamDeck,
+      p_ccu_tier: params.ccuTier,
+    });
+
+    if (appsResult.error) {
+      console.error('Error fetching apps:', appsResult.error);
       return NextResponse.json(
-        { error: error.message },
+        { error: appsResult.error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ data: data ?? [] });
+    // Parse stats result (returns array with single row)
+    let stats: AggregateStats = DEFAULT_STATS;
+    if (!statsResult.error && statsResult.data && statsResult.data.length > 0) {
+      const row = statsResult.data[0];
+      stats = {
+        total_games: Number(row.total_games) || 0,
+        avg_ccu: row.avg_ccu ? Number(row.avg_ccu) : null,
+        avg_score: row.avg_score ? Number(row.avg_score) : null,
+        avg_momentum: row.avg_momentum ? Number(row.avg_momentum) : null,
+        trending_up_count: Number(row.trending_up_count) || 0,
+        trending_down_count: Number(row.trending_down_count) || 0,
+        sentiment_improving_count: Number(row.sentiment_improving_count) || 0,
+        sentiment_declining_count: Number(row.sentiment_declining_count) || 0,
+        avg_value_score: row.avg_value_score ? Number(row.avg_value_score) : null,
+      };
+    } else if (statsResult.error) {
+      console.error('Error fetching aggregate stats:', statsResult.error);
+      // Continue with default stats - don't fail the whole request
+    }
+
+    const result = { data: appsResult.data ?? [], stats };
+
+    // Cache default view results for fast subsequent loads
+    if (isDefaultView(params)) {
+      defaultViewCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    }
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error in apps API:', error);
     return NextResponse.json(

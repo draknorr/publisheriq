@@ -40,7 +40,7 @@ function AutoLinkTableCell({ children }: { children?: ReactNode }) {
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+          className="text-accent-primary hover:text-accent-primary/80 hover:underline transition-colors"
         >
           {linked.name}
         </Link>
@@ -87,7 +87,7 @@ const CodeBlockRenderer = memo(function CodeBlockRenderer({
   // For inline code, render simple styled span
   if (!className && !code.includes('\n')) {
     return (
-      <code className="px-1.5 py-0.5 rounded bg-surface-overlay text-accent-cyan font-mono text-[0.9em]">
+      <code className="px-1.5 py-0.5 rounded bg-surface-overlay text-accent-primary font-mono text-[0.9em]">
         {children}
       </code>
     );
@@ -180,7 +180,7 @@ const components: Components = {
 
   // Blockquotes
   blockquote: ({ children }) => (
-    <blockquote className="border-l-2 border-accent-blue pl-4 my-3 text-text-secondary italic">
+    <blockquote className="border-l-2 border-accent-primary pl-4 my-3 text-text-secondary italic">
       {children}
     </blockquote>
   ),
@@ -224,7 +224,7 @@ export function StreamingContent({ content, isStreaming = false }: StreamingCont
 function StreamingCursor() {
   return (
     <span
-      className="inline-block w-0.5 h-4 bg-accent-blue ml-0.5 align-middle animate-pulse"
+      className="inline-block w-0.5 h-4 bg-accent-primary ml-0.5 align-middle animate-pulse"
       aria-label="Streaming..."
     />
   );

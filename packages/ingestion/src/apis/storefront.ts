@@ -137,6 +137,7 @@ export interface ParsedStorefrontApp {
   name: string;
   type: string;
   isFree: boolean;
+  isDelisted: boolean; // True when packages is null/empty (can't be purchased)
   developers: string[];
   publishers: string[];
   releaseDate: string | null;
@@ -221,11 +222,15 @@ function parseStorefrontResponse(
 
   const data = response.data;
 
+  // Game is delisted if packages is null or empty (can't be purchased on Steam)
+  const isDelisted = !data.packages || data.packages.length === 0;
+
   return {
     appid,
     name: data.name,
     type: data.type,
     isFree: data.is_free,
+    isDelisted,
     developers: data.developers || [],
     publishers: data.publishers || [],
     releaseDate: parseReleaseDate(data.release_date?.date || ''),

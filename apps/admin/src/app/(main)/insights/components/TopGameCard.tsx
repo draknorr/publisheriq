@@ -28,10 +28,10 @@ function formatPlaytime(hours: number): string {
 }
 
 function getReviewColor(percent: number): string {
-  if (percent >= 80) return 'text-accent-green';
-  if (percent >= 70) return 'text-lime-400';
-  if (percent >= 50) return 'text-accent-yellow';
-  return 'text-accent-red';
+  if (percent >= 80) return 'text-semantic-success-text';
+  if (percent >= 70) return 'text-semantic-warning';
+  if (percent >= 50) return 'text-semantic-warning';
+  return 'text-semantic-error-text';
 }
 
 function formatDate(dateString: string): string {
@@ -87,7 +87,7 @@ export function TopGameCard({ game, rank, showReleaseDate = false }: TopGameCard
           </div>
           {growthPct !== undefined && (
             <div
-              className={`text-caption ${growthPct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}
+              className={`text-caption ${growthPct >= 0 ? 'text-trend-positive' : 'text-trend-negative'}`}
             >
               {growthPct >= 0 ? '+' : ''}
               {growthPct}%
@@ -122,14 +122,14 @@ export function TopGameCard({ game, rank, showReleaseDate = false }: TopGameCard
       {/* Price */}
       <div className="w-[70px] text-right flex-shrink-0 hidden md:block">
         {game.isFree ? (
-          <span className="text-body-sm text-accent-green font-medium">Free</span>
+          <span className="text-body-sm text-semantic-success-text font-medium">Free</span>
         ) : game.priceCents ? (
           <>
             <div className="text-body-sm text-text-primary">
               ${(game.priceCents / 100).toFixed(2)}
             </div>
             {game.discountPercent && game.discountPercent > 0 && (
-              <div className="text-caption text-accent-green">-{game.discountPercent}%</div>
+              <div className="text-caption text-semantic-success-text">-{game.discountPercent}%</div>
             )}
           </>
         ) : (

@@ -39,9 +39,9 @@ function formatDate(dateStr: string | null): string {
 function getTierColor(tier: 1 | 2 | 3): string {
   switch (tier) {
     case 1:
-      return 'bg-accent-green/15 text-accent-green';
+      return 'bg-semantic-success-subtle text-semantic-success';
     case 2:
-      return 'bg-accent-blue/15 text-accent-blue';
+      return 'bg-semantic-info-subtle text-semantic-info';
     case 3:
       return 'bg-surface-overlay text-text-muted';
   }

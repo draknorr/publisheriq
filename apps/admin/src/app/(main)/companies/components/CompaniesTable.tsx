@@ -90,7 +90,7 @@ function SortHeader({
       <button
         onClick={handleClick}
         className={`hover:text-text-primary transition-colors ${
-          isActive ? 'text-accent-blue' : ''
+          isActive ? 'text-accent-primary' : ''
         }`}
         disabled={isDisabled}
         title={isDisabled ? 'This column cannot be sorted' : undefined}
@@ -444,12 +444,14 @@ export function CompaniesTable({
                   )
                 }
                 className="flex items-center justify-center w-8 flex-shrink-0"
+                aria-label={`Select ${company.name}`}
+                title={isSelected ? 'Deselect' : 'Select'}
               >
                 <div
-                  className="w-5 h-5 rounded border transition-colors flex items-center justify-center"
+                  className="w-5 h-5 rounded-sm border transition-colors flex items-center justify-center"
                   style={{
-                    backgroundColor: isSelected ? 'var(--accent-blue)' : 'transparent',
-                    borderColor: isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                    backgroundColor: isSelected ? 'var(--accent-primary)' : 'var(--input-bg)',
+                    borderColor: isSelected ? 'var(--accent-primary)' : 'var(--input-border)',
                   }}
                 >
                   {isSelected && <Check className="w-3 h-3 text-white" />}
@@ -532,11 +534,12 @@ export function CompaniesTable({
                 <th className="px-3 py-2 w-10">
                   <button
                     onClick={() => onToggleAllVisible?.(sortedCompanies)}
-                    className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+                    className="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors hover:border-accent-primary"
                     style={{
-                      backgroundColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-blue)' : 'transparent',
-                      borderColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                      backgroundColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-primary)' : 'var(--input-bg)',
+                      borderColor: isAllVisibleSelected || isIndeterminate ? 'var(--accent-primary)' : 'var(--input-border)',
                     }}
+                    aria-label="Select all visible companies"
                     title={isAllVisibleSelected ? 'Deselect all' : 'Select all visible'}
                   >
                     {isAllVisibleSelected && <Check className="w-3 h-3 text-white" />}
@@ -591,7 +594,7 @@ export function CompaniesTable({
               <tr
                 key={`${company.type}-${company.id}`}
                 className={`hover:bg-surface-overlay transition-colors ${
-                  isSelected ? 'bg-accent-blue/5' : ''
+                  isSelected ? 'bg-accent-primary/5' : ''
                 }`}
               >
                 {/* M6a: Selection checkbox */}
@@ -607,11 +610,13 @@ export function CompaniesTable({
                           e.shiftKey
                         )
                       }
-                      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+                      className="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors hover:border-accent-primary"
                       style={{
-                        backgroundColor: isSelected ? 'var(--accent-blue)' : 'transparent',
-                        borderColor: isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                        backgroundColor: isSelected ? 'var(--accent-primary)' : 'var(--input-bg)',
+                        borderColor: isSelected ? 'var(--accent-primary)' : 'var(--input-border)',
                       }}
+                      aria-label={`Select ${company.name}`}
+                      title={isSelected ? 'Deselect' : 'Select'}
                     >
                       {isSelected && <Check className="w-3 h-3 text-white" />}
                     </button>

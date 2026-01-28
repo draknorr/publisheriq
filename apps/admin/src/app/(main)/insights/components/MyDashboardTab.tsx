@@ -110,21 +110,21 @@ export function MyDashboardTab() {
         <div className="flex flex-col sm:flex-row gap-2 justify-center text-body-sm">
           <a
             href="/apps"
-            className="inline-flex items-center gap-1 text-accent-blue hover:underline"
+            className="inline-flex items-center gap-1 text-accent-primary hover:underline"
           >
             Browse games <ArrowRight className="h-3.5 w-3.5" />
           </a>
           <span className="text-text-muted hidden sm:inline">|</span>
           <a
             href="/publishers"
-            className="inline-flex items-center gap-1 text-accent-blue hover:underline"
+            className="inline-flex items-center gap-1 text-accent-primary hover:underline"
           >
             Browse publishers <ArrowRight className="h-3.5 w-3.5" />
           </a>
           <span className="text-text-muted hidden sm:inline">|</span>
           <a
             href="/developers"
-            className="inline-flex items-center gap-1 text-accent-blue hover:underline"
+            className="inline-flex items-center gap-1 text-accent-primary hover:underline"
           >
             Browse developers <ArrowRight className="h-3.5 w-3.5" />
           </a>

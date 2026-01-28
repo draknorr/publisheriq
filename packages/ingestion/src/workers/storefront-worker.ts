@@ -107,6 +107,7 @@ async function processApp(
       p_name: details.name,
       p_type: normalizeAppType(details.type),
       p_is_free: details.isFree,
+      p_is_delisted: details.isDelisted,
       p_release_date: details.releaseDate,
       p_release_date_raw: details.releaseDateRaw,
       p_has_workshop: details.hasWorkshop,

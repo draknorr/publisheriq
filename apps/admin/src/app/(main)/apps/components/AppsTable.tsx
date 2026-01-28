@@ -91,7 +91,7 @@ function SortHeader({
       <button
         onClick={handleClick}
         className={`hover:text-text-primary transition-colors ${
-          isActive ? 'text-accent-blue' : ''
+          isActive ? 'text-accent-primary' : ''
         } ${isDisabled ? 'cursor-default hover:text-text-tertiary' : ''}`}
         disabled={isDisabled}
         title={isDisabled ? 'This column cannot be sorted' : undefined}
@@ -129,6 +129,39 @@ function DiscountBadge({ percent }: { percent: number }) {
   return (
     <span className="ml-1 px-1 py-0.5 text-[10px] font-medium bg-accent-green/20 text-accent-green rounded">
       -{percent}%
+    </span>
+  );
+}
+
+/**
+ * Free badge for free games
+ */
+function FreeBadge() {
+  return (
+    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent-green/15 text-accent-green rounded">
+      Free
+    </span>
+  );
+}
+
+/**
+ * Delisted badge for games no longer sold on Steam
+ */
+function DelistedBadge() {
+  return (
+    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-text-muted/15 text-text-muted rounded">
+      Delisted
+    </span>
+  );
+}
+
+/**
+ * Varies badge for games with variable pricing (bundles only, no base price)
+ */
+function VariesBadge() {
+  return (
+    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent-blue/15 text-accent-blue rounded">
+      Varies
     </span>
   );
 }
@@ -213,9 +246,9 @@ function MobileAppCard({
             <span className="text-text-tertiary">Reviews</span>
             <span className="text-text-secondary">
               {formatCompactNumber(app.total_reviews)}
-              {app.review_score !== null && (
+              {app.positive_percentage !== null && (
                 <span className="ml-1">
-                  <ReviewScoreBadge score={app.review_score} />
+                  <ReviewScoreBadge score={app.positive_percentage} />
                 </span>
               )}
             </span>
@@ -223,9 +256,19 @@ function MobileAppCard({
           <div className="flex justify-between">
             <span className="text-text-tertiary">Price</span>
             <span className="text-text-secondary">
-              {formatPrice(app.price_cents)}
-              {app.current_discount_percent > 0 && (
-                <DiscountBadge percent={app.current_discount_percent} />
+              {app.is_free ? (
+                <FreeBadge />
+              ) : app.is_delisted ? (
+                <DelistedBadge />
+              ) : app.price_cents === null ? (
+                <VariesBadge />
+              ) : (
+                <>
+                  {formatPrice(app.price_cents)}
+                  {app.current_discount_percent > 0 && (
+                    <DiscountBadge percent={app.current_discount_percent} />
+                  )}
+                </>
               )}
             </span>
           </div>
@@ -300,9 +343,9 @@ function renderCell(
       return (
         <>
           <span>{formatCompactNumber(app.total_reviews)}</span>
-          {app.review_score !== null && (
+          {app.positive_percentage !== null && (
             <span className="ml-1">
-              <ReviewScoreBadge score={app.review_score} />
+              <ReviewScoreBadge score={app.positive_percentage} />
             </span>
           )}
         </>
@@ -358,6 +401,16 @@ function renderCell(
     // FINANCIAL
     // ═══════════════════════════════════════════════════════════════════
     case 'price':
+      if (app.is_free) {
+        return <FreeBadge />;
+      }
+      if (app.is_delisted) {
+        return <DelistedBadge />;
+      }
+      // Null price but not free = variable pricing (bundles only, no base price)
+      if (app.price_cents === null) {
+        return <VariesBadge />;
+      }
       return (
         <>
           <span>{formatPrice(app.price_cents)}</span>
@@ -462,10 +515,10 @@ function SelectionCheckbox({
   return (
     <button
       onClick={onChange}
-      className="flex items-center justify-center w-4 h-4 rounded border transition-colors hover:border-accent-blue"
+      className="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors hover:border-accent-primary"
       style={{
-        backgroundColor: checked || indeterminate ? 'var(--accent-blue)' : 'transparent',
-        borderColor: checked || indeterminate ? 'var(--accent-blue)' : 'var(--border-subtle)',
+        backgroundColor: checked || indeterminate ? 'var(--accent-primary)' : 'var(--input-bg)',
+        borderColor: checked || indeterminate ? 'var(--accent-primary)' : 'var(--input-border)',
       }}
       aria-label={ariaLabel}
       title={checked ? 'Deselect' : 'Select'}
@@ -567,7 +620,7 @@ function AppRow({
   return (
     <tr
       className={`hover:bg-surface-overlay transition-colors ${
-        isSelected ? 'bg-accent-blue/5' : ''
+        isSelected ? 'bg-accent-primary/5' : ''
       }`}
       onClick={handleRowClick}
     >

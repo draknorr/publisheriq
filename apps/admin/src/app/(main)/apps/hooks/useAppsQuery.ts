@@ -91,13 +91,24 @@ function buildSearchParams(params: AppsFilterParams): URLSearchParams {
   // Activity filters
   if (params.ccuTier !== undefined) searchParams.set('ccuTier', String(params.ccuTier));
 
+  // Boolean filters
+  if (params.isFree !== undefined) searchParams.set('isFree', String(params.isFree));
+
   return searchParams;
+}
+
+/**
+ * Response shape from /api/apps
+ */
+interface AppsApiResponse {
+  data: App[];
+  stats: AggregateStats;
 }
 
 /**
  * Fetch apps from the API with timeout protection
  */
-async function fetchApps(params: AppsFilterParams): Promise<App[]> {
+async function fetchApps(params: AppsFilterParams): Promise<AppsApiResponse> {
   const searchParams = buildSearchParams(params);
   const url = `/api/apps?${searchParams.toString()}`;
 
@@ -115,7 +126,10 @@ async function fetchApps(params: AppsFilterParams): Promise<App[]> {
     }
 
     const json = await response.json();
-    return json.data as App[];
+    return {
+      data: json.data as App[],
+      stats: json.stats as AggregateStats,
+    };
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === 'AbortError') {
@@ -129,10 +143,10 @@ async function fetchApps(params: AppsFilterParams): Promise<App[]> {
  * Hook for fetching apps with React Query
  *
  * @param params - Filter parameters for the query
- * @returns React Query result with data, loading, and error states
+ * @returns Object with apps, stats, isLoading, and isFetching states
  */
 export function useAppsQuery(params: AppsFilterParams) {
-  return useQuery({
+  const query = useQuery({
     // Unique key for this query, includes all filter params
     queryKey: ['apps', params],
     // Fetch function
@@ -144,6 +158,14 @@ export function useAppsQuery(params: AppsFilterParams) {
     // Note: placeholderData was removed to ensure loading state shows during slow queries
     // (prevents stale data from appearing when 3+ tags cause query delays)
   });
+
+  return {
+    apps: query.data?.data ?? null,
+    stats: query.data?.stats ?? null,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    error: query.error,
+  };
 }
 
 /**
@@ -249,6 +271,9 @@ export function buildFilterParamsFromUrl(searchParams: URLSearchParams): AppsFil
 
     // Activity filters
     ccuTier: parseNumber(searchParams.get('ccuTier')) as AppsFilterParams['ccuTier'],
+
+    // Boolean filters
+    isFree: parseBoolean(searchParams.get('isFree')),
   };
 }
 

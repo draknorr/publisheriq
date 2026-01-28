@@ -213,10 +213,10 @@ export const PRESETS: AppsPreset[] = [
     id: 'publishers_best',
     label: "Publisher's Best",
     emoji: '🏆',
-    description: 'Games outperforming their publisher average',
-    tooltip: 'Games scoring 10+ points above their publisher average review score',
+    description: 'Games at or above their publisher average',
+    tooltip: 'Games scoring at or above their publisher average review score',
     filters: {
-      minVsPublisher: 10,
+      minVsPublisher: 0,
     },
     sort: 'vs_publisher_avg',
     order: 'desc',

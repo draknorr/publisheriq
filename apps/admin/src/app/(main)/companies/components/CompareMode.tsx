@@ -99,7 +99,7 @@ export function CompareMode({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle bg-surface-elevated">
           <div className="flex items-center gap-3">
-            <Scale className="w-5 h-5 text-accent-blue" />
+            <Scale className="w-5 h-5 text-accent-primary" />
             <h2 id="compare-modal-title" className="text-heading-sm font-semibold text-text-primary">
               Compare Companies
             </h2>

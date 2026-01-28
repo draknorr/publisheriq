@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import '@fontsource-variable/dm-sans';
+import '@fontsource-variable/jetbrains-mono';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { Providers } from './providers';
 import './globals.css';
@@ -22,12 +24,17 @@ export const viewport: Viewport = {
 };
 
 // Script to prevent theme flash on load (light mode default)
+// Sets both data-theme attribute (new) and .dark class (Phase 1 compatibility)
 const themeScript = `
   (function() {
     try {
-      const theme = localStorage.getItem('publisheriq-theme');
-      if (theme === 'dark') {
+      var theme = localStorage.getItem('publisheriq-theme');
+      var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) {
+        document.documentElement.setAttribute('data-theme', 'dark');
         document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
       }
     } catch (e) {}
   })();
@@ -42,6 +49,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${GeistSans.variable} ${GeistMono.variable}`}
+      data-theme="light"
       suppressHydrationWarning
     >
       <head>

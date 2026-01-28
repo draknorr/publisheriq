@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PublisherIQ Design System — Component Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       CSS VARIABLES
+       ============================================================ */
+    :root,
+    [data-theme="light"] {
+      color-scheme: light;
+      --surface-base: #FAF9F7;
+      --surface-raised: #FFFFFF;
+      --surface-elevated: #F8F6F3;
+      --surface-sunken: #F5F3EF;
+      --surface-overlay: rgba(255, 255, 255, 0.95);
+      --surface-backdrop: rgba(45, 42, 38, 0.4);
+      --border-default: #E8E4DE;
+      --border-subtle: #F0EDE8;
+      --border-strong: #DDD8D0;
+      --border-focus: #D4716A;
+      --border-interactive: #D5D0C8;
+      --text-primary: #2D2A26;
+      --text-secondary: #5C5752;
+      --text-tertiary: #7A756D;
+      --text-disabled: #A8A29E;
+      --text-placeholder: #9A958D;
+      --text-inverse: #FFFFFF;
+      --text-on-accent: #FFFFFF;
+      --accent-primary: #D4716A;
+      --accent-primary-hover: #C46359;
+      --accent-primary-active: #B4564C;
+      --accent-primary-subtle: #FBF0EF;
+      --accent-primary-muted: #F5DCD9;
+      --accent-secondary: #BE655D;
+      --semantic-success: #2D8A6E;
+      --semantic-success-subtle: #E6F4EF;
+      --semantic-success-text: #1E6B54;
+      --semantic-error: #B54D42;
+      --semantic-error-subtle: #FDF4F3;
+      --semantic-error-text: #9C4338;
+      --semantic-warning: #D97706;
+      --semantic-warning-subtle: #FEF8E8;
+      --semantic-warning-text: #B45309;
+      --semantic-info: #0E7490;
+      --semantic-info-subtle: #ECFEFF;
+      --semantic-info-text: #0E6377;
+      --interactive-hover: rgba(45, 42, 38, 0.04);
+      --interactive-active: rgba(45, 42, 38, 0.08);
+      --interactive-selected: rgba(212, 113, 106, 0.08);
+      --interactive-disabled: #F5F3EF;
+      --shadow-xs: 0 1px 2px rgba(45, 42, 38, 0.04);
+      --shadow-sm: 0 2px 4px rgba(45, 42, 38, 0.06), 0 1px 2px rgba(45, 42, 38, 0.04);
+      --shadow-md: 0 4px 8px rgba(45, 42, 38, 0.08), 0 2px 4px rgba(45, 42, 38, 0.04);
+      --shadow-lg: 0 8px 16px rgba(45, 42, 38, 0.10), 0 4px 8px rgba(45, 42, 38, 0.06);
+      --shadow-xl: 0 16px 32px rgba(45, 42, 38, 0.12), 0 8px 16px rgba(45, 42, 38, 0.08);
+      --shadow-focus: 0 0 0 3px rgba(212, 113, 106, 0.25);
+      --table-header-bg: #F8F6F3;
+      --table-row-hover: rgba(45, 42, 38, 0.02);
+      --table-row-selected: rgba(212, 113, 106, 0.06);
+      --table-border: #F0EDE8;
+      --sidebar-bg: #FFFFFF;
+      --sidebar-item-hover: rgba(45, 42, 38, 0.04);
+      --sidebar-item-active: rgba(212, 113, 106, 0.08);
+      --card-bg: #FFFFFF;
+      --card-border: #E8E4DE;
+      --card-hover-border: #DDD8D0;
+      --input-bg: #FFFFFF;
+      --input-border: #DDD8D0;
+      --input-border-hover: #C9C4BC;
+      --input-border-focus: #D4716A;
+      --input-placeholder: #9A958D;
+      --badge-bg: #F5F3EF;
+      --badge-text: #5C5752;
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --surface-base: #1A1816;
+      --surface-raised: #211F1C;
+      --surface-elevated: #292623;
+      --surface-sunken: #151311;
+      --surface-overlay: rgba(33, 31, 28, 0.98);
+      --surface-backdrop: rgba(0, 0, 0, 0.6);
+      --border-default: #332F2A;
+      --border-subtle: #292623;
+      --border-strong: #3D3935;
+      --border-focus: #E07D75;
+      --border-interactive: #433F38;
+      --text-primary: #E8E4DE;
+      --text-secondary: #B5B0A8;
+      --text-tertiary: #8A847A;
+      --text-disabled: #5C5752;
+      --text-placeholder: #6B665E;
+      --text-inverse: #1A1816;
+      --text-on-accent: #FFFFFF;
+      --accent-primary: #E07D75;
+      --accent-primary-hover: #E68D86;
+      --accent-primary-active: #EC9D97;
+      --accent-primary-subtle: rgba(224, 125, 117, 0.12);
+      --accent-primary-muted: rgba(224, 125, 117, 0.2);
+      --accent-secondary: #E8918A;
+      --semantic-success: #5DD4A8;
+      --semantic-success-subtle: rgba(93, 212, 168, 0.12);
+      --semantic-success-text: #5DD4A8;
+      --semantic-error: #CF7F76;
+      --semantic-error-subtle: rgba(207, 127, 118, 0.12);
+      --semantic-error-text: #CF7F76;
+      --semantic-warning: #FBBF24;
+      --semantic-warning-subtle: rgba(251, 191, 36, 0.12);
+      --semantic-warning-text: #FBBF24;
+      --semantic-info: #38BDF8;
+      --semantic-info-subtle: rgba(56, 189, 248, 0.12);
+      --semantic-info-text: #38BDF8;
+      --interactive-hover: rgba(232, 228, 222, 0.04);
+      --interactive-active: rgba(232, 228, 222, 0.08);
+      --interactive-selected: rgba(224, 125, 117, 0.12);
+      --interactive-disabled: #252320;
+      --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.16);
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.20), 0 1px 2px rgba(0, 0, 0, 0.12);
+      --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.16);
+      --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.28), 0 4px 8px rgba(0, 0, 0, 0.20);
+      --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.32), 0 8px 16px rgba(0, 0, 0, 0.24);
+      --shadow-focus: 0 0 0 3px rgba(224, 125, 117, 0.3);
+      --table-header-bg: #252320;
+      --table-row-hover: rgba(232, 228, 222, 0.02);
+      --table-row-selected: rgba(224, 125, 117, 0.08);
+      --table-border: #292623;
+      --sidebar-bg: #211F1C;
+      --sidebar-item-hover: rgba(232, 228, 222, 0.04);
+      --sidebar-item-active: rgba(224, 125, 117, 0.12);
+      --card-bg: #211F1C;
+      --card-border: #332F2A;
+      --card-hover-border: #3D3935;
+      --input-bg: #252320;
+      --input-border: #3D3935;
+      --input-border-hover: #4A453E;
+      --input-border-focus: #E07D75;
+      --input-placeholder: #6B665E;
+      --badge-bg: #292623;
+      --badge-text: #B5B0A8;
+    }
+
+    /* ============================================================
+       BASE STYLES
+       ============================================================ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: var(--surface-base);
+      color: var(--text-primary);
+      transition: background-color 200ms ease, color 200ms ease;
+    }
+
+    /* ============================================================
+       LAYOUT
+       ============================================================ */
+    .page-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .page-subtitle {
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .section {
+      margin-bottom: 64px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .section-description {
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .component-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .component-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .component-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      margin-bottom: 16px;
+    }
+
+    .component-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .component-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ============================================================
+       THEME TOGGLE
+       ============================================================ */
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: var(--transition-base);
+    }
+
+    .theme-toggle:hover {
+      border-color: var(--border-strong);
+    }
+
+    .theme-toggle-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    .theme-toggle-label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* ============================================================
+       BUTTONS
+       ============================================================ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: var(--shadow-focus);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent-primary);
+      color: var(--text-on-accent);
+      border-color: var(--accent-primary);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-primary-hover);
+      border-color: var(--accent-primary-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface-raised);
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--interactive-hover);
+      border-color: var(--border-interactive);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--interactive-hover);
+      color: var(--text-primary);
+    }
+
+    .btn-danger {
+      background: var(--semantic-error);
+      color: white;
+      border-color: var(--semantic-error);
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 11px;
+    }
+
+    .btn-lg {
+      padding: 12px 24px;
+      font-size: 14px;
+    }
+
+    .btn-icon {
+      padding: 8px;
+      aspect-ratio: 1;
+    }
+
+    /* ============================================================
+       INPUTS
+       ============================================================ */
+    .input {
+      display: block;
+      width: 100%;
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      transition: border-color 150ms, box-shadow 150ms;
+    }
+
+    .input::placeholder {
+      color: var(--input-placeholder);
+    }
+
+    .input:hover:not(:disabled):not(:focus) {
+      border-color: var(--input-border-hover);
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: var(--input-border-focus);
+      box-shadow: var(--shadow-focus);
+    }
+
+    .input-error {
+      border-color: var(--semantic-error);
+    }
+
+    .textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237A756D' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 40px;
+    }
+
+    [data-theme="dark"] .select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238A847A' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    }
+
+    .label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .helper-text {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 6px;
+    }
+
+    .helper-text-error {
+      color: var(--semantic-error-text);
+    }
+
+    /* Checkbox */
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .checkbox {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1px solid var(--input-border);
+      background: var(--input-bg);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 150ms;
+    }
+
+    .checkbox:checked {
+      background: var(--accent-primary);
+      border-color: var(--accent-primary);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+
+    .checkbox:focus-visible {
+      outline: none;
+      box-shadow: var(--shadow-focus);
+    }
+
+    .checkbox-label {
+      font-size: 13px;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+
+    /* ============================================================
+       BADGES
+       ============================================================ */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1;
+      border-radius: 6px;
+    }
+
+    .badge-default {
+      background: var(--badge-bg);
+      color: var(--badge-text);
+    }
+
+    .badge-accent {
+      background: var(--accent-primary-subtle);
+      color: var(--accent-primary);
+    }
+
+    .badge-success {
+      background: var(--semantic-success-subtle);
+      color: var(--semantic-success-text);
+    }
+
+    .badge-error {
+      background: var(--semantic-error-subtle);
+      color: var(--semantic-error-text);
+    }
+
+    .badge-warning {
+      background: var(--semantic-warning-subtle);
+      color: var(--semantic-warning-text);
+    }
+
+    .badge-info {
+      background: var(--semantic-info-subtle);
+      color: var(--semantic-info-text);
+    }
+
+    .badge-pill {
+      border-radius: 9999px;
+    }
+
+    /* ============================================================
+       CARDS
+       ============================================================ */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .card-interactive {
+      cursor: pointer;
+      transition: border-color 150ms, box-shadow 150ms;
+    }
+
+    .card-interactive:hover {
+      border-color: var(--card-hover-border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .card-description {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .card-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--surface-elevated);
+    }
+
+    /* Stat Card */
+    .stat-card {
+      padding: 16px 20px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      margin-top: 4px;
+    }
+
+    .stat-trend {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 8px;
+    }
+
+    .trend-up { color: var(--semantic-success-text); }
+    .trend-down { color: var(--semantic-error-text); }
+
+    /* ============================================================
+       TABLE
+       ============================================================ */
+    .table-container {
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .table th {
+      padding: 12px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: left;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      background: var(--table-header-bg);
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    .table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--table-border);
+    }
+
+    .table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .table tbody tr:hover {
+      background: var(--table-row-hover);
+    }
+
+    .table .num {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    /* ============================================================
+       DROPDOWN
+       ============================================================ */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 1000;
+      min-width: 180px;
+      padding: 4px;
+      background: var(--surface-raised);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      box-shadow: var(--shadow-lg);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      transition: all 150ms ease;
+    }
+
+    .dropdown.open .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: none;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 100ms;
+    }
+
+    .dropdown-item:hover {
+      background: var(--interactive-hover);
+    }
+
+    .dropdown-item.active {
+      background: var(--interactive-selected);
+      color: var(--accent-primary);
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      margin: 4px 0;
+      background: var(--border-default);
+    }
+
+    .dropdown-header {
+      padding: 8px 12px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ============================================================
+       MODAL
+       ============================================================ */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1040;
+      background: var(--surface-backdrop);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 200ms ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      z-index: 1050;
+      width: calc(100% - 32px);
+      max-width: 480px;
+      max-height: calc(100vh - 64px);
+      background: var(--surface-raised);
+      border: 1px solid var(--border-default);
+      border-radius: 12px;
+      box-shadow: var(--shadow-xl);
+      transform: translate(-50%, -50%) scale(0.95);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 200ms ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal.open {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      transition: all 100ms;
+    }
+
+    .modal-close:hover {
+      background: var(--interactive-hover);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      flex: 1;
+      padding: 20px 24px;
+      overflow-y: auto;
+    }
+
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px 20px;
+      border-top: 1px solid var(--border-default);
+    }
+
+    /* ============================================================
+       TABS
+       ============================================================ */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    .tab {
+      position: relative;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      transition: color 100ms;
+    }
+
+    .tab:hover {
+      color: var(--text-primary);
+    }
+
+    .tab.active {
+      color: var(--accent-primary);
+    }
+
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent-primary);
+      border-radius: 2px 2px 0 0;
+    }
+
+    /* ============================================================
+       PROGRESS
+       ============================================================ */
+    .progress {
+      width: 100%;
+      height: 6px;
+      background: var(--surface-elevated);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--accent-primary);
+      border-radius: 9999px;
+      transition: width 300ms ease;
+    }
+
+    .progress-bar-success { background: var(--semantic-success); }
+    .progress-bar-warning { background: var(--semantic-warning); }
+    .progress-bar-error { background: var(--semantic-error); }
+
+    /* Spinner */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border-default);
+      border-top-color: var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ============================================================
+       AVATAR
+       ============================================================ */
+    .avatar {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: var(--surface-elevated);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .avatar-sm { width: 24px; height: 24px; font-size: 11px; }
+    .avatar-lg { width: 48px; height: 48px; font-size: 16px; }
+    .avatar-xl { width: 64px; height: 64px; font-size: 18px; }
+
+    .avatar-group {
+      display: flex;
+    }
+
+    .avatar-group .avatar {
+      border: 2px solid var(--surface-raised);
+      margin-left: -8px;
+    }
+
+    .avatar-group .avatar:first-child {
+      margin-left: 0;
+    }
+
+    /* ============================================================
+       TOAST
+       ============================================================ */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1080;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 300px;
+      max-width: 420px;
+      padding: 16px;
+      background: var(--surface-raised);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      box-shadow: var(--shadow-lg);
+      animation: slideIn 200ms ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+
+    .toast-success { border-left: 3px solid var(--semantic-success); }
+    .toast-error { border-left: 3px solid var(--semantic-error); }
+    .toast-warning { border-left: 3px solid var(--semantic-warning); }
+    .toast-info { border-left: 3px solid var(--semantic-info); }
+
+    .toast-content { flex: 1; }
+    .toast-title { font-size: 13px; font-weight: 600; }
+    .toast-message { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+    /* ============================================================
+       COLOR SWATCHES
+       ============================================================ */
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+    }
+
+    .swatch {
+      display: flex;
+      flex-direction: column;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border-default);
+    }
+
+    .swatch-color {
+      height: 48px;
+    }
+
+    .swatch-info {
+      padding: 8px 10px;
+      background: var(--surface-raised);
+    }
+
+    .swatch-name {
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .swatch-value {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ============================================================
+       SIDEBAR PREVIEW
+       ============================================================ */
+    .sidebar-preview {
+      width: 220px;
+      height: 300px;
+      background: var(--sidebar-bg);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .sidebar-brand {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 8px;
+      overflow-y: auto;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 100ms;
+    }
+
+    .sidebar-item:hover {
+      background: var(--sidebar-item-hover);
+      color: var(--text-primary);
+    }
+
+    .sidebar-item.active {
+      background: var(--sidebar-item-active);
+      color: var(--accent-primary);
+    }
+
+    .sidebar-icon {
+      width: 18px;
+      height: 18px;
+      opacity: 0.6;
+    }
+
+    .sidebar-item.active .sidebar-icon {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <!-- Header -->
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">PublisherIQ Design System</h1>
+        <p class="page-subtitle">Warm Stone + Coral • Component Library</p>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <svg class="theme-toggle-icon" id="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg class="theme-toggle-icon" id="theme-icon-dark" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <span class="theme-toggle-label" id="theme-label">Light Mode</span>
+      </button>
+    </header>
+
+    <!-- Color Palette -->
+    <section class="section">
+      <h2 class="section-title">Color Palette</h2>
+      <p class="section-description">Warm stone neutrals with coral accent. Both light and dark modes designed intentionally.</p>
+      
+      <div class="swatch-grid">
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--surface-base);"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Surface Base</div>
+            <div class="swatch-value">--surface-base</div>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--surface-raised);"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Surface Raised</div>
+            <div class="swatch-value">--surface-raised</div>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--surface-elevated);"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Surface Elevated</div>
+            <div class="swatch-value">--surface-elevated</div>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--accent-primary);"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Accent Primary</div>
+            <div class="swatch-value">--accent-primary</div>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--semantic-success);"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Success / Up</div>
+            <div class="swatch-value">--semantic-success</div>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--semantic-error);"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Error / Down</div>
+            <div class="swatch-value">--semantic-error</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Buttons -->
+    <section class="section">
+      <h2 class="section-title">Buttons</h2>
+      <p class="section-description">Multiple variants and sizes for different contexts.</p>
+      
+      <div class="component-grid">
+        <div class="component-card">
+          <div class="component-label">Variants</div>
+          <div class="component-row">
+            <button class="btn btn-primary">Primary</button>
+            <button class="btn btn-secondary">Secondary</button>
+            <button class="btn btn-ghost">Ghost</button>
+            <button class="btn btn-danger">Danger</button>
+          </div>
+        </div>
+        
+        <div class="component-card">
+          <div class="component-label">Sizes</div>
+          <div class="component-row">
+            <button class="btn btn-primary btn-sm">Small</button>
+            <button class="btn btn-primary">Default</button>
+            <button class="btn btn-primary btn-lg">Large</button>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-label">States</div>
+          <div class="component-row">
+            <button class="btn btn-primary">Normal</button>
+            <button class="btn btn-primary" disabled>Disabled</button>
+            <button class="btn btn-icon btn-secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Form Inputs -->
+    <section class="section">
+      <h2 class="section-title">Form Inputs</h2>
+      <p class="section-description">Text inputs, selects, checkboxes, and form elements.</p>
+      
+      <div class="component-grid">
+        <div class="component-card">
+          <div class="component-label">Text Input</div>
+          <div class="component-stack">
+            <div>
+              <label class="label">Label</label>
+              <input type="text" class="input" placeholder="Placeholder text...">
+              <p class="helper-text">Helper text goes here</p>
+            </div>
+            <div>
+              <label class="label">Error State</label>
+              <input type="text" class="input input-error" value="Invalid input">
+              <p class="helper-text helper-text-error">This field is required</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-label">Select & Textarea</div>
+          <div class="component-stack">
+            <div>
+              <label class="label">Select</label>
+              <select class="input select">
+                <option>Option 1</option>
+                <option>Option 2</option>
+                <option>Option 3</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Textarea</label>
+              <textarea class="input textarea" placeholder="Enter description..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-label">Checkboxes</div>
+          <div class="component-stack">
+            <label class="checkbox-wrapper">
+              <input type="checkbox" class="checkbox" checked>
+              <span class="checkbox-label">Checked option</span>
+            </label>
+            <label class="checkbox-wrapper">
+              <input type="checkbox" class="checkbox">
+              <span class="checkbox-label">Unchecked option</span>
+            </label>
+            <label class="checkbox-wrapper">
+              <input type="checkbox" class="checkbox">
+              <span class="checkbox-label">Another option</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Badges -->
+    <section class="section">
+      <h2 class="section-title">Badges</h2>
+      <p class="section-description">Labels and tags for status, categories, and metadata.</p>
+      
+      <div class="component-card">
+        <div class="component-label">Variants</div>
+        <div class="component-row">
+          <span class="badge badge-default">Default</span>
+          <span class="badge badge-accent">Accent</span>
+          <span class="badge badge-success">Success</span>
+          <span class="badge badge-error">Error</span>
+          <span class="badge badge-warning">Warning</span>
+          <span class="badge badge-info">Info</span>
+          <span class="badge badge-default badge-pill">Pill</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cards & Stats -->
+    <section class="section">
+      <h2 class="section-title">Cards & Stats</h2>
+      <p class="section-description">Content containers and data cards.</p>
+      
+      <div class="component-grid">
+        <div class="card stat-card">
+          <div class="stat-label">Hours Played</div>
+          <div class="stat-value">216.5B</div>
+          <div class="stat-trend trend-up">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+            +4.2% from last week
+          </div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-label">Concurrent Users</div>
+          <div class="stat-value">8.5M</div>
+          <div class="stat-trend trend-up">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+            +2.1% from last week
+          </div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-label">Total Games</div>
+          <div class="stat-value">170.8K</div>
+          <div class="stat-trend trend-down">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            -0.3% from last week
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 24px;">
+        <div class="card-header">
+          <h3 class="card-title">Standard Card</h3>
+          <p class="card-description">Card with header, body, and footer sections.</p>
+        </div>
+        <div class="card-body">
+          <p style="color: var(--text-secondary)">This is the card body content area. You can put any content here including text, forms, tables, or other components.</p>
+        </div>
+        <div class="card-footer">
+          <div class="component-row" style="justify-content: flex-end;">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section class="section">
+      <h2 class="section-title">Data Table</h2>
+      <p class="section-description">Tables for displaying structured data.</p>
+      
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Developer</th>
+              <th>Top Game</th>
+              <th class="num">CCU</th>
+              <th class="num">7d Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color: var(--text-tertiary)">1</td>
+              <td><strong>Valve</strong></td>
+              <td style="color: var(--text-secondary)">Counter-Strike 2</td>
+              <td class="num">1,547,832</td>
+              <td class="num trend-up">+6.7%</td>
+            </tr>
+            <tr>
+              <td style="color: var(--text-tertiary)">2</td>
+              <td><strong>PUBG Corp</strong></td>
+              <td style="color: var(--text-secondary)">PUBG: Battlegrounds</td>
+              <td class="num">314,729</td>
+              <td class="num trend-down">-12.0%</td>
+            </tr>
+            <tr>
+              <td style="color: var(--text-tertiary)">3</td>
+              <td><strong>Rockstar Games</strong></td>
+              <td style="color: var(--text-secondary)">Grand Theft Auto V</td>
+              <td class="num">185,432</td>
+              <td class="num trend-up">+3.2%</td>
+            </tr>
+            <tr>
+              <td style="color: var(--text-tertiary)">4</td>
+              <td><strong>miHoYo</strong></td>
+              <td style="color: var(--text-secondary)">Genshin Impact</td>
+              <td class="num">127,891</td>
+              <td class="num trend-up">+8.4%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Dropdown -->
+    <section class="section">
+      <h2 class="section-title">Dropdown Menu</h2>
+      <p class="section-description">Click the button to toggle the dropdown.</p>
+      
+      <div class="component-card">
+        <div class="component-label">Interactive Dropdown</div>
+        <div class="dropdown" id="demo-dropdown">
+          <button class="btn btn-secondary" onclick="toggleDropdown()">
+            Options
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Actions</div>
+            <button class="dropdown-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit
+            </button>
+            <button class="dropdown-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Duplicate
+            </button>
+            <button class="dropdown-item active">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+              Bookmark
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" style="color: var(--semantic-error-text);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <section class="section">
+      <h2 class="section-title">Tabs</h2>
+      <p class="section-description">Tab navigation for switching between views.</p>
+      
+      <div class="component-card">
+        <div class="component-label">Tab Navigation</div>
+        <div class="tabs">
+          <button class="tab active">Overview</button>
+          <button class="tab">Analytics</button>
+          <button class="tab">Reports</button>
+          <button class="tab">Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal -->
+    <section class="section">
+      <h2 class="section-title">Modal Dialog</h2>
+      <p class="section-description">Click the button to open the modal.</p>
+      
+      <div class="component-card">
+        <div class="component-label">Interactive Modal</div>
+        <button class="btn btn-primary" onclick="openModal()">Open Modal</button>
+      </div>
+    </section>
+
+    <!-- Progress & Loading -->
+    <section class="section">
+      <h2 class="section-title">Progress & Loading</h2>
+      <p class="section-description">Progress bars and loading indicators.</p>
+      
+      <div class="component-grid">
+        <div class="component-card">
+          <div class="component-label">Progress Bars</div>
+          <div class="component-stack" style="gap: 16px;">
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px;">
+                <span>Processing</span>
+                <span style="color:var(--text-tertiary)">65%</span>
+              </div>
+              <div class="progress">
+                <div class="progress-bar" style="width: 65%"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px;">
+                <span>Upload Complete</span>
+                <span style="color:var(--semantic-success-text)">100%</span>
+              </div>
+              <div class="progress">
+                <div class="progress-bar progress-bar-success" style="width: 100%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-label">Spinners</div>
+          <div class="component-row">
+            <div class="spinner" style="width:16px; height:16px; border-width:1.5px;"></div>
+            <div class="spinner"></div>
+            <div class="spinner" style="width:32px; height:32px; border-width:3px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Avatars -->
+    <section class="section">
+      <h2 class="section-title">Avatars</h2>
+      <p class="section-description">User and entity representations.</p>
+      
+      <div class="component-card">
+        <div class="component-label">Sizes & Groups</div>
+        <div class="component-row" style="gap: 24px;">
+          <div class="component-row">
+            <div class="avatar avatar-sm">SM</div>
+            <div class="avatar">MD</div>
+            <div class="avatar avatar-lg">LG</div>
+            <div class="avatar avatar-xl">XL</div>
+          </div>
+          <div class="avatar-group">
+            <div class="avatar" style="background: var(--accent-primary); color: white;">V</div>
+            <div class="avatar" style="background: var(--semantic-success); color: white;">P</div>
+            <div class="avatar" style="background: var(--semantic-warning); color: white;">R</div>
+            <div class="avatar">+5</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sidebar -->
+    <section class="section">
+      <h2 class="section-title">Sidebar Navigation</h2>
+      <p class="section-description">Application sidebar with navigation items.</p>
+      
+      <div class="sidebar-preview">
+        <div class="sidebar-header">
+          <div class="sidebar-brand">PublisherIQ</div>
+        </div>
+        <nav class="sidebar-nav">
+          <div class="sidebar-item active">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            Dashboard
+          </div>
+          <div class="sidebar-item">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            Developers
+          </div>
+          <div class="sidebar-item">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            Games
+          </div>
+          <div class="sidebar-item">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            Analytics
+          </div>
+          <div class="sidebar-item">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            Settings
+          </div>
+        </nav>
+      </div>
+    </section>
+
+    <!-- Toast Preview -->
+    <section class="section">
+      <h2 class="section-title">Toast Notifications</h2>
+      <p class="section-description">Click buttons to show toast notifications.</p>
+      
+      <div class="component-card">
+        <div class="component-label">Trigger Toasts</div>
+        <div class="component-row">
+          <button class="btn btn-secondary" onclick="showToast('success')">Success</button>
+          <button class="btn btn-secondary" onclick="showToast('error')">Error</button>
+          <button class="btn btn-secondary" onclick="showToast('warning')">Warning</button>
+          <button class="btn btn-secondary" onclick="showToast('info')">Info</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal" id="demo-modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Export Data</h3>
+      <button class="modal-close" onclick="closeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="component-stack">
+        <div>
+          <label class="label">Export Format</label>
+          <select class="input select">
+            <option>CSV (Comma Separated)</option>
+            <option>Excel (.xlsx)</option>
+            <option>JSON</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Date Range</label>
+          <select class="input select">
+            <option>Last 7 days</option>
+            <option>Last 30 days</option>
+            <option>Last 90 days</option>
+            <option>All time</option>
+          </select>
+        </div>
+        <label class="checkbox-wrapper">
+          <input type="checkbox" class="checkbox" checked>
+          <span class="checkbox-label">Include metadata columns</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary">Export</button>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script>
+    // Theme Toggle
+    function toggleTheme() {
+      const html = document.documentElement;
+      const currentTheme = html.getAttribute('data-theme');
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', newTheme);
+      
+      document.getElementById('theme-icon-light').style.display = newTheme === 'light' ? 'block' : 'none';
+      document.getElementById('theme-icon-dark').style.display = newTheme === 'dark' ? 'block' : 'none';
+      document.getElementById('theme-label').textContent = newTheme === 'light' ? 'Light Mode' : 'Dark Mode';
+    }
+
+    // Dropdown Toggle
+    function toggleDropdown() {
+      document.getElementById('demo-dropdown').classList.toggle('open');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      const dropdown = document.getElementById('demo-dropdown');
+      if (!dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    // Modal
+    function openModal() {
+      document.getElementById('modal-backdrop').classList.add('open');
+      document.getElementById('demo-modal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.remove('open');
+      document.getElementById('demo-modal').classList.remove('open');
+    }
+
+    // Toast
+    function showToast(type) {
+      const container = document.getElementById('toast-container');
+      const messages = {
+        success: { title: 'Export Complete', message: 'Your data has been exported successfully.' },
+        error: { title: 'Export Failed', message: 'Unable to export data. Please try again.' },
+        warning: { title: 'Large Dataset', message: 'This export may take a few minutes.' },
+        info: { title: 'Export Started', message: 'Your export is being processed.' }
+      };
+      
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.innerHTML = `
+        <div class="toast-content">
+          <div class="toast-title">${messages[type].title}</div>
+          <div class="toast-message">${messages[type].message}</div>
+        </div>
+        <button class="modal-close" onclick="this.parentElement.remove()" style="width:24px;height:24px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      `;
+      
+      container.appendChild(toast);
+      
+      // Auto-remove after 4 seconds
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 200);
+      }, 4000);
+    }
+
+    // Tab click handler
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        this.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // Sidebar item click handler
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+      item.addEventListener('click', function() {
+        this.parentElement.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

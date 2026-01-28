@@ -13,7 +13,7 @@ interface SearchBarProps {
 
 /**
  * Debounced search input for the Games page
- * Parent hook (useAppsFilters) handles the 300ms debounce for URL updates
+ * Parent hook (useAppsFilters) handles the 700ms debounce for URL updates
  */
 export function SearchBar({
   initialValue,
@@ -23,9 +23,15 @@ export function SearchBar({
   disabled = false,
 }: SearchBarProps) {
   const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Track focus state to prevent prop sync while user is typing
   const isFocusedRef = useRef(false);
+  // Track if user was recently typing (survives blur events during re-render)
+  const recentlyTypedRef = useRef(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Track previous pending state to detect when loading finishes
+  const wasPendingRef = useRef(false);
 
   // Sync internal value when initialValue changes (but not while focused)
   useEffect(() => {
@@ -34,13 +40,45 @@ export function SearchBar({
     }
   }, [initialValue]);
 
+  // Restore focus when loading completes (isPending: true -> false)
+  useEffect(() => {
+    if (wasPendingRef.current && !isPending && recentlyTypedRef.current) {
+      // Use setTimeout to ensure DOM has fully settled (works better in Firefox)
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+    wasPendingRef.current = isPending;
+  }, [isPending]);
+
+  // Mark user as recently typing (keeps flag for 2 seconds after last keystroke)
+  const markRecentlyTyped = useCallback(() => {
+    recentlyTypedRef.current = true;
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      recentlyTypedRef.current = false;
+    }, 2000);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleChange = useCallback(
     (newValue: string) => {
       setValue(newValue);
+      markRecentlyTyped();
       // Call parent immediately - hook handles debouncing
       onSearch(newValue);
     },
-    [onSearch]
+    [onSearch, markRecentlyTyped]
   );
 
   const handleClear = useCallback(() => {
@@ -58,6 +96,7 @@ export function SearchBar({
         )}
       </div>
       <input
+        ref={inputRef}
         type="text"
         value={value}
         onChange={(e) => handleChange(e.target.value)}

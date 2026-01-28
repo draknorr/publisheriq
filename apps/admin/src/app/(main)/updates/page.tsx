@@ -18,6 +18,10 @@ import {
   LineChart,
   Lock,
   Moon,
+  Command,
+  Gamepad2,
+  SlidersHorizontal,
+  Type,
 } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -146,6 +150,90 @@ function VersionCard({ version, isLatest }: { version: Version; isLatest: boolea
 
 // All versions data
 const versions: Version[] = [
+  {
+    version: 'v2.7',
+    name: 'Command Palette',
+    date: 'January 2026',
+    headline: 'Power user filtering with a fresh new look',
+    accentColor: 'bg-accent-purple/10',
+    icon: <Command className="h-6 w-6 text-accent-purple" />,
+    highlights: [
+      'Press ⌘K to open the command palette for instant filtering',
+      'Type filter syntax like "ccu > 50000" or "free:yes" for power users',
+      'Active filters show as color-coded chips grouped by category',
+      'Refined warm color palette with better readability',
+    ],
+    features: [
+      {
+        title: 'Command Palette',
+        description: 'Press ⌘K anywhere on Games or Companies pages. Browse presets, filters, genres, tags, and categories all in one place.',
+        icon: <Command className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Filter Syntax',
+        description: 'Type natural expressions: "ccu > 50000", "score >= 90", "genre:action", "free:yes". The palette understands and suggests corrections.',
+        icon: <Type className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Active Filter Bar',
+        description: 'See all active filters as color-coded chips. Click any chip to modify, or X to remove. Purple for presets, blue for metrics, green for content.',
+        icon: <SlidersHorizontal className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Warm Stone Theme',
+        description: 'Refined color palette with warm off-white backgrounds (#FAF9F7) and dusty coral accents for a comfortable viewing experience.',
+        icon: <Palette className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      'New fonts: DM Sans for UI, JetBrains Mono for data tables',
+      'Dark mode with improved warm contrast ratios',
+      'Keyboard navigation throughout the palette (arrows, Enter, Escape)',
+      'Fuzzy matching for filter shortcuts and preset names',
+    ],
+  },
+  {
+    version: 'v2.6',
+    name: 'Games Page',
+    date: 'January 2026',
+    headline: 'Discover and analyze games like never before',
+    accentColor: 'bg-accent-blue/10',
+    icon: <Gamepad2 className="h-6 w-6 text-accent-blue" />,
+    highlights: [
+      '12 preset views for instant discovery patterns',
+      '6 computed insight metrics including Momentum and Sentiment Delta',
+      '33 customizable columns to show exactly what you need',
+      '20x faster page loads through database optimization',
+    ],
+    features: [
+      {
+        title: 'Preset Discovery Views',
+        description: '12 one-click presets: Top Games, Rising Stars, Hidden Gems, Breakout Hits, High Momentum, Comeback Stories, and more.',
+        icon: <Sparkles className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Momentum Score',
+        description: 'A novel metric combining CCU growth and review velocity to identify games "taking off" right now.',
+        icon: <TrendingUp className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Sentiment Delta',
+        description: 'Track review sentiment changes over time. Catch comeback stories and review bombs early.',
+        icon: <LineChart className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Compare Games',
+        description: 'Select 2-5 games and see them side-by-side with best/worst highlighting and percentage differences.',
+        icon: <BarChart3 className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      'Page loads 20x faster with optimized materialized views',
+      '7 new database views for instant filter counts',
+      'Sparklines load progressively without blocking the page',
+      'All filters persist in URL for easy sharing',
+    ],
+  },
   {
     version: 'v2.5',
     name: 'Companies Page',

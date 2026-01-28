@@ -69,11 +69,11 @@ function getEntityHref(entityType: string, entityId: number): string {
 function getEntityBadgeStyles(entityType: string): string {
   switch (entityType) {
     case 'game':
-      return 'bg-accent-cyan/15 text-accent-cyan';
+      return 'bg-accent-primary-subtle text-accent-primary';
     case 'publisher':
-      return 'bg-accent-purple/15 text-accent-purple';
+      return 'bg-chart-5/15 text-chart-5';
     case 'developer':
-      return 'bg-accent-blue/15 text-accent-blue';
+      return 'bg-semantic-info-subtle text-semantic-info';
     default:
       return 'bg-surface-overlay text-text-secondary';
   }
@@ -81,10 +81,10 @@ function getEntityBadgeStyles(entityType: string): string {
 
 function getReviewColor(percent: number | null): string {
   if (percent === null) return 'text-text-muted';
-  if (percent >= 80) return 'text-accent-green';
-  if (percent >= 70) return 'text-lime-400';
-  if (percent >= 50) return 'text-accent-yellow';
-  return 'text-accent-red';
+  if (percent >= 80) return 'text-semantic-success-text';
+  if (percent >= 70) return 'text-semantic-warning';
+  if (percent >= 50) return 'text-semantic-warning';
+  return 'text-semantic-error-text';
 }
 
 export function PinnedCard({ pin }: PinnedCardProps) {
@@ -132,7 +132,7 @@ export function PinnedCard({ pin }: PinnedCardProps) {
                 {formatNumber(pin.ccu_current)}
                 {pin.ccu_change_pct !== null && (
                   <span
-                    className={`ml-1.5 text-caption ${pin.ccu_change_pct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}
+                    className={`ml-1.5 text-caption ${pin.ccu_change_pct >= 0 ? 'text-trend-positive' : 'text-trend-negative'}`}
                   >
                     {pin.ccu_change_pct >= 0 ? '+' : ''}
                     {pin.ccu_change_pct.toFixed(1)}%
@@ -160,7 +160,7 @@ export function PinnedCard({ pin }: PinnedCardProps) {
               <span className="text-text-primary">
                 {formatPrice(pin.price_cents)}
                 {pin.discount_percent !== null && pin.discount_percent > 0 && (
-                  <span className="ml-1.5 text-accent-green text-caption font-medium">
+                  <span className="ml-1.5 text-semantic-success-text text-caption font-medium">
                     -{pin.discount_percent}%
                   </span>
                 )}
@@ -174,9 +174,9 @@ export function PinnedCard({ pin }: PinnedCardProps) {
                 <span
                   className={`text-caption font-medium ${
                     pin.trend_direction === 'up'
-                      ? 'text-accent-green'
+                      ? 'text-trend-positive'
                       : pin.trend_direction === 'down'
-                        ? 'text-accent-red'
+                        ? 'text-trend-negative'
                         : 'text-text-muted'
                   }`}
                 >

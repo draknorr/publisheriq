@@ -1,8 +1,18 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data acquisition platform with natural language chat interface. Last updated: January 15, 2026.
+> Steam data acquisition platform with natural language chat interface. Last updated: January 25, 2026.
 
 ---
+
+This codebase will outlive you. Every shortcut you take becomes
+someone else's burden. Every hack compounds into technical debt
+that slows the whole team down.
+
+You are not just writing code. You are shaping the future of this
+project. The patterns you establish will be copied. The corners
+you cut will be cut again.
+
+Fight entropy. Leave the codebase better than you found it
 
 ## ❓ When Uncertain, Ask
 
@@ -69,24 +79,72 @@ supabase db push
 
 ## Direct Database Access (psql)
 
-### Prerequisites
-PostgreSQL client is installed via Homebrew:
+### ⚠️ CRITICAL: psql is NOT in PATH
+
+**psql is installed via Homebrew but NOT in the shell PATH.** You MUST use the full path in every command:
+
 ```bash
-brew install libpq
-echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+# ✅ CORRECT - Always use full path
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
+
+# ❌ WRONG - Will fail with "command not found"
+source .env && psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
 ```
 
-### Running SQL Queries
+### psql Command Template (copy this exactly)
 ```bash
-# Load DATABASE_URL from .env and run interactive session
-source .env && psql "$DATABASE_URL"
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "YOUR_SQL_HERE"
+```
 
-# Single query
-source .env && psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
+### Example Queries
+```bash
+# Count apps
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM apps;"
 
-# Query with formatted output
-source .env && psql "$DATABASE_URL" -c "SELECT name, game_count FROM publishers ORDER BY game_count DESC LIMIT 10;"
+# Get app by appid
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT appid, name, type, is_released, release_date FROM apps WHERE appid = 123456;"
+
+# Get daily metrics
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT appid, metric_date, ccu_peak, total_reviews FROM daily_metrics WHERE appid = 123456 ORDER BY metric_date DESC LIMIT 10;"
+
+# List table columns (use information_schema, NOT \d)
+source /Users/ryanbohmann/Desktop/publisheriq/.env && /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'apps' ORDER BY ordinal_position;"
+```
+
+### Key Table Schemas (actual column names)
+
+**apps** - Steam apps with metadata:
+```
+appid, name, type, is_released, is_delisted, release_date, release_date_raw,
+platforms, controller_support, is_free, current_price_cents, current_discount_percent,
+metacritic_score, metacritic_url, pics_review_score, pics_review_percentage,
+parent_appid, created_at, updated_at, last_content_update
+```
+⚠️ NO `description` or `short_description` column exists!
+
+**daily_metrics** - Daily snapshots (use `metric_date` NOT `date`):
+```
+id, appid, metric_date, ccu_peak, ccu_source, total_reviews, positive_reviews,
+negative_reviews, review_score, review_score_desc, owners_min, owners_max,
+price_cents, discount_percent, average_playtime_forever, average_playtime_2weeks
+```
+
+**sync_status** - Per-app sync tracking:
+```
+appid, refresh_tier, priority_score, last_storefront_sync, last_reviews_sync,
+last_steamspy_sync, last_histogram_sync, last_ccu_synced, ccu_tier,
+consecutive_errors, storefront_accessible, created_at, updated_at
+```
+
+**ccu_snapshots** - Hourly CCU samples:
+```
+id, appid, recorded_at, ccu, source
+```
+
+### Why \d commands fail
+psql meta-commands like `\d table_name` try to connect via Unix socket. Use `information_schema.columns` instead:
+```sql
+SELECT column_name FROM information_schema.columns WHERE table_name = 'your_table';
 ```
 
 ### Supabase CLI Docker Requirements
@@ -657,13 +715,105 @@ Three-tier polling with Steam API for exact player counts:
 
 **Workflow:** 60-minute timeout (reduced from 120 after optimizations)
 
-## Design System (v2.0)
+## Design System (v2.7)
 
+Comprehensive theming system with warm stone color palette and CSS variable-based components.
+
+### Core Configuration
 - **Themes:** Light (default) + Dark with system preference detection
+- **Dark Mode:** Supports both `.dark` class and `[data-theme="dark"]` attribute
 - **Persistence:** localStorage key `publisheriq-theme`
-- **Fonts:** Geist Sans, Geist Mono
-- **Color Tokens:** CSS variables (--surface, --text-primary, --accent-*, --trend-*)
-- **Components:** ThemeProvider, ThemeToggle, CollapsibleSection, DenseMetricGrid, StatusBar
+
+### Typography
+| Font | Variable | Usage |
+|------|----------|-------|
+| DM Sans Variable | `--font-sans` | Primary UI text |
+| JetBrains Mono Variable | `--font-mono` | Code, data display |
+
+**Utility Classes:**
+- `.font-data` - Monospace with tabular numbers for data tables
+
+### Color Palette - Warm Stone Theme
+
+**Light Theme:**
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--surface` | `#FAF9F7` | Base background (warm off-white) |
+| `--surface-raised` | `#FFFFFF` | Elevated surfaces |
+| `--accent-primary` | `#D4716A` | Primary actions (dusty coral) |
+| `--text-primary` | `#2D2A26` | Main text |
+| `--border-muted` | `#E8E4DE` | Subtle borders |
+
+**Dark Theme:**
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--surface` | `#1A1816` | Base background (warm dark) |
+| `--accent-primary` | `#E07D75` | Primary actions (coral) |
+
+### CSS Variable Categories
+- **Surface:** `--surface-sunken`, `--surface-base`, `--surface-elevated`
+- **Border:** `--border-muted`, `--border-prominent`, `--border-strong`, `--border-focus`
+- **Text:** `--text-primary`, `--text-secondary`, `--text-tertiary`, `--text-placeholder`
+- **Semantic:** `--semantic-success`, `--semantic-error`, `--semantic-warning`, `--semantic-info`
+- **Shadows:** `--shadow-xs` through `--shadow-xl` (theme-aware)
+- **Interactive:** `--interactive-hover`, `--interactive-active`, `--interactive-selected`
+- **Component-specific:** `--input-*`, `--badge-*`, `--table-*`, `--card-*`
+
+### Border Radius
+| Token | Value | Change |
+|-------|-------|--------|
+| `rounded` (default) | 6px | was 8px |
+| `rounded-lg` | 8px | was 12px |
+| `rounded-md` | 6px | standard component radius |
+
+### Component Updates (v2.7)
+- **Badge:** CSS variable-based variants (`--badge-{variant}-bg/text`)
+- **Button:** Refined radius (`rounded-md`)
+- **Input:** CSS variables + primary accent focus
+- **FilterPill:** Card-like appearance (`rounded-md` vs `rounded-full`)
+
+### New Components
+- **ActiveFilterBar:** Color-coded filter chips with category grouping, overflow handling, command palette integration
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `apps/admin/src/app/globals.css` | CSS variables and base styles |
+| `apps/admin/tailwind.config.cjs` | Theme configuration |
+| `apps/admin/src/components/ui/` | Reusable UI components |
+
+## Command Palette (v2.7)
+
+Unified filtering interface accessible via ⌘K on Games and Companies pages.
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `apps/admin/src/lib/filter-registry.ts` | Filter definitions (40+) |
+| `apps/admin/src/lib/filter-syntax-parser.ts` | Syntax parsing |
+| `apps/admin/src/components/command-palette/` | UI components |
+| `apps/admin/src/hooks/useCommandPalette.ts` | State management |
+| `apps/admin/src/components/ActiveFilterBar.tsx` | Filter chips |
+
+### Filter Syntax Examples
+| Syntax | Description |
+|--------|-------------|
+| `ccu > 50000` | Range filter (greater than) |
+| `ccu 1000-50000` | Range filter (between) |
+| `free:yes` | Boolean filter |
+| `genre:action` | Content filter |
+| `rising stars` | Preset by name |
+
+### Active Filter Bar Colors
+| Category | Color |
+|----------|-------|
+| Preset | Purple |
+| Quick Filter | Coral |
+| Metric | Blue |
+| Content | Green |
+| Platform | Orange |
+| Release | Amber |
+| Relationship | Pink |
 
 ## Insights Dashboard (v2.2+)
 
@@ -808,3 +958,5 @@ Full documentation in `/docs/`:
 - [v2.3 Release Notes](docs/releases/v2.3-embedding-optimization.md) - 10x embedding sync
 - [v2.4 Release Notes](docs/releases/v2.4-personalization.md) - Personalization, concept search, trending
 - [v2.5 Release Notes](docs/releases/v2.5-companies-page.md) - Unified Companies page
+- [v2.6 Release Notes](docs/releases/v2.6-games-page.md) - Games page with computed metrics
+- [v2.7 Release Notes](docs/releases/v2.7-design-command-palette.md) - Command Palette and Design System

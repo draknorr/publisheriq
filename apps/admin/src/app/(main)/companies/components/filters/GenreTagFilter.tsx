@@ -34,26 +34,58 @@ export function GenreTagFilter({
 }: GenreTagFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const hasFetchedRef = useRef(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Filter options by search query
+  // Debounced search handler
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => setDebouncedSearch(value), 150);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
+  // Filter options by debounced search query
   const filteredOptions = useMemo(() => {
-    if (!search) return options;
-    const lower = search.toLowerCase();
+    if (!debouncedSearch) return options;
+    const lower = debouncedSearch.toLowerCase();
     return options.filter((o) => o.option_name.toLowerCase().includes(lower));
-  }, [options, search]);
+  }, [options, debouncedSearch]);
+
+  // O(1) Map-based lookup for selected names
+  const optionMap = useMemo(() => {
+    return new Map(options.map((o) => [o.option_id, o.option_name]));
+  }, [options]);
 
   // Get names for selected IDs (for badges)
   const selectedNames = useMemo(() => {
-    return selected.map((id) => options.find((o) => o.option_id === id)?.option_name ?? `ID:${id}`);
-  }, [selected, options]);
+    return selected.map((id) => optionMap.get(id) ?? `ID:${id}`);
+  }, [selected, optionMap]);
 
-  // Handle dropdown open
+  // Handle dropdown open - only fetch once per open session
   const handleOpen = useCallback(() => {
     if (disabled) return;
+    if (!isOpen && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      onOpen();
+    }
     setIsOpen(true);
-    onOpen();
-  }, [onOpen, disabled]);
+  }, [onOpen, disabled, isOpen]);
+
+  // Reset fetch flag when dropdown closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasFetchedRef.current = false;
+    }
+  }, [isOpen]);
 
   // Handle clicking outside to close
   useEffect(() => {
@@ -61,6 +93,7 @@ export function GenreTagFilter({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setSearch('');
+        setDebouncedSearch('');
       }
     };
 
@@ -177,7 +210,7 @@ export function GenreTagFilter({
                 <input
                   type="text"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   placeholder={`Search ${label.toLowerCase()}...`}
                   className="w-full h-8 pl-8 pr-3 rounded bg-surface-elevated border border-border-subtle text-body-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-primary"
                   autoFocus
