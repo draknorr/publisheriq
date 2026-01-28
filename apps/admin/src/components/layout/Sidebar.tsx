@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   Gamepad2,
@@ -40,8 +40,8 @@ const mainNavItems: NavItem[] = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/insights', label: 'Insights', icon: TrendingUp },
   { href: '/apps', label: 'Apps', icon: Gamepad2 },
-  { href: '/publishers', label: 'Publishers', icon: Building2 },
-  { href: '/developers', label: 'Developers', icon: Users },
+  { href: '/companies?type=publisher', label: 'Publishers', icon: Building2 },
+  { href: '/companies?type=developer', label: 'Developers', icon: Users },
 ];
 
 const adminNavItems: NavItem[] = [
@@ -53,6 +53,7 @@ const adminNavItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { isOpen, toggle, close } = useSidebar();
   const { open: openSearch } = useGlobalSearch();
   const [userProfile, setUserProfile] = useState<{
@@ -68,6 +69,12 @@ export function Sidebar() {
     // For admin routes, only match exact or child paths
     if (href === '/admin') {
       return pathname === '/admin';
+    }
+    // Handle companies page with type filter
+    if (href.startsWith('/companies?type=')) {
+      const currentType = searchParams.get('type');
+      const hrefType = new URL(href, 'http://x').searchParams.get('type');
+      return pathname === '/companies' && currentType === hrefType;
     }
     return pathname.startsWith(href);
   };
