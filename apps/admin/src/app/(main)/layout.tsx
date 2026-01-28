@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/layout';
 import { SidebarProvider } from '@/contexts';
@@ -17,7 +18,9 @@ export default function MainLayout({
     <SidebarProvider>
       <GlobalSearchProvider>
         <div className="flex">
-          <Sidebar />
+          <Suspense fallback={null}>
+            <Sidebar />
+          </Suspense>
           <main className="flex-1 min-w-0 min-h-screen-safe md:ml-64">
             {isChat ? (
               // Full height, no padding for chat page
