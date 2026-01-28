@@ -74,7 +74,8 @@ export function formatCompactNumber(n: number | null | undefined): string {
  * Format revenue in cents to USD string (e.g., $1.2M)
  */
 export function formatRevenue(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined || cents === 0) return '—';
+  if (cents === null || cents === undefined) return '—';
+  if (cents === 0) return '$0';
   const usd = cents / 100;
   if (usd >= 1_000_000_000) return `$${(usd / 1_000_000_000).toFixed(1)}B`;
   if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(1)}M`;
@@ -86,7 +87,8 @@ export function formatRevenue(cents: number | null | undefined): string {
  * Format hours (e.g., 15.2M hrs)
  */
 export function formatHours(hours: number | null | undefined): string {
-  if (hours === null || hours === undefined || hours === 0) return '—';
+  if (hours === null || hours === undefined) return '—';
+  if (hours === 0) return '0 hrs';
   if (hours >= 1_000_000) return `${(hours / 1_000_000).toFixed(1)}M hrs`;
   if (hours >= 1_000) return `${(hours / 1_000).toFixed(1)}K hrs`;
   return `${hours.toLocaleString()} hrs`;
@@ -99,7 +101,8 @@ export function getReviewPercentage(
   positive: number | null | undefined,
   total: number | null | undefined
 ): number | null {
-  if (!positive || !total || total === 0) return null;
+  if (positive === null || positive === undefined ||
+      total === null || total === undefined || total === 0) return null;
   return Math.round((positive / total) * 100);
 }
 
@@ -153,6 +156,8 @@ export async function getAggregateStats(
     p_max_growth_7d: params.maxGrowth7d,
     p_min_growth_30d: params.minGrowth30d,
     p_max_growth_30d: params.maxGrowth30d,
+    // Relationship filter
+    p_relationship: params.relationship ?? undefined,
   });
 
   if (error) {

@@ -6,10 +6,11 @@
  * Full browsing and selection of tags across all categories.
  * Features:
  * - Back navigation to Home View
- * - Match mode toggle (ANY/ALL)
  * - Tag search (filters visibility)
  * - Selected tags bar
  * - Accordion categories with tag grids
+ *
+ * Note: Tag match mode toggle removed - not wired to URL or RPC backend
  */
 
 import { useRef, useEffect, useState, useMemo } from 'react';
@@ -106,11 +107,10 @@ export function CommandPaletteTags({
     state,
     goBack,
     toggleTag,
-    setTagMatchMode,
     clearTags,
     toggleSection,
   } = palette;
-  const { selectedTags, tagMatchMode, expandedSections } = state;
+  const { selectedTags, expandedSections } = state;
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -206,29 +206,6 @@ export function CommandPaletteTags({
             </div>
           </div>
 
-          {/* Match Mode Toggle */}
-          <div className="flex items-center gap-1 bg-surface-elevated rounded-lg p-1">
-            <button
-              onClick={() => setTagMatchMode('any')}
-              className={`px-2.5 py-1 rounded-md text-caption font-medium transition-colors
-                ${tagMatchMode === 'any'
-                  ? 'bg-accent-primary text-white'
-                  : 'text-text-secondary hover:text-text-primary'
-                }`}
-            >
-              Match ANY
-            </button>
-            <button
-              onClick={() => setTagMatchMode('all')}
-              className={`px-2.5 py-1 rounded-md text-caption font-medium transition-colors
-                ${tagMatchMode === 'all'
-                  ? 'bg-accent-primary text-white'
-                  : 'text-text-secondary hover:text-text-primary'
-                }`}
-            >
-              Match ALL
-            </button>
-          </div>
         </div>
 
         {/* Search Input */}

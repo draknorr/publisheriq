@@ -107,6 +107,7 @@ export interface UseCompaniesFiltersReturn {
   // Content filter actions (M4b)
   setGenres: (ids: number[]) => void;
   setGenreMode: (mode: FilterMode) => void;
+  setGenresWithMode: (ids: number[], mode: FilterMode) => void;
   setTags: (ids: number[]) => void;
   setCategories: (ids: number[]) => void;
   setSteamDeck: (value: SteamDeckFilterValue) => void;
@@ -629,6 +630,20 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
   );
 
   /**
+   * Set genres and mode atomically (avoids race condition)
+   */
+  const setGenresWithMode = useCallback(
+    (ids: number[], mode: FilterMode) => {
+      updateUrl({
+        genres: ids.length > 0 ? ids.join(',') : null,
+        genreMode: mode,
+        preset: null,
+      });
+    },
+    [updateUrl]
+  );
+
+  /**
    * Set tag filter (array of tag IDs)
    */
   const setTags = useCallback(
@@ -767,6 +782,7 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
     // M4b
     setGenres,
     setGenreMode,
+    setGenresWithMode,
     setTags,
     setCategories,
     setSteamDeck,

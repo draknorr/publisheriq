@@ -81,8 +81,7 @@ function CompaniesPageClientInner({
     // M4a
     setAdvancedFilter,
     // M4b
-    setGenres,
-    setGenreMode,
+    setGenresWithMode,
     setTags,
     setCategories,
     // M5
@@ -104,8 +103,7 @@ function CompaniesPageClientInner({
     initialCategories: advancedFilters.categories,
     onApplyTags: setTags,
     onApplyGenres: (genres, mode) => {
-      setGenres(genres);
-      setGenreMode(mode);
+      setGenresWithMode(genres, mode);
     },
     onApplyCategories: setCategories,
   });
@@ -336,7 +334,7 @@ function CompaniesPageClientInner({
           genreOptions={filterCounts.data.genre}
           tagOptions={filterCounts.data.tag}
           categoryOptions={filterCounts.data.category}
-          resultCount={initialData.length}
+          resultCount={aggregateStats.total_companies}
           onClearPreset={clearPreset}
           onToggleQuickFilter={toggleQuickFilter}
           onClearAdvancedFilter={handleClearAdvancedFilter}
