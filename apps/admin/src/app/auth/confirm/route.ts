@@ -34,17 +34,28 @@ function isAllowedOrigin(origin: string): boolean {
 }
 
 /**
+ * Ensure URL has https:// protocol.
+ */
+function ensureProtocol(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `https://${url}`;
+}
+
+/**
  * Get the site URL for redirects.
  * Uses env var if set, otherwise validates request origin against allowlist.
  */
 function getSiteUrl(requestOrigin: string): string {
   // Prefer explicit env var for production
   if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL;
+    return ensureProtocol(process.env.NEXT_PUBLIC_SITE_URL);
   }
   // Validate request origin against allowlist
-  if (isAllowedOrigin(requestOrigin)) {
-    return requestOrigin;
+  const normalizedOrigin = ensureProtocol(requestOrigin);
+  if (isAllowedOrigin(normalizedOrigin)) {
+    return normalizedOrigin;
   }
   // Fallback to Vercel URL for previews
   if (process.env.VERCEL_URL) {
@@ -68,7 +79,10 @@ export async function GET(request: NextRequest) {
   let siteUrl = 'https://www.publisheriq.app'; // Safe default
 
   try {
-    const { searchParams, origin } = new URL(request.url);
+    const url = new URL(request.url);
+    const searchParams = url.searchParams;
+    // Ensure origin has protocol (URL.origin should include it, but be defensive)
+    const origin = url.origin.startsWith('http') ? url.origin : `https://${url.origin}`;
     siteUrl = getSiteUrl(origin);
     const token_hash = searchParams.get('token_hash');
     const typeParam = searchParams.get('type');
