@@ -116,10 +116,22 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+    // Try to verify the token - works for both regular token_hash and PKCE codes
+    // For PKCE codes, @supabase/ssr stores the verifier in cookies, so server-side exchange works
+    let authError = null;
 
-    if (error) {
-      console.error('Token verification error:', error);
+    if (token_hash.startsWith('pkce_')) {
+      // PKCE code - exchange it server-side (verifier is in cookies via @supabase/ssr)
+      const { error } = await supabase.auth.exchangeCodeForSession(token_hash);
+      authError = error;
+    } else {
+      // Regular token hash - verify via OTP
+      const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+      authError = error;
+    }
+
+    if (authError) {
+      console.error('Token verification error:', authError);
       return NextResponse.redirect(`${siteUrl}/login?error=invalid_token`);
     }
 
