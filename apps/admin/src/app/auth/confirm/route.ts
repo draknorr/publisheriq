@@ -65,53 +65,71 @@ function getSiteUrl(requestOrigin: string): string {
  * {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
-  // SECURITY FIX (AUTH-07): Use validated origin for redirects
-  const siteUrl = getSiteUrl(origin);
-  const token_hash = searchParams.get('token_hash');
-  const typeParam = searchParams.get('type');
-  const next = searchParams.get('next') ?? '/dashboard';
+  let siteUrl = 'https://www.publisheriq.app'; // Safe default
 
-  // Validate type is one of the allowed EmailOtpType values
-  const validTypes = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'] as const;
-  type EmailOtpType = typeof validTypes[number];
+  try {
+    const { searchParams, origin } = new URL(request.url);
+    siteUrl = getSiteUrl(origin);
+    const token_hash = searchParams.get('token_hash');
+    const typeParam = searchParams.get('type');
+    const next = searchParams.get('next') ?? '/dashboard';
 
-  if (!token_hash || !typeParam || !validTypes.includes(typeParam as EmailOtpType)) {
-    return NextResponse.redirect(`${siteUrl}/login?error=missing_token`);
-  }
+    // Validate type is one of the allowed EmailOtpType values
+    const validTypes = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'] as const;
+    type EmailOtpType = typeof validTypes[number];
 
-  const type = typeParam as EmailOtpType;
-
-  const cookieStore = await cookies();
-  const cookiesToSet: { name: string; value: string; options: CookieOptions }[] = [];
-
-  const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookies: { name: string; value: string; options: CookieOptions }[]) {
-          cookiesToSet.push(...cookies);
-        },
-      },
+    if (!token_hash || !typeParam || !validTypes.includes(typeParam as EmailOtpType)) {
+      return NextResponse.redirect(`${siteUrl}/login?error=missing_token`);
     }
-  );
 
-  const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+    const type = typeParam as EmailOtpType;
 
-  if (error) {
-    console.error('Token verification error:', error);
-    return NextResponse.redirect(`${siteUrl}/login?error=invalid_token`);
+    const cookieStore = await cookies();
+    const cookiesToSet: { name: string; value: string; options: CookieOptions }[] = [];
+
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookies: { name: string; value: string; options: CookieOptions }[]) {
+            cookiesToSet.push(...cookies);
+          },
+        },
+      }
+    );
+
+    // PKCE tokens (starting with pkce_) need code exchange, not OTP verification
+    // This handles cases where Supabase sends PKCE tokens to the confirm endpoint
+    if (token_hash.startsWith('pkce_')) {
+      // Redirect to the client-side callback which can exchange the code
+      const callbackUrl = new URL('/auth/callback', siteUrl);
+      callbackUrl.searchParams.set('code', token_hash);
+      if (next !== '/dashboard') {
+        callbackUrl.searchParams.set('next', next);
+      }
+      return NextResponse.redirect(callbackUrl.toString());
+    }
+
+    const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+
+    if (error) {
+      console.error('Token verification error:', error);
+      return NextResponse.redirect(`${siteUrl}/login?error=invalid_token`);
+    }
+
+    // Create redirect response and attach session cookies
+    const response = NextResponse.redirect(`${siteUrl}${next}`);
+    cookiesToSet.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options);
+    });
+
+    return response;
+  } catch (err) {
+    console.error('Auth confirm error:', err);
+    return NextResponse.redirect(`${siteUrl}/login?error=server_error`);
   }
-
-  // Create redirect response and attach session cookies
-  const response = NextResponse.redirect(`${siteUrl}${next}`);
-  cookiesToSet.forEach(({ name, value, options }) => {
-    response.cookies.set(name, value, options);
-  });
-
-  return response;
 }
