@@ -139,13 +139,21 @@ async function fetchApps(params: AppsFilterParams): Promise<AppsApiResponse> {
   }
 }
 
+interface UseAppsQueryOptions {
+  /** Whether the query should run. Use to defer until auth is ready. */
+  enabled?: boolean;
+}
+
 /**
  * Hook for fetching apps with React Query
  *
  * @param params - Filter parameters for the query
+ * @param options - Query options (e.g., enabled to defer until auth ready)
  * @returns Object with apps, stats, isLoading, and isFetching states
  */
-export function useAppsQuery(params: AppsFilterParams) {
+export function useAppsQuery(params: AppsFilterParams, options: UseAppsQueryOptions = {}) {
+  const { enabled = true } = options;
+
   const query = useQuery({
     // Unique key for this query, includes all filter params
     queryKey: ['apps', params],
@@ -155,6 +163,8 @@ export function useAppsQuery(params: AppsFilterParams) {
     staleTime: 5 * 60 * 1000,
     // Keep in cache for 30 minutes
     gcTime: 30 * 60 * 1000,
+    // Defer query until enabled (e.g., auth is ready)
+    enabled,
     // Note: placeholderData was removed to ensure loading state shows during slow queries
     // (prevents stale data from appearing when 3+ tags cause query delays)
   });

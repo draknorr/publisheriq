@@ -23,6 +23,7 @@ import { useSparklineLoader } from '../hooks/useSparklineLoader';
 import { useAppsSelection } from '../hooks/useAppsSelection';
 import { useAppsCompare } from '../hooks/useAppsCompare';
 import { useAppsQuery, buildFilterParamsFromUrl } from '../hooks/useAppsQuery';
+import { useAuthReady } from '@/hooks/useAuthReady';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useCommandPaletteShortcut } from '../hooks/useKeyboardShortcut';
 import type { App, AppType, SortField, SortOrder, AggregateStats, QuickFilterId } from '../lib/apps-types';
@@ -63,13 +64,18 @@ function AppsPageClientInner({
     [searchParams]
   );
 
+  // Wait for auth to be ready before making API calls
+  // This prevents 401 errors on cold page load when cookies haven't been parsed yet
+  const authReady = useAuthReady();
+
   // Fetch apps data using React Query with client-side caching
+  // Deferred until auth is ready to prevent 401 errors on initial load
   const {
     apps: queryApps,
     stats: queryStats,
     isLoading,
     isFetching,
-  } = useAppsQuery(filterParams);
+  } = useAppsQuery(filterParams, { enabled: authReady });
 
   // Use React Query data if available, otherwise fall back to server data
   const apps = queryApps ?? initialData;
