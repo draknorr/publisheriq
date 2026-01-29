@@ -22,6 +22,7 @@ export function createBrowserClient() {
       auth: {
         detectSessionInUrl: true,
         autoRefreshToken: true,
+        flowType: 'implicit', // Use implicit flow for magic links (works across browser contexts)
       },
       cookieOptions: {
         ...(isProduction && { domain: '.publisheriq.app' }),
