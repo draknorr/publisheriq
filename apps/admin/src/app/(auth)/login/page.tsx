@@ -1,31 +1,44 @@
 'use client';
 
-import { Suspense, useState, useEffect, FormEvent } from 'react';
+import { Suspense, useState, useEffect, FormEvent, useRef } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Gamepad2, Mail, CheckCircle, UserPlus, ArrowRight, Loader2 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Gamepad2, Mail, UserPlus, ArrowRight, Loader2, KeyRound } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 function LoginPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [showWaitlistPrompt, setShowWaitlistPrompt] = useState(false);
+
+  // OTP flow state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   // Handle error from failed auth callback
   useEffect(() => {
     const urlError = searchParams.get('error');
     if (urlError === 'auth_failed' || urlError === 'invalid_token') {
-      setError('Sign-in link expired or invalid. Please request a new one.');
+      setError('Sign-in code expired or invalid. Please request a new one.');
     } else if (urlError === 'missing_token') {
       setError('Invalid sign-in link. Please request a new one.');
     }
   }, [searchParams]);
+
+  // Focus OTP input when shown
+  useEffect(() => {
+    if (otpSent && otpInputRef.current) {
+      otpInputRef.current.focus();
+    }
+  }, [otpSent]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -61,8 +74,7 @@ function LoginPageContent() {
         return;
       }
 
-      // Step 2: Send magic link (only for approved emails)
-      // The email template controls the redirect URL using {{ .TokenHash }}
+      // Step 2: Send OTP code (only for approved emails)
       const supabase = createBrowserClient();
 
       const { error: authError } = await supabase.auth.signInWithOtp({
@@ -74,12 +86,68 @@ function LoginPageContent() {
 
       if (authError) {
         console.error('Auth error:', authError);
-        setError('Unable to send sign-in link. Please try again.');
+        setError('Unable to send verification code. Please try again.');
         setIsLoading(false);
         return;
       }
 
-      setIsSuccess(true);
+      // Show OTP entry form
+      setOtpSent(true);
+      setOtp('');
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsVerifying(true);
+
+    try {
+      const supabase = createBrowserClient();
+
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'email',
+      });
+
+      if (verifyError) {
+        console.error('OTP verification error:', verifyError);
+        setError('Invalid or expired code. Please try again.');
+        setIsVerifying(false);
+        return;
+      }
+
+      // Success - redirect to dashboard
+      router.replace('/');
+    } catch {
+      setError('Something went wrong. Please try again.');
+      setIsVerifying(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError('');
+    setIsLoading(true);
+    setOtp('');
+
+    try {
+      const supabase = createBrowserClient();
+
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+
+      if (authError) {
+        setError('Unable to resend code. Please try again.');
+      }
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -126,33 +194,74 @@ function LoginPageContent() {
     );
   }
 
-  if (isSuccess) {
+  // OTP entry form (shown after email submitted)
+  if (otpSent) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
         <Card variant="elevated" padding="lg" className="w-full max-w-sm">
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-green mb-4">
-              <CheckCircle className="h-6 w-6 text-white" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-blue mb-4">
+              <KeyRound className="h-6 w-6 text-white" />
             </div>
-            <h1 className="text-heading text-text-primary">Check your email</h1>
+            <h1 className="text-heading text-text-primary">Enter verification code</h1>
             <p className="text-body-sm text-text-secondary mt-2">
-              We sent a sign-in link to <strong className="text-text-primary">{email}</strong>
+              We sent a 6-digit code to <strong className="text-text-primary">{email}</strong>
             </p>
-            <p className="text-body-xs text-text-tertiary mt-4">
-              Click the link in the email to sign in. The link expires in 1 hour.
-            </p>
+          </div>
+
+          <form onSubmit={handleVerifyOtp} className="mt-6 space-y-4">
+            <Input
+              ref={otpInputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              placeholder="000000"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+              error={error}
+              className="text-center text-2xl tracking-[0.5em] font-mono"
+              autoComplete="one-time-code"
+            />
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              isLoading={isVerifying}
+              className="w-full"
+              disabled={otp.length !== 6 || isVerifying}
+            >
+              {isVerifying ? 'Verifying...' : 'Verify Code'}
+            </Button>
+          </form>
+
+          <div className="mt-4 flex flex-col items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
-              className="mt-6"
+              onClick={handleResendOtp}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Sending...' : 'Resend code'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
-                setIsSuccess(false);
+                setOtpSent(false);
+                setOtp('');
                 setEmail('');
+                setError('');
               }}
             >
               Use a different email
             </Button>
           </div>
+
+          <p className="text-body-xs text-text-tertiary mt-4 text-center">
+            The code expires in 1 hour.
+          </p>
         </Card>
       </div>
     );
@@ -166,7 +275,7 @@ function LoginPageContent() {
             <Gamepad2 className="h-6 w-6 text-white" />
           </div>
           <h1 className="text-heading text-text-primary">PublisherIQ</h1>
-          <p className="text-body-sm text-text-secondary mt-1">Sign in with magic link</p>
+          <p className="text-body-sm text-text-secondary mt-1">Sign in with email</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -189,7 +298,7 @@ function LoginPageContent() {
             className="w-full"
             disabled={!email}
           >
-            {isLoading ? 'Sending link...' : 'Send magic link'}
+            {isLoading ? 'Sending code...' : 'Continue'}
           </Button>
         </form>
 

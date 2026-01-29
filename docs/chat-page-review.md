@@ -139,21 +139,23 @@ Assistant messages are rendered with:
 - Enforce `p_user_id = auth.uid()` inside the function body (or validate a service-only secret).
 - Consider `FORCE ROW LEVEL SECURITY` on sensitive tables if any SECURITY DEFINER patterns remain.
 
-### 3) HIGH: `/api/search` response shape mismatch breaks chat entity autocomplete
+### 3) VERIFIED: `/api/search` response shape matches chat entity autocomplete
 **What**
 - `apps/admin/src/app/api/search/route.ts` returns `{ success, query, results: { games, publishers, developers } }`.
-- `apps/admin/src/components/chat/ChatInput.tsx` incorrectly reads `data.games`, `data.publishers`, `data.developers`.
+- `apps/admin/src/components/chat/ChatInput.tsx` reads `data.results.games`, `data.results.publishers`, `data.results.developers` (matches `SearchResponse`).
 
 **Impact**
-- Game/publisher/developer suggestions from the API never appear (only template/tag/example suggestions show).
+- No issue: entity autocomplete parsing matches the API response shape.
 
-### 4) HIGH: Autocomplete dropdown never shows “Searching…” / “No suggestions found”
+### 4) VERIFIED: Autocomplete dropdown loading/empty states render correctly
 **What**
-- `AutocompleteDropdown` supports loading/empty states.
-- But `ChatInput` only renders it when `isDropdownOpen && allSuggestions.length > 0`.
+- `ChatInput` controls dropdown visibility via `isDropdownVisible` (not `allSuggestions.length > 0`).
+- `AutocompleteDropdown` renders:
+  - “Searching…” when `isLoading && suggestions.length === 0`
+  - “No suggestions found” when `!isLoading && suggestions.length === 0 && inputValue.length >= 2`
 
 **Impact**
-- When there are zero suggestions, the dropdown is hidden, so users never see “Searching…” or “No suggestions found”.
+- No issue: loading/empty states can appear when there are zero suggestions.
 
 ### 5) HIGH: Anthropic provider cannot stream; docs claim Claude
 **What**
@@ -188,12 +190,12 @@ Assistant messages are rendered with:
 **Impact**
 - Scrolling performance suffers and can “fight” the user when reading earlier messages.
 
-### 9) MED: Tool details panel is missing handling for `lookup_tags`
+### 9) VERIFIED: Tool details panel handles `lookup_tags`
 **What**
-- `ChatMessage` renders explicit UI for many tools, but not `lookup_tags`.
+- `ChatMessage` includes an explicit UI handler for `lookup_tags` tool results.
 
 **Impact**
-- “Unknown tool” appears even though the tool is supported and used.
+- No issue: `lookup_tags` does not fall through to an “Unknown tool” state.
 
 ### 10) MED: Mermaid SVG injection is un-hardened
 **What**
