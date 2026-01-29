@@ -10,6 +10,7 @@ import {
   generateGameSuggestions,
 } from '@/lib/chat/query-templates';
 import { getRandomPrompts } from '@/lib/example-prompts';
+import type { SearchResponse } from '@/components/search/types';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -138,12 +139,12 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
           return;
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as SearchResponse;
         const results: AutocompleteSuggestion[] = [];
 
         // Add game results
-        if (data.games?.length) {
-          for (const game of data.games.slice(0, 3)) {
+        if (data.results.games?.length) {
+          for (const game of data.results.games.slice(0, 3)) {
             // Generate game-based suggestions
             const gameSuggestions = generateGameSuggestions(game.name, 2);
             results.push(...gameSuggestions);
@@ -151,8 +152,8 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
         }
 
         // Add publisher results
-        if (data.publishers?.length) {
-          for (const pub of data.publishers.slice(0, 2)) {
+        if (data.results.publishers?.length) {
+          for (const pub of data.results.publishers.slice(0, 2)) {
             results.push({
               label: `All games by ${pub.name}`,
               query: `all games by ${pub.name}`,
@@ -162,8 +163,8 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
         }
 
         // Add developer results
-        if (data.developers?.length) {
-          for (const dev of data.developers.slice(0, 2)) {
+        if (data.results.developers?.length) {
+          for (const dev of data.results.developers.slice(0, 2)) {
             results.push({
               label: `Games by ${dev.name}`,
               query: `games by ${dev.name}`,
@@ -274,6 +275,11 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
     setIsDropdownOpen(true);
   };
 
+  const trimmedInput = input.trim();
+  const isDropdownVisible =
+    isDropdownOpen &&
+    (trimmedInput.length === 0 || trimmedInput.length >= MIN_SEARCH_LENGTH);
+
   return (
     <div className="flex gap-3 items-end">
       <div className="flex-1 relative">
@@ -286,7 +292,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
           onHover={setSelectedIndex}
           inputValue={input}
           isLoading={isSearching || isLoadingTags}
-          isVisible={isDropdownOpen && allSuggestions.length > 0}
+          isVisible={isDropdownVisible}
         />
 
         <textarea
