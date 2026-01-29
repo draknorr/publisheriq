@@ -15,6 +15,7 @@ import {
   type LookupPublishersArgs,
   type LookupDevelopersArgs,
 } from '@/lib/search/publisher-lookup';
+import { createServerClient } from '@/lib/supabase/server';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, ChatTiming, LLMResponse, Tool } from '@/lib/llm/types';
 
 // Set to true to use Cube.dev semantic layer, false for legacy SQL
@@ -35,6 +36,17 @@ interface QueryAnalyticsArgs {
 
 export async function POST(request: NextRequest): Promise<NextResponse<ChatResponse>> {
   const requestStart = performance.now();
+
+  // SECURITY FIX (AUTH-06): Defense-in-depth auth check
+  // Middleware handles auth, but API routes should also verify
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { response: '', error: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
   try {
     const body = (await request.json()) as ChatRequest;

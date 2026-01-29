@@ -2,6 +2,41 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
+ * Allowed origins for auth redirects.
+ * This prevents open redirect vulnerabilities where attackers could redirect
+ * users to malicious sites after authentication.
+ */
+const ALLOWED_ORIGINS = [
+  // Production
+  'https://publisheriq.app',
+  'https://app.publisheriq.app',
+  'https://www.publisheriq.app',
+  // Vercel previews (pattern matching done separately)
+];
+
+/**
+ * Check if an origin is allowed for redirects.
+ */
+function isAllowedOrigin(origin: string): boolean {
+  // Exact match against allowlist
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return true;
+  }
+
+  // Allow Vercel preview URLs (*.vercel.app)
+  try {
+    const url = new URL(origin);
+    if (url.hostname.endsWith('.vercel.app')) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+/**
  * Server-side auth callback handler.
  *
  * Routes auth codes to the client-side handler for PKCE exchange.
@@ -21,9 +56,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/auth/callback`);
   }
 
-  // Determine where to send the code for client-side exchange
-  // The PKCE verifier is in localStorage on the origin where user started login
-  const destination = targetOrigin || origin;
+  // SECURITY FIX: Validate origin parameter to prevent open redirect
+  // Only allow redirects to known-safe origins
+  let destination = origin; // Default to current origin
+  if (targetOrigin) {
+    if (isAllowedOrigin(targetOrigin)) {
+      destination = targetOrigin;
+    } else {
+      console.warn(`Blocked redirect to untrusted origin: ${targetOrigin}`);
+      // Fall back to current origin instead of redirecting to untrusted site
+    }
+  }
 
   const clientCallbackUrl = new URL('/auth/callback', destination);
   clientCallbackUrl.searchParams.set('code', code);

@@ -41,6 +41,13 @@ function LoginPageContent() {
         body: JSON.stringify({ email }),
       });
 
+      // SECURITY FIX (AUTH-11): Check response status before parsing JSON
+      if (!validateResponse.ok) {
+        setError('Unable to validate email. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
       const validation = await validateResponse.json();
 
       if (!validation.valid) {

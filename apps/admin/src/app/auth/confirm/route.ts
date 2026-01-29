@@ -5,6 +5,23 @@ import type { NextRequest } from 'next/server';
 import type { Database } from '@publisheriq/database';
 
 /**
+ * Get the site URL for redirects.
+ * SECURITY FIX (AUTH-07): Use env var instead of request origin to prevent host header injection.
+ */
+function getSiteUrl(): string {
+  // Prefer explicit env var for production
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+  // Fallback to Vercel URL for previews
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  // Last resort: localhost for development
+  return 'http://localhost:3001';
+}
+
+/**
  * Token hash verification route for magic link authentication.
  *
  * This route handles magic links that use token_hash instead of PKCE code.
@@ -15,7 +32,9 @@ import type { Database } from '@publisheriq/database';
  * {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // SECURITY FIX (AUTH-07): Use env-based URL instead of request origin
+  const siteUrl = getSiteUrl();
   const token_hash = searchParams.get('token_hash');
   const typeParam = searchParams.get('type');
   const next = searchParams.get('next') ?? '/dashboard';
@@ -25,7 +44,7 @@ export async function GET(request: NextRequest) {
   type EmailOtpType = typeof validTypes[number];
 
   if (!token_hash || !typeParam || !validTypes.includes(typeParam as EmailOtpType)) {
-    return NextResponse.redirect(`${origin}/login?error=missing_token`);
+    return NextResponse.redirect(`${siteUrl}/login?error=missing_token`);
   }
 
   const type = typeParam as EmailOtpType;
@@ -52,11 +71,11 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('Token verification error:', error);
-    return NextResponse.redirect(`${origin}/login?error=invalid_token`);
+    return NextResponse.redirect(`${siteUrl}/login?error=invalid_token`);
   }
 
   // Create redirect response and attach session cookies
-  const response = NextResponse.redirect(`${origin}${next}`);
+  const response = NextResponse.redirect(`${siteUrl}${next}`);
   cookiesToSet.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options);
   });

@@ -48,9 +48,10 @@ export async function middleware(request: NextRequest) {
   const hostname = request.nextUrl.hostname;
 
   // DEV BYPASS: Skip auth on localhost for local development
-  // Safe because hostname can only be 'localhost' when running locally
+  // Only enabled when NODE_ENV is explicitly 'development'
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  if (isLocalhost && !isPublicPath(pathname) && !isStaticAsset(pathname)) {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  if (isLocalhost && isDevelopment && !isPublicPath(pathname) && !isStaticAsset(pathname)) {
     return NextResponse.next();
   }
 
@@ -101,7 +102,7 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     // Preserve the intended destination
     if (pathname !== '/dashboard') {
-      loginUrl.searchParams.set('redirect', pathname);
+      loginUrl.searchParams.set('next', pathname);
     }
     return NextResponse.redirect(loginUrl);
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase/server';
 import type { AppsFilterParams, AggregateStats } from '@/app/(main)/apps/lib/apps-types';
 
 /**
@@ -101,6 +102,17 @@ function isDefaultView(params: AppsFilterParams): boolean {
  * Used by client-side React Query for data fetching
  */
 export async function GET(request: NextRequest) {
+  // SECURITY FIX (AUTH-06): Defense-in-depth auth check
+  // Middleware handles auth, but API routes should also verify
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Authentication required' },
+      { status: 401 }
+    );
+  }
+
   const searchParams = request.nextUrl.searchParams;
 
   // Parse query parameters

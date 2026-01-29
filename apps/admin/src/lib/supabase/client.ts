@@ -11,8 +11,9 @@ import type { Database } from '@publisheriq/database';
 export function createBrowserClient() {
   // Only set explicit domain for production (allows subdomains like app.publisheriq.app)
   // For other environments (localhost, Vercel previews), let browser use current origin
-  const isProduction = typeof window !== 'undefined' &&
-    window.location.hostname.endsWith('.publisheriq.app');
+  // SECURITY FIX (AUTH-09): Also match apex domain (publisheriq.app without subdomain)
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isProduction = hostname === 'publisheriq.app' || hostname.endsWith('.publisheriq.app');
 
   return createSupabaseBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
