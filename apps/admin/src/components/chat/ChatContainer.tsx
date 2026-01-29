@@ -17,7 +17,9 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
   const [error, setError] = useState<string | null>(null);
   const [suggestions] = useState(() => getRandomPrompts(4));
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const hasSubmittedInitialQuery = useRef(false);
+  const lastScrollTime = useRef<number>(0);
 
   const {
     messages,
@@ -29,14 +31,40 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
     onError: setError,
   });
 
-  // Auto-scroll to bottom when new messages arrive
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Check if user is near the bottom of the scroll container
+  const isNearBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    const threshold = 150; // px from bottom
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
   }, []);
 
+  // Auto-scroll to bottom when new messages arrive (only if user is near bottom)
+  const scrollToBottom = useCallback((force = false) => {
+    if (!force && !isNearBottom()) return;
+
+    // Throttle scroll calls during streaming to reduce jank
+    const now = Date.now();
+    if (isStreaming && now - lastScrollTime.current < 100) return;
+    lastScrollTime.current = now;
+
+    // Use 'instant' during streaming to avoid fighting smooth scroll
+    messagesEndRef.current?.scrollIntoView({
+      behavior: isStreaming ? 'instant' : 'smooth',
+    });
+  }, [isNearBottom, isStreaming]);
+
+  // Scroll on new messages, but throttled during streaming
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isStreaming, scrollToBottom]);
+  }, [messages, scrollToBottom]);
+
+  // Force scroll when streaming starts (new user message)
+  useEffect(() => {
+    if (isStreaming) {
+      scrollToBottom(true);
+    }
+  }, [isStreaming, scrollToBottom]);
 
   // Auto-submit initial query from URL
   useEffect(() => {
@@ -81,7 +109,7 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-16 h-16 rounded-full bg-accent-blue/10 flex items-center justify-center mb-4">

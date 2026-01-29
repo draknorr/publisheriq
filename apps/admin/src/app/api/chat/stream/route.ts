@@ -357,7 +357,34 @@ export async function POST(request: NextRequest): Promise<Response> {
           });
         }
 
-        // Send completion event with debug info
+        // Log the chat query to database (do this BEFORE sending message_end)
+        // Wrap in try-catch to ensure logging failures don't affect the response
+        const lastUserMessage = body.messages.filter((m) => m.role === 'user').pop();
+        if (lastUserMessage) {
+          try {
+            await logChatQuery({
+              query_text: lastUserMessage.content.slice(0, 2000),
+              tool_names: [...new Set(allToolNames)],
+              tool_count: debugStats.toolCallCount,
+              iteration_count: debugStats.iterations,
+              response_length: debugStats.totalChars,
+              timing_llm_ms: Math.round(totalLlmMs),
+              timing_tools_ms: Math.round(totalToolsMs),
+              timing_total_ms: Math.round(performance.now() - requestStart),
+              // New fields for credit tracking
+              user_id: userId ?? undefined,
+              input_tokens: totalInputTokens > 0 ? totalInputTokens : undefined,
+              output_tokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
+              tool_credits_used: CREDITS_ENABLED ? getCreditBreakdown(allToolNames, 0, 0).toolCredits : undefined,
+              total_credits_charged: CREDITS_ENABLED ? creditsCharged : undefined,
+            });
+          } catch (logError) {
+            // Log to console but don't fail the request
+            console.error('Failed to log chat query:', logError);
+          }
+        }
+
+        // Send completion event with debug info (after logging to prevent error-after-end)
         const endEvent: MessageEndEvent = {
           type: 'message_end',
           timing: {
@@ -373,27 +400,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           creditsCharged: CREDITS_ENABLED ? creditsCharged : undefined,
         };
         controller.enqueue(encoder.encode(formatSSE(endEvent)));
-
-        // Log the chat query to database
-        const lastUserMessage = body.messages.filter((m) => m.role === 'user').pop();
-        if (lastUserMessage) {
-          await logChatQuery({
-            query_text: lastUserMessage.content.slice(0, 2000),
-            tool_names: [...new Set(allToolNames)],
-            tool_count: debugStats.toolCallCount,
-            iteration_count: debugStats.iterations,
-            response_length: debugStats.totalChars,
-            timing_llm_ms: Math.round(totalLlmMs),
-            timing_tools_ms: Math.round(totalToolsMs),
-            timing_total_ms: Math.round(performance.now() - requestStart),
-            // New fields for credit tracking
-            user_id: userId ?? undefined,
-            input_tokens: totalInputTokens > 0 ? totalInputTokens : undefined,
-            output_tokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
-            tool_credits_used: CREDITS_ENABLED ? getCreditBreakdown(allToolNames, 0, 0).toolCredits : undefined,
-            total_credits_charged: CREDITS_ENABLED ? creditsCharged : undefined,
-          });
-        }
 
       } catch (error) {
         console.error('Streaming chat error:', error);

@@ -71,7 +71,25 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        // Try to parse error details from the response body
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorBody = await response.json();
+          if (errorBody.message) {
+            errorMessage = errorBody.message;
+          } else if (errorBody.error) {
+            errorMessage = typeof errorBody.error === 'string'
+              ? errorBody.error
+              : `${errorBody.error}: ${errorBody.message || ''}`;
+          }
+          // Include retry_after hint for rate limiting
+          if (errorBody.retry_after) {
+            errorMessage += ` (retry in ${errorBody.retry_after}s)`;
+          }
+        } catch {
+          // Body wasn't JSON or couldn't be parsed, use status code
+        }
+        throw new Error(errorMessage);
       }
 
       const reader = response.body?.getReader();

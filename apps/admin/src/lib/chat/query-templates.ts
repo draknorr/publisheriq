@@ -17,7 +17,7 @@ export const TAG_TEMPLATES = [
   'free {input} games',
   'hidden gem {input} games',
   "what's breaking out in {input}?",
-  'best {input} games of 2025',
+  'best {input} games this year',
   '{input} games under $20',
   '{input} games on Linux',
   '{input} games with co-op',
@@ -44,7 +44,7 @@ export const ENTITY_TEMPLATES = [
 export const DISCOVERY_TEMPLATES = [
   "what's breaking out right now?",
   'trending games this week',
-  'best indie games of 2025',
+  'best indie games this year',
   'Steam Deck verified games with great reviews',
   'free-to-play games with the most players',
   'games gaining traction this month',

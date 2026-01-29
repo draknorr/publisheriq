@@ -314,6 +314,10 @@ Supports fuzzy tag matching - you don't need exact tag names.`,
           type: 'boolean',
           description: 'Filter by free-to-play status',
         },
+        on_sale: {
+          type: 'boolean',
+          description: 'Filter to games currently on sale (has active discount)',
+        },
         limit: {
           type: 'number',
           description: 'Maximum results to return (default 20, max 50)',
