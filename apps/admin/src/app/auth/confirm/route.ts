@@ -116,18 +116,6 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    // PKCE tokens (starting with pkce_) need code exchange, not OTP verification
-    // This handles cases where Supabase sends PKCE tokens to the confirm endpoint
-    if (token_hash.startsWith('pkce_')) {
-      // Redirect to the client-side callback which can exchange the code
-      const callbackUrl = new URL('/auth/callback', siteUrl);
-      callbackUrl.searchParams.set('code', token_hash);
-      if (next !== '/dashboard') {
-        callbackUrl.searchParams.set('next', next);
-      }
-      return NextResponse.redirect(callbackUrl.toString());
-    }
-
     const { error } = await supabase.auth.verifyOtp({ token_hash, type });
 
     if (error) {
