@@ -1,28 +1,37 @@
 import { createBrowserClient as createSupabaseBrowserClient } from '@supabase/ssr';
 import type { Database } from '@publisheriq/database';
 
+// Singleton instance for browser client
+// Using ReturnType to match the exact type returned by createSupabaseBrowserClient
+let browserClient: ReturnType<typeof createSupabaseBrowserClient<Database>> | null = null;
+
 /**
- * Creates a Supabase client for browser/client components.
- * This client automatically handles auth state and cookies.
+ * Creates or returns the singleton Supabase client for browser/client components.
+ * Using a singleton prevents multiple auth listeners and token refresh loops
+ * that can cause rate limit errors when multiple components create clients.
  *
- * Magic link auth uses token_hash verification (server-side) instead of
- * PKCE code exchange (client-side) to work across browser contexts.
+ * OTP auth verifies 6-digit codes entered by the user, avoiding PKCE
+ * code verifier issues that occur with magic links across browser contexts.
  */
 export function createBrowserClient() {
+  // Return existing instance if available
+  if (browserClient) {
+    return browserClient;
+  }
+
   // Only set explicit domain for production (allows subdomains like app.publisheriq.app)
   // For other environments (localhost, Vercel previews), let browser use current origin
   // SECURITY FIX (AUTH-09): Also match apex domain (publisheriq.app without subdomain)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const isProduction = hostname === 'publisheriq.app' || hostname.endsWith('.publisheriq.app');
 
-  return createSupabaseBrowserClient<Database>(
+  browserClient = createSupabaseBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
         detectSessionInUrl: true,
         autoRefreshToken: true,
-        flowType: 'implicit', // Use implicit flow for magic links (works across browser contexts)
       },
       cookieOptions: {
         ...(isProduction && { domain: '.publisheriq.app' }),
@@ -33,4 +42,6 @@ export function createBrowserClient() {
       },
     }
   );
+
+  return browserClient;
 }

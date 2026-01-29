@@ -83,9 +83,12 @@ export function Sidebar() {
 
   // Fetch user profile
   useEffect(() => {
+    // Use single client instance for both fetching and subscribing
+    // This prevents multiple auth listeners and token refresh loops
+    const supabase = createBrowserClient();
+
     const fetchProfile = async () => {
       try {
-        const supabase = createBrowserClient();
         const { data: { user } } = await supabase.auth.getUser();
 
         if (user) {
@@ -106,8 +109,7 @@ export function Sidebar() {
 
     fetchProfile();
 
-    // Subscribe to auth changes
-    const supabase = createBrowserClient();
+    // Subscribe using the same client instance
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       fetchProfile();
     });
