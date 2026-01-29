@@ -5,13 +5,46 @@ import type { NextRequest } from 'next/server';
 import type { Database } from '@publisheriq/database';
 
 /**
- * Get the site URL for redirects.
- * SECURITY FIX (AUTH-07): Use env var instead of request origin to prevent host header injection.
+ * Allowed origins for redirects.
+ * SECURITY FIX (AUTH-07): Validate origin to prevent host header injection.
  */
-function getSiteUrl(): string {
+const ALLOWED_ORIGINS = [
+  'https://publisheriq.app',
+  'https://www.publisheriq.app',
+  'https://app.publisheriq.app',
+];
+
+/**
+ * Check if an origin is allowed for redirects.
+ */
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return true;
+  }
+  // Allow Vercel preview URLs
+  try {
+    const url = new URL(origin);
+    if (url.hostname.endsWith('.vercel.app')) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Get the site URL for redirects.
+ * Uses env var if set, otherwise validates request origin against allowlist.
+ */
+function getSiteUrl(requestOrigin: string): string {
   // Prefer explicit env var for production
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+  // Validate request origin against allowlist
+  if (isAllowedOrigin(requestOrigin)) {
+    return requestOrigin;
   }
   // Fallback to Vercel URL for previews
   if (process.env.VERCEL_URL) {
@@ -32,9 +65,9 @@ function getSiteUrl(): string {
  * {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  // SECURITY FIX (AUTH-07): Use env-based URL instead of request origin
-  const siteUrl = getSiteUrl();
+  const { searchParams, origin } = new URL(request.url);
+  // SECURITY FIX (AUTH-07): Use validated origin for redirects
+  const siteUrl = getSiteUrl(origin);
   const token_hash = searchParams.get('token_hash');
   const typeParam = searchParams.get('type');
   const next = searchParams.get('next') ?? '/dashboard';
