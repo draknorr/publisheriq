@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { notFound } from 'next/navigation';
 import { PageSubHeader } from '@/components/layout';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ appid: string }> }): Promise<Metadata> {
   const { appid } = await params;
   if (!isSupabaseConfigured()) return { title: 'App Details' };
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
   const { data: app } = await supabase.from('apps').select('name').eq('appid', Number(appid)).single();
   return { title: app?.name || 'App Details' };
 }
@@ -140,7 +141,7 @@ interface SyncStatus {
 
 async function getAppDetails(appid: number) {
   if (!isSupabaseConfigured()) return null;
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data, error } = await supabase
     .from('apps')
@@ -159,7 +160,7 @@ async function getAppDetails(appid: number) {
 
 async function getDevelopers(appid: number): Promise<{ id: number; name: string }[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_developers')
@@ -173,7 +174,7 @@ async function getDevelopers(appid: number): Promise<{ id: number; name: string 
 
 async function getPublishers(appid: number): Promise<{ id: number; name: string }[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_publishers')
@@ -187,7 +188,7 @@ async function getPublishers(appid: number): Promise<{ id: number; name: string 
 
 async function getTags(appid: number): Promise<{ tag: string; vote_count: number | null }[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_tags')
@@ -200,7 +201,7 @@ async function getTags(appid: number): Promise<{ tag: string; vote_count: number
 
 async function getDailyMetrics(appid: number): Promise<DailyMetric[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('daily_metrics')
@@ -220,7 +221,7 @@ async function getDailyMetrics(appid: number): Promise<DailyMetric[]> {
 
 async function getReviewHistogram(appid: number): Promise<ReviewHistogram[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('review_histogram')
@@ -264,7 +265,7 @@ async function getReviewHistogram(appid: number): Promise<ReviewHistogram[]> {
 
 async function getTrends(appid: number): Promise<AppTrends | null> {
   if (!isSupabaseConfigured()) return null;
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_trends')
@@ -277,7 +278,7 @@ async function getTrends(appid: number): Promise<AppTrends | null> {
 
 async function getSyncStatus(appid: number): Promise<SyncStatus | null> {
   if (!isSupabaseConfigured()) return null;
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('sync_status')
@@ -298,7 +299,7 @@ async function getSyncStatus(appid: number): Promise<SyncStatus | null> {
 
 async function getSteamDeckInfo(appid: number): Promise<SteamDeckInfo | null> {
   if (!isSupabaseConfigured()) return null;
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_steam_deck')
@@ -311,7 +312,7 @@ async function getSteamDeckInfo(appid: number): Promise<SteamDeckInfo | null> {
 
 async function getGenres(appid: number): Promise<Genre[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_genres')
@@ -328,7 +329,7 @@ async function getGenres(appid: number): Promise<Genre[]> {
 
 async function getCategories(appid: number): Promise<Category[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_categories')
@@ -343,7 +344,7 @@ async function getCategories(appid: number): Promise<Category[]> {
 
 async function getFranchises(appid: number): Promise<Franchise[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_franchises')
@@ -357,7 +358,7 @@ async function getFranchises(appid: number): Promise<Franchise[]> {
 
 async function getDLCs(appid: number): Promise<DLCApp[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('apps')
@@ -370,7 +371,7 @@ async function getDLCs(appid: number): Promise<DLCApp[]> {
 
 async function getSteamTags(appid: number): Promise<SteamTag[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data } = await supabase
     .from('app_steam_tags')

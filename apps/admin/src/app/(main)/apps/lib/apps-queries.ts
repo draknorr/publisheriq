@@ -1,4 +1,4 @@
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import type { App, AppsFilterParams, AggregateStats, CcuTier, VelocityTier, SteamDeckCategory } from './apps-types';
 
 /**
@@ -22,7 +22,7 @@ interface AggregateStatsRow {
  * Note: Uses type assertion until database types are regenerated after migration
  */
 export async function getApps(params: AppsFilterParams): Promise<App[]> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)('get_apps_with_filters', {
@@ -164,7 +164,7 @@ function isDefaultQuery(params: AppsFilterParams): boolean {
 export async function getAggregateStats(
   params: AppsFilterParams
 ): Promise<AggregateStats> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
   const appType = params.type || 'game';
 
   // For default queries (no filters), use the fast materialized view
@@ -377,7 +377,7 @@ export function getAppTypeLabel(type: string): string {
 export async function getAppsByIds(appids: number[]): Promise<App[]> {
   if (appids.length === 0) return [];
 
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Use the optimized RPC that returns all data in one query
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
