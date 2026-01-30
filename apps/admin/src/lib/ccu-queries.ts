@@ -130,6 +130,52 @@ export async function getCCUSparkline(
 }
 
 /**
+ * Fetch daily peak CCU data via the get_app_sparkline_data RPC.
+ *
+ * This is used by the game detail page to standardize sparklines with the /apps list.
+ */
+export async function getAppDailyPeakSparkline(
+  appid: number,
+  days: 7 | 30 = 7
+): Promise<CCUSparklineData> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase.rpc('get_app_sparkline_data', {
+    p_appids: [appid],
+    p_days: days,
+  });
+
+  if (error || !data || data.length === 0) {
+    return {
+      dataPoints: [],
+      trend: 'stable',
+      growthPct: null,
+      peakCCU: null,
+    };
+  }
+
+  const row = data[0];
+  const points = Array.isArray(row.sparkline_data) ? row.sparkline_data : [];
+
+  const dataPoints: number[] = points
+    .map((p) => {
+      if (!p || typeof p !== 'object') return null;
+      const ccu = (p as { ccu?: unknown }).ccu;
+      return typeof ccu === 'number' ? ccu : typeof ccu === 'string' ? Number(ccu) : null;
+    })
+    .filter((v): v is number => v !== null && !Number.isNaN(v));
+
+  const peakCCU = dataPoints.length > 0 ? Math.max(...dataPoints) : null;
+
+  return {
+    dataPoints,
+    trend: calculateTrend(dataPoints),
+    growthPct: calculateGrowthPct(dataPoints),
+    peakCCU,
+  };
+}
+
+/**
  * Batch fetch sparkline data for multiple apps
  */
 export async function getCCUSparklinesBatch(

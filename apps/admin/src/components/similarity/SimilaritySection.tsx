@@ -41,7 +41,11 @@ interface SimilarityResponse {
 }
 
 interface SimilaritySectionProps {
-  entityId?: number; // Reserved for future cache key use
+  /**
+   * Optional stable identifier for ID-first similarity lookup.
+   * Sent as `reference_id`; `entityName` is still provided as a fallback.
+   */
+  entityId?: number;
   entityName: string;
   entityType: EntityType;
   limit?: number;
@@ -49,6 +53,7 @@ interface SimilaritySectionProps {
   showHeader?: boolean; // Whether to show the section header (default: true)
   compact?: boolean; // Use horizontal scroll layout with compact cards
   className?: string;
+  onStatusChange?: (next: { status: 'ok' | 'missing' | 'unknown'; detail?: string }) => void;
 }
 
 type PopularityFilter = 'any' | 'less_popular' | 'similar' | 'more_popular';
@@ -61,6 +66,7 @@ const popularityOptions: { value: PopularityFilter; label: string }[] = [
 ];
 
 export function SimilaritySection({
+  entityId,
   entityName,
   entityType,
   limit = 8,
@@ -68,6 +74,7 @@ export function SimilaritySection({
   showHeader = true,
   compact = false,
   className = '',
+  onStatusChange,
 }: SimilaritySectionProps) {
   const [results, setResults] = useState<SimilarEntity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,34 +84,53 @@ export function SimilaritySection({
   const fetchSimilar = useCallback(async () => {
     setLoading(true);
     setError(null);
+    onStatusChange?.({ status: 'unknown' });
 
     try {
       const params = new URLSearchParams({
         entity_type: entityType,
-        reference_name: entityName,
         limit: limit.toString(),
       });
+
+      // ID-first lookup for exact matching; name is kept as a fallback/debug aid.
+      if (entityId !== undefined) {
+        params.set('reference_id', entityId.toString());
+      }
+      params.set('reference_name', entityName);
 
       if (popularityFilter !== 'any') {
         params.set('popularity_comparison', popularityFilter);
       }
 
       const response = await fetch(`/api/similarity?${params.toString()}`);
+      if (response.status === 401) {
+        setError('Authentication required');
+        setResults([]);
+        onStatusChange?.({ status: 'missing', detail: 'Authentication required' });
+        return;
+      }
+
       const data: SimilarityResponse = await response.json();
 
       if (!data.success) {
         setError(data.error || 'Failed to fetch similar entities');
         setResults([]);
+        onStatusChange?.({ status: 'missing', detail: data.error || 'Failed to fetch similar entities' });
       } else {
         setResults(data.results || []);
+        onStatusChange?.({
+          status: 'ok',
+          detail: data.results && data.results.length > 0 ? `${data.results.length} results` : 'Indexed (no results)',
+        });
       }
     } catch {
       setError('Failed to fetch similar entities');
       setResults([]);
+      onStatusChange?.({ status: 'missing', detail: 'Request failed' });
     } finally {
       setLoading(false);
     }
-  }, [entityType, entityName, limit, popularityFilter]);
+  }, [entityType, entityName, entityId, limit, popularityFilter, onStatusChange]);
 
   useEffect(() => {
     fetchSimilar();

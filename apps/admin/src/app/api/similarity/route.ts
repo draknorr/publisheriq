@@ -21,6 +21,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const searchParams = request.nextUrl.searchParams;
 
     const entityType = searchParams.get('entity_type') as 'game' | 'publisher' | 'developer' | null;
+    const referenceIdStr = searchParams.get('reference_id');
     const referenceName = searchParams.get('reference_name');
     const limitStr = searchParams.get('limit');
     const popularityComparison = searchParams.get('popularity_comparison') as PopularityComparison | null;
@@ -33,9 +34,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const tags = searchParams.getAll('tags');
     const minReviews = searchParams.get('min_reviews');
 
-    if (!entityType || !referenceName) {
+    const referenceId = referenceIdStr ? parseInt(referenceIdStr, 10) : null;
+
+    if (!entityType || (!referenceName && (referenceId === null || isNaN(referenceId)))) {
       return NextResponse.json(
-        { success: false, error: 'entity_type and reference_name are required' },
+        { success: false, error: 'entity_type and (reference_id or reference_name) are required' },
         { status: 400 }
       );
     }
@@ -94,7 +97,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const result = await findSimilar({
       entity_type: entityType,
-      reference_name: referenceName,
+      reference_id: referenceId !== null && !isNaN(referenceId) ? referenceId : undefined,
+      reference_name: referenceName ?? undefined,
       filters: Object.keys(filters).length > 0 ? filters : undefined,
       limit,
     });

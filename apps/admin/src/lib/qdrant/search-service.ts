@@ -58,7 +58,8 @@ const DEFAULT_RESULTS = 10;
  */
 export interface FindSimilarArgs {
   entity_type: EntityType;
-  reference_name: string;
+  reference_id?: number;
+  reference_name?: string;
   filters?: {
     // Game-specific filters
     popularity_comparison?: PopularityComparison;
@@ -219,6 +220,63 @@ async function lookupEntityByName(
 
     if (partial) {
       return { id: partial.id, name: partial.name };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Look up entity by ID (exact match)
+ */
+async function lookupEntityById(
+  entityType: EntityType,
+  id: number
+): Promise<{ id: number; name: string; type?: string; metrics?: object } | null> {
+  const supabase = getSupabase();
+
+  if (entityType === 'game') {
+    const { data } = await supabase
+      .from('apps')
+      .select(
+        'appid, name, type, pics_review_percentage, current_price_cents, publisher_ids:app_publishers(publisher_id), developer_ids:app_developers(developer_id)'
+      )
+      .eq('appid', id)
+      .eq('type', 'game')
+      .single();
+
+    if (data) {
+      return {
+        id: data.appid,
+        name: data.name,
+        type: data.type ?? undefined,
+        metrics: {
+          review_percentage: data.pics_review_percentage,
+          price_cents: data.current_price_cents,
+          publisher_ids: (data.publisher_ids as { publisher_id: number }[])?.map(p => p.publisher_id) || [],
+          developer_ids: (data.developer_ids as { developer_id: number }[])?.map(d => d.developer_id) || [],
+        },
+      };
+    }
+  } else if (entityType === 'publisher') {
+    const { data } = await supabase
+      .from('publishers')
+      .select('id, name, game_count')
+      .eq('id', id)
+      .single();
+
+    if (data) {
+      return { id: data.id, name: data.name };
+    }
+  } else if (entityType === 'developer') {
+    const { data } = await supabase
+      .from('developers')
+      .select('id, name, game_count')
+      .eq('id', id)
+      .single();
+
+    if (data) {
+      return { id: data.id, name: data.name };
     }
   }
 
@@ -409,15 +467,34 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     };
   }
 
-  const { entity_type, reference_name, filters, limit = DEFAULT_RESULTS } = args;
+  const { entity_type, reference_id, reference_name, filters, limit = DEFAULT_RESULTS } = args;
   // Request one extra for publishers/developers since we filter client-side
   const extraForFilter = entity_type !== 'game' ? 1 : 0;
   const actualLimit = Math.min(limit + extraForFilter, MAX_RESULTS);
 
   // Look up the reference entity
-  const entity = await lookupEntityByName(entity_type, reference_name);
+  const entity =
+    typeof reference_id === 'number' && Number.isFinite(reference_id)
+      ? await lookupEntityById(entity_type, reference_id)
+      : reference_name && reference_name.trim().length > 0
+        ? await lookupEntityByName(entity_type, reference_name)
+        : null;
+
+  if (reference_id === undefined && (!reference_name || reference_name.trim().length === 0)) {
+    return {
+      success: false,
+      error: 'reference_id or reference_name is required.',
+    };
+  }
 
   if (!entity) {
+    if (typeof reference_id === 'number' && Number.isFinite(reference_id)) {
+      return {
+        success: false,
+        error: `Could not find ${entity_type} with ID ${reference_id}.`,
+      };
+    }
+
     return {
       success: false,
       error: `Could not find ${entity_type} named "${reference_name}". Try a different name or check spelling.`,

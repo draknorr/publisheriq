@@ -7,6 +7,8 @@ import { TrendBadge, TierBadge, StackedBarChart, AreaChartComponent, RatioBar, R
 import { SimilaritySection } from '@/components/similarity';
 import { Card } from '@/components/ui';
 import { CheckCircle2, XCircle, AlertTriangle, ChevronRight, ChevronDown, Monitor, Gamepad2, Calendar, FileText, Wrench, Globe, ExternalLink, Layers } from 'lucide-react';
+import type { App as AppSummary } from '../lib/apps-types';
+import { DataFreshnessFooter } from '../components/DataFreshnessFooter';
 
 interface AppDetails {
   appid: number;
@@ -75,6 +77,20 @@ interface DLCApp {
   type: string;
 }
 
+type DataCoverageStatus = 'ok' | 'missing' | 'stale' | 'unknown';
+
+interface DataCoverageItem {
+  key: string;
+  label: string;
+  status: DataCoverageStatus;
+  source: string;
+  detail?: string;
+}
+
+interface DataCoverage {
+  items: DataCoverageItem[];
+}
+
 interface DailyMetric {
   metric_date: string;
   review_score: number | null;
@@ -128,6 +144,8 @@ interface SyncStatus {
 
 interface AppDetailSectionsProps {
   app: AppDetails;
+  appSummary: AppSummary | null;
+  dataCoverage: DataCoverage;
   developers: { id: number; name: string }[];
   publishers: { id: number; name: string }[];
   tags: { tag: string; vote_count: number | null }[];
@@ -148,6 +166,7 @@ const sections = [
   { id: 'similar', label: 'Similar' },
   { id: 'metrics', label: 'Metrics' },
   { id: 'reviews', label: 'Reviews' },
+  { id: 'data', label: 'Data' },
   { id: 'sync', label: 'Sync Status' },
 ];
 
@@ -185,7 +204,16 @@ const itemVariants = {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString();
+  // Handle YYYY-MM-DD without timezone shifts (date-only columns)
+  const dateOnly = parseDateOnlyParts(dateStr);
+  if (dateOnly) {
+    return `${MONTH_SHORT_NAMES[dateOnly.monthIndex]} ${dateOnly.day}, ${dateOnly.year}`;
+  }
+
+  // Fallback for timestamps: format in UTC for SSR/client consistency
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${MONTH_SHORT_NAMES[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -208,6 +236,15 @@ function formatNumber(n: number | null): string {
 }
 
 /**
+ * Short month names for consistent formatting between server and client.
+ * Using manual lookup avoids toLocaleDateString hydration mismatches.
+ */
+const MONTH_SHORT_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/**
  * Month names for consistent formatting between server and client.
  * Using manual lookup avoids toLocaleDateString hydration mismatches.
  */
@@ -215,6 +252,27 @@ const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+function parseDateOnlyParts(dateStr: string): { year: number; monthIndex: number; day: number } | null {
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || !Number.isFinite(day)) return null;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+  if (day < 1 || day > 31) return null;
+
+  return { year, monthIndex, day };
+}
+
+function formatShortDateLabel(dateStr: string): string {
+  const parts = parseDateOnlyParts(dateStr);
+  if (!parts) return '—';
+  return `${MONTH_SHORT_NAMES[parts.monthIndex]} ${parts.day}`;
+}
 
 /**
  * Safely parse a month_start string (YYYY-MM or YYYY-MM-DD format)
@@ -277,6 +335,8 @@ function parseContentDescriptors(descriptors: unknown[] | null): { id: string; l
 
 export function AppDetailSections({
   app,
+  appSummary,
+  dataCoverage,
   developers,
   publishers,
   tags,
@@ -293,6 +353,21 @@ export function AppDetailSections({
 }: AppDetailSectionsProps) {
   const [activeSection, setActiveSection] = useState('summary');
   const latestMetrics = metrics[0] ?? null;
+  const [similarityCoverage, setSimilarityCoverage] = useState<Pick<DataCoverageItem, 'status' | 'detail'>>({
+    status: 'unknown',
+    detail: undefined,
+  });
+
+  const mergedCoverage: DataCoverage = {
+    items: dataCoverage.items.map((item) => {
+      if (item.key !== 'similarity') return item;
+      return {
+        ...item,
+        status: similarityCoverage.status,
+        detail: similarityCoverage.detail ?? item.detail,
+      };
+    }),
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -374,13 +449,21 @@ export function AppDetailSections({
               showFilters={true}
               showHeader={false}
               compact={true}
+              onStatusChange={setSimilarityCoverage}
             />
           </section>
         )}
         <MetricsSection id="metrics" metrics={metrics} />
         <ReviewsSection id="reviews" histogram={histogram} latestMetrics={latestMetrics} />
+        <DataCoverageSection
+          id="data"
+          coverage={mergedCoverage}
+          onJumpToSync={() => scrollToSection('sync')}
+        />
         <SyncSection id="sync" syncStatus={syncStatus} />
       </div>
+
+      <DataFreshnessFooter lastUpdated={appSummary?.data_updated_at ?? null} />
     </div>
   );
 }
@@ -882,9 +965,9 @@ function MetricsSection({
 }: {
   id: string;
   metrics: DailyMetric[];
-}) {
+  }) {
   const chartData = [...metrics].reverse().map((m) => ({
-    date: new Date(m.metric_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    date: formatShortDateLabel(m.metric_date),
     reviews: m.total_reviews ?? 0,
     ccu: m.ccu_peak ?? 0,
     positive: m.positive_reviews ?? 0,
@@ -1203,6 +1286,88 @@ function ReviewsSection({
           No review histogram data available
         </p>
       )}
+    </section>
+  );
+}
+
+function CoverageStatusBadge({ status }: { status: DataCoverageStatus }) {
+  const badge = (() => {
+    switch (status) {
+      case 'ok':
+        return { label: 'OK', className: 'bg-accent-green/15 text-accent-green border-accent-green/20' };
+      case 'stale':
+        return { label: 'Stale', className: 'bg-accent-yellow/15 text-accent-yellow border-accent-yellow/20' };
+      case 'missing':
+        return { label: 'Missing', className: 'bg-accent-red/15 text-accent-red border-accent-red/20' };
+      case 'unknown':
+      default:
+        return { label: 'Unknown', className: 'bg-surface-elevated text-text-muted border-border-subtle' };
+    }
+  })();
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-caption font-medium border ${badge.className}`}>
+      {badge.label}
+    </span>
+  );
+}
+
+function DataCoverageSection({
+  id,
+  coverage,
+  onJumpToSync,
+}: {
+  id: string;
+  coverage: DataCoverage;
+  onJumpToSync: () => void;
+}) {
+  const missingItems = coverage.items.filter((i) => i.status === 'missing');
+  const staleItems = coverage.items.filter((i) => i.status === 'stale');
+
+  return (
+    <section>
+      <SectionHeader title="Data Coverage" id={id} />
+
+      <div className="space-y-4">
+        <Card padding="md">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-body-sm text-text-secondary">
+              {coverage.items.length} sources · {missingItems.length} missing · {staleItems.length} stale
+            </span>
+            <button
+              onClick={onJumpToSync}
+              className="ml-auto text-caption text-accent-blue hover:bg-accent-blue/10 px-2 py-1 rounded transition-colors"
+            >
+              Jump to Sync Status
+            </button>
+          </div>
+        </Card>
+
+        <div className="rounded-md border border-border-subtle overflow-hidden">
+          <div className="divide-y divide-border-subtle">
+            {coverage.items.map((item) => (
+              <div key={item.key} className="p-4 bg-surface-raised">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-body-sm font-medium text-text-primary">{item.label}</span>
+                      <CoverageStatusBadge status={item.status} />
+                    </div>
+                    <div className="text-caption text-text-tertiary mt-1">
+                      Source: <span className="font-mono text-[11px]">{item.source}</span>
+                    </div>
+                    {item.detail && (
+                      <div className="text-caption text-text-muted mt-1 whitespace-pre-wrap break-words">
+                        {item.detail}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
