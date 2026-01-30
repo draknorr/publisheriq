@@ -45,3 +45,32 @@ export function createBrowserClient() {
 
   return browserClient;
 }
+
+/**
+ * Creates a Supabase client WITHOUT auto token refresh.
+ * Use this on the login page to prevent refresh loops when stale tokens exist.
+ * This is NOT a singleton - each call creates a fresh instance.
+ */
+export function createBrowserClientNoRefresh() {
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isProduction = hostname === 'publisheriq.app' || hostname.endsWith('.publisheriq.app');
+
+  return createSupabaseBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        detectSessionInUrl: false,
+        autoRefreshToken: false,
+        persistSession: true,
+      },
+      cookieOptions: {
+        ...(isProduction && { domain: '.publisheriq.app' }),
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: 604800,
+      },
+    }
+  );
+}

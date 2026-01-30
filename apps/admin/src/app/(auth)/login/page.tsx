@@ -7,7 +7,7 @@ import { Gamepad2, Mail, UserPlus, ArrowRight, Loader2, KeyRound } from 'lucide-
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { createBrowserClientNoRefresh } from '@/lib/supabase/client';
 
 function LoginPageContent() {
   const router = useRouter();
@@ -27,7 +27,7 @@ function LoginPageContent() {
   // This prevents the browser client from spamming token refresh requests
   useEffect(() => {
     const checkSession = async () => {
-      const supabase = createBrowserClient();
+      const supabase = createBrowserClientNoRefresh();
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         // User is authenticated, redirect to dashboard
@@ -93,7 +93,7 @@ function LoginPageContent() {
       }
 
       // Step 2: Send OTP code (only for approved emails)
-      const supabase = createBrowserClient();
+      const supabase = createBrowserClientNoRefresh();
 
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
@@ -125,7 +125,7 @@ function LoginPageContent() {
     setIsVerifying(true);
 
     try {
-      const supabase = createBrowserClient();
+      const supabase = createBrowserClientNoRefresh();
 
       const { error: verifyError } = await supabase.auth.verifyOtp({
         email,
@@ -154,7 +154,7 @@ function LoginPageContent() {
     setOtp('');
 
     try {
-      const supabase = createBrowserClient();
+      const supabase = createBrowserClientNoRefresh();
 
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
