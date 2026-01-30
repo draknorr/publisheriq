@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { getSupabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase/client';
 import type { AppType } from '../lib/apps-types';
 
 /**
@@ -124,7 +124,7 @@ export function useFilterCounts() {
       setLoading((prev) => ({ ...prev, [filterType]: true }));
 
       try {
-        const supabase = getSupabase();
+        const supabase = createBrowserClient();
 
         const rpcParams = {
           p_filter_type: filterType,
@@ -135,7 +135,8 @@ export function useFilterCounts() {
           p_min_owners: contextFilters?.minOwners,
         };
 
-        const response = await supabase.rpc('get_apps_filter_option_counts', rpcParams);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const response = await (supabase.rpc as any)('get_apps_filter_option_counts', rpcParams);
 
         const { data: result, error } = response;
 
