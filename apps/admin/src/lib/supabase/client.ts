@@ -10,7 +10,7 @@ let browserClient: ReturnType<typeof createSupabaseBrowserClient<Database>> | nu
  * Using a singleton prevents multiple auth listeners and token refresh loops
  * that can cause rate limit errors when multiple components create clients.
  *
- * OTP auth verifies 6-digit codes entered by the user, avoiding PKCE
+ * OTP auth verifies 8-digit codes entered by the user, avoiding PKCE
  * code verifier issues that occur with magic links across browser contexts.
  */
 export function createBrowserClient() {

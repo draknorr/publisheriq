@@ -205,7 +205,7 @@ function LoginPageContent() {
             </div>
             <h1 className="text-heading text-text-primary">Enter verification code</h1>
             <p className="text-body-sm text-text-secondary mt-2">
-              We sent a 6-digit code to <strong className="text-text-primary">{email}</strong>
+              We sent a verification code to <strong className="text-text-primary">{email}</strong>
             </p>
           </div>
 
@@ -215,8 +215,8 @@ function LoginPageContent() {
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              maxLength={6}
-              placeholder="000000"
+              maxLength={8}
+              placeholder="00000000"
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
               error={error}
@@ -230,7 +230,7 @@ function LoginPageContent() {
               size="lg"
               isLoading={isVerifying}
               className="w-full"
-              disabled={otp.length !== 6 || isVerifying}
+              disabled={otp.length !== 8 || isVerifying}
             >
               {isVerifying ? 'Verifying...' : 'Verify Code'}
             </Button>
