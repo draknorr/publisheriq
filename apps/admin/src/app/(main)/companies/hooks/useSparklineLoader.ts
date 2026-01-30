@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { getSupabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 interface SparklineData {
   dataPoints: number[];
@@ -63,14 +63,15 @@ export function useSparklineLoader(): UseSparklineLoaderReturn {
       forceUpdate((n) => n + 1);
 
       try {
-        const supabase = getSupabase();
-        const { data, error } = await supabase.rpc('get_company_sparkline_data', {
+        const supabase = createBrowserClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase.rpc as any)('get_company_sparkline_data', {
           p_company_id: companyId,
           p_company_type: companyType,
           p_days: 7,
         });
 
-        if (!error && data && data.length > 0) {
+        if (!error && data && Array.isArray(data) && data.length > 0) {
           // Extract CCU values for sparkline
           const dataPoints = data.map((d: { total_ccu: number }) => Number(d.total_ccu) || 0);
           const trend = calculateTrend(dataPoints);

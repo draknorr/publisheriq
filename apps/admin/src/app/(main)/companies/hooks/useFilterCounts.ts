@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { getSupabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase/client';
 import type { FilterOption, CompanyType, StatusFilterValue } from '../lib/companies-types';
 
 export type FilterType = 'genre' | 'tag' | 'category' | 'steam_deck';
@@ -88,9 +88,10 @@ export function useFilterCounts() {
       setLoading((prev) => ({ ...prev, [filterType]: true }));
 
       try {
-        const supabase = getSupabase();
+        const supabase = createBrowserClient();
 
-        const { data: result, error } = await supabase.rpc('get_filter_option_counts', {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: result, error } = await (supabase.rpc as any)('get_filter_option_counts', {
           p_filter_type: filterType,
           p_company_type: companyType,
           p_min_games: contextFilters?.minGames,
