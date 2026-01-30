@@ -23,6 +23,19 @@ function LoginPageContent() {
   const [isVerifying, setIsVerifying] = useState(false);
   const otpInputRef = useRef<HTMLInputElement>(null);
 
+  // Redirect authenticated users away from login page
+  // This prevents the browser client from spamming token refresh requests
+  useEffect(() => {
+    const checkSession = async () => {
+      const supabase = createBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/dashboard');
+      }
+    };
+    checkSession();
+  }, [router]);
+
   // Handle error from failed auth callback
   useEffect(() => {
     const urlError = searchParams.get('error');
@@ -123,7 +136,7 @@ function LoginPageContent() {
       }
 
       // Success - redirect to dashboard
-      router.replace('/');
+      router.replace('/dashboard');
     } catch {
       setError('Something went wrong. Please try again.');
       setIsVerifying(false);
