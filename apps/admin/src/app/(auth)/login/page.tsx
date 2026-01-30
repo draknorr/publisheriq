@@ -23,14 +23,19 @@ function LoginPageContent() {
   const [isVerifying, setIsVerifying] = useState(false);
   const otpInputRef = useRef<HTMLInputElement>(null);
 
-  // Redirect authenticated users away from login page
+  // Redirect authenticated users or clear stale tokens
   // This prevents the browser client from spamming token refresh requests
   useEffect(() => {
     const checkSession = async () => {
       const supabase = createBrowserClient();
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        // User is authenticated, redirect to dashboard
         router.replace('/dashboard');
+      } else {
+        // No valid session - sign out to clear any stale tokens
+        // This stops the auto-refresh loop from spamming 400 errors
+        await supabase.auth.signOut();
       }
     };
     checkSession();
