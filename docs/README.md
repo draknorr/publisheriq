@@ -21,19 +21,16 @@ Welcome to the PublisherIQ documentation. This guide covers everything you need 
 
 ## Latest Release
 
-**[v2.6 - Games Page](releases/v2.6-games-page.md)** (January 16, 2026)
+**[v2.8 - Security Fixes](releases/v2.8-security-fixes.md)** (January 31, 2026)
 
-**Comprehensive Game Discovery**
-- Browse all Steam apps (games, DLC, demos) with type toggle
-- 12 discovery presets: Top Games, Rising Stars, Hidden Gems, Momentum, etc.
-- 12 stackable quick filters: Popular, Trending, Well Reviewed, Free, Indie, Steam Deck, etc.
-- 9 advanced filter categories with 30+ parameters
-- 33 customizable columns across 9 metric categories
-- 6 novel computed metrics: Momentum, Sentiment Delta, Active %, Review Rate, Value Score, vs Publisher Avg
-- Compare mode: side-by-side comparison of 2-5 games
-- CSV/JSON export with configurable columns
-- Saved views for filter configurations (max 10)
-- Inline CCU sparkline visualizations
+**Critical security and stability release:**
+- 14 security vulnerabilities patched (auth bypass, privilege escalation)
+- OTP authentication with 8-digit codes (10-minute expiry)
+- Token refresh loop fixes on login page
+- Apps page sparkline rendering fixed
+- Companies page client hooks corrected
+- New `NEXT_PUBLIC_SITE_URL` environment variable required
+- Supabase client pattern standardization
 
 ---
 
@@ -130,6 +127,8 @@ Technical lookup documentation:
 
 ## Previous Releases
 
+- **[v2.7 - Command Palette](releases/v2.7-design-command-palette.md)** - ⌘K palette and design system
+- **[v2.6 - Games Page](releases/v2.6-games-page.md)** - Game discovery dashboard
 - **[v2.5 - Companies Page](releases/v2.5-companies-page.md)** - Unified publishers/developers
 - **[v2.4 - Personalization](releases/v2.4-personalization.md)** - Pins and alerts
 - **[v2.3 - Embedding Optimization](releases/v2.3-embedding-optimization.md)** - 10x faster sync

@@ -366,7 +366,9 @@ class PICSDatabase:
                     if app.steam_release_date and not has_storefront_date
                     else {}
                 ),
-                "is_released": app.release_state == "released",
+                # is_released from PICS - only as fallback when storefront hasn't synced yet
+                # Storefront API is authoritative for is_released (uses reliable coming_soon field)
+                **({"is_released": app.release_state == "released"} if not has_storefront_sync else {}),
                 "updated_at": datetime.utcnow().isoformat(),
             }
         except Exception as e:

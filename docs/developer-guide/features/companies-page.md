@@ -2,7 +2,7 @@
 
 This document describes the technical architecture of the unified Companies page in PublisherIQ.
 
-**Last Updated:** January 15, 2026
+**Last Updated:** January 31, 2026
 
 ---
 
@@ -552,10 +552,63 @@ Company-specific category colors:
 
 ---
 
+## Supabase Client Patterns (v2.8+)
+
+The Companies page follows the same client patterns as the Games page.
+
+### Server Component (page.tsx)
+
+Uses service role for initial data fetch:
+
+```typescript
+import { createServiceClient } from '@/lib/supabase/server';
+
+export default async function CompaniesPage() {
+  const supabase = createServiceClient();
+
+  const { data } = await supabase.rpc('get_companies_with_filters', params);
+
+  return <CompaniesPageClient initialData={data} />;
+}
+```
+
+### Client Hooks
+
+Use `createBrowserClient` for session-aware fetching:
+
+```typescript
+// hooks/useSparklineLoader.ts
+import { createBrowserClient } from '@supabase/ssr';
+
+export function useSparklineLoader() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  const { data } = await supabase.rpc('get_company_sparkline_data', {
+    p_company_ids: companyIds,
+    p_days: 7
+  });
+}
+```
+
+### Pattern Summary
+
+| Pattern | Context | Use Case |
+|---------|---------|----------|
+| `createServiceClient()` | Server Component | Initial page data |
+| `createBrowserClient()` | Client hooks | Interactive features (sparklines, filter counts) |
+
+**Important:** Client hooks that previously used `getSupabase()` were updated in v2.8 to use `createBrowserClient()`. This fixes auth failures where RPC calls would fail silently and cache empty results.
+
+---
+
 ## Related Documentation
 
 - [v2.5 Release Notes](../../releases/v2.5-companies-page.md) - Full changelog
 - [v2.7 Release Notes](../../releases/v2.7-design-command-palette.md) - Command Palette and Design System
+- [v2.8 Release Notes](../../releases/v2.8-security-fixes.md) - Security fixes and client patterns
 - [Companies Page User Guide](../../user-guide/companies-page.md) - Usage instructions
 - [Companies Page Spec](../../specs/archived/companies-page-spec.md) - Original specification
 - [Publishers & Developers Pages](../../archive/publishers-developers-pages.md) - Legacy pages (deprecated)

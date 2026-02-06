@@ -2,7 +2,7 @@
 
 This document describes the technical architecture of the Games page in PublisherIQ.
 
-**Last Updated:** January 16, 2026
+**Last Updated:** January 31, 2026
 
 ---
 
@@ -825,10 +825,66 @@ useEffect(() => {
 
 ---
 
+## Supabase Client Patterns (v2.8+)
+
+The Games page uses different Supabase clients for server vs client contexts.
+
+### Server Component (page.tsx)
+
+Uses service role for initial data fetch:
+
+```typescript
+import { createServiceClient } from '@/lib/supabase/server';
+
+export default async function AppsPage() {
+  const supabase = createServiceClient();
+
+  // Service role bypasses RLS for efficient queries
+  const { data } = await supabase.rpc('get_apps_with_filters', params);
+
+  return <AppsPageClient initialData={data} />;
+}
+```
+
+### Client Hooks
+
+Use `createBrowserClient` for session-aware fetching:
+
+```typescript
+// hooks/useSparklineLoader.ts
+import { createBrowserClient } from '@supabase/ssr';
+
+export function useSparklineLoader() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  // Session cookies are automatically included
+  const { data } = await supabase.rpc('get_app_sparkline_data', {
+    p_appids: appIds,
+    p_days: 7
+  });
+}
+```
+
+### Why This Matters
+
+| Pattern | Context | Session | Use Case |
+|---------|---------|---------|----------|
+| `createServiceClient()` | Server | Service role | Initial page load |
+| `createBrowserClient()` | Client | Cookie-aware | Interactive features |
+| `getSupabase()` | Either | Anon only | Public data |
+
+**Common Mistake:** Using `getSupabase()` in client hooks causes auth failures because it creates an anon-key client without session awareness.
+
+---
+
 ## Related Documentation
 
 - [v2.6 Release Notes](../../releases/v2.6-games-page.md) - Full changelog
 - [v2.7 Release Notes](../../releases/v2.7-design-command-palette.md) - Command Palette and Design System
+- [v2.8 Release Notes](../../releases/v2.8-security-fixes.md) - Security fixes and client patterns
 - [Games Page User Guide](../../user-guide/games-page.md) - Usage instructions
 - [Games Page Spec](../../specs/archived/apps-page-spec.md) - Original specification
 - [Games Page Progress](../../specs/archived/apps-page-progress.md) - Implementation log

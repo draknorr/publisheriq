@@ -4,6 +4,42 @@ This guide explains how to use your account page in PublisherIQ to view your pro
 
 ---
 
+## Signing In
+
+PublisherIQ uses email-based authentication with one-time codes.
+
+### Login Flow
+
+1. Go to `/login` and enter your email address
+2. Check your inbox for an email with an **8-digit code**
+3. Enter the code on the login page
+4. You'll be redirected to the dashboard
+
+### OTP Code Details
+
+| Setting | Value |
+|---------|-------|
+| Code length | 8 digits |
+| Code expiry | 10 minutes |
+| Rate limit | 3 attempts per 15 minutes |
+
+### Troubleshooting Login
+
+**Code not arriving:**
+- Check spam/junk folder
+- Verify your email is on the approved waitlist
+- Wait 60 seconds before requesting a new code
+
+**Code expired:**
+- Codes expire after 10 minutes
+- Return to `/login` and request a new code
+
+**"Email not approved" error:**
+- Your email must be approved by an administrator
+- Contact your admin to be added to the waitlist
+
+---
+
 ## Accessing Your Account
 
 Navigate to your account page by:

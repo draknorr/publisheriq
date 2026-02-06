@@ -2,7 +2,7 @@
 
 Common issues and solutions for PublisherIQ.
 
-**Last Updated:** January 9, 2026
+**Last Updated:** January 31, 2026
 
 ## Database Connection Issues
 
@@ -401,11 +401,41 @@ pnpm build
 2. Admin approves via `/admin/waitlist`
 3. User can then sign in
 
+### OTP Code Not Working (v2.8+)
+
+**Cause:** Invalid or expired OTP code.
+
+**Solution:**
+1. OTP codes are 8 digits (not 6)
+2. Codes expire after 10 minutes
+3. Check for typos - codes are case-insensitive
+4. Request a new code if expired
+
+**Rate Limiting:**
+- After 3 failed attempts, wait 15 minutes
+- Check spam folder for OTP emails
+
+### Token Refresh Loop (v2.8+)
+
+**Symptoms:** Login page continuously refreshing or becoming unresponsive.
+
+**Cause:** Stale authentication tokens in browser storage.
+
+**Solution:**
+1. Clear browser cookies for the site
+2. Clear localStorage:
+   ```javascript
+   // In browser console
+   localStorage.clear();
+   ```
+3. Hard refresh the page (Cmd+Shift+R / Ctrl+Shift+R)
+4. Try incognito/private browsing mode
+
 ### "Magic link expired"
 
-**Cause:** Link older than 1 hour.
+**Cause:** Link older than 10 minutes (OTP) or 1 hour (magic link).
 
-**Solution:** Request a new magic link from `/login`
+**Solution:** Request a new code from `/login`
 
 ### "Insufficient credits"
 
@@ -468,6 +498,71 @@ pnpm --filter @publisheriq/ingestion interpolate-reviews
 
 # Or directly
 source .env && psql "$DATABASE_URL" -c "SELECT interpolate_all_review_deltas(CURRENT_DATE - 30, CURRENT_DATE);"
+```
+
+---
+
+## Page Loading Issues (v2.8+)
+
+### Apps Page Sparklines Show Em-Dash (---)
+
+**Symptoms:** Sparkline column displays `---` instead of trend charts.
+
+**Cause:** Client-side Supabase RPC failing silently due to incorrect client pattern.
+
+**Solution:**
+1. Verify deployment includes commit `3c2dda3` or later
+2. Check browser DevTools Network tab for `get_app_sparkline_data` requests
+3. Verify requests return 200 status with data
+4. If 401/403, check authentication state
+
+**Technical Details:**
+- Sparklines are fetched client-side via IntersectionObserver
+- Failed RPC calls cache empty results (sticky failure)
+- Page refresh clears the cache and retries
+
+**Verification Query:**
+```sql
+-- Verify sparkline data exists
+SELECT COUNT(*) FROM ccu_snapshots
+WHERE recorded_at > NOW() - INTERVAL '7 days';
+```
+
+### Apps/Companies Page Timeout
+
+**Symptoms:** Page takes >30 seconds to load or times out entirely.
+
+**Cause:** Expensive query path triggered or incorrect Supabase client.
+
+**Solution:**
+1. Check if "vs Publisher" filter is active (triggers slow path)
+2. Clear filters and try default view
+3. Verify Server Component uses service role client
+4. Check Supabase dashboard for slow queries
+
+**Performance Expectations:**
+- Fast path: ~200ms (most filters)
+- Slow path: ~4s (vs_publisher filter or sort)
+
+### Client-Side Data Not Loading
+
+**Symptoms:** Interactive features (sparklines, filter counts) not populating.
+
+**Cause:** Client hooks using incorrect Supabase client pattern.
+
+**Solution:**
+1. Ensure hooks use `createBrowserClient()` from `@supabase/ssr`
+2. Verify `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set
+3. Check browser console for errors
+
+**Correct Pattern:**
+```typescript
+import { createBrowserClient } from '@supabase/ssr';
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 ```
 
 ---
