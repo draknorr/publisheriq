@@ -20,7 +20,7 @@ PublisherIQ uses email-based authentication with one-time codes.
 | Setting | Value |
 |---------|-------|
 | Code length | 8 digits |
-| Code expiry | 10 minutes |
+| Code expiry | 1 hour |
 | Rate limit | 3 attempts per 15 minutes |
 
 ### Troubleshooting Login
@@ -31,7 +31,7 @@ PublisherIQ uses email-based authentication with one-time codes.
 - Wait 60 seconds before requesting a new code
 
 **Code expired:**
-- Codes expire after 10 minutes
+- Codes expire after 1 hour
 - Return to `/login` and request a new code
 
 **"Email not approved" error:**

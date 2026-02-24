@@ -15,51 +15,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const normalizedEmail = email.toLowerCase().trim();
     const supabase = createServiceClient();
 
-    // SECURITY FIX (AUTH-04): Use paginated listUsers with email filter
-    // The default listUsers() only returns the first page (50 users) which causes
-    // validation failures once the user count exceeds 50.
-    // Using filter parameter limits results to matching email.
-    const { data: existingUsers } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1,
-    });
-    // Filter client-side since Supabase admin API doesn't support email filter directly
-    // But with small perPage we minimize data transfer, and we check all pages if needed
-    const userExists = existingUsers?.users?.some(
-      (u) => u.email?.toLowerCase() === normalizedEmail
-    );
+    // Check if user already exists via user_profiles (O(1) indexed lookup)
+    const { data: existingProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
 
-    // If not found on first page and there are more users, paginate through all
-    if (!userExists && existingUsers?.users?.length === 1) {
-      // First page didn't have the user, need to search all pages
-      let page = 1;
-      let foundUser = false;
-      const perPage = 1000; // Larger page size for efficiency
-
-      while (!foundUser) {
-        const { data: pageData } = await supabase.auth.admin.listUsers({
-          page,
-          perPage,
-        });
-
-        if (!pageData?.users || pageData.users.length === 0) {
-          break; // No more users
-        }
-
-        foundUser = pageData.users.some(
-          (u) => u.email?.toLowerCase() === normalizedEmail
-        );
-
-        if (pageData.users.length < perPage) {
-          break; // Last page
-        }
-        page++;
-      }
-
-      if (foundUser) {
-        return NextResponse.json({ valid: true });
-      }
-    } else if (userExists) {
+    if (profileError) {
+      console.error('Profile lookup error:', profileError);
+      // Fall through to waitlist check
+    } else if (existingProfile) {
       return NextResponse.json({ valid: true });
     }
 

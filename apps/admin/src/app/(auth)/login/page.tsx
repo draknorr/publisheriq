@@ -9,6 +9,21 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createBrowserClientNoRefresh } from '@/lib/supabase/client';
 
+function mapAuthError(error: { status?: number; message?: string } | null): string {
+  if (!error) return 'Unable to complete sign-in. Please try again.';
+  const msg = error.message?.toLowerCase() ?? '';
+  if (error.status === 429 || msg.includes('rate limit')) {
+    return 'Too many attempts. Please wait a few minutes before trying again.';
+  }
+  if (msg.includes('expired')) {
+    return 'Your code has expired. Please request a new one.';
+  }
+  if (msg.includes('invalid')) {
+    return 'Invalid code. Please check and try again.';
+  }
+  return 'Unable to complete sign-in. Please try again.';
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,23 +38,22 @@ function LoginPageContent() {
   const [isVerifying, setIsVerifying] = useState(false);
   const otpInputRef = useRef<HTMLInputElement>(null);
 
-  // Redirect authenticated users or clear stale tokens
-  // This prevents the browser client from spamming token refresh requests
+  // Resend cooldown
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Redirect authenticated users to their intended destination
+  // createBrowserClientNoRefresh already prevents token refresh loops,
+  // so we don't need to call signOut() for stale sessions
   useEffect(() => {
     const checkSession = async () => {
       const supabase = createBrowserClientNoRefresh();
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // User is authenticated, redirect to dashboard
-        router.replace('/dashboard');
-      } else {
-        // No valid session - sign out to clear any stale tokens
-        // This stops the auto-refresh loop from spamming 400 errors
-        await supabase.auth.signOut();
+        router.replace(searchParams.get('next') || '/dashboard');
       }
     };
     checkSession();
-  }, [router]);
+  }, [router, searchParams]);
 
   // Handle error from failed auth callback
   useEffect(() => {
@@ -57,6 +71,21 @@ function LoginPageContent() {
       otpInputRef.current.focus();
     }
   }, [otpSent]);
+
+  // Resend cooldown countdown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(id);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [resendCooldown > 0]); // only re-run when transitioning between active/inactive
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -104,7 +133,7 @@ function LoginPageContent() {
 
       if (authError) {
         console.error('Auth error:', authError);
-        setError('Unable to send verification code. Please try again.');
+        setError(mapAuthError(authError));
         setIsLoading(false);
         return;
       }
@@ -112,6 +141,7 @@ function LoginPageContent() {
       // Show OTP entry form
       setOtpSent(true);
       setOtp('');
+      setResendCooldown(60);
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -127,7 +157,7 @@ function LoginPageContent() {
     try {
       const supabase = createBrowserClientNoRefresh();
 
-      const { error: verifyError } = await supabase.auth.verifyOtp({
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email,
         token: otp,
         type: 'email',
@@ -135,13 +165,25 @@ function LoginPageContent() {
 
       if (verifyError) {
         console.error('OTP verification error:', verifyError);
-        setError('Invalid or expired code. Please try again.');
+        setError(mapAuthError(verifyError));
         setIsVerifying(false);
         return;
       }
 
-      // Success - redirect to dashboard
-      router.replace('/dashboard');
+      // Confirm we actually have a session before redirecting
+      let hasSession = !!data.session;
+      if (!hasSession) {
+        const { data: { session } } = await supabase.auth.getSession();
+        hasSession = !!session;
+      }
+
+      if (!hasSession) {
+        setError('Verification succeeded but no session was created. Please try again.');
+        setIsVerifying(false);
+        return;
+      }
+
+      router.replace(searchParams.get('next') || '/dashboard');
     } catch {
       setError('Something went wrong. Please try again.');
       setIsVerifying(false);
@@ -164,7 +206,9 @@ function LoginPageContent() {
       });
 
       if (authError) {
-        setError('Unable to resend code. Please try again.');
+        setError(mapAuthError(authError));
+      } else {
+        setResendCooldown(60);
       }
     } catch {
       setError('Something went wrong. Please try again.');
@@ -259,9 +303,9 @@ function LoginPageContent() {
               variant="ghost"
               size="sm"
               onClick={handleResendOtp}
-              disabled={isLoading}
+              disabled={isLoading || resendCooldown > 0}
             >
-              {isLoading ? 'Sending...' : 'Resend code'}
+              {isLoading ? 'Sending...' : resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
             </Button>
             <Button
               variant="ghost"
@@ -271,6 +315,7 @@ function LoginPageContent() {
                 setOtp('');
                 setEmail('');
                 setError('');
+                setResendCooldown(0);
               }}
             >
               Use a different email
