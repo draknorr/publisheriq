@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
+const AUTH_DEBUG = process.env.NEXT_PUBLIC_AUTH_DEBUG === 'true';
+
 // Public paths - no auth required
 const PUBLIC_PATHS = [
   '/login',
@@ -41,6 +43,14 @@ function isAdminPath(pathname: string): boolean {
 
 function isApiPath(pathname: string): boolean {
   return pathname.startsWith('/api/');
+}
+
+function logAuthDebug(event: string, details: Record<string, unknown>): void {
+  if (!AUTH_DEBUG) {
+    return;
+  }
+
+  console.info(`[auth][middleware] ${event}`, details);
 }
 
 export async function middleware(request: NextRequest) {
@@ -87,6 +97,7 @@ export async function middleware(request: NextRequest) {
 
   // Protected routes - require Supabase auth
   const { user, response, supabase } = await updateSession(request);
+  logAuthDebug('protected-check', { hostname, pathname, hasUser: !!user });
 
   // Not authenticated
   if (!user) {

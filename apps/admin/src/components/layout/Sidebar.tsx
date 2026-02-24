@@ -193,6 +193,7 @@ export function Sidebar() {
           <div className="flex h-14 items-center justify-between border-b border-border-subtle px-5">
             <Link
               href="/dashboard"
+              prefetch={false}
               className="flex items-center gap-2.5 text-text-primary transition-opacity hover:opacity-80"
             >
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent-primary">
@@ -234,6 +235,7 @@ export function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
                     className={`
                       group relative flex items-center gap-3 rounded-lg px-3 py-2
                       text-body font-medium transition-all duration-150
@@ -262,6 +264,7 @@ export function Sidebar() {
             <div className="mt-4 pt-4 border-t border-border-subtle">
               <Link
                 href="/account"
+                prefetch={false}
                 className={`
                   group relative flex items-center gap-3 rounded-lg px-3 py-2
                   text-body font-medium transition-all duration-150
@@ -307,6 +310,7 @@ export function Sidebar() {
                         <Link
                           key={item.href}
                           href={item.href}
+                          prefetch={false}
                           className={`
                             group relative flex items-center gap-3 rounded-lg px-3 py-2 ml-2
                             text-body font-medium transition-all duration-150
@@ -339,6 +343,7 @@ export function Sidebar() {
           <div className="border-t border-border-subtle p-4">
             <Link
               href="/updates"
+              prefetch={false}
               className="flex items-center gap-2 mb-3 text-caption text-text-muted hover:text-text-secondary transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />

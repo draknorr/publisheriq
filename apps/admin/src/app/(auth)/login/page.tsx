@@ -9,6 +9,10 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createBrowserClientNoRefresh } from '@/lib/supabase/client';
 
+const AUTH_DEBUG = process.env.NEXT_PUBLIC_AUTH_DEBUG === 'true';
+const SESSION_PERSISTENCE_RETRY_DELAY_MS = 120;
+const SESSION_PERSISTENCE_MAX_ATTEMPTS = 3;
+
 function mapAuthError(error: { status?: number; message?: string } | null): string {
   if (!error) return 'Unable to complete sign-in. Please try again.';
   const msg = error.message?.toLowerCase() ?? '';
@@ -22,6 +26,45 @@ function mapAuthError(error: { status?: number; message?: string } | null): stri
     return 'Invalid code. Please check and try again.';
   }
   return 'Unable to complete sign-in. Please try again.';
+}
+
+function logAuthDebug(message: string, details: Record<string, unknown> = {}): void {
+  if (!AUTH_DEBUG || typeof window === 'undefined') {
+    return;
+  }
+
+  console.info('[auth][login]', {
+    message,
+    hostname: window.location.hostname,
+    ...details,
+  });
+}
+
+async function hasPersistedSession(): Promise<boolean> {
+  for (let attempt = 1; attempt <= SESSION_PERSISTENCE_MAX_ATTEMPTS; attempt += 1) {
+    const persistedClient = createBrowserClientNoRefresh();
+    const { data: { session }, error } = await persistedClient.auth.getSession();
+
+    logAuthDebug('persisted-session-check', {
+      attempt,
+      hasSession: !!session,
+      hasError: !!error,
+    });
+
+    if (session) {
+      return true;
+    }
+
+    if (error) {
+      return false;
+    }
+
+    if (attempt < SESSION_PERSISTENCE_MAX_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, SESSION_PERSISTENCE_RETRY_DELAY_MS));
+    }
+  }
+
+  return false;
 }
 
 function LoginPageContent() {
@@ -48,6 +91,7 @@ function LoginPageContent() {
     const checkSession = async () => {
       const supabase = createBrowserClientNoRefresh();
       const { data: { session } } = await supabase.auth.getSession();
+      logAuthDebug('existing-session-check', { hasSession: !!session });
       if (session) {
         router.replace(searchParams.get('next') || '/dashboard');
       }
@@ -170,6 +214,8 @@ function LoginPageContent() {
         return;
       }
 
+      logAuthDebug('verify-otp-success', { hasDataSession: !!data.session });
+
       // Confirm we actually have a session before redirecting
       let hasSession = !!data.session;
       if (!hasSession) {
@@ -179,6 +225,13 @@ function LoginPageContent() {
 
       if (!hasSession) {
         setError('Verification succeeded but no session was created. Please try again.');
+        setIsVerifying(false);
+        return;
+      }
+
+      const persistedSessionReady = await hasPersistedSession();
+      if (!persistedSessionReady) {
+        setError('Verification succeeded but your session was not persisted. Please try again.');
         setIsVerifying(false);
         return;
       }

@@ -19,12 +19,6 @@ export function createBrowserClient() {
     return browserClient;
   }
 
-  // Only set explicit domain for production (allows subdomains like app.publisheriq.app)
-  // For other environments (localhost, Vercel previews), let browser use current origin
-  // SECURITY FIX (AUTH-09): Also match apex domain (publisheriq.app without subdomain)
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  const isProduction = hostname === 'publisheriq.app' || hostname.endsWith('.publisheriq.app');
-
   browserClient = createSupabaseBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -34,7 +28,7 @@ export function createBrowserClient() {
         autoRefreshToken: true,
       },
       cookieOptions: {
-        ...(isProduction && { domain: '.publisheriq.app' }),
+        // Keep cookies host-only to avoid cross-host session drift between apex/www.
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         path: '/',
@@ -52,9 +46,6 @@ export function createBrowserClient() {
  * This is NOT a singleton - each call creates a fresh instance.
  */
 export function createBrowserClientNoRefresh() {
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  const isProduction = hostname === 'publisheriq.app' || hostname.endsWith('.publisheriq.app');
-
   return createSupabaseBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -65,7 +56,7 @@ export function createBrowserClientNoRefresh() {
         persistSession: true,
       },
       cookieOptions: {
-        ...(isProduction && { domain: '.publisheriq.app' }),
+        // Keep cookies host-only to avoid cross-host session drift between apex/www.
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         path: '/',
