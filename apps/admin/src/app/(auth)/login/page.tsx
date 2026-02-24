@@ -12,6 +12,8 @@ import { createBrowserClientNoRefresh } from '@/lib/supabase/client';
 const AUTH_DEBUG = process.env.NEXT_PUBLIC_AUTH_DEBUG === 'true';
 const SESSION_PERSISTENCE_RETRY_DELAY_MS = 120;
 const SESSION_PERSISTENCE_MAX_ATTEMPTS = 3;
+const VERIFY_OTP_TIMEOUT_MS = 15000;
+const SESSION_CHECK_TIMEOUT_MS = 3000;
 
 function mapAuthError(error: { status?: number; message?: string } | null): string {
   if (!error) return 'Unable to complete sign-in. Please try again.';
@@ -40,10 +42,32 @@ function logAuthDebug(message: string, details: Record<string, unknown> = {}): v
   });
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]);
+}
+
 async function hasPersistedSession(): Promise<boolean> {
   for (let attempt = 1; attempt <= SESSION_PERSISTENCE_MAX_ATTEMPTS; attempt += 1) {
     const persistedClient = createBrowserClientNoRefresh();
-    const { data: { session }, error } = await persistedClient.auth.getSession();
+    let session: unknown = null;
+    let error: unknown = null;
+
+    try {
+      const result = await withTimeout(
+        persistedClient.auth.getSession(),
+        SESSION_CHECK_TIMEOUT_MS,
+        'persisted-session-check'
+      );
+      session = result.data.session;
+      error = result.error;
+    } catch (err) {
+      logAuthDebug('persisted-session-check-timeout', { attempt, error: String(err) });
+      return false;
+    }
 
     logAuthDebug('persisted-session-check', {
       attempt,
@@ -201,11 +225,15 @@ function LoginPageContent() {
     try {
       const supabase = createBrowserClientNoRefresh();
 
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'email',
-      });
+      const { data, error: verifyError } = await withTimeout(
+        supabase.auth.verifyOtp({
+          email,
+          token: otp,
+          type: 'email',
+        }),
+        VERIFY_OTP_TIMEOUT_MS,
+        'verify-otp'
+      );
 
       if (verifyError) {
         console.error('OTP verification error:', verifyError);
@@ -219,7 +247,11 @@ function LoginPageContent() {
       // Confirm we actually have a session before redirecting
       let hasSession = !!data.session;
       if (!hasSession) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await withTimeout(
+          supabase.auth.getSession(),
+          SESSION_CHECK_TIMEOUT_MS,
+          'session-check-after-verify'
+        );
         hasSession = !!session;
       }
 
@@ -229,16 +261,25 @@ function LoginPageContent() {
         return;
       }
 
-      const persistedSessionReady = await hasPersistedSession();
-      if (!persistedSessionReady) {
-        setError('Verification succeeded but your session was not persisted. Please try again.');
-        setIsVerifying(false);
-        return;
+      // If verifyOtp returned a direct session, proceed immediately and verify persistence in background.
+      // This avoids trapping users in a loading state when browser session checks stall.
+      if (data.session) {
+        void hasPersistedSession().then((persistedSessionReady) => {
+          logAuthDebug('post-verify-background-persist-check', { persistedSessionReady });
+        });
+      } else {
+        const persistedSessionReady = await hasPersistedSession();
+        if (!persistedSessionReady) {
+          setError('Verification succeeded but your session was not persisted. Please try again.');
+          setIsVerifying(false);
+          return;
+        }
       }
 
       router.replace(searchParams.get('next') || '/dashboard');
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (err) {
+      logAuthDebug('verify-flow-failed', { error: String(err) });
+      setError('Verification timed out. Please try again.');
       setIsVerifying(false);
     }
   };
