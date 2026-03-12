@@ -3,13 +3,17 @@ name: Review Interpolation
 on:
   schedule:
     # Run once daily at 5 AM UTC
-    - cron: '0 5 * * *'
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       days_back:
-        description: 'Number of days to interpolate'
+        description: "Number of days to interpolate"
         required: false
-        default: '30'
+        default: "30"
+      app_batch_size:
+        description: "Apps per RPC batch"
+        required: false
+        default: "2000"
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -27,8 +31,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -41,3 +45,4 @@ jobs:
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
           INTERPOLATION_DAYS: ${{ github.event.inputs.days_back || '30' }}
+          INTERPOLATION_APP_BATCH_SIZE: ${{ github.event.inputs.app_batch_size || '2000' }}

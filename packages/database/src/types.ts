@@ -2899,6 +2899,20 @@ export type Database = {
           total_interpolated: number
         }[]
       }
+      interpolate_review_deltas_batch: {
+        Args: {
+          p_after_appid?: number
+          p_app_limit?: number
+          p_end_date?: string
+          p_start_date?: string
+        }
+        Returns: {
+          apps_processed: number
+          has_more: boolean
+          last_appid: number | null
+          total_interpolated: number
+        }[]
+      }
       interpolate_review_deltas: {
         Args: { p_appid: number; p_end_date?: string; p_start_date?: string }
         Returns: number
