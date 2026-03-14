@@ -13,6 +13,7 @@ const WARN_BYTES = 20 * 1024 * 1024 * 1024;
 const TIGHTEN_BYTES = 35 * 1024 * 1024 * 1024;
 const PAUSE_BYTES = 50 * 1024 * 1024 * 1024;
 const DAILY_DOWNLOAD_BUDGET_BYTES = 10 * 1024 * 1024 * 1024;
+const USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const downloadLimiter = new RateLimiter({ requestsPerSecond: 1, burst: 2 });
 
@@ -128,26 +129,29 @@ export class HeroAssetArchiver {
   constructor(private readonly supabase: TypedSupabaseClient) {}
 
   private async getBucketUsageBytes(): Promise<number> {
-    if (this.usageCache && Date.now() - this.usageCache.fetchedAt < 5 * 60 * 1000) {
+    if (this.usageCache && Date.now() - this.usageCache.fetchedAt < USAGE_CACHE_TTL_MS) {
       return this.usageCache.bytes;
     }
 
     const db = this.supabase as any;
-    const { data, error } = await db
-      .schema('storage')
-      .from('objects')
-      .select('metadata')
-      .eq('bucket_id', HERO_BUCKET)
-      .limit(50000);
+    const { data, error } = await db.rpc('get_storage_bucket_usage_bytes', {
+      p_bucket_id: HERO_BUCKET,
+    });
 
     if (error) {
       log.warn('Failed to query storage usage', { error: error.message });
-      return this.usageCache?.bytes ?? 0;
+      const fallbackBytes = this.usageCache?.bytes ?? 0;
+      this.usageCache = { bytes: fallbackBytes, fetchedAt: Date.now() };
+      return fallbackBytes;
     }
 
-    const bytes = (data ?? []).reduce((sum: number, row: Record<string, any>) => {
-      return sum + Number(row.metadata?.size ?? 0);
-    }, 0);
+    const bytes = Number(data ?? 0);
+    if (!Number.isFinite(bytes)) {
+      log.warn('Received invalid storage usage value', { data });
+      const fallbackBytes = this.usageCache?.bytes ?? 0;
+      this.usageCache = { bytes: fallbackBytes, fetchedAt: Date.now() };
+      return fallbackBytes;
+    }
 
     this.usageCache = { bytes, fetchedAt: Date.now() };
     return bytes;
