@@ -23,6 +23,14 @@
       "dependsOn": ["build"],
       "cache": false
     },
+    "app-change-hints": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "change-intel-worker": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
     "storefront-sync": {
       "dependsOn": ["build"],
       "cache": false

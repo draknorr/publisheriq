@@ -79,12 +79,12 @@ async function processBatch(
 
     // Prepare arrays for batch update
     const updateAppids: number[] = [];
-    const updatePrices: (number | null)[] = [];
+    const updatePrices: number[] = [];
     const updateDiscounts: number[] = [];
 
     for (const [appid, priceInfo] of priceResults) {
       updateAppids.push(appid);
-      updatePrices.push(priceInfo.priceCents);
+      updatePrices.push(priceInfo.priceCents ?? 0);
       updateDiscounts.push(priceInfo.discountPercent);
     }
 

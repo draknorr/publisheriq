@@ -7,6 +7,13 @@ from typing import Any, Dict, List, Optional, Set
 import httpx
 
 from .client import SupabaseClient
+from .change_intelligence import (
+    PICS_CHANGE_SOURCE,
+    PICS_SNAPSHOT_SOURCE,
+    diff_pics_snapshots,
+    hash_normalized_snapshot,
+    normalize_pics_snapshot,
+)
 from ..extractors.common import ExtractedPICSData, Association
 
 logger = logging.getLogger(__name__)
@@ -137,6 +144,7 @@ class PICSDatabase:
     def __init__(self):
         self._db = SupabaseClient.get_instance()
         self._load_tag_names()
+        self._history_available = True
 
     def _load_tag_names(self):
         """Load Steam tag names from API (cached at class level)."""
@@ -157,7 +165,12 @@ class PICSDatabase:
         """Get tag name from cache, or fallback to placeholder."""
         return PICSDatabase._tag_name_cache.get(tag_id, f"Tag {tag_id}")
 
-    def upsert_apps_batch(self, apps: List[ExtractedPICSData]) -> Dict[str, int]:
+    def upsert_apps_batch(
+        self,
+        apps: List[ExtractedPICSData],
+        trigger_reason: str = "bulk_sync",
+        trigger_cursor: Optional[str] = None,
+    ) -> Dict[str, int]:
         """
         Upsert a batch of apps with their relationships.
 
@@ -191,6 +204,9 @@ class PICSDatabase:
         if not apps_to_process:
             logger.info("No apps to process after filtering - all apps not in database")
             return stats
+
+        # Capture normalized snapshot history before mutating latest-state tables.
+        self._capture_change_history(apps_to_process, trigger_reason=trigger_reason, trigger_cursor=trigger_cursor)
 
         # Get apps that already have storefront release dates (authoritative)
         # PICS should only set release_date as a fallback when storefront data is missing
@@ -239,7 +255,7 @@ class PICSDatabase:
 
         # Process relationships only for successfully upserted apps
         successful_apps = [appid_to_app[appid] for appid in successful_appids if appid in appid_to_app]
-        self._sync_relationships(successful_apps, successful_appids)
+        self._sync_relationships(successful_apps, successful_appids, trigger_cursor=trigger_cursor)
 
         return stats
 
@@ -322,6 +338,171 @@ class PICSDatabase:
 
         return has_storefront_sync
 
+    def _capture_change_history(
+        self,
+        apps: List[ExtractedPICSData],
+        trigger_reason: str,
+        trigger_cursor: Optional[str],
+    ) -> None:
+        """Persist normalized PICS snapshots and diff events before latest-state writes."""
+        if not self._history_available or not apps:
+            return
+
+        observed_at = datetime.utcnow().isoformat()
+        latest_snapshots = self._get_latest_history_snapshots([app.appid for app in apps])
+
+        unchanged_snapshot_ids: List[int] = []
+        snapshot_rows: List[Dict[str, Any]] = []
+        pending_events: Dict[int, Dict[str, Any]] = {}
+
+        for app in apps:
+            normalized = normalize_pics_snapshot(app)
+            content_hash = hash_normalized_snapshot(normalized)
+            previous = latest_snapshots.get(app.appid)
+
+            if previous and previous.get("content_hash") == content_hash:
+                previous_id = previous.get("id")
+                if previous_id:
+                    unchanged_snapshot_ids.append(int(previous_id))
+                continue
+
+            snapshot_rows.append(
+                {
+                    "appid": app.appid,
+                    "source": PICS_SNAPSHOT_SOURCE,
+                    "observed_at": observed_at,
+                    "first_seen_at": observed_at,
+                    "last_seen_at": observed_at,
+                    "content_hash": content_hash,
+                    "previous_snapshot_id": previous.get("id") if previous else None,
+                    "trigger_reason": trigger_reason,
+                    "trigger_cursor": trigger_cursor,
+                    "snapshot_data": normalized,
+                }
+            )
+            pending_events[app.appid] = {
+                "previous": previous,
+                "normalized": normalized,
+                "trigger_cursor": trigger_cursor,
+                "observed_at": observed_at,
+            }
+
+        if unchanged_snapshot_ids:
+            self._update_last_seen_snapshots(unchanged_snapshot_ids, observed_at)
+
+        if not snapshot_rows:
+            return
+
+        inserted_snapshots = self._insert_history_snapshots(snapshot_rows)
+        if not inserted_snapshots:
+            return
+
+        event_rows: List[Dict[str, Any]] = []
+        for snapshot in inserted_snapshots:
+            appid = int(snapshot["appid"])
+            snapshot_id = int(snapshot["id"])
+            pending = pending_events.get(appid)
+            if not pending:
+                continue
+
+            previous = pending["previous"]
+            if not previous:
+                continue
+
+            diff_events = diff_pics_snapshots(previous["snapshot_data"], pending["normalized"])
+            for event in diff_events:
+                event_rows.append(
+                    {
+                        "appid": appid,
+                        "source": PICS_CHANGE_SOURCE,
+                        "change_type": event.change_type,
+                        "occurred_at": pending["observed_at"],
+                        "source_snapshot_id": snapshot_id,
+                        "related_snapshot_id": previous.get("id"),
+                        "before_value": event.before_value,
+                        "after_value": event.after_value,
+                        "context": event.context,
+                        "trigger_cursor": pending["trigger_cursor"],
+                    }
+                )
+
+        if event_rows:
+            self._insert_change_events(event_rows)
+
+    def _get_latest_history_snapshots(self, appids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """Fetch the latest stored PICS snapshot per app."""
+        latest_by_appid: Dict[int, Dict[str, Any]] = {}
+        batch_size = 200
+
+        for i in range(0, len(appids), batch_size):
+            batch = appids[i : i + batch_size]
+            try:
+                result = (
+                    self._db.client.table("app_source_snapshots")
+                    .select("id, appid, content_hash, snapshot_data, first_seen_at")
+                    .eq("source", PICS_SNAPSHOT_SOURCE)
+                    .in_("appid", batch)
+                    .order("appid")
+                    .order("first_seen_at", desc=True)
+                    .execute()
+                )
+            except Exception as e:
+                self._disable_history_capture(f"Failed to query PICS history snapshots: {e}")
+                return {}
+
+            for row in result.data or []:
+                appid = int(row["appid"])
+                if appid not in latest_by_appid:
+                    latest_by_appid[appid] = row
+
+        return latest_by_appid
+
+    def _update_last_seen_snapshots(self, snapshot_ids: List[int], observed_at: str) -> None:
+        """Extend last_seen_at for unchanged snapshots."""
+        for snapshot_id in snapshot_ids:
+            try:
+                (
+                    self._db.client.table("app_source_snapshots")
+                    .update({"last_seen_at": observed_at, "observed_at": observed_at})
+                    .eq("id", snapshot_id)
+                    .execute()
+                )
+            except Exception as e:
+                self._disable_history_capture(f"Failed to update last_seen_at for snapshot {snapshot_id}: {e}")
+                return
+
+    def _insert_history_snapshots(self, snapshot_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Insert new PICS history snapshots in batches."""
+        inserted_rows: List[Dict[str, Any]] = []
+
+        for i in range(0, len(snapshot_rows), self.UPSERT_BATCH_SIZE):
+            batch = snapshot_rows[i : i + self.UPSERT_BATCH_SIZE]
+            try:
+                result = self._db.client.table("app_source_snapshots").insert(batch).execute()
+            except Exception as e:
+                self._disable_history_capture(f"Failed to insert PICS history snapshots: {e}")
+                return []
+
+            inserted_rows.extend(result.data or [])
+
+        return inserted_rows
+
+    def _insert_change_events(self, event_rows: List[Dict[str, Any]]) -> None:
+        """Insert structured PICS change events in batches."""
+        for i in range(0, len(event_rows), self.UPSERT_BATCH_SIZE):
+            batch = event_rows[i : i + self.UPSERT_BATCH_SIZE]
+            try:
+                self._db.client.table("app_change_events").insert(batch).execute()
+            except Exception as e:
+                self._disable_history_capture(f"Failed to insert PICS change events: {e}")
+                return
+
+    def _disable_history_capture(self, reason: str) -> None:
+        """Disable history capture for the rest of the process after a schema/runtime failure."""
+        if self._history_available:
+            logger.warning(f"Disabling PICS change history capture for this process: {reason}")
+        self._history_available = False
+
     def _build_app_record(self, app: ExtractedPICSData, has_storefront_date: bool = False, has_storefront_sync: bool = False) -> Optional[Dict[str, Any]]:
         """Build a database record from extracted PICS data."""
         try:
@@ -375,7 +556,12 @@ class PICSDatabase:
             logger.error(f"Failed to build record for app {app.appid}: {e}")
             return None
 
-    def _sync_relationships(self, apps: List[ExtractedPICSData], successful_appids: Set[int]):
+    def _sync_relationships(
+        self,
+        apps: List[ExtractedPICSData],
+        successful_appids: Set[int],
+        trigger_cursor: Optional[str] = None,
+    ):
         """Sync developer/publisher/tag/genre/category/franchise relationships.
 
         Only processes apps in the successful_appids set to avoid FK violations
@@ -394,16 +580,13 @@ class PICSDatabase:
                     self._upsert_steam_deck(app.appid, app.steam_deck)
 
                 # Categories
-                if app.categories:
-                    self._sync_categories(app.appid, app.categories)
+                self._sync_categories(app.appid, app.categories)
 
                 # Genres
-                if app.genres:
-                    self._sync_genres(app.appid, app.genres, app.primary_genre)
+                self._sync_genres(app.appid, app.genres, app.primary_genre)
 
                 # Store tags
-                if app.store_tags:
-                    self._sync_store_tags(app.appid, app.store_tags)
+                self._sync_store_tags(app.appid, app.store_tags)
 
                 # Franchises from associations
                 franchises = [a for a in app.associations if a.type == "franchise"]
@@ -422,7 +605,7 @@ class PICSDatabase:
 
         # Batch update sync status only for successfully processed apps
         if processed_appids:
-            self._batch_update_sync_status(processed_appids)
+            self._batch_update_sync_status(processed_appids, trigger_cursor=trigger_cursor)
 
     def _upsert_steam_deck(self, appid: int, deck: "SteamDeckCompatibility"):
         """Upsert Steam Deck compatibility data."""
@@ -452,75 +635,62 @@ class PICSDatabase:
     def _sync_categories(self, appid: int, categories: Dict[int, bool]):
         """Sync app categories."""
         try:
-            # Delete existing
-            self._db.client.table("app_categories").delete().eq("appid", appid).execute()
+            enabled_cat_ids = sorted({cat_id for cat_id, enabled in (categories or {}).items() if enabled})
 
-            # Get enabled category IDs
-            enabled_cat_ids = [cat_id for cat_id, enabled in categories.items() if enabled]
-            if not enabled_cat_ids:
-                return
+            if enabled_cat_ids:
+                cat_records = [
+                    {"category_id": cat_id, "name": CATEGORY_NAMES.get(cat_id, f"Category {cat_id}")}
+                    for cat_id in enabled_cat_ids
+                ]
+                self._db.client.table("steam_categories").upsert(cat_records, on_conflict="category_id").execute()
 
-            # Batch upsert categories into lookup table
-            cat_records = [
-                {"category_id": cat_id, "name": CATEGORY_NAMES.get(cat_id, f"Category {cat_id}")}
-                for cat_id in enabled_cat_ids
-            ]
-            self._db.client.table("steam_categories").upsert(cat_records, on_conflict="category_id").execute()
-
-            # Insert new
-            records = [{"appid": appid, "category_id": cat_id} for cat_id in enabled_cat_ids]
-            self._db.client.table("app_categories").insert(records).execute()
+            self._db.client.rpc(
+                "replace_app_categories",
+                {"p_appid": appid, "p_category_ids": enabled_cat_ids},
+            ).execute()
         except Exception as e:
             logger.error(f"Failed to sync categories for {appid}: {e}")
 
     def _sync_genres(self, appid: int, genres: List[int], primary_genre: Optional[int]):
         """Sync app genres."""
         try:
-            # Delete existing
-            self._db.client.table("app_genres").delete().eq("appid", appid).execute()
+            desired_genres = list(dict.fromkeys(genre_id for genre_id in (genres or []) if genre_id is not None))
 
-            if not genres:
-                return
+            if desired_genres:
+                genre_records = [
+                    {"genre_id": genre_id, "name": GENRE_NAMES.get(genre_id, f"Genre {genre_id}")}
+                    for genre_id in desired_genres
+                ]
+                self._db.client.table("steam_genres").upsert(genre_records, on_conflict="genre_id").execute()
 
-            # Batch upsert genres into lookup table
-            genre_records = [
-                {"genre_id": genre_id, "name": GENRE_NAMES.get(genre_id, f"Genre {genre_id}")}
-                for genre_id in genres
-            ]
-            self._db.client.table("steam_genres").upsert(genre_records, on_conflict="genre_id").execute()
-
-            # Insert new
-            records = [
-                {"appid": appid, "genre_id": genre_id, "is_primary": genre_id == primary_genre}
-                for genre_id in genres
-            ]
-            self._db.client.table("app_genres").insert(records).execute()
+            self._db.client.rpc(
+                "replace_app_genres",
+                {
+                    "p_appid": appid,
+                    "p_genre_ids": desired_genres,
+                    "p_primary_genre_id": primary_genre,
+                },
+            ).execute()
         except Exception as e:
             logger.error(f"Failed to sync genres for {appid}: {e}")
 
     def _sync_store_tags(self, appid: int, tag_ids: List[int]):
         """Sync store tags for an app."""
         try:
-            # Delete existing
-            self._db.client.table("app_steam_tags").delete().eq("appid", appid).execute()
+            ordered_tag_ids = list(dict.fromkeys(tag_id for tag_id in (tag_ids or []) if tag_id is not None))
 
-            if not tag_ids:
-                return
+            if ordered_tag_ids:
+                now = datetime.utcnow().isoformat()
+                tag_records = [
+                    {"tag_id": tag_id, "name": self._get_tag_name(tag_id), "updated_at": now}
+                    for tag_id in ordered_tag_ids
+                ]
+                self._db.client.table("steam_tags").upsert(tag_records, on_conflict="tag_id").execute()
 
-            # Batch upsert tags into lookup table
-            now = datetime.utcnow().isoformat()
-            tag_records = [
-                {"tag_id": tag_id, "name": self._get_tag_name(tag_id), "updated_at": now}
-                for tag_id in tag_ids
-            ]
-            self._db.client.table("steam_tags").upsert(tag_records, on_conflict="tag_id").execute()
-
-            # Insert new with rank
-            records = [
-                {"appid": appid, "tag_id": tag_id, "rank": idx}
-                for idx, tag_id in enumerate(tag_ids)
-            ]
-            self._db.client.table("app_steam_tags").insert(records).execute()
+            self._db.client.rpc(
+                "replace_app_steam_tags",
+                {"p_appid": appid, "p_tag_ids": ordered_tag_ids},
+            ).execute()
         except Exception as e:
             logger.error(f"Failed to sync store tags for {appid}: {e}")
 
@@ -563,17 +733,21 @@ class PICSDatabase:
         except Exception as e:
             logger.error(f"Failed to sync DLC relationships for {parent_appid}: {e}")
 
-    def _update_sync_status(self, appid: int):
+    def _update_sync_status(self, appid: int, trigger_cursor: Optional[str] = None):
         """Update sync status for an app."""
         try:
             self._db.client.table("sync_status").upsert(
-                {"appid": appid, "last_pics_sync": datetime.utcnow().isoformat()},
+                {
+                    "appid": appid,
+                    "last_pics_sync": datetime.utcnow().isoformat(),
+                    **({"pics_change_number": int(trigger_cursor)} if trigger_cursor else {}),
+                },
                 on_conflict="appid",
             ).execute()
         except Exception as e:
             logger.error(f"Failed to update sync status for {appid}: {e}")
 
-    def _batch_update_sync_status(self, appids: List[int]):
+    def _batch_update_sync_status(self, appids: List[int], trigger_cursor: Optional[str] = None):
         """Batch update sync status for multiple apps."""
         if not appids:
             return
@@ -583,7 +757,14 @@ class PICSDatabase:
 
         for i in range(0, len(appids), batch_size):
             batch = appids[i : i + batch_size]
-            records = [{"appid": appid, "last_pics_sync": now} for appid in batch]
+            records = [
+                {
+                    "appid": appid,
+                    "last_pics_sync": now,
+                    **({"pics_change_number": int(trigger_cursor)} if trigger_cursor else {}),
+                }
+                for appid in batch
+            ]
 
             try:
                 self._db.client.table("sync_status").upsert(
@@ -595,7 +776,7 @@ class PICSDatabase:
                 logger.error(f"Failed to batch update sync status ({len(batch)} apps): {e}")
                 # Fallback to individual updates for this batch
                 for appid in batch:
-                    self._update_sync_status(appid)
+                    self._update_sync_status(appid, trigger_cursor=trigger_cursor)
 
     def _infer_type(self, app: ExtractedPICSData) -> str:
         """Infer app type when PICS doesn't provide it.

@@ -20,6 +20,9 @@ export const RATE_LIMITS = {
 
   /** Steam CCU API (GetNumberOfCurrentPlayers) - conservative 1 req/sec */
   STEAM_CCU: { requestsPerSecond: 1, burst: 5 },
+
+  /** Steam News API - lightweight but still explicitly throttled */
+  STEAM_NEWS: { requestsPerSecond: 1, burst: 5 },
 } as const;
 
 /**
@@ -170,5 +173,13 @@ export const APP_TYPES = [
 ] as const;
 
 export type AppType = (typeof APP_TYPES)[number];
-export type SyncSource = 'steamspy' | 'storefront' | 'reviews' | 'histogram';
+export type SyncSource =
+  | 'steamspy'
+  | 'storefront'
+  | 'reviews'
+  | 'histogram'
+  | 'pics'
+  | 'news'
+  | 'hero_asset'
+  | 'change_hints';
 export type TrendDirection = 'up' | 'down' | 'stable';

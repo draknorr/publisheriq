@@ -140,6 +140,7 @@ export const rateLimiters = {
   reviews: new RateLimiter(RATE_LIMITS.REVIEWS),
   histogram: new RateLimiter(RATE_LIMITS.HISTOGRAM),
   steamCCU: new RateLimiter(RATE_LIMITS.STEAM_CCU),
+  steamNews: new RateLimiter(RATE_LIMITS.STEAM_NEWS),
 };
 
 /**

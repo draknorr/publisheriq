@@ -19,12 +19,41 @@ interface StoreAppListResponse {
   };
 }
 
+export interface SteamAppChangeHint extends SteamApp {
+  lastModified: number;
+  priceChangeNumber: number;
+}
+
 /**
  * Simplified app entry from Steam
  */
 export interface SteamApp {
   appid: number;
   name: string;
+}
+
+async function fetchStoreAppListPage(lastAppId?: number): Promise<StoreAppListResponse> {
+  const apiKey = process.env.STEAM_API_KEY;
+  if (!apiKey) {
+    throw new Error('STEAM_API_KEY environment variable is required');
+  }
+
+  const url = new URL(`${API_URLS.STEAM_WEB}/IStoreService/GetAppList/v1/`);
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('max_results', '50000');
+  if (lastAppId !== undefined) {
+    url.searchParams.set('last_appid', lastAppId.toString());
+  }
+
+  return withRetry(async () => {
+    const res = await fetch(url.toString());
+
+    if (!res.ok) {
+      throw new ApiError(`Failed to fetch app list: ${res.statusText}`, res.status, url.toString());
+    }
+
+    return res.json() as Promise<StoreAppListResponse>;
+  });
 }
 
 /**
@@ -35,11 +64,6 @@ export interface SteamApp {
  * @returns Array of all Steam apps with appid and name
  */
 export async function fetchSteamAppList(): Promise<SteamApp[]> {
-  const apiKey = process.env.STEAM_API_KEY;
-  if (!apiKey) {
-    throw new Error('STEAM_API_KEY environment variable is required');
-  }
-
   const allApps: SteamApp[] = [];
   let lastAppId: number | undefined;
   let hasMore = true;
@@ -49,22 +73,7 @@ export async function fetchSteamAppList(): Promise<SteamApp[]> {
 
   while (hasMore) {
     pageCount++;
-    const url = new URL(`${API_URLS.STEAM_WEB}/IStoreService/GetAppList/v1/`);
-    url.searchParams.set('key', apiKey);
-    url.searchParams.set('max_results', '50000');
-    if (lastAppId !== undefined) {
-      url.searchParams.set('last_appid', lastAppId.toString());
-    }
-
-    const response = await withRetry(async () => {
-      const res = await fetch(url.toString());
-
-      if (!res.ok) {
-        throw new ApiError(`Failed to fetch app list: ${res.statusText}`, res.status, url.toString());
-      }
-
-      return res.json() as Promise<StoreAppListResponse>;
-    });
+    const response = await fetchStoreAppListPage(lastAppId);
 
     const apps = response.response.apps || [];
     for (const app of apps) {
@@ -85,10 +94,34 @@ export async function fetchSteamAppList(): Promise<SteamApp[]> {
   return allApps;
 }
 
+export async function fetchSteamAppChangeHints(): Promise<SteamAppChangeHint[]> {
+  const hints: SteamAppChangeHint[] = [];
+  let lastAppId: number | undefined;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await fetchStoreAppListPage(lastAppId);
+    const apps = response.response.apps ?? [];
+    for (const app of apps) {
+      hints.push({
+        appid: app.appid,
+        name: app.name,
+        lastModified: app.last_modified,
+        priceChangeNumber: app.price_change_number,
+      });
+    }
+
+    hasMore = response.response.have_more_results === true;
+    lastAppId = response.response.last_appid;
+  }
+
+  return hints;
+}
+
 /**
  * Get news for a specific app
  */
-interface NewsItem {
+export interface NewsItem {
   gid: string;
   title: string;
   url: string;
@@ -114,14 +147,29 @@ interface NewsResponse {
  * @param count - Number of news items to fetch (max 100)
  * @returns Array of news items
  */
-export async function fetchAppNews(appid: number, count = 10): Promise<NewsItem[]> {
-  const url = `${API_URLS.STEAM_WEB}/ISteamNews/GetNewsForApp/v2/?appid=${appid}&count=${count}`;
+export async function fetchAppNews(
+  appid: number,
+  options: {
+    count?: number;
+    maxLength?: number;
+    endDateUnix?: number;
+  } = {}
+): Promise<NewsItem[]> {
+  const url = new URL(`${API_URLS.STEAM_WEB}/ISteamNews/GetNewsForApp/v2/`);
+  url.searchParams.set('appid', appid.toString());
+  url.searchParams.set('count', String(options.count ?? 10));
+  if (options.maxLength !== undefined) {
+    url.searchParams.set('maxlength', String(options.maxLength));
+  }
+  if (options.endDateUnix !== undefined) {
+    url.searchParams.set('enddate', String(options.endDateUnix));
+  }
 
   const response = await withRetry(async () => {
-    const res = await fetch(url);
+    const res = await fetch(url.toString());
 
     if (!res.ok) {
-      throw new ApiError(`Failed to fetch news for app ${appid}`, res.status, url);
+      throw new ApiError(`Failed to fetch news for app ${appid}`, res.status, url.toString());
     }
 
     return res.json() as Promise<NewsResponse>;

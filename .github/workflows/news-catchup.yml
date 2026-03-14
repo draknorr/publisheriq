@@ -1,0 +1,53 @@
+name: Steam News Catch-up
+
+on:
+  workflow_dispatch:
+    inputs:
+      claim_limit:
+        description: 'Queue claim size for each news batch'
+        required: false
+        default: '50'
+      seed_limit:
+        description: 'How many stale apps to enqueue when the worker is idle'
+        required: false
+        default: '100'
+      max_idle_polls:
+        description: 'Exit after this many idle polls so the job finishes cleanly'
+        required: false
+        default: '3'
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+
+jobs:
+  catchup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run bounded news catch-up
+        run: pnpm --filter @publisheriq/ingestion change-intel-worker
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          QUEUE_SOURCES: news
+          CLAIM_LIMIT: ${{ github.event.inputs.claim_limit || '50' }}
+          NEWS_CATCHUP_SEED_LIMIT: ${{ github.event.inputs.seed_limit || '100' }}
+          MAX_IDLE_POLLS: ${{ github.event.inputs.max_idle_polls || '3' }}
+          POLL_INTERVAL_MS: '1000'

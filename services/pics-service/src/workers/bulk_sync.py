@@ -96,7 +96,7 @@ class BulkSyncWorker:
 
                 # Persist to database
                 if extracted:
-                    stats = self._db.upsert_apps_batch(extracted)
+                    stats = self._db.upsert_apps_batch(extracted, trigger_reason="bulk_sync")
                     total_processed += stats["updated"]
                     total_failed += stats["failed"]
                     logger.info(f"Database upsert: {stats['updated']} updated, {stats['failed']} failed")

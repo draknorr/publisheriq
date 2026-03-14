@@ -90,7 +90,7 @@ class ChangeMonitorWorker:
                     self._db.set_last_change_number(last_change)
 
                 # Process queued apps
-                self._process_queue()
+                self._process_queue(last_change)
 
                 # Update health status
                 if self._health:
@@ -117,7 +117,7 @@ class ChangeMonitorWorker:
         # Cleanup
         self._steam.disconnect()
 
-    def _process_queue(self):
+    def _process_queue(self, trigger_cursor: Optional[int] = None):
         """Process a batch of queued apps."""
         if not self._change_queue:
             return
@@ -146,7 +146,11 @@ class ChangeMonitorWorker:
                     logger.error(f"Failed to extract app {appid_str}: {e}")
 
             if extracted:
-                self._db.upsert_apps_batch(extracted)
+                self._db.upsert_apps_batch(
+                    extracted,
+                    trigger_reason="change_monitor",
+                    trigger_cursor=str(trigger_cursor) if trigger_cursor is not None else None,
+                )
 
             logger.debug(f"Processed {len(extracted)} apps from queue")
 

@@ -8,22 +8,11 @@
  */
 
 import { getServiceClient } from '@publisheriq/database';
-import { logger, BATCH_SIZES, APP_TYPES, AppType } from '@publisheriq/shared';
+import { logger, BATCH_SIZES } from '@publisheriq/shared';
 import pLimit from 'p-limit';
 import { fetchStorefrontAppDetails } from '../apis/storefront.js';
-
-// Set of valid app types for quick lookup
-const VALID_APP_TYPES = new Set<string>(APP_TYPES);
-
-/**
- * Normalize app type from Steam API to a valid database enum value.
- * Falls back to 'game' for unknown types to prevent database errors.
- */
-function normalizeAppType(type: string | undefined): AppType {
-  if (!type) return 'game';
-  const lower = type.toLowerCase();
-  return VALID_APP_TYPES.has(lower) ? (lower as AppType) : 'game';
-}
+import { upsertLatestStorefrontState } from '../change-intel/storefront-latest-state.js';
+import { captureStorefrontState } from '../workers-support/change-intel.js';
 
 const log = logger.child({ worker: 'storefront-sync' });
 
@@ -96,35 +85,11 @@ async function processApp(
     // Success - we have data
     const details = result.data;
 
-    // Single optimized RPC call that handles:
-    // - App update
-    // - Developer upserts + junction records
-    // - Publisher upserts + junction records
-    // - Sync status update
-    // Reduces 7-11 DB round trips to 1
-    const { error: upsertError } = await supabase.rpc('upsert_storefront_app', {
-      p_appid: appid,
-      p_name: details.name,
-      p_type: normalizeAppType(details.type),
-      p_is_free: details.isFree,
-      p_is_delisted: details.isDelisted,
-      p_release_date: details.releaseDate,
-      p_release_date_raw: details.releaseDateRaw,
-      p_has_workshop: details.hasWorkshop,
-      p_current_price_cents: details.priceCents,
-      p_current_discount_percent: details.discountPercent,
-      p_is_released: !details.comingSoon,
-      p_developers: details.developers,
-      p_publishers: details.publishers,
-      p_dlc_appids: details.dlcAppids.length > 0 ? details.dlcAppids : null,
-      p_parent_appid: details.parentAppid, // For DLC, the base game from fullgame field
+    await captureStorefrontState(supabase, appid, details, {
+      triggerReason: 'storefront_safety_sweep',
+      triggerCursor: null,
     });
-
-    if (upsertError) {
-      log.error('Failed to upsert app', { appid, error: upsertError });
-      stats.appsFailed++;
-      return;
-    }
+    await upsertLatestStorefrontState(supabase, appid, details);
 
     // Track as first-time enrichment or refresh (synchronous to avoid race)
     if (neverSyncedSet.has(appid)) {

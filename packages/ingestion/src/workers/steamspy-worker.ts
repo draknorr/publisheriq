@@ -266,14 +266,18 @@ async function main(): Promise<void> {
 
     // Mark apps not in SteamSpy as unavailable (only if we did a full sync)
     if (maxPages === 0) {
-      const { count } = await supabase
+      const { data: unavailableRows, error: unavailableError } = await supabase
         .from('sync_status')
         .update({ steamspy_available: false })
         .is('last_steamspy_sync', null)
         .eq('is_syncable', true)
-        .select('*', { count: 'exact', head: true });
+        .select('appid');
 
-      log.info('Marked apps as not in SteamSpy catalog', { count });
+      if (unavailableError) {
+        throw unavailableError;
+      }
+
+      log.info('Marked apps as not in SteamSpy catalog', { count: unavailableRows?.length ?? 0 });
 
       // Supplementary individual fetches for popular apps not in pagination
       const supplementaryLimit = parseInt(process.env.SUPPLEMENTARY_LIMIT || '100', 10);

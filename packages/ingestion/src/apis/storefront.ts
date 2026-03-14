@@ -157,6 +157,30 @@ export interface ParsedStorefrontApp {
   totalRecommendations: number | null;
   dlcAppids: number[];
   parentAppid: number | null; // For DLC items, the base game appid from fullgame field
+  detailedDescription: string | null;
+  aboutTheGame: string | null;
+  shortDescription: string | null;
+  supportedLanguages: string | null;
+  controllerSupport: string | null;
+  headerImage: string | null;
+  capsuleImage: string | null;
+  backgroundImage: string | null;
+  website: string | null;
+  packageIds: number[];
+  packageGroupSubs: number[];
+  screenshots: Array<{
+    id: number | null;
+    thumbnailUrl: string | null;
+    fullUrl: string;
+  }>;
+  movies: Array<{
+    id: number | null;
+    name: string | null;
+    thumbnailUrl: string | null;
+    mp4Url: string | null;
+    webmUrl: string | null;
+    highlight: boolean;
+  }>;
 }
 
 /**
@@ -246,6 +270,32 @@ function parseStorefrontResponse(
     totalRecommendations: data.recommendations?.total ?? null,
     dlcAppids: data.dlc || [],
     parentAppid: data.fullgame?.appid ? parseInt(data.fullgame.appid, 10) : null,
+    detailedDescription: data.detailed_description ?? null,
+    aboutTheGame: data.about_the_game ?? null,
+    shortDescription: data.short_description ?? null,
+    supportedLanguages: data.supported_languages ?? null,
+    controllerSupport: data.controller_support ?? null,
+    headerImage: data.header_image ?? null,
+    capsuleImage: data.capsule_imagev5 ?? data.capsule_image ?? null,
+    backgroundImage: data.background_raw ?? data.background ?? null,
+    website: data.website ?? null,
+    packageIds: data.packages ?? [],
+    packageGroupSubs: data.package_groups?.flatMap((group) =>
+      group.subs.map((sub) => sub.packageid)
+    ) ?? [],
+    screenshots: (data.screenshots ?? []).map((screenshot) => ({
+      id: screenshot.id ?? null,
+      thumbnailUrl: screenshot.path_thumbnail ?? null,
+      fullUrl: screenshot.path_full,
+    })),
+    movies: (data.movies ?? []).map((movie) => ({
+      id: movie.id ?? null,
+      name: movie.name ?? null,
+      thumbnailUrl: movie.thumbnail ?? null,
+      mp4Url: movie.mp4?.max ?? movie.mp4?.['480'] ?? null,
+      webmUrl: movie.webm?.max ?? movie.webm?.['480'] ?? null,
+      highlight: Boolean(movie.highlight),
+    })),
   };
 }
 

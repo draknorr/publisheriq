@@ -1,0 +1,43 @@
+name: Steam App Change Hints
+
+on:
+  schedule:
+    - cron: '10 * * * *'
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of hint rows to compare per sync_status upsert batch'
+        required: false
+        default: '1000'
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run change-hint sweep
+        run: pnpm --filter @publisheriq/ingestion app-change-hints
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          HINT_BATCH_SIZE: ${{ github.event.inputs.batch_size || '1000' }}
