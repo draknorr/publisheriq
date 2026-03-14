@@ -1,8 +1,9 @@
 """Database operations for PICS data."""
 
 import logging
+import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, TypeVar
 
 import httpx
 
@@ -17,6 +18,7 @@ from .change_intelligence import (
 from ..extractors.common import ExtractedPICSData, Association
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 STEAM_TAGS_URL = "https://store.steampowered.com/tagdata/populartags/english"
 
@@ -139,12 +141,16 @@ class PICSDatabase:
     """Database operations for PICS data."""
 
     UPSERT_BATCH_SIZE = 500
+    HISTORY_MAX_RETRIES = 3
+    HISTORY_RETRY_DELAY_SECONDS = 1.0
+    HISTORY_FAILURE_COOLDOWN_SECONDS = 60.0
     _tag_name_cache: Dict[int, str] = {}  # Class-level cache
 
     def __init__(self):
         self._db = SupabaseClient.get_instance()
         self._load_tag_names()
         self._history_available = True
+        self._history_disabled_until: Optional[float] = None
 
     def _load_tag_names(self):
         """Load Steam tag names from API (cached at class level)."""
@@ -345,11 +351,13 @@ class PICSDatabase:
         trigger_cursor: Optional[str],
     ) -> None:
         """Persist normalized PICS snapshots and diff events before latest-state writes."""
-        if not self._history_available or not apps:
+        if not apps or not self._is_history_capture_enabled():
             return
 
         observed_at = datetime.utcnow().isoformat()
         latest_snapshots = self._get_latest_history_snapshots([app.appid for app in apps])
+        if latest_snapshots is None:
+            return
 
         unchanged_snapshot_ids: List[int] = []
         snapshot_rows: List[Dict[str, Any]] = []
@@ -389,12 +397,14 @@ class PICSDatabase:
 
         if unchanged_snapshot_ids:
             self._update_last_seen_snapshots(unchanged_snapshot_ids, observed_at)
+            if not self._history_available:
+                return
 
         if not snapshot_rows:
             return
 
         inserted_snapshots = self._insert_history_snapshots(snapshot_rows)
-        if not inserted_snapshots:
+        if inserted_snapshots is None:
             return
 
         event_rows: List[Dict[str, Any]] = []
@@ -429,15 +439,16 @@ class PICSDatabase:
         if event_rows:
             self._insert_change_events(event_rows)
 
-    def _get_latest_history_snapshots(self, appids: List[int]) -> Dict[int, Dict[str, Any]]:
+    def _get_latest_history_snapshots(self, appids: List[int]) -> Optional[Dict[int, Dict[str, Any]]]:
         """Fetch the latest stored PICS snapshot per app."""
         latest_by_appid: Dict[int, Dict[str, Any]] = {}
         batch_size = 200
 
         for i in range(0, len(appids), batch_size):
             batch = appids[i : i + batch_size]
-            try:
-                result = (
+            result = self._run_history_operation(
+                "query PICS history snapshots",
+                lambda batch=batch: (
                     self._db.client.table("app_source_snapshots")
                     .select("id, appid, content_hash, snapshot_data, first_seen_at")
                     .eq("source", PICS_SNAPSHOT_SOURCE)
@@ -445,10 +456,11 @@ class PICSDatabase:
                     .order("appid")
                     .order("first_seen_at", desc=True)
                     .execute()
-                )
-            except Exception as e:
-                self._disable_history_capture(f"Failed to query PICS history snapshots: {e}")
-                return {}
+                ),
+                retry_policy="transient",
+            )
+            if result is None:
+                return None
 
             for row in result.data or []:
                 appid = int(row["appid"])
@@ -460,28 +472,32 @@ class PICSDatabase:
     def _update_last_seen_snapshots(self, snapshot_ids: List[int], observed_at: str) -> None:
         """Extend last_seen_at for unchanged snapshots."""
         for snapshot_id in snapshot_ids:
-            try:
-                (
+            result = self._run_history_operation(
+                f"update last_seen_at for snapshot {snapshot_id}",
+                lambda snapshot_id=snapshot_id: (
                     self._db.client.table("app_source_snapshots")
                     .update({"last_seen_at": observed_at, "observed_at": observed_at})
                     .eq("id", snapshot_id)
                     .execute()
-                )
-            except Exception as e:
-                self._disable_history_capture(f"Failed to update last_seen_at for snapshot {snapshot_id}: {e}")
+                ),
+                retry_policy="transient",
+            )
+            if result is None:
                 return
 
-    def _insert_history_snapshots(self, snapshot_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _insert_history_snapshots(self, snapshot_rows: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
         """Insert new PICS history snapshots in batches."""
         inserted_rows: List[Dict[str, Any]] = []
 
         for i in range(0, len(snapshot_rows), self.UPSERT_BATCH_SIZE):
             batch = snapshot_rows[i : i + self.UPSERT_BATCH_SIZE]
-            try:
-                result = self._db.client.table("app_source_snapshots").insert(batch).execute()
-            except Exception as e:
-                self._disable_history_capture(f"Failed to insert PICS history snapshots: {e}")
-                return []
+            result = self._run_history_operation(
+                "insert PICS history snapshots",
+                lambda batch=batch: self._db.client.table("app_source_snapshots").insert(batch).execute(),
+                retry_policy="schema_cache_only",
+            )
+            if result is None:
+                return None
 
             inserted_rows.extend(result.data or [])
 
@@ -491,17 +507,140 @@ class PICSDatabase:
         """Insert structured PICS change events in batches."""
         for i in range(0, len(event_rows), self.UPSERT_BATCH_SIZE):
             batch = event_rows[i : i + self.UPSERT_BATCH_SIZE]
-            try:
-                self._db.client.table("app_change_events").insert(batch).execute()
-            except Exception as e:
-                self._disable_history_capture(f"Failed to insert PICS change events: {e}")
+            result = self._run_history_operation(
+                "insert PICS change events",
+                lambda batch=batch: self._db.client.table("app_change_events").insert(batch).execute(),
+                retry_policy="schema_cache_only",
+            )
+            if result is None:
                 return
 
     def _disable_history_capture(self, reason: str) -> None:
-        """Disable history capture for the rest of the process after a schema/runtime failure."""
-        if self._history_available:
-            logger.warning(f"Disabling PICS change history capture for this process: {reason}")
+        """Trip a cooldown circuit breaker after repeated history failures."""
+        cooldown_until = time.monotonic() + self.HISTORY_FAILURE_COOLDOWN_SECONDS
+        already_disabled = not self._history_available
         self._history_available = False
+        self._history_disabled_until = cooldown_until
+
+        if already_disabled:
+            return
+
+        logger.warning(
+            "Disabling PICS change history capture for this process for %.0fs: %s",
+            self.HISTORY_FAILURE_COOLDOWN_SECONDS,
+            reason,
+        )
+
+    def _is_history_capture_enabled(self) -> bool:
+        """Allow history capture after the cooldown window expires."""
+        if self._history_available:
+            return True
+
+        if self._history_disabled_until is None:
+            return False
+
+        if time.monotonic() < self._history_disabled_until:
+            return False
+
+        logger.info("Re-enabling PICS change history capture after cooldown")
+        self._history_available = True
+        self._history_disabled_until = None
+        return True
+
+    def _run_history_operation(
+        self,
+        operation_name: str,
+        operation: Callable[[], T],
+        retry_policy: str,
+    ) -> Optional[T]:
+        """Run a history operation with bounded retries and cooldown on failure."""
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, self.HISTORY_MAX_RETRIES + 1):
+            try:
+                result = operation()
+                self._record_history_success()
+                return result
+            except Exception as error:
+                last_error = error
+                if not self._should_retry_history_error(error, retry_policy, attempt):
+                    break
+
+                logger.warning(
+                    "Retrying PICS change history %s after transient failure (%s/%s): %s",
+                    operation_name,
+                    attempt,
+                    self.HISTORY_MAX_RETRIES,
+                    error,
+                )
+                time.sleep(self.HISTORY_RETRY_DELAY_SECONDS * attempt)
+
+        self._disable_history_capture(
+            f"Failed to {operation_name} after {self.HISTORY_MAX_RETRIES} attempts: {last_error}"
+            if last_error is not None
+            else f"Failed to {operation_name}"
+        )
+        return None
+
+    def _record_history_success(self) -> None:
+        """Reset cooldown state after a successful history operation."""
+        self._history_available = True
+        self._history_disabled_until = None
+
+    def _should_retry_history_error(self, error: Exception, retry_policy: str, attempt: int) -> bool:
+        """Retry only when the failure type is safe for the specific operation."""
+        if attempt >= self.HISTORY_MAX_RETRIES:
+            return False
+
+        if self._is_history_schema_cache_error(error):
+            return True
+
+        return retry_policy == "transient" and self._is_history_transient_error(error)
+
+    def _is_history_transient_error(self, error: Exception) -> bool:
+        """Treat network and timeout errors as transient for idempotent history operations."""
+        if isinstance(error, (httpx.TimeoutException, httpx.TransportError, httpx.NetworkError)):
+            return True
+
+        message = self._history_error_text(error)
+        transient_markers = (
+            "timeout",
+            "timed out",
+            "connection reset",
+            "connection aborted",
+            "connection refused",
+            "server disconnected",
+            "temporarily unavailable",
+            "502",
+            "503",
+            "504",
+        )
+        return any(marker in message for marker in transient_markers)
+
+    def _is_history_schema_cache_error(self, error: Exception) -> bool:
+        """Detect transient PostgREST schema cache misses."""
+        payload = self._history_error_payload(error)
+        if payload.get("code") == "PGRST205":
+            return True
+
+        message = self._history_error_text(error)
+        return "schema cache" in message or "could not find the table" in message
+
+    def _history_error_payload(self, error: Exception) -> Dict[str, Any]:
+        """Extract structured error payloads from Supabase client exceptions when present."""
+        if error.args and isinstance(error.args[0], dict):
+            return error.args[0]
+        return {}
+
+    def _history_error_text(self, error: Exception) -> str:
+        """Normalize exception text for retry classification."""
+        payload = self._history_error_payload(error)
+        parts = [str(error)]
+        for key in ("message", "hint", "details", "code"):
+            value = payload.get(key)
+            if value:
+                parts.append(str(value))
+        return " ".join(parts).lower()
 
     def _build_app_record(self, app: ExtractedPICSData, has_storefront_date: bool = False, has_storefront_sync: bool = False) -> Optional[Dict[str, Any]]:
         """Build a database record from extracted PICS data."""

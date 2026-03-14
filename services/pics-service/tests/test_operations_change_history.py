@@ -87,10 +87,15 @@ class FakeSupabaseClient:
         self,
         snapshots: Optional[List[Dict[str, Any]]] = None,
         existing_appids: Optional[List[int]] = None,
+        failures: Optional[Dict[tuple[str, str], List[Exception]]] = None,
     ):
         self.snapshots = deepcopy(snapshots or [])
         self.next_snapshot_id = max((int(row["id"]) for row in self.snapshots), default=0) + 1
         self.existing_appids = set(existing_appids or [])
+        self.failures = {
+            key: list(values)
+            for key, values in (failures or {}).items()
+        }
         self.inserted_events: List[Dict[str, Any]] = []
         self.snapshot_updates: List[Dict[str, Any]] = []
         self.apps_upserts: List[Dict[str, Any]] = []
@@ -101,7 +106,12 @@ class FakeSupabaseClient:
         return FakeQuery(self, table_name)
 
     def execute(self, query: FakeQuery) -> FakeResult:
-        self.calls.append((query.table_name, query.action or "unknown"))
+        action = query.action or "unknown"
+        self.calls.append((query.table_name, action))
+
+        failure_queue = self.failures.get((query.table_name, action))
+        if failure_queue:
+            raise failure_queue.pop(0)
 
         if query.table_name == "app_source_snapshots":
             return self._execute_snapshots(query)
@@ -181,6 +191,55 @@ class FakeSupabaseWrapper:
         self.client = client
 
 
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: List[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def schema_cache_error() -> Exception:
+    return Exception(
+        {
+            "message": "Could not find the table 'public.app_source_snapshots' in the schema cache",
+            "code": "PGRST205",
+            "hint": "Perhaps you meant the table 'public.ccu_snapshots'",
+            "details": None,
+        }
+    )
+
+
+def create_history_database(monkeypatch: pytest.MonkeyPatch, fake_client: FakeSupabaseClient) -> PICSDatabase:
+    monkeypatch.setattr(PICSDatabase, "_load_tag_names", lambda self: None)
+    monkeypatch.setattr(
+        "src.database.operations.SupabaseClient.get_instance",
+        lambda: FakeSupabaseWrapper(fake_client),
+    )
+    return PICSDatabase()
+
+
+def stub_latest_state_writes(monkeypatch: pytest.MonkeyPatch, database: PICSDatabase) -> None:
+    monkeypatch.setattr(database, "_get_existing_appids", lambda appids: appids)
+    monkeypatch.setattr(database, "_get_apps_with_storefront_dates", lambda appids: set())
+    monkeypatch.setattr(database, "_get_apps_with_storefront_sync", lambda appids: set())
+    monkeypatch.setattr(
+        database,
+        "_build_app_record",
+        lambda app, has_storefront_date=False, has_storefront_sync=False: {
+            "appid": app.appid,
+            "name": app.name,
+            "updated_at": datetime.utcnow().isoformat(),
+        },
+    )
+    monkeypatch.setattr(database, "_sync_relationships", lambda apps, successful_appids, trigger_cursor=None: None)
+
+
 def build_app(**overrides: Any) -> ExtractedPICSData:
     app = ExtractedPICSData(
         appid=730,
@@ -217,14 +276,7 @@ def build_app(**overrides: Any) -> ExtractedPICSData:
 @pytest.fixture
 def history_database(monkeypatch: pytest.MonkeyPatch) -> tuple[PICSDatabase, FakeSupabaseClient]:
     fake_client = FakeSupabaseClient()
-
-    monkeypatch.setattr(PICSDatabase, "_load_tag_names", lambda self: None)
-    monkeypatch.setattr(
-        "src.database.operations.SupabaseClient.get_instance",
-        lambda: FakeSupabaseWrapper(fake_client),
-    )
-
-    database = PICSDatabase()
+    database = create_history_database(monkeypatch, fake_client)
     return database, fake_client
 
 
@@ -308,19 +360,7 @@ def test_upsert_apps_batch_captures_history_before_latest_state_write(
     database, fake_client = history_database
     fake_client.existing_appids.add(730)
 
-    monkeypatch.setattr(database, "_get_existing_appids", lambda appids: appids)
-    monkeypatch.setattr(database, "_get_apps_with_storefront_dates", lambda appids: set())
-    monkeypatch.setattr(database, "_get_apps_with_storefront_sync", lambda appids: set())
-    monkeypatch.setattr(
-        database,
-        "_build_app_record",
-        lambda app, has_storefront_date=False, has_storefront_sync=False: {
-            "appid": app.appid,
-            "name": app.name,
-            "updated_at": datetime.utcnow().isoformat(),
-        },
-    )
-    monkeypatch.setattr(database, "_sync_relationships", lambda apps, successful_appids, trigger_cursor=None: None)
+    stub_latest_state_writes(monkeypatch, database)
 
     stats = database.upsert_apps_batch([build_app()], trigger_reason="bulk_sync", trigger_cursor="42")
 
@@ -340,3 +380,138 @@ def test_batch_update_sync_status_persists_pics_change_number(
     assert len(fake_client.sync_status_upserts) == 2
     assert {record["appid"] for record in fake_client.sync_status_upserts} == {570, 730}
     assert all(record["pics_change_number"] == 912345 for record in fake_client.sync_status_upserts)
+
+
+def test_capture_change_history_retries_transient_schema_cache_select_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = FakeSupabaseClient(
+        failures={
+            ("app_source_snapshots", "select"): [schema_cache_error()],
+        }
+    )
+    database = create_history_database(monkeypatch, fake_client)
+    clock = FakeClock()
+
+    database.HISTORY_RETRY_DELAY_SECONDS = 0.0
+    monkeypatch.setattr("src.database.operations.time.monotonic", clock.monotonic)
+    monkeypatch.setattr("src.database.operations.time.sleep", clock.sleep)
+
+    previous_snapshot = {
+        "id": 10,
+        "appid": 730,
+        "source": "pics",
+        "content_hash": "prior-hash",
+        "first_seen_at": "2026-03-01T12:00:00",
+        "snapshot_data": normalize_pics_snapshot(build_app(store_tags=[1], platforms=["windows"])),
+    }
+    fake_client.snapshots.append(deepcopy(previous_snapshot))
+
+    database._capture_change_history(
+        [build_app(store_tags=[2, 3], platforms=["windows", "linux"], current_build_id="222")],
+        trigger_reason="change_monitor",
+        trigger_cursor="456",
+    )
+
+    assert fake_client.calls.count(("app_source_snapshots", "select")) == 2
+    assert len(fake_client.snapshots) == 2
+    assert fake_client.inserted_events
+    assert database._history_available is True
+    assert database._history_disabled_until is None
+
+
+def test_capture_change_history_retries_schema_cache_insert_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = FakeSupabaseClient(
+        failures={
+            ("app_source_snapshots", "insert"): [schema_cache_error()],
+        }
+    )
+    database = create_history_database(monkeypatch, fake_client)
+    clock = FakeClock()
+
+    database.HISTORY_RETRY_DELAY_SECONDS = 0.0
+    monkeypatch.setattr("src.database.operations.time.monotonic", clock.monotonic)
+    monkeypatch.setattr("src.database.operations.time.sleep", clock.sleep)
+
+    database._capture_change_history([build_app()], trigger_reason="bulk_sync", trigger_cursor=None)
+
+    assert fake_client.calls.count(("app_source_snapshots", "insert")) == 2
+    assert len(fake_client.snapshots) == 1
+    assert database._history_available is True
+    assert database._history_disabled_until is None
+
+
+def test_upsert_apps_batch_enters_history_cooldown_without_blocking_latest_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = FakeSupabaseClient(
+        existing_appids=[730],
+        failures={
+            ("app_source_snapshots", "select"): [
+                schema_cache_error(),
+                schema_cache_error(),
+                schema_cache_error(),
+            ],
+        },
+    )
+    database = create_history_database(monkeypatch, fake_client)
+    clock = FakeClock()
+
+    database.HISTORY_RETRY_DELAY_SECONDS = 0.0
+    database.HISTORY_FAILURE_COOLDOWN_SECONDS = 10.0
+    monkeypatch.setattr("src.database.operations.time.monotonic", clock.monotonic)
+    monkeypatch.setattr("src.database.operations.time.sleep", clock.sleep)
+    stub_latest_state_writes(monkeypatch, database)
+
+    first_stats = database.upsert_apps_batch([build_app()], trigger_reason="bulk_sync", trigger_cursor="42")
+    first_select_calls = fake_client.calls.count(("app_source_snapshots", "select"))
+
+    assert first_stats == {"created": 0, "updated": 1, "failed": 0, "skipped": 0}
+    assert ("apps", "upsert") in fake_client.calls
+    assert first_select_calls == 3
+    assert database._history_available is False
+    assert database._history_disabled_until == pytest.approx(10.0)
+
+    second_stats = database.upsert_apps_batch([build_app()], trigger_reason="bulk_sync", trigger_cursor="43")
+
+    assert second_stats == {"created": 0, "updated": 1, "failed": 0, "skipped": 0}
+    assert fake_client.calls.count(("app_source_snapshots", "select")) == first_select_calls
+
+
+def test_history_capture_recovers_after_cooldown_expires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = FakeSupabaseClient(
+        existing_appids=[730],
+        failures={
+            ("app_source_snapshots", "select"): [
+                schema_cache_error(),
+                schema_cache_error(),
+                schema_cache_error(),
+            ],
+        },
+    )
+    database = create_history_database(monkeypatch, fake_client)
+    clock = FakeClock()
+
+    database.HISTORY_RETRY_DELAY_SECONDS = 0.0
+    database.HISTORY_FAILURE_COOLDOWN_SECONDS = 10.0
+    monkeypatch.setattr("src.database.operations.time.monotonic", clock.monotonic)
+    monkeypatch.setattr("src.database.operations.time.sleep", clock.sleep)
+    stub_latest_state_writes(monkeypatch, database)
+
+    first_stats = database.upsert_apps_batch([build_app()], trigger_reason="bulk_sync", trigger_cursor="42")
+
+    assert first_stats == {"created": 0, "updated": 1, "failed": 0, "skipped": 0}
+    assert database._history_available is False
+    assert len(fake_client.snapshots) == 0
+
+    clock.now = 11.0
+    second_stats = database.upsert_apps_batch([build_app()], trigger_reason="bulk_sync", trigger_cursor="43")
+
+    assert second_stats == {"created": 0, "updated": 1, "failed": 0, "skipped": 0}
+    assert len(fake_client.snapshots) == 1
+    assert database._history_available is True
+    assert database._history_disabled_until is None
