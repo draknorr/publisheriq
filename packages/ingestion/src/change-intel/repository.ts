@@ -437,6 +437,39 @@ export async function completeCaptureQueueItems(
   }
 }
 
+export async function requeueStaleCaptureClaims(
+  supabase: TypedSupabaseClient,
+  sources: AppCaptureSource[],
+  claimedBeforeIso: string,
+  limit = 500
+): Promise<number> {
+  if (sources.length === 0) {
+    return 0;
+  }
+
+  const boundedLimit = Math.max(1, Math.min(limit, 500));
+  const { data, error } = await getDb(supabase)
+    .from('app_capture_queue')
+    .select('id')
+    .eq('status', 'claimed')
+    .in('source', sources)
+    .lt('claimed_at', claimedBeforeIso)
+    .order('claimed_at', { ascending: true })
+    .limit(boundedLimit);
+
+  if (error) {
+    throw new Error(`Failed to fetch stale app capture queue claims: ${error.message}`);
+  }
+
+  const staleIds = (data ?? []).map((row: { id: number }) => String(row.id));
+  if (staleIds.length === 0) {
+    return 0;
+  }
+
+  await completeCaptureQueueItems(supabase, staleIds, 'queued', 'stale_claim_requeued');
+  return staleIds.length;
+}
+
 export async function updateSyncStatusFields(
   supabase: TypedSupabaseClient,
   appid: number,

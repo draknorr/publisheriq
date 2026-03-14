@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { enqueueCaptureJobs } from './repository.js';
+import { enqueueCaptureJobs, requeueStaleCaptureClaims } from './repository.js';
 
 interface QueueRpcArgs {
   p_jobs: Array<Record<string, unknown>>;
@@ -99,4 +99,97 @@ test('enqueueCaptureJobs surfaces RPC errors', async () => {
       ]),
     /Failed to enqueue app capture jobs: boom/
   );
+});
+
+test('requeueStaleCaptureClaims requeues stale claimed rows through complete_app_capture_queue', async () => {
+  let rpcName: string | null = null;
+  let rpcArgs: Record<string, unknown> | null = null;
+
+  const query = {
+    select() {
+      return query;
+    },
+    eq() {
+      return query;
+    },
+    in() {
+      return query;
+    },
+    lt() {
+      return query;
+    },
+    order() {
+      return query;
+    },
+    limit() {
+      return Promise.resolve({
+        data: [{ id: 41 }, { id: 42 }],
+        error: null,
+      });
+    },
+  };
+
+  const supabase = {
+    from(table: string) {
+      assert.equal(table, 'app_capture_queue');
+      return query;
+    },
+    rpc(name: string, args: Record<string, unknown>) {
+      rpcName = name;
+      rpcArgs = args;
+      return Promise.resolve({ data: 2, error: null });
+    },
+  } as any;
+
+  const requeued = await requeueStaleCaptureClaims(supabase, ['storefront', 'news'], '2026-03-14T09:00:00.000Z', 100);
+
+  assert.equal(requeued, 2);
+  assert.equal(rpcName, 'complete_app_capture_queue');
+  assert.deepEqual(rpcArgs, {
+    p_ids: [41, 42],
+    p_status: 'queued',
+    p_error: 'stale_claim_requeued',
+  });
+});
+
+test('requeueStaleCaptureClaims skips completion when no stale rows were found', async () => {
+  let rpcCalled = false;
+  const query = {
+    select() {
+      return query;
+    },
+    eq() {
+      return query;
+    },
+    in() {
+      return query;
+    },
+    lt() {
+      return query;
+    },
+    order() {
+      return query;
+    },
+    limit() {
+      return Promise.resolve({
+        data: [],
+        error: null,
+      });
+    },
+  };
+
+  const supabase = {
+    from() {
+      return query;
+    },
+    rpc() {
+      rpcCalled = true;
+      return Promise.resolve({ data: 0, error: null });
+    },
+  } as any;
+
+  const requeued = await requeueStaleCaptureClaims(supabase, ['hero_asset'], '2026-03-14T09:00:00.000Z', 100);
+
+  assert.equal(requeued, 0);
+  assert.equal(rpcCalled, false);
 });

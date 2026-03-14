@@ -21,6 +21,8 @@ Steam change intelligence is split across three runtimes:
 - `QUEUE_SOURCES`: comma-separated subset of `storefront,news,hero_asset`. Default is all three.
 - `NEWS_CATCHUP_SEED_LIMIT`: how many stale-app news jobs to seed when the worker goes idle. Default `10`.
 - `MAX_IDLE_POLLS`: optional bounded-exit control for manual workflows. `0` means run forever.
+- `CLAIM_STALE_AFTER_MS`: requeue `claimed` queue rows older than this threshold so abandoned work is not stranded during worker churn or replica scale-down. Default `1800000` (`30` minutes). Set `0` to disable.
+- `STALE_CLAIM_SWEEP_INTERVAL_MS`: how often the worker checks for stale claimed rows. Default `60000`.
 
 ## Storage Guardrails
 

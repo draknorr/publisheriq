@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { getServiceClient } from '@publisheriq/database';
 import { logger } from '@publisheriq/shared';
 import { fetchStorefrontAppDetails } from '../apis/storefront.js';
-import { claimCaptureQueue, completeCaptureQueueItems } from '../change-intel/repository.js';
+import { claimCaptureQueue, completeCaptureQueueItems, requeueStaleCaptureClaims } from '../change-intel/repository.js';
 import { upsertLatestStorefrontState } from '../change-intel/storefront-latest-state.js';
 import { archiveHeroAssetsForApp, captureNewsForApp, captureStorefrontState, seedStaleNewsCatchup } from '../workers-support/change-intel.js';
 
@@ -141,22 +141,56 @@ async function main(): Promise<void> {
   const pollIntervalMs = parseInt(process.env.POLL_INTERVAL_MS || '5000', 10);
   const catchupSeedLimit = parseInt(process.env.NEWS_CATCHUP_SEED_LIMIT || '10', 10);
   const maxIdlePolls = parseInt(process.env.MAX_IDLE_POLLS || '0', 10);
+  const staleClaimAfterMs = Math.max(0, parseInt(process.env.CLAIM_STALE_AFTER_MS || '1800000', 10));
+  const staleClaimSweepIntervalMs = Math.max(
+    pollIntervalMs,
+    parseInt(process.env.STALE_CLAIM_SWEEP_INTERVAL_MS || '60000', 10)
+  );
   const sources = (process.env.QUEUE_SOURCES?.split(',').map((value) => value.trim()).filter(Boolean) ?? [
     ...DEFAULT_SOURCES,
   ]) as QueueSource[];
   const supabase = getServiceClient();
   let idlePolls = 0;
+  let lastStaleClaimSweepAt = 0;
 
   log.info('Starting change-intel queue worker', {
     workerId,
     claimLimit,
     sources,
     pollIntervalMs,
+    staleClaimAfterMs: staleClaimAfterMs > 0 ? staleClaimAfterMs : null,
+    staleClaimSweepIntervalMs: staleClaimAfterMs > 0 ? staleClaimSweepIntervalMs : null,
     maxIdlePolls: maxIdlePolls > 0 ? maxIdlePolls : null,
   });
 
   while (true) {
     let processedAny = false;
+
+    if (staleClaimAfterMs > 0 && Date.now() - lastStaleClaimSweepAt >= staleClaimSweepIntervalMs) {
+      lastStaleClaimSweepAt = Date.now();
+      try {
+        const requeued = await requeueStaleCaptureClaims(
+          supabase,
+          [...sources],
+          new Date(Date.now() - staleClaimAfterMs).toISOString(),
+          claimLimit * 10
+        );
+        if (requeued > 0) {
+          log.warn('Requeued stale change-intel claims', {
+            workerId,
+            sources,
+            requeued,
+            staleClaimAfterMs,
+          });
+        }
+      } catch (error) {
+        log.error('Failed to requeue stale change-intel claims', {
+          workerId,
+          sources,
+          error,
+        });
+      }
+    }
 
     for (const source of sources) {
       const claimed = await processClaimedJobs(supabase, source, workerId, claimLimit);
