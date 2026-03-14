@@ -116,7 +116,6 @@ export function extractHeroAssets(mediaVersion: NormalizedMediaVersion | null): 
   const candidates: Array<HeroAssetDescriptor | null> = [
     mediaVersion.heroImages.header ? { kind: 'header', url: mediaVersion.heroImages.header } : null,
     mediaVersion.heroImages.capsule ? { kind: 'capsule', url: mediaVersion.heroImages.capsule } : null,
-    mediaVersion.heroImages.background ? { kind: 'background', url: mediaVersion.heroImages.background } : null,
   ];
 
   return candidates.filter((candidate): candidate is HeroAssetDescriptor => Boolean(candidate));

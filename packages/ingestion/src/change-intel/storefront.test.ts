@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { diffNewsVersions, normalizeNewsVersion } from './news.js';
-import { diffStorefrontMedia, diffStorefrontSnapshots, normalizeStorefrontMediaVersion, normalizeStorefrontSnapshot } from './storefront.js';
+import {
+  collectChangedHeroAssets,
+  diffStorefrontMedia,
+  diffStorefrontSnapshots,
+  normalizeStorefrontMediaVersion,
+  normalizeStorefrontSnapshot,
+} from './storefront.js';
 
 const baseSnapshot = normalizeStorefrontSnapshot({
   appid: 10,
@@ -99,6 +105,19 @@ test('storefront media diff detects hero, screenshot, and trailer changes', () =
   assert.ok(types.includes('header_url_changed'));
   assert.ok(types.includes('screenshot_added'));
   assert.ok(types.includes('trailer_thumbnail_changed'));
+});
+
+test('collectChangedHeroAssets ignores background-only changes', () => {
+  const previousMedia = normalizeStorefrontMediaVersion(baseSnapshot);
+  const nextMedia = {
+    ...previousMedia,
+    heroImages: {
+      ...previousMedia.heroImages,
+      background: 'https://cdn.example.com/background-v2.jpg',
+    },
+  };
+
+  assert.deepEqual(collectChangedHeroAssets(previousMedia, nextMedia), []);
 });
 
 test('news diff distinguishes publish from edit', () => {

@@ -425,9 +425,5 @@ export function collectChangedHeroAssets(
     assets.push({ kind: 'capsule', url: nextMedia.heroImages.capsule });
   }
 
-  if (nextMedia.heroImages.background && previousMedia?.heroImages.background !== nextMedia.heroImages.background) {
-    assets.push({ kind: 'background', url: nextMedia.heroImages.background });
-  }
-
   return assets;
 }

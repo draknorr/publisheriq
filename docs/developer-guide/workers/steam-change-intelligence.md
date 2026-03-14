@@ -12,7 +12,7 @@ Steam change intelligence is split across three runtimes:
 - Queue sources are:
   - `storefront`: recapture Storefront details, write `app_source_snapshots`, `app_media_versions`, `app_change_events`, and latest-state RPC updates.
   - `news`: fetch reachable Steam News history, write `steam_news_items`, `steam_news_versions`, and `app_change_events`.
-  - `hero_asset`: archive changed `header`, `capsule`, and `background` binaries for the eligible cohort only.
+  - `hero_asset`: archive changed `header` and `capsule` binaries for the eligible cohort only. Backgrounds still remain in URL-level media history and change events, but their binaries are not archived.
 
 ## Worker Environment
 
@@ -25,7 +25,7 @@ Steam change intelligence is split across three runtimes:
 ## Storage Guardrails
 
 - Bucket: `steam-hero-assets`
-- Archive only `header`, `capsule`, and `background` binaries.
+- Archive only `header` and `capsule` binaries.
 - Reject assets larger than `2 MB`.
 - Warn when bucket usage reaches `20 GB`.
 - Tighten archival behavior at `35 GB`.

@@ -15,7 +15,6 @@ test('extractHeroAssets returns populated hero asset descriptors only', () => {
 
   assert.deepEqual(assets, [
     { kind: 'header', url: 'https://cdn.example.com/header.jpg' },
-    { kind: 'background', url: 'https://cdn.example.com/background.webp' },
   ]);
 });
 
