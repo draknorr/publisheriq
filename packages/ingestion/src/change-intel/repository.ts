@@ -370,28 +370,24 @@ export async function enqueueCaptureJobs(
     return 0;
   }
 
-  const { error } = await getDb(supabase).from('app_capture_queue').upsert(
-    jobs.map((job) => ({
+  const availableAt = new Date().toISOString();
+  const { data, error } = await getDb(supabase).rpc('enqueue_app_capture_queue', {
+    p_jobs: jobs.map((job) => ({
       appid: job.appid,
       source: job.source,
-      status: 'queued',
       priority: job.priority ?? 100,
       trigger_reason: job.triggerReason,
       trigger_cursor: job.triggerCursor ?? '',
       payload: job.payload ?? {},
-      available_at: new Date().toISOString(),
+      available_at: availableAt,
     })),
-    {
-      onConflict: 'appid,source,trigger_cursor',
-      ignoreDuplicates: true,
-    }
-  );
+  });
 
   if (error) {
     throw new Error(`Failed to enqueue app capture jobs: ${error.message}`);
   }
 
-  return jobs.length;
+  return Number(data ?? 0);
 }
 
 export async function claimCaptureQueue(
