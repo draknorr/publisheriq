@@ -33,8 +33,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build packages
-        run: pnpm build
+      - name: Build ingestion packages
+        run: pnpm --filter @publisheriq/ingestion... build
 
       - name: Run change-hint sweep
         run: pnpm --filter @publisheriq/ingestion app-change-hints
