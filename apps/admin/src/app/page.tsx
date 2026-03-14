@@ -1,259 +1,74 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import { ConfigurationRequired } from '@/components/ConfigurationRequired';
-import { SyncHealthCards, LastSyncTimes } from '@/components/SyncHealthCards';
-import { getSyncHealthData } from '@/lib/sync-queries';
-import { PageHeader, Section, Grid } from '@/components/layout';
-import { Card } from '@/components/ui';
-import { Badge } from '@/components/ui/Badge';
-import { RefreshCw, Gamepad2, Building2, Users, ArrowRight } from 'lucide-react';
+import { Gamepad2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
-export const dynamic = 'force-dynamic';
+export const metadata: Metadata = {
+  title: 'PublisherIQ',
+  description: 'Gaming Industry Intelligence',
+};
 
-async function getStats() {
-  if (!isSupabaseConfigured()) {
-    return null;
-  }
-  const supabase = getSupabase();
-  const [appsResult, publishersResult, developersResult, jobsResult, syncHealth] = await Promise.all([
-    supabase.from('apps').select('*', { count: 'exact', head: true }),
-    supabase.from('publishers').select('*', { count: 'exact', head: true }),
-    supabase.from('developers').select('*', { count: 'exact', head: true }),
-    supabase
-      .from('sync_jobs')
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(5),
-    getSyncHealthData(supabase),
-  ]);
-
-  return {
-    appCount: appsResult.count ?? 0,
-    publisherCount: publishersResult.count ?? 0,
-    developerCount: developersResult.count ?? 0,
-    recentJobs: jobsResult.data ?? [],
-    syncHealth,
-  };
-}
-
-function StatCard({
-  title,
-  value,
-  href,
-  icon: Icon,
-  color,
-}: {
-  title: string;
-  value: number | string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-}) {
+function LandingFooter() {
   return (
-    <Link href={href}>
-      <Card variant="interactive" className="p-5 group">
-        <div className="flex items-start justify-between">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
-            <Icon className="h-5 w-5" />
-          </div>
-          <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-text-secondary transition-colors" />
-        </div>
-        <div className="mt-4">
-          <p className="text-display text-text-primary">
-            {typeof value === 'number' ? value.toLocaleString() : value}
+    <footer className="border-t border-border-subtle py-8 px-4 sm:px-6">
+      <div className="max-w-6xl mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-accent-green animate-pulse-subtle" />
+          <p className="text-caption text-text-muted">
+            Made by{' '}
+            <a
+              href="https://www.ryanbohmann.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Ryan
+            </a>
           </p>
-          <p className="text-body-sm text-text-secondary mt-1">{title}</p>
         </div>
-      </Card>
-    </Link>
+        <div className="flex items-center gap-4">
+          <ThemeToggle />
+          <p className="text-caption text-text-muted">
+            PublisherIQ
+          </p>
+        </div>
+      </div>
+    </footer>
   );
 }
 
-function StatusBadge({ status }: { status: string | null }) {
-  const safeStatus = status ?? 'unknown';
-  const variant = safeStatus === 'completed' ? 'success' : safeStatus === 'running' ? 'info' : safeStatus === 'failed' ? 'error' : 'default';
-  return <Badge variant={variant}>{safeStatus}</Badge>;
-}
-
-export default async function DashboardPage() {
-  const stats = await getStats();
-
-  if (!stats) {
-    return <ConfigurationRequired />;
-  }
-
-  const { appCount, publisherCount, developerCount, recentJobs, syncHealth } = stats;
-
+export default function LandingPage() {
   return (
-    <div>
-      <PageHeader
-        title="Dashboard"
-        description="Steam data acquisition platform overview"
-      />
-
-      <Section
-        title="Sync Health"
-        actions={
-          <Link
-            href="/sync-status"
-            className="text-body-sm font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
-          >
-            View details
-          </Link>
-        }
-        className="mb-8"
-      >
-        <SyncHealthCards data={syncHealth} />
-        <div className="mt-4">
-          <LastSyncTimes lastSyncs={syncHealth.lastSyncs} />
-        </div>
-      </Section>
-
-      <Section className="mb-8">
-        <Grid cols={4} gap="md">
-          <StatCard
-            title="Total Apps"
-            value={appCount}
-            href="/apps"
-            icon={Gamepad2}
-            color="bg-accent-purple/15 text-accent-purple"
-          />
-          <StatCard
-            title="Publishers"
-            value={publisherCount}
-            href="/publishers"
-            icon={Building2}
-            color="bg-accent-green/15 text-accent-green"
-          />
-          <StatCard
-            title="Developers"
-            value={developerCount}
-            href="/developers"
-            icon={Users}
-            color="bg-accent-orange/15 text-accent-orange"
-          />
-          <StatCard
-            title="Sync Jobs"
-            value={recentJobs.length > 0 ? recentJobs.length : 0}
-            href="/jobs"
-            icon={RefreshCw}
-            color="bg-accent-blue/15 text-accent-blue"
-          />
-        </Grid>
-      </Section>
-
-      <Section title="Quick Links" className="mb-8">
-        <Grid cols={3} gap="md">
-          <Link href="/jobs">
-            <Card variant="interactive" className="p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-blue/15 text-accent-blue">
-                  <RefreshCw className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-body font-medium text-text-primary">Sync Jobs</p>
-                  <p className="text-body-sm text-text-secondary">View job history and status</p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-
-          <Link href="/apps">
-            <Card variant="interactive" className="p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-purple/15 text-accent-purple">
-                  <Gamepad2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-body font-medium text-text-primary">Browse Apps</p>
-                  <p className="text-body-sm text-text-secondary">Search and explore games</p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-
-          <Link href="/publishers">
-            <Card variant="interactive" className="p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-green/15 text-accent-green">
-                  <Building2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-body font-medium text-text-primary">Publishers</p>
-                  <p className="text-body-sm text-text-secondary">View publisher data</p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        </Grid>
-      </Section>
-
-      <Section
-        title="Recent Sync Jobs"
-        actions={
-          <Link
-            href="/jobs"
-            className="text-body-sm font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
-          >
-            View all
-          </Link>
-        }
-      >
-        {recentJobs.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-text-secondary">No sync jobs yet</p>
-            <p className="mt-2 text-body-sm text-text-muted">
-              Run a GitHub Action workflow to start syncing data
-            </p>
-          </Card>
-        ) : (
-          <Card padding="none">
-            <div className="overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-surface-elevated">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Job Type
-                    </th>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Processed
-                    </th>
-                    <th className="px-4 py-3 text-left text-caption font-medium text-text-secondary">
-                      Started
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle">
-                  {recentJobs.map((job) => (
-                    <tr key={job.id} className="bg-surface-raised hover:bg-surface-elevated transition-colors">
-                      <td className="px-4 py-3 text-body-sm font-medium text-text-primary">
-                        {job.job_type}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={job.status} />
-                      </td>
-                      <td className="px-4 py-3 text-body-sm text-text-secondary">
-                        {(job.items_succeeded ?? 0)}/{job.items_processed ?? 0}
-                        {(job.items_failed ?? 0) > 0 && (
-                          <span className="ml-1 text-accent-red">
-                            ({job.items_failed ?? 0} failed)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-body-sm text-text-tertiary">
-                        {job.started_at ? new Date(job.started_at).toLocaleString() : 'Unknown'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+    <div className="min-h-screen bg-surface flex flex-col">
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6">
+        <div className="text-center">
+          <div className="flex justify-center mb-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-primary">
+              <Gamepad2 className="h-8 w-8 text-white" />
             </div>
-          </Card>
-        )}
-      </Section>
+          </div>
+          <h1 className="text-display text-text-primary mb-3 tracking-tight">
+            PublisherIQ
+          </h1>
+          <p className="text-body-lg text-text-secondary mb-8">
+            Gaming Industry Intelligence
+          </p>
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <Link href="/waitlist">
+              <Button variant="primary" size="lg" className="w-full sm:w-auto">
+                Join Waitlist
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button variant="secondary" size="lg" className="w-full sm:w-auto">
+                Sign In
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </main>
+      <LandingFooter />
     </div>
   );
 }
