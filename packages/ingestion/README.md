@@ -7,6 +7,7 @@ Data collection workers and API clients for PublisherIQ.
 ## Overview
 
 This package provides:
+
 - API clients for Steam, SteamSpy, and OpenAI embeddings
 - Worker processes for scheduled data sync
 - Rate limiting and retry utilities
@@ -57,28 +58,28 @@ pnpm --filter @publisheriq/ingestion price-sync
 
 Workers run via GitHub Actions:
 
-| Worker | Schedule | Purpose |
-|--------|----------|---------|
-| applist-sync | Daily 00:15 UTC | Master app list |
-| steamspy-sync | Daily 02:15 UTC | CCU, owners, tags |
-| embedding-sync | Daily 03:00 UTC | Vector embeddings (v2.3) |
-| histogram-sync | Daily 04:15 UTC | Monthly reviews |
-| ccu-sync | Hourly :00 | Tier 1+2 CCU (v2.2) |
-| ccu-daily-sync | 3x daily | Tier 3 CCU rotation (v2.2) |
-| storefront-sync | 5x daily | Game metadata |
-| reviews-sync | Every 2h :15 | Review counts (3x throughput v2.2) |
-| velocity-calculation | 3x daily | Velocity tiers (v2.1) |
-| interpolation | Daily 05:00 UTC | Fill review gaps (v2.1) |
-| refresh-views | Daily 05:00 UTC | Materialized views (v2.1) |
-| trends-calculation | Daily 22:00 UTC | Trend metrics |
-| priority-calculation | Daily 22:30 UTC | Priority scores |
+| Worker               | Schedule        | Purpose                            |
+| -------------------- | --------------- | ---------------------------------- |
+| applist-sync         | Daily 00:15 UTC | Master app list                    |
+| steamspy-sync        | Daily 02:15 UTC | CCU, owners, tags                  |
+| embedding-sync       | Daily 03:00 UTC | Vector embeddings (v2.3)           |
+| histogram-sync       | Daily 04:15 UTC | Monthly reviews                    |
+| ccu-sync             | Hourly :00      | Tier 1+2 CCU (v2.2)                |
+| ccu-daily-sync       | 3x daily        | Tier 3 CCU rotation (v2.2)         |
+| storefront-sync      | 5x daily        | Game metadata                      |
+| reviews-sync         | Every 2h :15    | Review counts (3x throughput v2.2) |
+| velocity-calculation | 3x daily        | Velocity tiers (v2.1)              |
+| interpolation        | Daily 05:00 UTC | Fill review gaps (v2.1)            |
+| refresh-views        | Daily 05:00 UTC | Materialized views (v2.1)          |
+| trends-calculation   | Daily 22:00 UTC | Trend metrics                      |
+| priority-calculation | Daily 22:30 UTC | Priority scores                    |
 
 ## API Clients
 
 ### Steam Web API
 
 ```typescript
-import { fetchAppList } from '@publisheriq/ingestion';
+import { fetchAppList } from "@publisheriq/ingestion";
 
 const apps = await fetchAppList();
 ```
@@ -86,10 +87,10 @@ const apps = await fetchAppList();
 ### Storefront API
 
 ```typescript
-import { fetchStorefrontApp } from '@publisheriq/ingestion';
+import { fetchStorefrontApp } from "@publisheriq/ingestion";
 
 const result = await fetchStorefrontApp(730);
-if (result.status === 'success') {
+if (result.status === "success") {
   console.log(result.data);
 }
 ```
@@ -97,7 +98,10 @@ if (result.status === 'success') {
 ### Reviews API
 
 ```typescript
-import { fetchReviewSummary, fetchReviewHistogram } from '@publisheriq/ingestion';
+import {
+  fetchReviewSummary,
+  fetchReviewHistogram,
+} from "@publisheriq/ingestion";
 
 const summary = await fetchReviewSummary(730);
 const histogram = await fetchReviewHistogram(730);
@@ -106,7 +110,10 @@ const histogram = await fetchReviewHistogram(730);
 ### SteamSpy API
 
 ```typescript
-import { fetchSteamSpyAllApps, fetchSteamSpyAppDetails } from '@publisheriq/ingestion';
+import {
+  fetchSteamSpyAllApps,
+  fetchSteamSpyAppDetails,
+} from "@publisheriq/ingestion";
 
 const allApps = await fetchSteamSpyAllApps(0); // Page 0
 const details = await fetchSteamSpyAppDetails(730);
@@ -115,7 +122,7 @@ const details = await fetchSteamSpyAppDetails(730);
 ### Steam CCU API (v2.2)
 
 ```typescript
-import { fetchSteamCCU } from '@publisheriq/ingestion';
+import { fetchSteamCCU } from "@publisheriq/ingestion";
 
 const ccu = await fetchSteamCCU(730); // Returns exact player count
 ```
@@ -126,8 +133,8 @@ const ccu = await fetchSteamCCU(730); // Returns exact player count
 import {
   buildGameEmbeddingText,
   generateEmbeddings,
-  hashEmbeddingText
-} from '@publisheriq/ingestion';
+  hashEmbeddingText,
+} from "@publisheriq/ingestion";
 
 const text = buildGameEmbeddingText(gameData);
 const hash = hashEmbeddingText(text);
@@ -141,12 +148,12 @@ const embeddings = await generateEmbeddings([text]);
 Token bucket rate limiter for API calls:
 
 ```typescript
-import { RateLimiter } from '@publisheriq/ingestion';
+import { RateLimiter } from "@publisheriq/ingestion";
 
 const limiter = new RateLimiter({
   tokensPerInterval: 10,
   interval: 30_000,
-  maxTokens: 10
+  maxTokens: 10,
 });
 
 await limiter.acquire(); // Blocks until token available
@@ -157,16 +164,13 @@ await limiter.acquire(); // Blocks until token available
 Exponential backoff retry wrapper:
 
 ```typescript
-import { withRetry } from '@publisheriq/ingestion';
+import { withRetry } from "@publisheriq/ingestion";
 
-const result = await withRetry(
-  () => fetchSomeData(),
-  {
-    maxRetries: 3,
-    initialDelay: 1000,
-    maxDelay: 30_000
-  }
-);
+const result = await withRetry(() => fetchSomeData(), {
+  maxRetries: 3,
+  initialDelay: 1000,
+  maxDelay: 30_000,
+});
 ```
 
 ## Project Structure
@@ -226,6 +230,7 @@ CCU_DAILY_LIMIT=150000           # Max Tier 3 apps per run
 
 # Velocity (v2.1)
 INTERPOLATION_DAYS=30            # Days to look back for interpolation
+INTERPOLATION_APP_BATCH_SIZE=2000 # Apps processed per interpolation RPC batch
 ```
 
 ## Dependencies

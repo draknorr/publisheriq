@@ -40,24 +40,24 @@ This document describes how data flows through PublisherIQ, from external APIs t
 
 All scheduled sync jobs run via GitHub Actions on UTC time:
 
-| Job | Schedule (UTC) | Worker | Batch Size | Purpose |
-|-----|----------------|--------|------------|---------|
-| applist-sync | 00:15 daily | `applist-worker.ts` | Full | Master app list |
-| steamspy-sync | 02:15 daily | `steamspy-worker.ts` | 1000/page | CCU, owners, tags |
-| embedding-sync | 03:00 daily | `embedding-worker.ts` | 500/200/100 | Vector embeddings (v2.3) |
-| histogram-sync | 04:15 daily | `histogram-worker.ts` | 300 | Monthly reviews |
-| storefront-sync | 06,10,14,18,22:00 | `storefront-worker.ts` | 200 | Game metadata |
-| reviews-sync | :15 every 2h | `reviews-worker.ts` | 2500 | Review counts |
-| trends-calculation | 22:00 daily | `trends-worker.ts` | 500 | Trend metrics |
-| priority-calculation | 22:30 daily | `priority-worker.ts` | 1000 | Priority scores |
-| velocity-calculation | 08,16,00:00 | `velocity-calculator-worker.ts` | - | Velocity stats (v2.1) |
-| interpolation | 05:00 daily | `interpolation-worker.ts` | - | Fill data gaps (v2.1) |
-| refresh-views | 05:00 daily | psql direct | - | Refresh materialized views (v2.1) |
-| ccu-sync | :00 hourly | `ccu-tiered-worker.ts` | ~1500 | Tier 1+2 CCU (v2.2) |
-| ccu-daily-sync | 04:30, 12:30, 20:30 (3x daily) | `ccu-daily-worker.ts` | ~21k/run (rotation) | Tier 3 CCU (v2.2) |
-| ccu-cleanup | Sun 03:00 | psql direct | - | Aggregate + cleanup snapshots (v2.2) |
-| cleanup-reservations | :00 hourly | psql direct | - | Stale credit reservation cleanup |
-| cleanup-chat-logs | 03:00 daily | psql direct | - | 7-day chat log retention |
+| Job                  | Schedule (UTC)                 | Worker                          | Batch Size          | Purpose                              |
+| -------------------- | ------------------------------ | ------------------------------- | ------------------- | ------------------------------------ |
+| applist-sync         | 00:15 daily                    | `applist-worker.ts`             | Full                | Master app list                      |
+| steamspy-sync        | 02:15 daily                    | `steamspy-worker.ts`            | 1000/page           | CCU, owners, tags                    |
+| embedding-sync       | 03:00 daily                    | `embedding-worker.ts`           | 500/200/100         | Vector embeddings (v2.3)             |
+| histogram-sync       | 04:15 daily                    | `histogram-worker.ts`           | 300                 | Monthly reviews                      |
+| storefront-sync      | 06,10,14,18,22:00              | `storefront-worker.ts`          | 200                 | Game metadata                        |
+| reviews-sync         | :15 every 2h                   | `reviews-worker.ts`             | 2500                | Review counts                        |
+| trends-calculation   | 22:00 daily                    | `trends-worker.ts`              | 500                 | Trend metrics                        |
+| priority-calculation | 22:30 daily                    | `priority-worker.ts`            | 1000                | Priority scores                      |
+| velocity-calculation | 08,16,00:00                    | `velocity-calculator-worker.ts` | -                   | Velocity stats (v2.1)                |
+| interpolation        | 05:00 daily                    | `interpolation-worker.ts`       | -                   | Fill data gaps (v2.1)                |
+| refresh-views        | 05:00 daily                    | psql direct                     | -                   | Refresh materialized views (v2.1)    |
+| ccu-sync             | :00 hourly                     | `ccu-tiered-worker.ts`          | ~1500               | Tier 1+2 CCU (v2.2)                  |
+| ccu-daily-sync       | 04:30, 12:30, 20:30 (3x daily) | `ccu-daily-worker.ts`           | ~21k/run (rotation) | Tier 3 CCU (v2.2)                    |
+| ccu-cleanup          | Sun 03:00                      | psql direct                     | -                   | Aggregate + cleanup snapshots (v2.2) |
+| cleanup-reservations | :00 hourly                     | psql direct                     | -                   | Stale credit reservation cleanup     |
+| cleanup-chat-logs    | 03:00 daily                    | psql direct                     | -                   | 7-day chat log retention             |
 
 ## Worker Architecture
 
@@ -66,10 +66,10 @@ Each worker follows a common pattern:
 ```typescript
 async function runWorker() {
   // 1. Create job record
-  const job = await createSyncJob('worker-name');
+  const job = await createSyncJob("worker-name");
 
   // 2. Get apps to sync (priority-ordered)
-  const apps = await getAppsForSync('source', batchSize);
+  const apps = await getAppsForSync("source", batchSize);
 
   // 3. Process with rate limiting
   for (const app of apps) {
@@ -95,12 +95,12 @@ Not all apps are synced equally. The system uses priority tiers:
 
 ### Refresh Tiers
 
-| Tier | Criteria | Sync Interval |
-|------|----------|---------------|
-| `active` | CCU > 100 OR reviews/day > 1 | 6-12 hours |
-| `moderate` | CCU > 0 | 24-48 hours |
-| `dormant` | No activity for 90 days | Weekly |
-| `dead` | No activity for 1 year | Monthly |
+| Tier       | Criteria                     | Sync Interval |
+| ---------- | ---------------------------- | ------------- |
+| `active`   | CCU > 100 OR reviews/day > 1 | 6-12 hours    |
+| `moderate` | CCU > 0                      | 24-48 hours   |
+| `dormant`  | No activity for 90 days      | Weekly        |
+| `dead`     | No activity for 1 year       | Monthly       |
 
 ### Priority Scoring
 
@@ -121,6 +121,7 @@ Penalties:
 ### App Selection Query
 
 Workers use `get_apps_for_sync()` which:
+
 1. Filters by `next_sync_after < NOW()`
 2. Orders by `priority_score DESC`
 3. Prioritizes apps missing developer info
@@ -132,12 +133,12 @@ In addition to priority-based scheduling, review syncs use velocity-based interv
 
 ### Velocity Tiers
 
-| Tier | Reviews/Day | Sync Interval | Description |
-|------|-------------|---------------|-------------|
-| `high` | >= 5 | 4 hours | Active games getting many reviews |
-| `medium` | 1-5 | 12 hours | Moderate review activity |
-| `low` | 0.1-1 | 24 hours | Low but non-zero activity |
-| `dormant` | < 0.1 | 72 hours | Minimal review activity |
+| Tier      | Reviews/Day | Sync Interval | Description                       |
+| --------- | ----------- | ------------- | --------------------------------- |
+| `high`    | >= 5        | 4 hours       | Active games getting many reviews |
+| `medium`  | 1-5         | 12 hours      | Moderate review activity          |
+| `low`     | 0.1-1       | 24 hours      | Low but non-zero activity         |
+| `dormant` | < 0.1       | 72 hours      | Minimal review activity           |
 
 ### How It Works
 
@@ -170,13 +171,13 @@ In addition to priority-based scheduling, review syncs use velocity-based interv
 
 Each review sync creates a record in `review_deltas`:
 
-| Field | Description |
-|-------|-------------|
-| `delta_date` | Date of sync |
-| `total_reviews` | Absolute count at sync |
-| `reviews_added` | Delta from previous sync |
-| `daily_velocity` | Normalized to reviews/24h |
-| `is_interpolated` | FALSE for real syncs |
+| Field             | Description               |
+| ----------------- | ------------------------- |
+| `delta_date`      | Date of sync              |
+| `total_reviews`   | Absolute count at sync    |
+| `reviews_added`   | Delta from previous sync  |
+| `daily_velocity`  | Normalized to reviews/24h |
+| `is_interpolated` | FALSE for real syncs      |
 
 ### Interpolation
 
@@ -192,17 +193,17 @@ Day 4: Actual sync → 1012 reviews (is_interpolated = FALSE)
 
 **Worker**: `interpolation-worker.ts`
 **Schedule**: Daily at 05:00 UTC
-**Environment Variable**: `INTERPOLATION_DAYS` (default 30)
+**Environment Variables**: `INTERPOLATION_DAYS` (default 30), `INTERPOLATION_APP_BATCH_SIZE` (default 2000)
 
 ### New sync_status Columns
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `next_reviews_sync` | TIMESTAMPTZ | When due for review sync |
-| `reviews_interval_hours` | INTEGER | Hours between syncs (4/12/24/72) |
-| `review_velocity_tier` | TEXT | Current velocity tier |
-| `velocity_7d` | DECIMAL | 7-day velocity |
-| `velocity_calculated_at` | TIMESTAMPTZ | Last calculation time |
+| Column                   | Type        | Description                      |
+| ------------------------ | ----------- | -------------------------------- |
+| `next_reviews_sync`      | TIMESTAMPTZ | When due for review sync         |
+| `reviews_interval_hours` | INTEGER     | Hours between syncs (4/12/24/72) |
+| `review_velocity_tier`   | TEXT        | Current velocity tier            |
+| `velocity_7d`            | DECIMAL     | 7-day velocity                   |
+| `velocity_calculated_at` | TIMESTAMPTZ | Last calculation time            |
 
 ## Tiered CCU Tracking System (v2.2+)
 
@@ -210,11 +211,11 @@ CCU (concurrent user) data is collected via a three-tier system using Steam's na
 
 ### CCU Tier Definitions
 
-| Tier | Criteria | Polling Frequency | Games |
-|------|----------|-------------------|-------|
-| **Tier 1** | Top 500 by 7-day peak CCU | Hourly | ~500 |
-| **Tier 2** | Top 1000 newest releases (past year) | Every 2 hours (even hours) | ~1000 |
-| **Tier 3** | All other games | 3x daily (rotation) | ~120,000+ |
+| Tier       | Criteria                             | Polling Frequency          | Games     |
+| ---------- | ------------------------------------ | -------------------------- | --------- |
+| **Tier 1** | Top 500 by 7-day peak CCU            | Hourly                     | ~500      |
+| **Tier 2** | Top 1000 newest releases (past year) | Every 2 hours (even hours) | ~1000     |
+| **Tier 3** | All other games                      | 3x daily (rotation)        | ~120,000+ |
 
 ### CCU Rotation Tracking
 
@@ -239,12 +240,14 @@ SELECT * FROM get_tier3_games_partitioned(
 ```
 
 **How Partitioning Works:**
+
 1. All Tier 3 games are ordered by `last_ccu_synced ASC NULLS FIRST`
 2. Each game is assigned to a partition using `(row_number - 1) % partition_count`
 3. Each worker processes only its partition slice
 4. Results are evenly distributed regardless of appid gaps
 
 **Parallel Execution:**
+
 - Run 3 workers in parallel, each with a different `p_partition_id`
 - Each worker handles ~7k games (21k total / 3 partitions)
 - Reduces total sync time by ~3x
@@ -297,6 +300,7 @@ This reduces wasted API calls by 10-15%.
 ### Tier Recalculation
 
 At midnight UTC, the `recalculate_ccu_tiers()` function:
+
 1. Identifies top 500 games by 7-day peak CCU → Tier 1
 2. Identifies top 1000 newest releases → Tier 2
 3. All remaining games → Tier 3
@@ -305,6 +309,7 @@ At midnight UTC, the `recalculate_ccu_tiers()` function:
 ### CCU Source Tracking
 
 The `daily_metrics.ccu_source` column tracks data provenance:
+
 - `'steam_api'` - Exact CCU from Steam's GetNumberOfCurrentPlayers
 - `'steamspy'` - Estimated CCU from SteamSpy
 - `NULL` - Legacy data (source unknown)
@@ -336,23 +341,23 @@ All API calls go through a token bucket rate limiter:
 
 ```typescript
 const rateLimiter = new RateLimiter({
-  tokensPerInterval: 10,    // Burst capacity
-  interval: 5000,           // Refill interval (ms)
-  maxTokens: 10             // Maximum bucket size
+  tokensPerInterval: 10, // Burst capacity
+  interval: 5000, // Refill interval (ms)
+  maxTokens: 10, // Maximum bucket size
 });
 
-await rateLimiter.acquire();  // Blocks until token available
+await rateLimiter.acquire(); // Blocks until token available
 ```
 
 ### Per-API Rate Limits
 
-| API | Tokens/Interval | Interval | Effective Rate |
-|-----|-----------------|----------|----------------|
-| Storefront | 10 | 30s | 0.33/sec |
-| Reviews | 1 | 1s | 1/sec (v2.2: increased from 0.33) |
-| Histogram | 5 | 5s | 1/sec |
-| SteamSpy | 1 | 1s | 1/sec |
-| Steam CCU | 1 | 1s | 1/sec (v2.2) |
+| API        | Tokens/Interval | Interval | Effective Rate                    |
+| ---------- | --------------- | -------- | --------------------------------- |
+| Storefront | 10              | 30s      | 0.33/sec                          |
+| Reviews    | 1               | 1s       | 1/sec (v2.2: increased from 0.33) |
+| Histogram  | 5               | 5s       | 1/sec                             |
+| SteamSpy   | 1               | 1s       | 1/sec                             |
+| Steam CCU  | 1               | 1s       | 1/sec (v2.2)                      |
 
 ## Data Flow by Worker
 
@@ -406,6 +411,7 @@ daily_metrics    → app_trends (velocity)
 ```
 
 Calculates:
+
 - 30/90 day trend direction
 - Positive ratio changes
 - Review velocity (reviews/day)
@@ -430,6 +436,7 @@ review_deltas → review_velocity_stats (REFRESH MATERIALIZED VIEW)
 **Command**: `pnpm --filter @publisheriq/ingestion calculate-velocity`
 
 **What it does**:
+
 1. Refreshes `review_velocity_stats` materialized view
 2. Updates `sync_status` with new velocity tiers
 3. Sets `reviews_interval_hours` based on tier
@@ -444,11 +451,13 @@ review_deltas (sparse) → review_deltas (continuous)
 **Command**: `pnpm --filter @publisheriq/ingestion interpolate-reviews`
 
 **What it does**:
+
 1. Finds gaps in `review_deltas` between actual syncs
 2. Inserts interpolated records with `is_interpolated = TRUE`
 3. Linear interpolation between sync points
 
 **Environment Variables**:
+
 - `INTERPOLATION_DAYS` - Days to look back (default 30)
 
 ### 10. Refresh Views (v2.1+)
@@ -460,6 +469,7 @@ PostgreSQL tables → Materialized views (REFRESH CONCURRENTLY)
 **Workflow**: `refresh-views.yml`
 
 **Views refreshed**:
+
 - `latest_daily_metrics`
 - `publisher_metrics`
 - `developer_metrics`
@@ -480,6 +490,7 @@ Steam GetNumberOfCurrentPlayers API → ccu_snapshots
 **Command**: `pnpm --filter @publisheriq/ingestion ccu-tiered-sync`
 
 **What it does**:
+
 1. Fetches tier assignments from `ccu_tier_assignments`
 2. Determines which tiers to poll based on current hour
 3. Calls Steam API for each game in the batch
@@ -496,6 +507,7 @@ Steam GetNumberOfCurrentPlayers API → daily_metrics (Tier 3 games)
 **Command**: `pnpm --filter @publisheriq/ingestion ccu-daily-sync`
 
 **What it does**:
+
 1. Fetches Tier 3 games sorted by `last_ccu_synced ASC NULLS FIRST`
 2. Skips apps with active `ccu_skip_until` (invalid appids)
 3. Polls CCU for each game (up to `CCU_DAILY_LIMIT`, default 150k)
@@ -514,6 +526,7 @@ ccu_snapshots → aggregate_daily_ccu_peaks() → daily_metrics
 **Schedule**: Weekly on Sunday at 03:00 UTC
 
 **What it does**:
+
 1. Aggregates yesterday's hourly peaks to `daily_metrics`
 2. Deletes snapshots older than 30 days
 3. Maintains storage efficiency
@@ -542,18 +555,18 @@ Steam PICS Changes → Queue
 
 ### PICS Data Populated
 
-| Table | Data |
-|-------|------|
-| `steam_tags` | Tag ID → name mapping |
-| `steam_genres` | Genre ID → name mapping |
-| `steam_categories` | Category ID → name (features like achievements, multiplayer) |
-| `franchises` | Game series/franchise groupings |
-| `app_steam_tags` | App to tag with rank |
-| `app_genres` | App to genre with is_primary flag |
-| `app_categories` | App to feature categories |
-| `app_franchises` | App to franchise |
-| `app_steam_deck` | Steam Deck compatibility category |
-| `apps` columns | controller_support, platforms, pics_review_*, metacritic_score |
+| Table              | Data                                                            |
+| ------------------ | --------------------------------------------------------------- |
+| `steam_tags`       | Tag ID → name mapping                                           |
+| `steam_genres`     | Genre ID → name mapping                                         |
+| `steam_categories` | Category ID → name (features like achievements, multiplayer)    |
+| `franchises`       | Game series/franchise groupings                                 |
+| `app_steam_tags`   | App to tag with rank                                            |
+| `app_genres`       | App to genre with is_primary flag                               |
+| `app_categories`   | App to feature categories                                       |
+| `app_franchises`   | App to franchise                                                |
+| `app_steam_deck`   | Steam Deck compatibility category                               |
+| `apps` columns     | controller*support, platforms, pics_review*\*, metacritic_score |
 
 ---
 
@@ -640,31 +653,35 @@ Instead of OFFSET pagination (which is inefficient for large datasets), the work
 
 ### Qdrant Collections
 
-| Collection | Entity | Purpose |
-|------------|--------|---------|
-| `publisheriq_games` | Games | Find similar games |
+| Collection                         | Entity     | Purpose                 |
+| ---------------------------------- | ---------- | ----------------------- |
+| `publisheriq_games`                | Games      | Find similar games      |
 | `publisheriq_publishers_portfolio` | Publishers | Match by entire catalog |
-| `publisheriq_publishers_identity` | Publishers | Match by top games |
+| `publisheriq_publishers_identity`  | Publishers | Match by top games      |
 | `publisheriq_developers_portfolio` | Developers | Match by entire catalog |
-| `publisheriq_developers_identity` | Developers | Match by top games |
+| `publisheriq_developers_identity`  | Developers | Match by top games      |
 
 ### Performance Optimizations (v2.3)
 
 **Async Qdrant Writes:**
+
 - Uses `wait: false` for non-blocking upserts
 - Collection verification at sync completion ensures data integrity
 - Enables 10x throughput improvement over blocking writes
 
 **OpenAI API Retry Logic:**
+
 - 3 retries with exponential backoff (1s → 2s → 4s, max 10s)
 - Handles 429 (rate limit), 5xx errors, timeouts
 - `isRetryableError()` function classifies transient vs permanent failures
 
 **Progress Monitoring:**
+
 - Logs every 30 seconds during sync
 - Metrics: elapsed time, items processed/skipped, tokens used, items/minute
 
 **Selective Sync:**
+
 - `SYNC_COLLECTION` env var controls which entity types to sync
 - Options: `all`, `games`, `publishers`, `developers`
 
@@ -683,7 +700,7 @@ const retryConfig = {
   maxRetries: 3,
   initialDelay: 1000,
   maxDelay: 30000,
-  backoffMultiplier: 2
+  backoffMultiplier: 2,
 };
 ```
 
@@ -719,6 +736,7 @@ INSERT INTO sync_jobs (
 ### Sync Health Dashboard
 
 The admin dashboard at `/sync` shows:
+
 - Recent job history
 - Success/failure rates
 - Error messages

@@ -57,6 +57,7 @@ pnpm --filter @publisheriq/ingestion applist-sync
 ```
 
 **What it does:**
+
 - Calls Steam IStoreService API
 - Creates/updates records in `apps` table
 - Initializes `sync_status` for new apps
@@ -80,6 +81,7 @@ MAX_PAGES=5 pnpm --filter @publisheriq/ingestion steamspy-sync
 ```
 
 **What it does:**
+
 - Fetches bulk data page by page
 - Updates `daily_metrics` (owners, CCU, playtime)
 - Updates `app_tags`
@@ -103,6 +105,7 @@ BATCH_SIZE=100 pnpm --filter @publisheriq/ingestion storefront-sync
 ```
 
 **What it does:**
+
 - Fetches app details from Storefront API
 - Updates `apps` (metadata, prices, release dates)
 - Creates `publishers` and `developers` entries
@@ -123,6 +126,7 @@ pnpm --filter @publisheriq/ingestion reviews-sync
 ```
 
 **What it does:**
+
 - Calls Steam Reviews API
 - Updates `daily_metrics` (review counts, scores)
 - Creates `review_deltas` records for velocity tracking
@@ -142,6 +146,7 @@ pnpm --filter @publisheriq/ingestion histogram-sync
 ```
 
 **What it does:**
+
 - Calls Review Histogram API
 - Updates `review_histogram` table
 
@@ -160,6 +165,7 @@ pnpm --filter @publisheriq/ingestion trends-calculate
 ```
 
 **What it does:**
+
 - Analyzes `review_histogram` data
 - Computes 30/90-day trends
 - Updates `app_trends` table
@@ -179,6 +185,7 @@ pnpm --filter @publisheriq/ingestion priority-calculate
 ```
 
 **What it does:**
+
 - Analyzes activity metrics
 - Assigns refresh tiers
 - Updates `sync_status` priorities
@@ -198,6 +205,7 @@ pnpm --filter @publisheriq/ingestion calculate-velocity
 ```
 
 **What it does:**
+
 - Refreshes `review_velocity_stats` materialized view
 - Updates `sync_status` with velocity tiers
 - Sets dynamic review sync intervals (4/12/24/72 hours)
@@ -217,6 +225,7 @@ pnpm --filter @publisheriq/ingestion ccu-tiered-sync
 ```
 
 **What it does:**
+
 - Fetches exact CCU from Steam's GetNumberOfCurrentPlayers API
 - Syncs Tier 1 games (top 500 by 7-day peak CCU)
 - Syncs Tier 2 games (top 1000 newest releases)
@@ -248,6 +257,7 @@ CCU_DAILY_LIMIT=10000 pnpm --filter @publisheriq/ingestion ccu-daily-sync
 ```
 
 **What it does:**
+
 - Fetches Tier 3 games sorted by `last_ccu_synced ASC NULLS FIRST`
 - Skips apps with active `ccu_skip_until` (invalid appids)
 - Updates `daily_metrics.ccu` and `ccu_source`
@@ -260,6 +270,7 @@ CCU_DAILY_LIMIT=10000 pnpm --filter @publisheriq/ingestion ccu-daily-sync
 **Schedule:** Runs 3x daily (04:30, 12:30, 20:30 UTC) for full Tier 3 coverage
 
 **Environment Variables:**
+
 - `CCU_DAILY_LIMIT` - Maximum apps to sync (default 150000)
 
 ---
@@ -274,9 +285,13 @@ pnpm --filter @publisheriq/ingestion interpolate-reviews
 
 # Custom range
 INTERPOLATION_DAYS=60 pnpm --filter @publisheriq/ingestion interpolate-reviews
+
+# Custom app batch size
+INTERPOLATION_APP_BATCH_SIZE=1000 pnpm --filter @publisheriq/ingestion interpolate-reviews
 ```
 
 **What it does:**
+
 - Finds gaps in `review_deltas` table
 - Inserts interpolated records (`is_interpolated = TRUE`)
 - Linear interpolation between actual sync points
@@ -284,20 +299,22 @@ INTERPOLATION_DAYS=60 pnpm --filter @publisheriq/ingestion interpolate-reviews
 **Duration:** ~5-10 minutes
 
 **Environment Variables:**
+
 - `INTERPOLATION_DAYS` - Days to look back (default 30)
+- `INTERPOLATION_APP_BATCH_SIZE` - Apps per interpolation RPC batch (default 2000)
 
 ## Environment Variables
 
 Workers respect these environment variables:
 
-| Variable | Purpose |
-|----------|---------|
-| `SUPABASE_URL` | Database connection |
-| `SUPABASE_SERVICE_KEY` | Database auth |
-| `STEAM_API_KEY` | Steam API access |
-| `BATCH_SIZE` | Apps per batch (some workers) |
-| `MAX_PAGES` | Limit pages (SteamSpy) |
-| `GITHUB_RUN_ID` | Job tracking ID |
+| Variable               | Purpose                       |
+| ---------------------- | ----------------------------- |
+| `SUPABASE_URL`         | Database connection           |
+| `SUPABASE_SERVICE_KEY` | Database auth                 |
+| `STEAM_API_KEY`        | Steam API access              |
+| `BATCH_SIZE`           | Apps per batch (some workers) |
+| `MAX_PAGES`            | Limit pages (SteamSpy)        |
+| `GITHUB_RUN_ID`        | Job tracking ID               |
 
 ## Monitoring Progress
 
@@ -343,6 +360,7 @@ tail -f steamspy.log
 ### "Module not found"
 
 Build packages first:
+
 ```bash
 pnpm build
 ```
@@ -354,6 +372,7 @@ Wait for rate limit window to reset. Workers have built-in rate limiting, but ex
 ### "Database connection failed"
 
 Verify environment variables:
+
 ```bash
 echo $SUPABASE_URL
 echo $SUPABASE_SERVICE_KEY
