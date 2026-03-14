@@ -18,4 +18,5 @@ test('normalize helpers collapse whitespace and dedupe arrays', () => {
   );
   assert.equal(arraysEqual([1, 2, 3], [1, 2, 3]), true);
   assert.equal(arraysEqual([1, 2], [2, 1]), false);
+  assert.equal(arraysEqual([{ a: 1, b: 2 }], [{ b: 2, a: 1 }]), true);
 });

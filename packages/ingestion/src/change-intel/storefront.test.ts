@@ -74,6 +74,21 @@ test('storefront snapshot diff detects content changes', () => {
   assert.ok(types.includes('package_references_changed'));
 });
 
+test('storefront snapshot diff ignores platform key-order churn from stored jsonb payloads', () => {
+  const previousSnapshot = {
+    ...baseSnapshot,
+    platforms: {
+      mac: false,
+      linux: false,
+      windows: true,
+    },
+  };
+
+  const events = diffStorefrontSnapshots(previousSnapshot, baseSnapshot);
+
+  assert.equal(events.some((event) => event.eventType === 'platforms_changed'), false);
+});
+
 test('storefront media diff detects hero, screenshot, and trailer changes', () => {
   const previousMedia = normalizeStorefrontMediaVersion(baseSnapshot);
   const nextMedia = {
@@ -139,4 +154,30 @@ test('news diff distinguishes publish from edit', () => {
     contents: 'Updated notes',
   };
   assert.deepEqual(diffNewsVersions(published, edited).map((event) => event.eventType), ['news_edited']);
+});
+
+test('news diff ignores key-order-only changes from stored jsonb payloads', () => {
+  const published = normalizeNewsVersion({
+    gid: '100',
+    title: 'Patch Notes',
+    url: 'https://store.steampowered.com/news/app/10/view/100',
+    author: 'Valve',
+    contents: 'Initial notes',
+    feedlabel: 'Patchnotes',
+    date: 1_700_000_000,
+    feedname: 'steam_updates',
+  });
+
+  const reordered = {
+    contents: published.contents,
+    publishedAt: published.publishedAt,
+    gid: published.gid,
+    url: published.url,
+    title: published.title,
+    feedname: published.feedname,
+    author: published.author,
+    feedlabel: published.feedlabel,
+  };
+
+  assert.deepEqual(diffNewsVersions(published, reordered).map((event) => event.eventType), []);
 });

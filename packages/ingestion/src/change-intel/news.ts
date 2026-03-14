@@ -1,4 +1,4 @@
-import { normalizeText, normalizeUrl } from './hashing.js';
+import { normalizeText, normalizeUrl, stableStringify } from './hashing.js';
 import type { AppChangeEventDraft, NormalizedNewsVersion } from './types.js';
 
 export interface SteamNewsItemInput {
@@ -39,7 +39,7 @@ export function diffNewsVersions(
     ];
   }
 
-  if (JSON.stringify(previousVersion) === JSON.stringify(nextVersion)) {
+  if (stableStringify(previousVersion) === stableStringify(nextVersion)) {
     return [];
   }
 

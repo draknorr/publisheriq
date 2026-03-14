@@ -61,5 +61,5 @@ export function arraysEqual<T>(left: T[], right: T[]): boolean {
     return false;
   }
 
-  return left.every((value, index) => JSON.stringify(value) === JSON.stringify(right[index]));
+  return left.every((value, index) => stableStringify(value) === stableStringify(right[index]));
 }

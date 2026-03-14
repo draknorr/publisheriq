@@ -1,5 +1,5 @@
 import type { ParsedStorefrontApp } from '../apis/storefront.js';
-import { arraysEqual, normalizeStringArray, normalizeText, normalizeUrl } from './hashing.js';
+import { arraysEqual, normalizeStringArray, normalizeText, normalizeUrl, stableStringify } from './hashing.js';
 import type {
   AppChangeEventDraft,
   HeroAssetDescriptor,
@@ -66,13 +66,21 @@ function normalizeMovies(values: ParsedStorefrontApp['movies']): StorefrontMovie
 }
 
 function collectAdded<T>(nextValues: T[], previousValues: T[]): T[] {
-  const previousSet = new Set(previousValues.map((value) => JSON.stringify(value)));
-  return nextValues.filter((value) => !previousSet.has(JSON.stringify(value)));
+  const previousSet = new Set(previousValues.map((value) => stableStringify(value)));
+  return nextValues.filter((value) => !previousSet.has(stableStringify(value)));
 }
 
 function collectRemoved<T>(previousValues: T[], nextValues: T[]): T[] {
-  const nextSet = new Set(nextValues.map((value) => JSON.stringify(value)));
-  return previousValues.filter((value) => !nextSet.has(JSON.stringify(value)));
+  const nextSet = new Set(nextValues.map((value) => stableStringify(value)));
+  return previousValues.filter((value) => !nextSet.has(stableStringify(value)));
+}
+
+function listEnabledPlatforms(platforms: NormalizedStorefrontSnapshot['platforms']): string[] {
+  return normalizeStringArray(
+    Object.entries(platforms)
+      .filter(([, enabled]) => enabled)
+      .map(([platform]) => platform)
+  );
 }
 
 function maybePushArrayChange(
@@ -248,12 +256,8 @@ export function diffStorefrontSnapshots(
     events,
     'platforms_changed',
     'storefront',
-    Object.entries(previousSnapshot.platforms)
-      .filter(([, enabled]) => enabled)
-      .map(([platform]) => platform),
-    Object.entries(nextSnapshot.platforms)
-      .filter(([, enabled]) => enabled)
-      .map(([platform]) => platform)
+    listEnabledPlatforms(previousSnapshot.platforms),
+    listEnabledPlatforms(nextSnapshot.platforms)
   );
   maybePushArrayChange(events, 'developer_association_changed', 'storefront', previousSnapshot.developers, nextSnapshot.developers);
   maybePushArrayChange(events, 'publisher_association_changed', 'storefront', previousSnapshot.publishers, nextSnapshot.publishers);
