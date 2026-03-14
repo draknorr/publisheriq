@@ -10,6 +10,7 @@
 import { getServiceClient } from '@publisheriq/database';
 import { logger } from '@publisheriq/shared';
 import { fetchSteamAppChangeHints } from '../apis/steam-web.js';
+import { partitionHintRows, type ExistingHintStatusRow, type HintRow } from '../change-intel/hints.js';
 import { enqueueCaptureJobs } from '../change-intel/repository.js';
 import { buildHintCursor } from '../workers-support/change-intel.js';
 
@@ -17,45 +18,48 @@ const log = logger.child({ worker: 'app-change-hints' });
 
 type SupabaseClient = ReturnType<typeof getServiceClient>;
 
-interface HintRow {
-  appid: number;
-  lastModified: number;
-  priceChangeNumber: number;
-}
-
 async function processHintBatch(
   supabase: SupabaseClient,
   batch: HintRow[]
-): Promise<{ changed: number; enqueued: number }> {
+): Promise<{ changed: number; enqueued: number; skipped: number }> {
   const appids = batch.map((row) => row.appid);
   const db = supabase as any;
+  const { data: knownApps, error: knownAppsError } = await db
+    .from('apps')
+    .select('appid')
+    .in('appid', appids);
+
+  if (knownAppsError) {
+    throw new Error(`Failed to fetch known app rows: ${knownAppsError.message}`);
+  }
+
+  const knownAppids = new Set<number>((knownApps ?? []).map((row: { appid: number }) => row.appid));
+  if (knownAppids.size === 0) {
+    return {
+      changed: 0,
+      enqueued: 0,
+      skipped: batch.length,
+    };
+  }
+
+  const knownRows = batch.filter((row) => knownAppids.has(row.appid));
   const { data: existingRows, error: existingError } = await db
     .from('sync_status')
     .select('appid, steam_last_modified, steam_price_change_number')
-    .in('appid', appids);
+    .in('appid', knownRows.map((row) => row.appid));
 
   if (existingError) {
     throw new Error(`Failed to fetch existing hint rows: ${existingError.message}`);
   }
 
-  const existingByAppid = new Map<number, { steam_last_modified: number | null; steam_price_change_number: number | null }>(
-    (existingRows ?? []).map((row: { appid: number; steam_last_modified: number | null; steam_price_change_number: number | null }) => [
-      row.appid,
-      row,
-    ])
+  const existingByAppid = new Map<number, ExistingHintStatusRow>(
+    (existingRows ?? []).map((row: ExistingHintStatusRow) => [row.appid, row])
   );
 
-  const changedRows = batch.filter((row) => {
-    const existing = existingByAppid.get(row.appid);
-    return (
-      !existing ||
-      existing.steam_last_modified !== row.lastModified ||
-      existing.steam_price_change_number !== row.priceChangeNumber
-    );
-  });
+  const partitioned = partitionHintRows(batch, knownAppids, existingByAppid);
 
   const { error: updateError } = await db.from('sync_status').upsert(
-    batch.map((row) => ({
+    partitioned.knownRows.map((row) => ({
       appid: row.appid,
       steam_last_modified: row.lastModified,
       steam_price_change_number: row.priceChangeNumber,
@@ -69,7 +73,7 @@ async function processHintBatch(
 
   const enqueued = await enqueueCaptureJobs(
     supabase,
-    changedRows.map((row) => ({
+    partitioned.changedRows.map((row) => ({
       appid: row.appid,
       source: 'storefront',
       triggerReason: 'steam_app_change_hint',
@@ -79,8 +83,9 @@ async function processHintBatch(
   );
 
   return {
-    changed: changedRows.length,
+    changed: partitioned.changedRows.length,
     enqueued,
+    skipped: partitioned.skippedRows.length,
   };
 }
 
@@ -105,6 +110,7 @@ async function main(): Promise<void> {
     const hints = await fetchSteamAppChangeHints();
     let changed = 0;
     let enqueued = 0;
+    let skipped = 0;
 
     for (let index = 0; index < hints.length; index += batchSize) {
       const batch = hints.slice(index, index + batchSize);
@@ -118,6 +124,7 @@ async function main(): Promise<void> {
       );
       changed += result.changed;
       enqueued += result.enqueued;
+      skipped += result.skipped;
     }
 
     if (job) {
@@ -129,6 +136,7 @@ async function main(): Promise<void> {
           items_processed: hints.length,
           items_succeeded: changed,
           items_created: enqueued,
+          items_skipped: skipped,
         })
         .eq('id', job.id);
     }
@@ -137,6 +145,7 @@ async function main(): Promise<void> {
       totalHints: hints.length,
       changed,
       enqueued,
+      skippedUnknownApps: skipped,
       durationSeconds: ((Date.now() - startTime) / 1000).toFixed(1),
     });
   } catch (error) {
@@ -147,6 +156,7 @@ async function main(): Promise<void> {
           status: 'failed',
           completed_at: new Date().toISOString(),
           error_message: error instanceof Error ? error.message : String(error),
+          items_skipped: 0,
         })
         .eq('id', job.id);
     }
