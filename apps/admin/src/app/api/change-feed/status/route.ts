@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import type { ChangeFeedStatus } from '@/app/(main)/changes/lib';
 
 export const dynamic = 'force-dynamic';
@@ -97,10 +98,7 @@ function determineState(
 
 export async function GET() {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireAuthOrThrow();
 
     const supabase = await createServerClient();
     // Generated DB types will lag until the migration is applied.
@@ -163,6 +161,11 @@ export async function GET() {
 
     return NextResponse.json(status);
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Change Feed status GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

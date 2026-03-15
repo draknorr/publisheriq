@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import {
   DEFAULT_PREFERENCES,
   DEFAULT_PIN_SETTINGS,
@@ -20,10 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const { id: pinId } = await params;
     const supabase = await createServerClient();
@@ -65,6 +63,11 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Pin alert settings GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -76,10 +79,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const { id: pinId } = await params;
     const body = await request.json();
@@ -178,6 +178,11 @@ export async function PUT(
 
     return NextResponse.json(response);
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Pin alert settings PUT error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -189,10 +194,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const { id: pinId } = await params;
     const supabase = await createServerClient();
@@ -224,6 +226,11 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Pin alert settings DELETE error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

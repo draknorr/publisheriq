@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,10 +12,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/pins - List user's pins with current metrics
 export async function GET() {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const supabase = await createServerClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,6 +27,11 @@ export async function GET() {
 
     return NextResponse.json(data);
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Pins GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -37,10 +40,7 @@ export async function GET() {
 // POST /api/pins - Create a new pin
 export async function POST(request: NextRequest) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const body = await request.json();
     const { entityType, entityId, displayName } = body as {
@@ -89,6 +89,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Pins POST error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

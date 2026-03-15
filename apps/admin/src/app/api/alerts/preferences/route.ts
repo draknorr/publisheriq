@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import { DEFAULT_PREFERENCES, type AlertPreferences } from '@/types/alerts';
 
 export const dynamic = 'force-dynamic';
@@ -7,10 +8,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/alerts/preferences - Fetch user's alert preferences
 export async function GET() {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const supabase = await createServerClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,6 +45,11 @@ export async function GET() {
 
     return NextResponse.json(formatPreferences(data));
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Preferences GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -55,10 +58,7 @@ export async function GET() {
 // PUT /api/alerts/preferences - Update user's alert preferences
 export async function PUT(request: NextRequest) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const body = await request.json();
     const updates: Partial<AlertPreferences> = {};
@@ -125,6 +125,11 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(formatPreferences(data));
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Preferences PUT error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

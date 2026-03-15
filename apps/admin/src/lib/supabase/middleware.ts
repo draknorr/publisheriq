@@ -54,3 +54,29 @@ export async function updateSession(request: NextRequest) {
 
   return { user, response, supabase };
 }
+
+export function applyMiddlewareCookies(
+  sourceResponse: NextResponse,
+  targetResponse: NextResponse
+): NextResponse {
+  sourceResponse.cookies.getAll().forEach((cookie) => {
+    targetResponse.cookies.set(cookie);
+  });
+
+  return targetResponse;
+}
+
+export function createRedirectResponse(
+  sourceResponse: NextResponse,
+  url: string | URL
+): NextResponse {
+  return applyMiddlewareCookies(sourceResponse, NextResponse.redirect(url));
+}
+
+export function createJsonResponse<T>(
+  sourceResponse: NextResponse,
+  body: T,
+  init?: ResponseInit
+): NextResponse {
+  return applyMiddlewareCookies(sourceResponse, NextResponse.json(body, init));
+}

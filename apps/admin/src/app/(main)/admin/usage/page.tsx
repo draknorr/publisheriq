@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
 import { BarChart3, Coins, MessageSquare, Users } from 'lucide-react';
 
@@ -89,17 +89,7 @@ async function getToolUsageBreakdown() {
 }
 
 export default async function AdminUsagePage() {
-  // Check admin access
-  const result = await getUserWithProfile();
-
-  if (!result) {
-    redirect('/login');
-  }
-
-  if (result.profile.role !== 'admin') {
-    redirect('/');
-  }
-
+  await requireAdmin();
   const [stats, topUsers, toolUsage] = await Promise.all([
     getUsageStats(),
     getTopUsers(),

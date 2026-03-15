@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { Database } from '@publisheriq/database';
+import { sanitizeAuthNextPath } from '@/lib/auth/redirects';
 
 /**
  * Allowed origins for redirects.
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     siteUrl = getSiteUrl(origin);
     const token_hash = searchParams.get('token_hash');
     const typeParam = searchParams.get('type');
-    const next = searchParams.get('next') ?? '/dashboard';
+    const next = sanitizeAuthNextPath(searchParams.get('next'));
 
     // Validate type is one of the allowed EmailOtpType values
     const validTypes = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'] as const;

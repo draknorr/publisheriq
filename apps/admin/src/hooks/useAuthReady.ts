@@ -12,32 +12,44 @@
  */
 
 import { useState, useEffect } from 'react';
+import { waitForAuthenticatedBrowserUser } from '@/lib/auth/browser-session';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 export function useAuthReady(): boolean {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const supabase = createBrowserClient();
 
-    // Check if session is already available
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setIsReady(true);
+      const authReadyResult = await waitForAuthenticatedBrowserUser({
+        client: supabase,
+      });
+
+      if (!cancelled) {
+        setIsReady(authReadyResult.ok);
       }
     };
 
-    checkSession();
+    void checkSession();
 
     // Also listen for auth state changes in case session loads after initial check
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        setIsReady(true);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        if (!cancelled) {
+          setIsReady(false);
+        }
+        return;
       }
+
+      void checkSession();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return isReady;

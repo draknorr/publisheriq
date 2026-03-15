@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { updateSession } from '@/lib/supabase/middleware';
+import { getAuthNextPathFromUrl } from '@/lib/auth/redirects';
+import {
+  createJsonResponse,
+  createRedirectResponse,
+  updateSession,
+} from '@/lib/supabase/middleware';
 
 const AUTH_DEBUG = process.env.NEXT_PUBLIC_AUTH_DEBUG === 'true';
 
@@ -103,19 +108,22 @@ export async function middleware(request: NextRequest) {
   if (!user) {
     // API routes get 401 JSON response (not redirect)
     if (isApiPath(pathname)) {
-      return new Response(
-        JSON.stringify({ error: 'unauthorized', message: 'Authentication required' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      return createJsonResponse(
+        response,
+        { error: 'unauthorized', message: 'Authentication required' },
+        { status: 401 }
       );
     }
 
     // Web routes get redirect to login
     const loginUrl = new URL('/login', request.url);
-    // Preserve the intended destination
-    if (pathname !== '/dashboard') {
-      loginUrl.searchParams.set('next', pathname);
-    }
-    return NextResponse.redirect(loginUrl);
+    loginUrl.searchParams.set('next', getAuthNextPathFromUrl(request.nextUrl));
+    logAuthDebug('redirect-login', {
+      hostname,
+      pathname,
+      next: loginUrl.searchParams.get('next'),
+    });
+    return createRedirectResponse(response, loginUrl);
   }
 
   // Check admin access for admin paths
@@ -130,7 +138,7 @@ export async function middleware(request: NextRequest) {
     if (!profile || profile.role !== 'admin') {
       // Non-admin trying to access admin routes - redirect to dashboard
       const dashboardUrl = new URL('/dashboard', request.url);
-      return NextResponse.redirect(dashboardUrl);
+      return createRedirectResponse(response, dashboardUrl);
     }
   }
 

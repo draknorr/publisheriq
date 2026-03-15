@@ -1,5 +1,10 @@
+import { NextResponse } from 'next/server';
 import { redirect } from 'next/navigation';
-import { createServerClient, getUserWithProfile, type UserProfile } from './supabase/server';
+import {
+  createServerClient,
+  getUserWithProfileResult,
+  type UserProfile,
+} from './supabase/server';
 import type { User } from '@supabase/supabase-js';
 
 export class AuthenticationError extends Error {
@@ -16,18 +21,48 @@ export class AuthorizationError extends Error {
   }
 }
 
+export class ProfileRecoveryError extends Error {
+  constructor(message = 'Unable to recover your account profile') {
+    super(message);
+    this.name = 'ProfileRecoveryError';
+  }
+}
+
+export function getAuthErrorResponse(error: unknown): NextResponse | null {
+  if (error instanceof ProfileRecoveryError) {
+    return NextResponse.json(
+      { error: 'Profile recovery failed. Please try signing in again.' },
+      { status: 503 }
+    );
+  }
+
+  if (error instanceof AuthenticationError) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (error instanceof AuthorizationError) {
+    return NextResponse.json({ error: error.message }, { status: 403 });
+  }
+
+  return null;
+}
+
 /**
  * Requires authentication. Redirects to login if not authenticated.
  * Use in server components or API routes.
  */
 export async function requireAuth(): Promise<{ user: User; profile: UserProfile }> {
-  const result = await getUserWithProfile();
+  const result = await getUserWithProfileResult();
 
-  if (!result) {
-    redirect('/login');
+  if (result.status === 'authenticated') {
+    return result;
   }
 
-  return result;
+  if (result.status === 'profile_repair_failed') {
+    redirect('/login?error=profile_recovery_failed');
+  }
+
+  redirect('/login');
 }
 
 /**
@@ -35,11 +70,7 @@ export async function requireAuth(): Promise<{ user: User; profile: UserProfile 
  * Use in server components or API routes.
  */
 export async function requireAdmin(): Promise<{ user: User; profile: UserProfile }> {
-  const result = await getUserWithProfile();
-
-  if (!result) {
-    redirect('/login');
-  }
+  const result = await requireAuth();
 
   if (result.profile.role !== 'admin') {
     redirect('/');
@@ -53,13 +84,17 @@ export async function requireAdmin(): Promise<{ user: User; profile: UserProfile
  * Use in API routes where you want to return an error response.
  */
 export async function requireAuthOrThrow(): Promise<{ user: User; profile: UserProfile }> {
-  const result = await getUserWithProfile();
+  const result = await getUserWithProfileResult();
 
-  if (!result) {
-    throw new AuthenticationError();
+  if (result.status === 'authenticated') {
+    return result;
   }
 
-  return result;
+  if (result.status === 'profile_repair_failed') {
+    throw new ProfileRecoveryError(result.reason);
+  }
+
+  throw new AuthenticationError();
 }
 
 /**
@@ -67,11 +102,7 @@ export async function requireAuthOrThrow(): Promise<{ user: User; profile: UserP
  * Use in API routes where you want to return an error response.
  */
 export async function requireAdminOrThrow(): Promise<{ user: User; profile: UserProfile }> {
-  const result = await getUserWithProfile();
-
-  if (!result) {
-    throw new AuthenticationError();
-  }
+  const result = await requireAuthOrThrow();
 
   if (result.profile.role !== 'admin') {
     throw new AuthorizationError('Admin role required');
@@ -96,9 +127,9 @@ export async function getCreditsForChat(minimumRequired: number = 4): Promise<{
   hasMinimum: boolean;
   userId: string;
 } | null> {
-  const result = await getUserWithProfile();
+  const result = await getUserWithProfileResult();
 
-  if (!result) {
+  if (result.status !== 'authenticated') {
     return null;
   }
 

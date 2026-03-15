@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import type {
   ChangeFeedNewsResponse,
   RawChangeNewsRow,
@@ -35,10 +36,7 @@ function isDefaultNewsRequest(params: ReturnType<typeof parseChangeFeedNewsParam
 
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireAuthOrThrow();
 
     const params = parseChangeFeedNewsParams(request.nextUrl.searchParams);
     const isDefaultRequest = isDefaultNewsRequest(params);
@@ -97,6 +95,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Change Feed news GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

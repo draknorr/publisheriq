@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import type {
   ChangeFeedBurstsResponse,
   RawChangeBurstRow,
@@ -38,10 +39,7 @@ function isDefaultBurstsRequest(params: ReturnType<typeof parseChangeFeedBurstPa
 
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireAuthOrThrow();
 
     const params = parseChangeFeedBurstParams(request.nextUrl.searchParams);
     const isDefaultRequest = isDefaultBurstsRequest(params);
@@ -104,6 +102,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Change Feed bursts GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

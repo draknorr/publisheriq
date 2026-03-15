@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
-import { getUserWithProfile, createServerClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
 import { Coins, History, User } from 'lucide-react';
 import { SignOutButton } from './SignOutButton';
@@ -55,12 +55,7 @@ function formatDate(dateString: string): string {
 }
 
 export default async function AccountPage() {
-  const result = await getUserWithProfile();
-
-  if (!result) {
-    redirect('/login');
-  }
-
+  const result = await requireAuth();
   const { profile } = result;
   const transactions = await getRecentTransactions(profile.id);
 

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getUserWithProfile } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth-utils';
 import { Card } from '@/components/ui';
 
 export const metadata: Metadata = {
@@ -66,15 +65,7 @@ function buildChatHref(query: string): string {
 }
 
 export default async function AdminChatSmokeTestsPage() {
-  const result = await getUserWithProfile();
-
-  if (!result) {
-    redirect('/login');
-  }
-
-  if (result.profile.role !== 'admin') {
-    redirect('/');
-  }
+  await requireAdmin();
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -136,4 +127,3 @@ export default async function AdminChatSmokeTestsPage() {
     </div>
   );
 }
-

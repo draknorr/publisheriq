@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import type { ChangeBurstDetail, RawChangeBurstDetailRow } from '@/app/(main)/changes/lib';
 import {
   isMissingChangeFeedRpcError,
@@ -13,10 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ burstId: string }> }
 ) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireAuthOrThrow();
 
     const { burstId } = await params;
     const decodedBurstId = decodeURIComponent(burstId);
@@ -51,6 +49,11 @@ export async function GET(
     const detail: ChangeBurstDetail = mapChangeBurstDetail(rawDetail);
     return NextResponse.json({ item: detail });
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Change Feed burst detail GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

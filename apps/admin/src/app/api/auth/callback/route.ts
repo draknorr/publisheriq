@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { sanitizeAuthNextPath } from '@/lib/auth/redirects';
 
 /**
  * Allowed origins for auth redirects.
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const targetOrigin = searchParams.get('origin');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const next = sanitizeAuthNextPath(searchParams.get('next'));
 
   if (!code) {
     // No code parameter - redirect to client-side handler

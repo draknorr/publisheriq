@@ -7,11 +7,12 @@ import { Gamepad2, Mail, UserPlus, ArrowRight, Loader2, KeyRound } from 'lucide-
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { waitForAuthenticatedBrowserUser } from '@/lib/auth/browser-session';
+import { sanitizeAuthNextPath } from '@/lib/auth/redirects';
 import { createBrowserClientNoRefresh } from '@/lib/supabase/client';
 
 const AUTH_DEBUG = process.env.NEXT_PUBLIC_AUTH_DEBUG === 'true';
-const SESSION_PERSISTENCE_RETRY_DELAY_MS = 120;
-const SESSION_PERSISTENCE_MAX_ATTEMPTS = 3;
+const AUTH_SESSION_READY_TIMEOUT_MS = 5000;
 const VERIFY_OTP_TIMEOUT_MS = 15000;
 const SESSION_CHECK_TIMEOUT_MS = 3000;
 
@@ -50,50 +51,10 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   return Promise.race([promise, timeoutPromise]);
 }
 
-async function hasPersistedSession(): Promise<boolean> {
-  for (let attempt = 1; attempt <= SESSION_PERSISTENCE_MAX_ATTEMPTS; attempt += 1) {
-    const persistedClient = createBrowserClientNoRefresh();
-    let session: unknown = null;
-    let error: unknown = null;
-
-    try {
-      const result = await withTimeout(
-        persistedClient.auth.getSession(),
-        SESSION_CHECK_TIMEOUT_MS,
-        'persisted-session-check'
-      );
-      session = result.data.session;
-      error = result.error;
-    } catch (err) {
-      logAuthDebug('persisted-session-check-timeout', { attempt, error: String(err) });
-      return false;
-    }
-
-    logAuthDebug('persisted-session-check', {
-      attempt,
-      hasSession: !!session,
-      hasError: !!error,
-    });
-
-    if (session) {
-      return true;
-    }
-
-    if (error) {
-      return false;
-    }
-
-    if (attempt < SESSION_PERSISTENCE_MAX_ATTEMPTS) {
-      await new Promise((resolve) => setTimeout(resolve, SESSION_PERSISTENCE_RETRY_DELAY_MS));
-    }
-  }
-
-  return false;
-}
-
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = sanitizeAuthNextPath(searchParams.get('next'));
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -112,16 +73,50 @@ function LoginPageContent() {
   // createBrowserClientNoRefresh already prevents token refresh loops,
   // so we don't need to call signOut() for stale sessions
   useEffect(() => {
+    let cancelled = false;
+
     const checkSession = async () => {
-      const supabase = createBrowserClientNoRefresh();
-      const { data: { session } } = await supabase.auth.getSession();
-      logAuthDebug('existing-session-check', { hasSession: !!session });
-      if (session) {
-        router.replace(searchParams.get('next') || '/dashboard');
+      if (searchParams.get('error') === 'profile_recovery_failed') {
+        return;
+      }
+
+      try {
+        const supabase = createBrowserClientNoRefresh();
+        const {
+          data: { session },
+        } = await withTimeout(
+          supabase.auth.getSession(),
+          SESSION_CHECK_TIMEOUT_MS,
+          'existing-session-check'
+        );
+
+        logAuthDebug('existing-session-check', { hasSession: !!session });
+        if (!session) {
+          return;
+        }
+
+        const authReadyResult = await waitForAuthenticatedBrowserUser({
+          timeoutMs: AUTH_SESSION_READY_TIMEOUT_MS,
+        });
+
+        logAuthDebug('existing-session-authoritative-check', {
+          ok: authReadyResult.ok,
+          sourceOrReason: authReadyResult.ok ? authReadyResult.source : authReadyResult.reason,
+        });
+
+        if (!cancelled && authReadyResult.ok) {
+          router.replace(nextPath);
+        }
+      } catch (err) {
+        logAuthDebug('existing-session-check-failed', { error: String(err) });
       }
     };
-    checkSession();
-  }, [router, searchParams]);
+
+    void checkSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [nextPath, router, searchParams]);
 
   // Handle error from failed auth callback
   useEffect(() => {
@@ -130,6 +125,8 @@ function LoginPageContent() {
       setError('Sign-in code expired or invalid. Please request a new one.');
     } else if (urlError === 'missing_token') {
       setError('Invalid sign-in link. Please request a new one.');
+    } else if (urlError === 'profile_recovery_failed') {
+      setError('Your sign-in succeeded, but we could not restore your account profile. Please try again.');
     }
   }, [searchParams]);
 
@@ -261,22 +258,22 @@ function LoginPageContent() {
         return;
       }
 
-      // If verifyOtp returned a direct session, proceed immediately and verify persistence in background.
-      // This avoids trapping users in a loading state when browser session checks stall.
-      if (data.session) {
-        void hasPersistedSession().then((persistedSessionReady) => {
-          logAuthDebug('post-verify-background-persist-check', { persistedSessionReady });
-        });
-      } else {
-        const persistedSessionReady = await hasPersistedSession();
-        if (!persistedSessionReady) {
-          setError('Verification succeeded but your session was not persisted. Please try again.');
-          setIsVerifying(false);
-          return;
-        }
+      const authReadyResult = await waitForAuthenticatedBrowserUser({
+        timeoutMs: AUTH_SESSION_READY_TIMEOUT_MS,
+      });
+
+      logAuthDebug('post-verify-authoritative-check', {
+        ok: authReadyResult.ok,
+        sourceOrReason: authReadyResult.ok ? authReadyResult.source : authReadyResult.reason,
+      });
+
+      if (!authReadyResult.ok) {
+        setError('Verification succeeded but your session was not fully established. Please try again.');
+        setIsVerifying(false);
+        return;
       }
 
-      router.replace(searchParams.get('next') || '/dashboard');
+      router.replace(nextPath);
     } catch (err) {
       logAuthDebug('verify-flow-failed', { error: String(err) });
       setError('Verification timed out. Please try again.');
@@ -417,7 +414,7 @@ function LoginPageContent() {
           </div>
 
           <p className="text-body-xs text-text-tertiary mt-4 text-center">
-            The code expires in 1 hour.
+            The code expires in 10 minutes.
           </p>
         </Card>
       </div>

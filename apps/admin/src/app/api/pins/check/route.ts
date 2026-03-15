@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,10 +10,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/pins/check?entityType=game&entityId=123 - Check if entity is pinned
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserWithProfile();
-    if (!result) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireAuthOrThrow();
 
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get('entityType');
@@ -54,6 +52,11 @@ export async function GET(request: NextRequest) {
       pinId: data?.id ?? null,
     });
   } catch (error) {
+    const authErrorResponse = getAuthErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
     console.error('Pins check error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

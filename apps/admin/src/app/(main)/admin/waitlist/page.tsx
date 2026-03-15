@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
-import { createServerClient, getUserWithProfile } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth-utils';
+import { createServerClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
 import { Clock, CheckCircle, XCircle } from 'lucide-react';
 import { WaitlistTable } from './WaitlistTable';
@@ -57,17 +57,7 @@ async function getWaitlistStats() {
 }
 
 export default async function AdminWaitlistPage() {
-  // Check admin access
-  const result = await getUserWithProfile();
-
-  if (!result) {
-    redirect('/login');
-  }
-
-  if (result.profile.role !== 'admin') {
-    redirect('/');
-  }
-
+  const result = await requireAdmin();
   const [entries, stats] = await Promise.all([getWaitlistEntries(), getWaitlistStats()]);
 
   return (

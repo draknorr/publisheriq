@@ -2,8 +2,13 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sanitizeAuthNextPath } from '@/lib/auth/redirects';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { waitForAuthenticatedBrowserUser } from '@/lib/auth/browser-session';
 import { Loader2 } from 'lucide-react';
+
+const AUTH_SESSION_READY_TIMEOUT_MS = 10000;
+const CODE_EXCHANGE_TIMEOUT_MS = 10000;
 
 /**
  * Client-side auth callback handler for implicit flow.
@@ -17,6 +22,7 @@ import { Loader2 } from 'lucide-react';
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = sanitizeAuthNextPath(searchParams.get('next'));
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
 
@@ -24,33 +30,36 @@ function AuthCallbackContent() {
     const handleAuthCallback = async () => {
       try {
         const supabase = createBrowserClient();
+        const buildLoginRedirect = (errorCode: string) => {
+          const params = new URLSearchParams({ error: errorCode });
+          if (nextPath !== '/dashboard') {
+            params.set('next', nextPath);
+          }
+          return `/login?${params.toString()}`;
+        };
 
         // Check if there's a hash fragment with auth tokens (implicit flow)
         // Supabase client auto-detects this on initialization
         const hash = window.location.hash;
 
         if (hash && hash.includes('access_token')) {
-          // Implicit flow - Supabase handles hash parsing automatically
-          // Wait a moment for the session to be established
-          await new Promise(resolve => setTimeout(resolve, 100));
+          const authReadyResult = await waitForAuthenticatedBrowserUser({
+            client: supabase,
+            timeoutMs: AUTH_SESSION_READY_TIMEOUT_MS,
+          });
 
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-            setError('Failed to establish session. Please try again.');
-            return;
-          }
-
-          if (session) {
+          if (authReadyResult.ok) {
             // Clear the hash from URL for cleanliness
             window.history.replaceState(null, '', window.location.pathname);
 
             // Success - redirect to intended destination
-            const next = searchParams.get('next') || '/dashboard';
-            router.replace(next);
+            router.replace(nextPath);
             return;
           }
+
+          setError('Failed to establish your authenticated session. Please try again.');
+          setTimeout(() => router.replace(buildLoginRedirect('auth_failed')), 2000);
+          return;
         }
 
         // Check for PKCE code in query params (from magic link via API route)
@@ -59,30 +68,38 @@ function AuthCallbackContent() {
           // Add timeout to prevent hanging - Supabase exchange can hang if code is invalid
           const exchangePromise = supabase.auth.exchangeCodeForSession(code);
           const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Exchange timeout')), 10000)
+            setTimeout(() => reject(new Error('Exchange timeout')), CODE_EXCHANGE_TIMEOUT_MS)
           );
 
           try {
-            const { data, error: exchangeError } = await Promise.race([exchangePromise, timeoutPromise]);
+            const { error: exchangeError } = await Promise.race([exchangePromise, timeoutPromise]);
 
             if (exchangeError) {
               console.error('Code exchange error:', exchangeError);
               setError('Sign-in link expired or invalid. Please request a new one.');
-              setTimeout(() => router.replace('/login?error=auth_failed'), 2000);
+              setTimeout(() => router.replace(buildLoginRedirect('auth_failed')), 2000);
               return;
             }
 
-            if (data.session) {
+            const authReadyResult = await waitForAuthenticatedBrowserUser({
+              client: supabase,
+              timeoutMs: AUTH_SESSION_READY_TIMEOUT_MS,
+            });
+
+            if (authReadyResult.ok) {
               // Clear code from URL
               window.history.replaceState(null, '', window.location.pathname);
-              const next = searchParams.get('next') || '/dashboard';
-              router.replace(next);
+              router.replace(nextPath);
               return;
             }
+
+            setError('Failed to establish your authenticated session. Please try again.');
+            setTimeout(() => router.replace(buildLoginRedirect('auth_failed')), 2000);
+            return;
           } catch (timeoutErr) {
             console.error('Exchange timed out:', timeoutErr);
             setError('Sign-in link expired or invalid. Please request a new one.');
-            setTimeout(() => router.replace('/login?error=auth_failed'), 2000);
+            setTimeout(() => router.replace(buildLoginRedirect('auth_failed')), 2000);
             return;
           }
         }
@@ -97,17 +114,20 @@ function AuthCallbackContent() {
 
         // No auth tokens found - might be direct navigation
         // Try to get existing session
-        const { data: { session } } = await supabase.auth.getSession();
+        const authReadyResult = await waitForAuthenticatedBrowserUser({
+          client: supabase,
+          timeoutMs: 2000,
+        });
 
-        if (session) {
+        if (authReadyResult.ok) {
           // Already logged in
-          router.replace('/dashboard');
+          router.replace(nextPath);
           return;
         }
 
         // No session, no tokens - redirect to login
         setError('No authentication data found. Redirecting to login...');
-        setTimeout(() => router.replace('/login'), 2000);
+        setTimeout(() => router.replace(buildLoginRedirect('auth_failed')), 2000);
 
       } catch (err) {
         console.error('Auth callback error:', err);
@@ -118,7 +138,7 @@ function AuthCallbackContent() {
     };
 
     handleAuthCallback();
-  }, [router, searchParams]);
+  }, [nextPath, router, searchParams]);
 
   if (error) {
     return (
@@ -132,7 +152,13 @@ function AuthCallbackContent() {
           <h2 className="text-heading text-text-primary mb-2">Authentication Error</h2>
           <p className="text-body-sm text-text-secondary mb-4">{error}</p>
           <button
-            onClick={() => router.replace('/login')}
+            onClick={() =>
+              router.replace(
+                nextPath === '/dashboard'
+                  ? '/login'
+                  : `/login?next=${encodeURIComponent(nextPath)}`
+              )
+            }
             className="px-4 py-2 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/90 transition-colors"
           >
             Return to Login
