@@ -31,6 +31,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.py[cod]
+
+# Python
+__pycache__/
 
 # Testing
 coverage
@@ -40,3 +44,6 @@ coverage
 supabase/.branches
 supabase/.temp
 .vercel
+
+# Local audit workspace
+bug-audit/
