@@ -4,67 +4,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { Database } from '@publisheriq/database';
 import { sanitizeAuthNextPath } from '@/lib/auth/redirects';
-
-/**
- * Allowed origins for redirects.
- * SECURITY FIX (AUTH-07): Validate origin to prevent host header injection.
- */
-const ALLOWED_ORIGINS = [
-  'https://publisheriq.app',
-  'https://www.publisheriq.app',
-  'https://app.publisheriq.app',
-];
-
-/**
- * Check if an origin is allowed for redirects.
- */
-function isAllowedOrigin(origin: string): boolean {
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    return true;
-  }
-  // Allow Vercel preview URLs
-  try {
-    const url = new URL(origin);
-    if (url.hostname.endsWith('.vercel.app')) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
-}
-
-/**
- * Ensure URL has https:// protocol.
- */
-function ensureProtocol(url: string): string {
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url;
-  }
-  return `https://${url}`;
-}
-
-/**
- * Get the site URL for redirects.
- * Uses env var if set, otherwise validates request origin against allowlist.
- */
-function getSiteUrl(requestOrigin: string): string {
-  // Prefer explicit env var for production
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return ensureProtocol(process.env.NEXT_PUBLIC_SITE_URL);
-  }
-  // Validate request origin against allowlist
-  const normalizedOrigin = ensureProtocol(requestOrigin);
-  if (isAllowedOrigin(normalizedOrigin)) {
-    return normalizedOrigin;
-  }
-  // Fallback to Vercel URL for previews
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  // Last resort: localhost for development
-  return 'http://localhost:3001';
-}
+import { buildAuthUrl, resolveAuthOrigin } from '@/lib/auth/origin';
 
 /**
  * Token hash verification route for magic link authentication.
@@ -77,14 +17,22 @@ function getSiteUrl(requestOrigin: string): string {
  * {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
  */
 export async function GET(request: NextRequest) {
-  let siteUrl = 'https://www.publisheriq.app'; // Safe default
+  let siteOrigin = resolveAuthOrigin(
+    request.nextUrl.origin,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    'http://localhost:3001'
+  );
 
   try {
     const url = new URL(request.url);
     const searchParams = url.searchParams;
-    // Ensure origin has protocol (URL.origin should include it, but be defensive)
-    const origin = url.origin.startsWith('http') ? url.origin : `https://${url.origin}`;
-    siteUrl = getSiteUrl(origin);
+    siteOrigin = resolveAuthOrigin(
+      url.origin,
+      process.env.NEXT_PUBLIC_SITE_URL,
+      process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+      'http://localhost:3001'
+    );
     const token_hash = searchParams.get('token_hash');
     const typeParam = searchParams.get('type');
     const next = sanitizeAuthNextPath(searchParams.get('next'));
@@ -94,7 +42,7 @@ export async function GET(request: NextRequest) {
     type EmailOtpType = typeof validTypes[number];
 
     if (!token_hash || !typeParam || !validTypes.includes(typeParam as EmailOtpType)) {
-      return NextResponse.redirect(`${siteUrl}/login?error=missing_token`);
+      return NextResponse.redirect(buildAuthUrl('/login?error=missing_token', siteOrigin));
     }
 
     const type = typeParam as EmailOtpType;
@@ -121,11 +69,11 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Token verification error:', error);
-      return NextResponse.redirect(`${siteUrl}/login?error=invalid_token`);
+      return NextResponse.redirect(buildAuthUrl('/login?error=invalid_token', siteOrigin));
     }
 
     // Create redirect response and attach session cookies
-    const response = NextResponse.redirect(`${siteUrl}${next}`);
+    const response = NextResponse.redirect(new URL(next, siteOrigin));
     cookiesToSet.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options);
     });
@@ -133,6 +81,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (err) {
     console.error('Auth confirm error:', err);
-    return NextResponse.redirect(`${siteUrl}/login?error=server_error`);
+    return NextResponse.redirect(buildAuthUrl('/login?error=server_error', siteOrigin));
   }
 }

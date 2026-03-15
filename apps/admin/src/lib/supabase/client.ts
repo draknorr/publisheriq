@@ -5,6 +5,14 @@ import type { Database } from '@publisheriq/database';
 // Using ReturnType to match the exact type returned by createSupabaseBrowserClient
 let browserClient: ReturnType<typeof createSupabaseBrowserClient<Database>> | null = null;
 
+const browserCookieOptions = {
+  // Keep cookies host-only to avoid cross-host session drift between apex/www.
+  sameSite: 'lax' as const,
+  secure: process.env.NODE_ENV === 'production',
+  path: '/',
+  maxAge: 604800, // 7 days in seconds - persist session across browser close
+};
+
 /**
  * Creates or returns the singleton Supabase client for browser/client components.
  * Using a singleton prevents multiple auth listeners and token refresh loops
@@ -27,13 +35,7 @@ export function createBrowserClient() {
         detectSessionInUrl: true,
         autoRefreshToken: true,
       },
-      cookieOptions: {
-        // Keep cookies host-only to avoid cross-host session drift between apex/www.
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-        maxAge: 604800, // 7 days in seconds - persist session across browser close
-      },
+      cookieOptions: browserCookieOptions,
     }
   );
 
@@ -41,27 +43,26 @@ export function createBrowserClient() {
 }
 
 /**
- * Creates a Supabase client WITHOUT auto token refresh.
- * Use this on the login page to prevent refresh loops when stale tokens exist.
- * This is NOT a singleton - each call creates a fresh instance.
+ * Creates an isolated browser client that never reuses the shared singleton.
+ * Use this for auth flows that need a fresh client instance.
+ *
+ * Note: @supabase/ssr always enables browser auto-refresh internally.
+ * Callers that need refresh fully suppressed should stop it immediately after creation.
  */
-export function createBrowserClientNoRefresh() {
+export function createIsolatedBrowserClient() {
   return createSupabaseBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      auth: {
-        detectSessionInUrl: false,
-        autoRefreshToken: false,
-        persistSession: true,
-      },
-      cookieOptions: {
-        // Keep cookies host-only to avoid cross-host session drift between apex/www.
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-        maxAge: 604800,
-      },
+      isSingleton: false,
+      cookieOptions: browserCookieOptions,
     }
   );
+}
+
+/**
+ * Backward-compatible alias for the login flow.
+ */
+export function createBrowserClientNoRefresh() {
+  return createIsolatedBrowserClient();
 }

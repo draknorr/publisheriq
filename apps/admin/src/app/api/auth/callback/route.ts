@@ -1,41 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { sanitizeAuthNextPath } from '@/lib/auth/redirects';
-
-/**
- * Allowed origins for auth redirects.
- * This prevents open redirect vulnerabilities where attackers could redirect
- * users to malicious sites after authentication.
- */
-const ALLOWED_ORIGINS = [
-  // Production
-  'https://publisheriq.app',
-  'https://app.publisheriq.app',
-  'https://www.publisheriq.app',
-  // Vercel previews (pattern matching done separately)
-];
-
-/**
- * Check if an origin is allowed for redirects.
- */
-function isAllowedOrigin(origin: string): boolean {
-  // Exact match against allowlist
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    return true;
-  }
-
-  // Allow Vercel preview URLs (*.vercel.app)
-  try {
-    const url = new URL(origin);
-    if (url.hostname.endsWith('.vercel.app')) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-
-  return false;
-}
+import { buildAuthUrl, isAllowedAuthOrigin, resolveAuthOrigin } from '@/lib/auth/origin';
 
 /**
  * Server-side auth callback handler.
@@ -51,18 +17,30 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const targetOrigin = searchParams.get('origin');
   const next = sanitizeAuthNextPath(searchParams.get('next'));
+  const fallbackOrigin = resolveAuthOrigin(
+    origin,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    'http://localhost:3001'
+  );
 
   if (!code) {
     // No code parameter - redirect to client-side handler
-    return NextResponse.redirect(`${origin}/auth/callback`);
+    return NextResponse.redirect(buildAuthUrl('/auth/callback', fallbackOrigin));
   }
 
   // SECURITY FIX: Validate origin parameter to prevent open redirect
   // Only allow redirects to known-safe origins
-  let destination = origin; // Default to current origin
+  let destination = fallbackOrigin;
   if (targetOrigin) {
-    if (isAllowedOrigin(targetOrigin)) {
-      destination = targetOrigin;
+    if (isAllowedAuthOrigin(targetOrigin)) {
+      destination = resolveAuthOrigin(
+        targetOrigin,
+        origin,
+        process.env.NEXT_PUBLIC_SITE_URL,
+        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+        'http://localhost:3001'
+      );
     } else {
       console.warn(`Blocked redirect to untrusted origin: ${targetOrigin}`);
       // Fall back to current origin instead of redirecting to untrusted site

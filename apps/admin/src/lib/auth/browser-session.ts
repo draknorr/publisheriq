@@ -4,7 +4,8 @@ import type { User } from '@supabase/supabase-js';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 const DEFAULT_AUTH_TIMEOUT_MS = 5000;
-const DEFAULT_POLL_INTERVAL_MS = 150;
+const DEFAULT_POLL_INTERVAL_MS = 250;
+const MAX_POLL_INTERVAL_MS = 1500;
 
 type BrowserSupabaseClient = ReturnType<typeof createBrowserClient>;
 type BrowserAuthReadySource = 'initial-user' | 'initial-session' | 'event' | 'poll';
@@ -75,6 +76,7 @@ export async function waitForAuthenticatedBrowserUser(
     };
   }
 
+  let initialTransientError: string | undefined;
   if (initialSession) {
     const initialUserResult = await getAuthoritativeUser(supabase);
     if (initialUserResult.error && !isTransientUserResolutionError(initialUserResult.error)) {
@@ -92,11 +94,24 @@ export async function waitForAuthenticatedBrowserUser(
         source: 'initial-user',
       };
     }
+
+    initialTransientError = initialUserResult.error ?? 'Authenticated session did not return a user yet.';
   }
 
   return new Promise<BrowserAuthReadyResult>((resolve) => {
     let settled = false;
     let isChecking = false;
+    let attemptCount = 0;
+    let retryTimeoutId: number | null = null;
+    let queuedSource: Exclude<BrowserAuthReadySource, 'initial-user'> | null = null;
+    let lastTransientError = initialTransientError;
+
+    const clearRetryTimeout = (): void => {
+      if (retryTimeoutId !== null) {
+        window.clearTimeout(retryTimeoutId);
+        retryTimeoutId = null;
+      }
+    };
 
     const finish = (result: BrowserAuthReadyResult): void => {
       if (settled) {
@@ -104,18 +119,53 @@ export async function waitForAuthenticatedBrowserUser(
       }
 
       settled = true;
-      window.clearInterval(intervalId);
+      clearRetryTimeout();
       window.clearTimeout(timeoutId);
       subscription.unsubscribe();
       resolve(result);
     };
 
+    const scheduleNextCheck = (): void => {
+      if (settled) {
+        return;
+      }
+
+      clearRetryTimeout();
+
+      const delay = Math.min(
+        pollIntervalMs * Math.pow(2, Math.max(attemptCount - 1, 0)),
+        MAX_POLL_INTERVAL_MS
+      );
+
+      retryTimeoutId = window.setTimeout(() => {
+        retryTimeoutId = null;
+        void checkForUser('poll');
+      }, delay);
+    };
+
+    const flushQueuedCheck = (): void => {
+      if (settled || isChecking || !queuedSource) {
+        return;
+      }
+
+      const source = queuedSource;
+      queuedSource = null;
+      clearRetryTimeout();
+      void checkForUser(source);
+    };
+
     const checkForUser = async (source: Exclude<BrowserAuthReadySource, 'initial-user'>): Promise<void> => {
-      if (settled || isChecking) {
+      if (settled) {
+        return;
+      }
+
+      if (isChecking) {
+        queuedSource = source;
         return;
       }
 
       isChecking = true;
+      attemptCount += 1;
 
       try {
         const {
@@ -133,6 +183,8 @@ export async function waitForAuthenticatedBrowserUser(
         }
 
         if (!session) {
+          lastTransientError = 'Session cookie not available yet.';
+          scheduleNextCheck();
           return;
         }
 
@@ -146,15 +198,26 @@ export async function waitForAuthenticatedBrowserUser(
           return;
         }
 
+        if (userResult.error) {
+          lastTransientError = userResult.error;
+          scheduleNextCheck();
+          return;
+        }
+
         if (userResult.user) {
           finish({
             ok: true,
             user: userResult.user,
             source,
           });
+          return;
         }
+
+        lastTransientError = 'Authenticated session did not return a user yet.';
+        scheduleNextCheck();
       } finally {
         isChecking = false;
+        flushQueuedCheck();
       }
     };
 
@@ -168,14 +231,11 @@ export async function waitForAuthenticatedBrowserUser(
       void checkForUser('event');
     });
 
-    const intervalId = window.setInterval(() => {
-      void checkForUser('poll');
-    }, pollIntervalMs);
-
     const timeoutId = window.setTimeout(() => {
       finish({
         ok: false,
         reason: 'timeout',
+        error: lastTransientError,
       });
     }, timeoutMs);
 

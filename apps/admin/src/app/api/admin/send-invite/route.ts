@@ -3,6 +3,7 @@ import { createServiceClient } from '@publisheriq/database';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@publisheriq/database';
+import { buildAuthUrl } from '@/lib/auth/origin';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -70,7 +71,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Send the invite email using service key (admin API)
     const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin}/auth/callback`,
+      redirectTo: buildAuthUrl(
+        '/auth/callback',
+        request.nextUrl.origin,
+        process.env.NEXT_PUBLIC_SITE_URL,
+        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+        'http://localhost:3001'
+      ),
     });
 
     if (inviteError) {

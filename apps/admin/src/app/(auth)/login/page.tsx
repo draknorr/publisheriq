@@ -15,6 +15,7 @@ const AUTH_DEBUG = process.env.NEXT_PUBLIC_AUTH_DEBUG === 'true';
 const AUTH_SESSION_READY_TIMEOUT_MS = 5000;
 const VERIFY_OTP_TIMEOUT_MS = 15000;
 const SESSION_CHECK_TIMEOUT_MS = 3000;
+type LoginSupabaseClient = ReturnType<typeof createBrowserClientNoRefresh>;
 
 function mapAuthError(error: { status?: number; message?: string } | null): string {
   if (!error) return 'Unable to complete sign-in. Please try again.';
@@ -51,6 +52,22 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   return Promise.race([promise, timeoutPromise]);
 }
 
+function getOrCreateLoginSupabaseClient(
+  ref: { current: Promise<LoginSupabaseClient> | null }
+): Promise<LoginSupabaseClient> {
+  if (!ref.current) {
+    const client = createBrowserClientNoRefresh();
+    ref.current = client.auth
+      .stopAutoRefresh()
+      .catch((err) => {
+        logAuthDebug('stop-auto-refresh-failed', { error: String(err) });
+      })
+      .then(() => client);
+  }
+
+  return ref.current;
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -68,10 +85,11 @@ function LoginPageContent() {
 
   // Resend cooldown
   const [resendCooldown, setResendCooldown] = useState(0);
+  const loginSupabasePromiseRef = useRef<Promise<LoginSupabaseClient> | null>(null);
 
   // Redirect authenticated users to their intended destination
-  // createBrowserClientNoRefresh already prevents token refresh loops,
-  // so we don't need to call signOut() for stale sessions
+  // The login flow uses an isolated browser client, so we can passively
+  // observe any existing session without touching shared auth state.
   useEffect(() => {
     let cancelled = false;
 
@@ -81,7 +99,7 @@ function LoginPageContent() {
       }
 
       try {
-        const supabase = createBrowserClientNoRefresh();
+        const supabase = await getOrCreateLoginSupabaseClient(loginSupabasePromiseRef);
         const {
           data: { session },
         } = await withTimeout(
@@ -188,7 +206,7 @@ function LoginPageContent() {
       }
 
       // Step 2: Send OTP code (only for approved emails)
-      const supabase = createBrowserClientNoRefresh();
+      const supabase = await getOrCreateLoginSupabaseClient(loginSupabasePromiseRef);
 
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
@@ -221,7 +239,7 @@ function LoginPageContent() {
     setIsVerifying(true);
 
     try {
-      const supabase = createBrowserClientNoRefresh();
+      const supabase = await getOrCreateLoginSupabaseClient(loginSupabasePromiseRef);
 
       const { data, error: verifyError } = await withTimeout(
         supabase.auth.verifyOtp({
@@ -267,9 +285,23 @@ function LoginPageContent() {
       logAuthDebug('post-verify-authoritative-check', {
         ok: authReadyResult.ok,
         sourceOrReason: authReadyResult.ok ? authReadyResult.source : authReadyResult.reason,
+        error: authReadyResult.ok ? null : authReadyResult.error ?? null,
       });
 
       if (!authReadyResult.ok) {
+        try {
+          const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+          if (signOutError) {
+            logAuthDebug('post-verify-session-cleanup-failed', {
+              error: signOutError.message,
+            });
+          }
+        } catch (cleanupError) {
+          logAuthDebug('post-verify-session-cleanup-threw', {
+            error: String(cleanupError),
+          });
+        }
+
         setError('Verification succeeded but your session was not fully established. Please try again.');
         setIsVerifying(false);
         return;
@@ -289,7 +321,7 @@ function LoginPageContent() {
     setOtp('');
 
     try {
-      const supabase = createBrowserClientNoRefresh();
+      const supabase = await getOrCreateLoginSupabaseClient(loginSupabasePromiseRef);
 
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
