@@ -41,6 +41,20 @@ async function getAuthoritativeUser(
   };
 }
 
+function isTransientUserResolutionError(error: string | null): boolean {
+  if (!error) {
+    return false;
+  }
+
+  const normalizedError = error.toLowerCase();
+  return (
+    normalizedError.includes('session') ||
+    normalizedError.includes('jwt') ||
+    normalizedError.includes('token') ||
+    normalizedError.includes('network')
+  );
+}
+
 export async function waitForAuthenticatedBrowserUser(
   options: WaitForAuthenticatedBrowserUserOptions = {}
 ): Promise<BrowserAuthReadyResult> {
@@ -63,7 +77,7 @@ export async function waitForAuthenticatedBrowserUser(
 
   if (initialSession) {
     const initialUserResult = await getAuthoritativeUser(supabase);
-    if (initialUserResult.error) {
+    if (initialUserResult.error && !isTransientUserResolutionError(initialUserResult.error)) {
       return {
         ok: false,
         reason: 'error',
@@ -123,7 +137,7 @@ export async function waitForAuthenticatedBrowserUser(
         }
 
         const userResult = await getAuthoritativeUser(supabase);
-        if (userResult.error) {
+        if (userResult.error && !isTransientUserResolutionError(userResult.error)) {
           finish({
             ok: false,
             reason: 'error',

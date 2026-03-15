@@ -96,6 +96,7 @@ function LoginPageContent() {
         }
 
         const authReadyResult = await waitForAuthenticatedBrowserUser({
+          client: supabase,
           timeoutMs: AUTH_SESSION_READY_TIMEOUT_MS,
         });
 
@@ -259,6 +260,7 @@ function LoginPageContent() {
       }
 
       const authReadyResult = await waitForAuthenticatedBrowserUser({
+        client: supabase,
         timeoutMs: AUTH_SESSION_READY_TIMEOUT_MS,
       });
 
