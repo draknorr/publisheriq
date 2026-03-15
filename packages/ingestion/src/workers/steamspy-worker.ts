@@ -18,12 +18,121 @@ import {
   parseOwnerEstimate,
   type SteamSpyAppSummary,
 } from '../apis/steamspy.js';
+import { withRetry } from '../utils/retry.js';
 
 const log = logger.child({ worker: 'steamspy-sync' });
+const MAX_REASONABLE_PRICE_CENTS = 50000;
+const AVAILABILITY_UPDATE_MAX_RETRIES = 2;
+
+interface SerializedError {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+  stack?: string;
+  raw?: string;
+}
+
+interface NormalizedSteamSpyPrice {
+  priceCents: number | null;
+  discountPercent: number;
+  isAppPriceValid: boolean;
+  isFree: boolean;
+}
 
 interface SyncStats {
   appsProcessed: number;
   errors: number;
+}
+
+function stringifyUnknownError(error: unknown): string {
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function serializeUnknownError(error: unknown): SerializedError {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const record = error as Record<string, unknown>;
+    const raw = stringifyUnknownError(error);
+    return {
+      message: typeof record.message === 'string' ? record.message : raw,
+      code: typeof record.code === 'string' ? record.code : undefined,
+      details: typeof record.details === 'string' ? record.details : undefined,
+      hint: typeof record.hint === 'string' ? record.hint : undefined,
+      raw,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
+function formatUnknownError(error: unknown): string {
+  const serialized = serializeUnknownError(error);
+  return [
+    serialized.message,
+    serialized.code ? `code=${serialized.code}` : null,
+    serialized.details ? `details=${serialized.details}` : null,
+    serialized.hint ? `hint=${serialized.hint}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function parseSteamSpyDiscount(discount: string): number {
+  const parsed = Number.parseInt(discount, 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  return parsed;
+}
+
+function normalizeSteamSpyPrice(price: string, discount: string): NormalizedSteamSpyPrice {
+  const parsedPrice = Number.parseInt(price, 10);
+  const discountPercent = parseSteamSpyDiscount(discount);
+
+  if (
+    Number.isNaN(parsedPrice) ||
+    parsedPrice < 0 ||
+    parsedPrice > MAX_REASONABLE_PRICE_CENTS
+  ) {
+    return {
+      priceCents: null,
+      discountPercent,
+      isAppPriceValid: false,
+      isFree: false,
+    };
+  }
+
+  return {
+    priceCents: parsedPrice,
+    discountPercent,
+    isAppPriceValid: true,
+    isFree: parsedPrice === 0,
+  };
+}
+
+function getMaxPages(): number {
+  const rawMaxPages = process.env.MAX_PAGES ?? process.env.PAGES_LIMIT ?? '0';
+  const parsedMaxPages = Number.parseInt(rawMaxPages, 10);
+
+  if (Number.isNaN(parsedMaxPages)) {
+    return 0;
+  }
+
+  return parsedMaxPages;
 }
 
 async function processBatch(
@@ -34,14 +143,17 @@ async function processBatch(
   const today = new Date().toISOString().split('T')[0];
   const now = new Date().toISOString();
 
-  // Build arrays for batch upserts
-  const appsToUpsert = apps.map((app) => ({
-    appid: app.appid,
-    name: app.name,
-    is_free: parseInt(app.price, 10) === 0,
-    current_price_cents: parseInt(app.price, 10) || null,
-    current_discount_percent: parseInt(app.discount, 10) || 0,
-  }));
+  const appsToUpsertWithPrice: Array<{
+    appid: number;
+    name: string;
+    is_free: boolean;
+    current_price_cents: number;
+    current_discount_percent: number;
+  }> = [];
+  const appsToUpsertWithoutPrice: Array<{
+    appid: number;
+    name: string;
+  }> = [];
 
   const syncStatusToUpsert = apps.map((app) => ({
     appid: app.appid,
@@ -51,7 +163,25 @@ async function processBatch(
   }));
 
   const metricsToUpsert = apps.map((app) => {
+    const normalizedPrice = normalizeSteamSpyPrice(app.price, app.discount);
     const owners = parseOwnerEstimate(app.owners);
+
+    const appBase = {
+      appid: app.appid,
+      name: app.name,
+    };
+
+    if (normalizedPrice.isAppPriceValid && normalizedPrice.priceCents !== null) {
+      appsToUpsertWithPrice.push({
+        ...appBase,
+        is_free: normalizedPrice.isFree,
+        current_price_cents: normalizedPrice.priceCents,
+        current_discount_percent: normalizedPrice.discountPercent,
+      });
+    } else {
+      appsToUpsertWithoutPrice.push(appBase);
+    }
+
     return {
       appid: app.appid,
       metric_date: today,
@@ -63,17 +193,30 @@ async function processBatch(
       positive_reviews: app.positive,
       negative_reviews: app.negative,
       total_reviews: app.positive + app.negative,
-      price_cents: parseInt(app.price, 10) || null,
-      discount_percent: parseInt(app.discount, 10) || 0,
+      price_cents: normalizedPrice.priceCents,
+      discount_percent: normalizedPrice.discountPercent,
     };
   });
 
   // Apps must complete first (sync_status and daily_metrics have FK to apps)
-  const appsResult = await supabase.from('apps').upsert(appsToUpsert, { onConflict: 'appid' });
-  if (appsResult.error) {
-    log.error('Batch apps upsert failed', { error: appsResult.error });
-    stats.errors += apps.length;
-    return;
+  for (const [group, rows] of [
+    ['with-price', appsToUpsertWithPrice],
+    ['without-price', appsToUpsertWithoutPrice],
+  ] as const) {
+    if (rows.length === 0) {
+      continue;
+    }
+
+    const appsResult = await supabase.from('apps').upsert(rows, { onConflict: 'appid' });
+    if (appsResult.error) {
+      log.error('Batch apps upsert failed', {
+        error: appsResult.error,
+        group,
+        batchSize: rows.length,
+      });
+      stats.errors += apps.length;
+      return;
+    }
   }
 
   // Now sync_status and daily_metrics can run in parallel
@@ -135,6 +278,7 @@ async function processSupplementaryFetches(
 
     if (details?.name) {
       stats.found++;
+      const normalizedPrice = normalizeSteamSpyPrice(details.price, details.discount);
       const owners = parseOwnerEstimate(details.owners);
 
       // Upsert daily_metrics
@@ -150,8 +294,8 @@ async function processSupplementaryFetches(
           positive_reviews: details.positive,
           negative_reviews: details.negative,
           total_reviews: details.positive + details.negative,
-          price_cents: parseInt(details.price, 10) || null,
-          discount_percent: parseInt(details.discount, 10) || 0,
+          price_cents: normalizedPrice.priceCents,
+          discount_percent: normalizedPrice.discountPercent,
         },
         { onConflict: 'appid,metric_date' }
       );
@@ -227,7 +371,7 @@ async function processSupplementaryFetches(
 async function main(): Promise<void> {
   const startTime = Date.now();
   const githubRunId = process.env.GITHUB_RUN_ID;
-  const maxPages = parseInt(process.env.PAGES_LIMIT || '0', 10);
+  const maxPages = getMaxPages();
 
   log.info('Starting SteamSpy sync', { githubRunId, maxPages: maxPages || 'all' });
 
@@ -266,16 +410,35 @@ async function main(): Promise<void> {
 
     // Mark apps not in SteamSpy as unavailable (only if we did a full sync)
     if (maxPages === 0) {
-      const { data: unavailableRows, error: unavailableError } = await supabase
-        .from('sync_status')
-        .update({ steamspy_available: false })
-        .is('last_steamspy_sync', null)
-        .eq('is_syncable', true)
-        .select('appid');
+      const unavailableRows = await withRetry(
+        async () => {
+          const { data, error } = await supabase
+            .from('sync_status')
+            .update({ steamspy_available: false })
+            .is('last_steamspy_sync', null)
+            .eq('is_syncable', true)
+            .select('appid');
 
-      if (unavailableError) {
-        throw unavailableError;
-      }
+          if (error) {
+            throw error;
+          }
+
+          return data;
+        },
+        {
+          maxRetries: AVAILABILITY_UPDATE_MAX_RETRIES,
+          initialDelayMs: 1000,
+          maxDelayMs: 5000,
+          shouldRetry: () => true,
+          onRetry: (error, attempt, delayMs) => {
+            log.warn('Retrying SteamSpy availability update', {
+              attempt,
+              delayMs,
+              error: serializeUnknownError(error),
+            });
+          },
+        }
+      );
 
       log.info('Marked apps as not in SteamSpy catalog', { count: unavailableRows?.length ?? 0 });
 
@@ -313,9 +476,11 @@ async function main(): Promise<void> {
       errors: stats.errors,
     });
   } catch (error) {
+    const serializedError = serializeUnknownError(error);
+    const errorMessage = formatUnknownError(error);
+
     log.error('SteamSpy sync failed', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      error: serializedError,
     });
 
     // Update sync job as failed
@@ -325,7 +490,7 @@ async function main(): Promise<void> {
         .update({
           status: 'failed',
           completed_at: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : String(error),
+          error_message: errorMessage,
           items_processed: stats.appsProcessed,
           items_succeeded: stats.appsProcessed,
           items_failed: stats.errors,
