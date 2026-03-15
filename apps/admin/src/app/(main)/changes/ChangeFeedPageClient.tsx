@@ -56,6 +56,8 @@ interface ChangeFeedPageClientProps {
   initialAppTypes?: string;
   initialSource?: string;
   initialSearch?: string;
+  initialFeedResponse?: ChangeFeedBurstsResponse;
+  initialNewsResponse?: ChangeFeedNewsResponse;
 }
 
 const FEED_PRESET_OPTIONS: Array<{
@@ -560,6 +562,8 @@ export function ChangeFeedPageClient({
   initialAppTypes,
   initialSource,
   initialSearch,
+  initialFeedResponse,
+  initialNewsResponse,
 }: ChangeFeedPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -579,19 +583,27 @@ export function ChangeFeedPageClient({
   const [searchInput, setSearchInput] = useState(search);
   const deferredSearch = useDeferredValue(searchInput);
 
-  const [feedItems, setFeedItems] = useState<ChangeBurstRow[]>([]);
-  const [feedCursor, setFeedCursor] = useState<ChangeFeedCursor | null>(null);
+  const [feedItems, setFeedItems] = useState<ChangeBurstRow[]>(() => initialFeedResponse?.items ?? []);
+  const [feedCursor, setFeedCursor] = useState<ChangeFeedCursor | null>(
+    () => initialFeedResponse?.nextCursor ?? null
+  );
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedLoadingMore, setFeedLoadingMore] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
-  const [feedLoadedKey, setFeedLoadedKey] = useState<string | null>(null);
+  const [feedLoadedKey, setFeedLoadedKey] = useState<string | null>(() =>
+    initialFeedResponse ? feedQueryKey : null
+  );
 
-  const [newsItems, setNewsItems] = useState<ChangeNewsRow[]>([]);
-  const [newsCursor, setNewsCursor] = useState<ChangeFeedCursor | null>(null);
+  const [newsItems, setNewsItems] = useState<ChangeNewsRow[]>(() => initialNewsResponse?.items ?? []);
+  const [newsCursor, setNewsCursor] = useState<ChangeFeedCursor | null>(
+    () => initialNewsResponse?.nextCursor ?? null
+  );
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsLoadingMore, setNewsLoadingMore] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
-  const [newsLoadedKey, setNewsLoadedKey] = useState<string | null>(null);
+  const [newsLoadedKey, setNewsLoadedKey] = useState<string | null>(() =>
+    initialNewsResponse ? newsQueryKey : null
+  );
 
   const [status, setStatus] = useState<ChangeFeedStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -603,6 +615,8 @@ export function ChangeFeedPageClient({
 
   const feedRequestVersionRef = useRef(0);
   const newsRequestVersionRef = useRef(0);
+  const previousFeedQueryKeyRef = useRef(feedQueryKey);
+  const previousNewsQueryKeyRef = useRef(newsQueryKey);
 
   useEffect(() => {
     setSearchInput(search);
@@ -623,6 +637,11 @@ export function ChangeFeedPageClient({
   }, [deferredSearch, pathname, router, search, searchParams]);
 
   useEffect(() => {
+    if (previousFeedQueryKeyRef.current === feedQueryKey) {
+      return;
+    }
+
+    previousFeedQueryKeyRef.current = feedQueryKey;
     feedRequestVersionRef.current += 1;
     setFeedItems([]);
     setFeedCursor(null);
@@ -633,6 +652,11 @@ export function ChangeFeedPageClient({
   }, [feedQueryKey]);
 
   useEffect(() => {
+    if (previousNewsQueryKeyRef.current === newsQueryKey) {
+      return;
+    }
+
+    previousNewsQueryKeyRef.current = newsQueryKey;
     newsRequestVersionRef.current += 1;
     setNewsItems([]);
     setNewsCursor(null);

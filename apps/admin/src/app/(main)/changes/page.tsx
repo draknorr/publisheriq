@@ -1,6 +1,14 @@
 import type { Metadata } from 'next';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { getUser } from '@/lib/supabase/server';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
+import type { ChangeFeedBurstsResponse, ChangeFeedNewsResponse } from './lib';
+import {
+  fetchChangeFeedBurstsResponse,
+  fetchChangeFeedNewsResponse,
+  parseChangeFeedBurstParams,
+  parseChangeFeedNewsParams,
+} from './lib';
 import { ChangeFeedPageClient } from './ChangeFeedPageClient';
 
 export const metadata: Metadata = {
@@ -9,6 +17,18 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = 'force-dynamic';
+
+function toUrlSearchParams(params: Record<string, string | undefined>): URLSearchParams {
+  const urlSearchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      urlSearchParams.set(key, value);
+    }
+  });
+
+  return urlSearchParams;
+}
 
 interface PageProps {
   searchParams: Promise<{
@@ -27,6 +47,26 @@ export default async function ChangeFeedPage({ searchParams }: PageProps) {
   }
 
   const params = await searchParams;
+  const urlSearchParams = toUrlSearchParams(params);
+  const activeTab = params.tab === 'news' ? 'news' : 'feed';
+  let initialFeedResponse: ChangeFeedBurstsResponse | undefined;
+  let initialNewsResponse: ChangeFeedNewsResponse | undefined;
+
+  if (await getUser()) {
+    try {
+      if (activeTab === 'news') {
+        initialNewsResponse = await fetchChangeFeedNewsResponse(
+          parseChangeFeedNewsParams(urlSearchParams)
+        );
+      } else {
+        initialFeedResponse = await fetchChangeFeedBurstsResponse(
+          parseChangeFeedBurstParams(urlSearchParams)
+        );
+      }
+    } catch (error) {
+      console.error(`Failed to prefetch Change Feed ${activeTab} data:`, error);
+    }
+  }
 
   return (
     <ChangeFeedPageClient
@@ -36,6 +76,8 @@ export default async function ChangeFeedPage({ searchParams }: PageProps) {
       initialAppTypes={params.appTypes}
       initialSource={params.source}
       initialSearch={params.search}
+      initialFeedResponse={initialFeedResponse}
+      initialNewsResponse={initialNewsResponse}
     />
   );
 }

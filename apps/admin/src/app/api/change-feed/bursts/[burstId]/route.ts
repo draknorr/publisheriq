@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthErrorResponse, requireAuthOrThrow } from '@/lib/auth-utils';
-import { createServerClient } from '@/lib/supabase/server';
-import type { ChangeBurstDetail, RawChangeBurstDetailRow } from '@/app/(main)/changes/lib';
+import type { ChangeBurstDetail } from '@/app/(main)/changes/lib';
 import {
-  isMissingChangeFeedRpcError,
-  mapChangeBurstDetail,
+  ChangeFeedQueryError,
+  ChangeFeedUnavailableError,
+  fetchChangeFeedBurstDetail,
 } from '@/app/(main)/changes/lib';
 
 export const dynamic = 'force-dynamic';
@@ -18,40 +18,26 @@ export async function GET(
 
     const { burstId } = await params;
     const decodedBurstId = decodeURIComponent(burstId);
-    const supabase = await createServerClient();
+    const detail: ChangeBurstDetail | null = await fetchChangeFeedBurstDetail(decodedBurstId);
 
-    // Generated DB types will lag until the migration is applied.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).rpc('get_change_feed_burst_detail', {
-      p_burst_id: decodedBurstId,
-    });
-
-    if (error) {
-      if (isMissingChangeFeedRpcError(error, 'get_change_feed_burst_detail')) {
-        return NextResponse.json(
-          { error: 'Change Feed detail query surface is not available yet. Apply the pending migration first.' },
-          { status: 503 }
-        );
-      }
-
-      console.error('Change Feed burst detail RPC error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    const rawDetail = Array.isArray(data)
-      ? ((data[0] ?? null) as RawChangeBurstDetailRow | null)
-      : ((data ?? null) as RawChangeBurstDetailRow | null);
-
-    if (!rawDetail) {
+    if (!detail) {
       return NextResponse.json({ error: 'Burst not found' }, { status: 404 });
     }
 
-    const detail: ChangeBurstDetail = mapChangeBurstDetail(rawDetail);
     return NextResponse.json({ item: detail });
   } catch (error) {
     const authErrorResponse = getAuthErrorResponse(error);
     if (authErrorResponse) {
       return authErrorResponse;
+    }
+
+    if (error instanceof ChangeFeedUnavailableError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
+
+    if (error instanceof ChangeFeedQueryError) {
+      console.error('Change Feed burst detail RPC error:', error.cause ?? error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     console.error('Change Feed burst detail GET error:', error);

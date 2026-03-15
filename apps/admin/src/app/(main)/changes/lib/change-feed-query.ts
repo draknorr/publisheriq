@@ -119,7 +119,7 @@ export function toSqlChangeFeedPreset(preset: ChangeFeedPreset): string {
   return CHANGE_FEED_SQL_PRESET_MAP[preset];
 }
 
-export function parseChangeFeedBurstParams(searchParams: URLSearchParams): {
+export interface ChangeFeedBurstParams {
   days: number;
   preset: ChangeFeedPreset;
   appTypes: AppType[] | null;
@@ -128,7 +128,9 @@ export function parseChangeFeedBurstParams(searchParams: URLSearchParams): {
   cursorTime: string | null;
   cursorKey: string | null;
   limit: number;
-} {
+}
+
+export function parseChangeFeedBurstParams(searchParams: URLSearchParams): ChangeFeedBurstParams {
   const days = Math.min(Math.max(parseInteger(searchParams.get('days'), DEFAULT_DAYS), 1), 30);
   const limit = Math.min(Math.max(parseInteger(searchParams.get('limit'), DEFAULT_LIMIT), 1), MAX_LIMIT);
   const appTypes = filterAppTypes(parseStringList(searchParams.get('appTypes')));
@@ -146,14 +148,16 @@ export function parseChangeFeedBurstParams(searchParams: URLSearchParams): {
   };
 }
 
-export function parseChangeFeedNewsParams(searchParams: URLSearchParams): {
+export interface ChangeFeedNewsParams {
   days: number;
   appTypes: AppType[] | null;
   search: string | null;
   cursorTime: string | null;
   cursorKey: string | null;
   limit: number;
-} {
+}
+
+export function parseChangeFeedNewsParams(searchParams: URLSearchParams): ChangeFeedNewsParams {
   const days = Math.min(Math.max(parseInteger(searchParams.get('days'), DEFAULT_DAYS), 1), 30);
   const limit = Math.min(Math.max(parseInteger(searchParams.get('limit'), DEFAULT_LIMIT), 1), MAX_LIMIT);
 
