@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
+  Activity,
   LayoutDashboard,
   Gamepad2,
   Building2,
@@ -39,6 +40,7 @@ const mainNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/insights', label: 'Insights', icon: TrendingUp },
+  { href: '/changes', label: 'Change Feed', icon: Activity },
   { href: '/apps', label: 'Apps', icon: Gamepad2 },
   { href: '/companies?type=publisher', label: 'Publishers', icon: Building2 },
   { href: '/companies?type=developer', label: 'Developers', icon: Users },
