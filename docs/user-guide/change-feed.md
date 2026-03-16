@@ -1,67 +1,52 @@
-# Change Feed Guide
+# Steam Activity Guide
 
-The Change Feed at `/changes` is the fastest way to see what recently changed across Steam storefront data, PICS-derived signals, media assets, and Steam news.
+Steam Activity at `/changes` is the fastest way to scan what is happening across Steam in one readable feed.
 
 ## What the Page Shows
 
-The page has two tabs:
+The page is one activity stream with three modes:
 
-- **Feed** groups related storefront, PICS, and media events into bursts for a single app
-- **News** shows recent Steam news posts with app context
+- **All activity** mixes grouped change cards and standalone announcements
+- **Changes only** hides announcement-only cards
+- **Announcements only** shows just Steam posts
 
-## Feed Tab
-
-Each feed row represents a grouped burst of changes for one app.
-
-A row can show:
+Each row is an activity card with:
 
 - app name and app type
-- whether the app is still upcoming
-- source badges such as `Storefront`, `PICS`, or `Media`
-- headline change chips such as release-date, price, languages, tags, screenshots, or capsule/header updates
-- related-news counts when nearby Steam news posts were captured
+- whether the title is upcoming
+- a readable headline and summary
+- signal pills such as `Release`, `Pricing`, `Store page`, `Media`, `Platform`, `Build activity`, and `Announcement`
+- expandable before / after detail when available
 
-Selecting a row opens the detail drawer.
+Expanding a card shows:
 
-## Detail Drawer
+- the actual before / after evidence
+- related announcements
+- impact windows when enough response data exists
 
-The drawer shows:
+Use this when you need to move from “something happened” to “what changed and what happened next.”
 
-- every individual change event in the burst
-- before/after values when available
-- related Steam news posts
-- impact windows that compare baseline and post-change metrics
+## Quick Views
 
-Use this when you need to move from “something changed” to “what changed and what happened next.”
+The page supports these top-level views:
 
-## News Tab
-
-The News tab lists captured Steam news items with:
-
-- app name
-- app type
-- feed labels and feed names, when present
-- published time or first-seen time
-- direct outbound link to the post
-
-## Presets
-
-The Feed tab supports three presets:
-
-| Preset | What it emphasizes |
-|--------|--------------------|
-| **High Signal** | Bursts with stronger product or commercial relevance |
-| **Upcoming Radar** | Upcoming titles and recently released games |
-| **All Changes** | Everything captured in recency order |
+| View | What it emphasizes |
+|------|--------------------|
+| **Overview** | Most relevant recent activity across Steam |
+| **Launch Watch** | Upcoming titles, recent launches, and date-locking activity |
+| **Commercial Moves** | Pricing, discount, package, and monetization shifts |
+| **Store Refreshes** | Copy, artwork, screenshots, trailers, tags, and presentation changes |
+| **All Activity** | The raw recent stream in strict recency order |
 
 ## Filters
 
-You can refine both tabs with:
+You can refine the stream with:
 
 - **Time range**: `24h`, `7d`, `30d`
+- **Signal family**
 - **App type**
-- **Source** on the Feed tab
-- **Search** by app name
+- **Search** by app name, headline, or theme
+- **Sort**
 
 ## Status Badge
 
@@ -79,12 +64,12 @@ This is a monitoring hint, not a guarantee that no events are missing.
 
 - monitor unreleased games for launch-prep activity
 - spot pricing, release-date, or merchandising changes quickly
-- connect bursts of product changes with nearby Steam announcements
-- check whether a change was a pure technical churn event or a meaningful market signal
+- review announcement cadence alongside product changes
+- scan the broader market as a live exploration surface
 
 ## Related Documentation
 
 - [Games Page](./games-page.md)
 - [Insights Page](./insights-page.md)
-- [Change Feed Developer Guide](../developer-guide/features/change-feed.md)
+- [Steam Activity Developer Guide](../developer-guide/features/change-feed.md)
 - [Steam Change Intelligence](../developer-guide/workers/steam-change-intelligence.md)

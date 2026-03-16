@@ -1,53 +1,44 @@
-# Change Feed Architecture
+# Steam Activity Architecture
 
 This document describes the implementation of the `/changes` feature.
 
 ## Overview
 
-The Change Feed is a signed-in dashboard surface that lets users inspect:
+Steam Activity is a signed-in dashboard surface that lets users inspect:
 
-- grouped storefront, PICS, and media change bursts
-- recent Steam news posts
-- per-burst detail, related news, and impact windows
+- one unified activity feed of grouped change cards and announcement cards
+- readable before / after detail for grouped change activity
+- related announcements and impact windows
 - capture health status
 
 ## Main Route
 
 - page route: `apps/admin/src/app/(main)/changes/page.tsx`
 - client UI: `apps/admin/src/app/(main)/changes/ChangeFeedPageClient.tsx`
-- detail drawer: `apps/admin/src/app/(main)/changes/ChangeFeedDrawer.tsx`
+- legacy drawer: `apps/admin/src/app/(main)/changes/ChangeFeedDrawer.tsx`
 
 ## Data Model
 
-The feature works with three main response shapes:
+The feature now works with these main response shapes:
 
-- `ChangeFeedBurstsResponse`
-- `ChangeFeedNewsResponse`
-- `ChangeBurstDetailResponse`
+- `ChangeFeedActivityResponse`
+- `ChangeFeedActivityDetailResponse`
+- legacy burst/news response types for fallback and app-specific drill-down
 
 These are defined in `apps/admin/src/app/(main)/changes/lib/change-feed-types.ts`.
 
 ## Filters and Querying
 
-### Feed Tab
+The unified activity feed supports:
 
-Supports:
-
-- preset
+- quick view
+- mode
 - range
 - app type
-- source filter
+- signal family filters
 - search
-- keyset cursor pagination
-
-### News Tab
-
-Supports:
-
-- range
-- app type
-- search
-- keyset cursor pagination
+- sort
+- cursor pagination
 
 Parameter parsing and row mapping live in `change-feed-query.ts`.
 
@@ -58,14 +49,16 @@ Parameter parsing and row mapping live in `change-feed-query.ts`.
 It is responsible for:
 
 - calling Supabase RPCs
-- mapping raw rows into UI types
-- handling “migration not applied yet” failures cleanly
-- caching default bursts/news responses for a short TTL
+- mapping raw rows into activity-card UI types
+- falling back to legacy burst/news surfaces if the unified RPC is unavailable
+- caching default activity responses for a short TTL
 
 ## Internal APIs
 
 | Endpoint | Purpose |
 |----------|---------|
+| `/api/change-feed/activity` | unified activity list |
+| `/api/change-feed/activity/[activityId]` | unified activity detail |
 | `/api/change-feed/bursts` | burst list |
 | `/api/change-feed/bursts/[burstId]` | burst detail |
 | `/api/change-feed/news` | news list |
@@ -77,12 +70,14 @@ All endpoints require an authenticated session.
 
 The feature depends on these functions:
 
+- `get_change_feed_activity`
 - `get_change_feed_bursts`
 - `get_change_feed_burst_detail`
 - `get_change_feed_news`
 
 They are created by:
 
+- `20260315193000_add_change_feed_activity_read_surface.sql`
 - `20260315114500_add_change_feed_read_surfaces.sql`
 - `20260315143000_optimize_change_feed_news_rpc.sql`
 
@@ -107,10 +102,10 @@ The UI is only as useful as the runtime beneath it:
 
 - `app-change-hints` must continue seeding new storefront capture work
 - `change-intel-worker` must keep draining `storefront`, `news`, and `hero_asset`
-- `pics-service` must keep writing PICS-side history and diff events
+- `pics-service` must keep writing internal history and diff events
 
 ## Related Documentation
 
-- [Change Feed User Guide](../../user-guide/change-feed.md)
+- [Steam Activity User Guide](../../user-guide/change-feed.md)
 - [Steam Change Intelligence](../workers/steam-change-intelligence.md)
 - [Internal API](../../api/internal-api.md)

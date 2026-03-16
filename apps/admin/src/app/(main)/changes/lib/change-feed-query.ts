@@ -1,5 +1,11 @@
 import type {
   AppType,
+  ChangeActivityMode,
+  ChangeActivityParamsCursor,
+  ChangeActivityRow,
+  ChangeActivitySignalFamily,
+  ChangeActivitySort,
+  ChangeActivityView,
   ChangeBurstDetail,
   ChangeBurstImpact,
   ChangeBurstImpactWindow,
@@ -10,12 +16,17 @@ import type {
   ChangeFeedSource,
   ChangeNewsRow,
   JsonValue,
+  RawChangeActivityRow,
   RawChangeBurstDetailEvent,
   RawChangeBurstDetailRow,
   RawChangeBurstRow,
   RawChangeNewsRow,
 } from './change-feed-types';
 import {
+  CHANGE_ACTIVITY_MODES,
+  CHANGE_ACTIVITY_SIGNAL_FAMILIES,
+  CHANGE_ACTIVITY_SORTS,
+  CHANGE_ACTIVITY_VIEWS,
   CHANGE_FEED_APP_TYPES,
   CHANGE_FEED_PRESETS,
   CHANGE_FEED_SOURCES,
@@ -85,6 +96,20 @@ function filterSources(values: string[]): ChangeFeedSource[] | null {
   return filtered.length > 0 ? filtered : null;
 }
 
+function filterSignalFamilies(values: string[]): ChangeActivitySignalFamily[] | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const allowed = new Set<ChangeActivitySignalFamily>(CHANGE_ACTIVITY_SIGNAL_FAMILIES);
+  const filtered = values.filter(
+    (value): value is ChangeActivitySignalFamily =>
+      allowed.has(value as ChangeActivitySignalFamily)
+  );
+
+  return filtered.length > 0 ? filtered : null;
+}
+
 function normalizeCursor(value: string | null): string | null {
   const normalized = normalizeText(value);
   return normalized ? decodeURIComponent(normalized) : null;
@@ -115,6 +140,39 @@ export function parseChangeFeedPreset(value: string | null): ChangeFeedPreset {
     : 'high-signal';
 }
 
+export function parseChangeActivityView(value: string | null | undefined): ChangeActivityView {
+  if (!value) {
+    return 'overview';
+  }
+
+  const normalized = value.trim().replace(/_/g, '-');
+  return CHANGE_ACTIVITY_VIEWS.includes(normalized as ChangeActivityView)
+    ? (normalized as ChangeActivityView)
+    : 'overview';
+}
+
+export function parseChangeActivityMode(value: string | null | undefined): ChangeActivityMode {
+  if (!value) {
+    return 'all';
+  }
+
+  const normalized = value.trim().replace(/_/g, '-');
+  return CHANGE_ACTIVITY_MODES.includes(normalized as ChangeActivityMode)
+    ? (normalized as ChangeActivityMode)
+    : 'all';
+}
+
+export function parseChangeActivitySort(value: string | null | undefined): ChangeActivitySort {
+  if (!value) {
+    return 'relevant';
+  }
+
+  const normalized = value.trim().replace(/_/g, '-');
+  return CHANGE_ACTIVITY_SORTS.includes(normalized as ChangeActivitySort)
+    ? (normalized as ChangeActivitySort)
+    : 'relevant';
+}
+
 export function toSqlChangeFeedPreset(preset: ChangeFeedPreset): string {
   return CHANGE_FEED_SQL_PRESET_MAP[preset];
 }
@@ -128,6 +186,40 @@ export interface ChangeFeedBurstParams {
   cursorTime: string | null;
   cursorKey: string | null;
   limit: number;
+}
+
+export interface ChangeFeedActivityParams {
+  days: number;
+  view: ChangeActivityView;
+  mode: ChangeActivityMode;
+  sort: ChangeActivitySort;
+  appTypes: AppType[] | null;
+  signalFamilies: ChangeActivitySignalFamily[] | null;
+  search: string | null;
+  cursor: string | null;
+  limit: number;
+}
+
+export function parseChangeFeedActivityParams(
+  searchParams: URLSearchParams
+): ChangeFeedActivityParams {
+  const days = Math.min(Math.max(parseInteger(searchParams.get('days'), DEFAULT_DAYS), 1), 30);
+  const limit = Math.min(
+    Math.max(parseInteger(searchParams.get('limit'), DEFAULT_LIMIT), 1),
+    MAX_LIMIT
+  );
+
+  return {
+    days,
+    view: parseChangeActivityView(searchParams.get('view')),
+    mode: parseChangeActivityMode(searchParams.get('mode')),
+    sort: parseChangeActivitySort(searchParams.get('sort')),
+    appTypes: filterAppTypes(parseStringList(searchParams.get('appTypes'))),
+    signalFamilies: filterSignalFamilies(parseStringList(searchParams.get('signals'))),
+    search: normalizeText(searchParams.get('search')),
+    cursor: normalizeCursor(searchParams.get('cursor')),
+    limit,
+  };
 }
 
 export function parseChangeFeedBurstParams(searchParams: URLSearchParams): ChangeFeedBurstParams {
@@ -203,6 +295,37 @@ export function mapChangeNewsRow(row: RawChangeNewsRow): ChangeNewsRow {
     feedLabel: row.feedlabel,
     feedName: row.feedname,
     url: row.url,
+  };
+}
+
+function toSafeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+export function mapChangeActivityRow(row: RawChangeActivityRow): ChangeActivityRow {
+  return {
+    activityId: row.activity_id,
+    activityKind: row.activity_kind,
+    storyKind: row.story_kind,
+    appid: row.appid,
+    appName: row.app_name,
+    appType: row.app_type,
+    isReleased: row.is_released,
+    releaseDate: row.release_date,
+    occurredAt: row.occurred_at,
+    headline: row.headline,
+    summary: row.summary,
+    facts: toSafeStringArray(row.facts),
+    highlightLabels: toSafeStringArray(row.highlight_labels),
+    signalFamilies:
+      filterSignalFamilies(toSafeStringArray(row.signal_families)) ?? [],
+    hasBeforeAfter: row.has_before_after,
+    relatedAnnouncementCount: row.related_announcement_count,
+    externalUrl: row.external_url,
   };
 }
 
@@ -286,6 +409,63 @@ export function buildNextCursor(
   }
 
   return { time, key };
+}
+
+export function encodeActivityCursor(cursor: { offset: number }): string {
+  return encodeURIComponent(JSON.stringify(cursor));
+}
+
+export function decodeActivityCursor(value: string | null): { offset: number } {
+  if (!value) {
+    return { offset: 0 };
+  }
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value)) as {
+      offset?: unknown;
+    };
+    const offset =
+      typeof parsed.offset === 'number' && Number.isFinite(parsed.offset) && parsed.offset >= 0
+        ? parsed.offset
+        : 0;
+    return { offset };
+  } catch {
+    return { offset: 0 };
+  }
+}
+
+export function encodeActivityScoreCursor(cursor: ChangeActivityParamsCursor): string {
+  return encodeURIComponent(JSON.stringify(cursor));
+}
+
+export function decodeActivityScoreCursor(value: string | null): ChangeActivityParamsCursor | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value)) as {
+      score?: unknown;
+      time?: unknown;
+      id?: unknown;
+    };
+
+    if (
+      typeof parsed.score !== 'number' ||
+      typeof parsed.time !== 'string' ||
+      typeof parsed.id !== 'string'
+    ) {
+      return null;
+    }
+
+    return {
+      score: parsed.score,
+      time: parsed.time,
+      id: parsed.id,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function isMissingChangeFeedRpcError(

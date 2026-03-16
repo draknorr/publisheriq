@@ -33,6 +33,30 @@ Related doc: [Streaming API](./streaming-api.md)
 
 ## Change Feed
 
+### `GET /api/change-feed/activity`
+
+Returns the unified Steam activity stream used by `/changes`.
+
+Important query params:
+
+- `days`
+- `view`
+- `mode`
+- `appTypes`
+- `signals`
+- `sort`
+- `search`
+- `cursor`
+- `limit`
+
+### `GET /api/change-feed/activity/[activityId]`
+
+Returns expanded detail for one activity card, including:
+
+- typed before / after diffs when available
+- related announcements
+- impact windows for grouped change activity
+
 ### `GET /api/change-feed/bursts`
 
 Returns grouped change bursts.
@@ -134,7 +158,7 @@ Server-side callback router that validates origin handling and forwards callback
 ## Notes
 
 - Change Feed endpoints return `503` when the required SQL read surfaces are not available yet.
-- Burst and news lists use keyset pagination rather than offset pagination.
+- The unified activity list uses server-side cursor pagination when the new read surface is available and a legacy fallback when it is not.
 - Protected-route UX redirects through `/login?next=...`; APIs return JSON errors instead of redirects.
 
 ## Related Documentation

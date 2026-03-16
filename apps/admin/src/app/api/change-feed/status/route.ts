@@ -5,12 +5,21 @@ import type { ChangeFeedStatus } from '@/app/(main)/changes/lib';
 
 export const dynamic = 'force-dynamic';
 
+const STATUS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 const CATCHING_UP_QUEUE_COUNT = 25000;
 const DELAYED_QUEUE_COUNT = 100000;
 const CATCHING_UP_QUEUE_AGE_HOURS = 6;
 const DELAYED_QUEUE_AGE_HOURS = 24;
 const CATCHING_UP_EVENT_AGE_HOURS = 3;
 const DELAYED_EVENT_AGE_HOURS = 12;
+
+let statusCache:
+  | {
+      data: ChangeFeedStatus;
+      cachedAt: number;
+    }
+  | null = null;
 
 function getHoursSince(timestamp: string | null): number | null {
   if (!timestamp) {
@@ -100,6 +109,10 @@ export async function GET() {
   try {
     await requireAuthOrThrow();
 
+    if (statusCache && Date.now() - statusCache.cachedAt < STATUS_CACHE_TTL_MS) {
+      return NextResponse.json(statusCache.data);
+    }
+
     const supabase = await createServerClient();
     // Generated DB types will lag until the migration is applied.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,6 +171,11 @@ export async function GET() {
       latestStorefrontResult.data?.occurred_at ?? null,
       latestNewsResult.data?.occurred_at ?? null
     );
+
+    statusCache = {
+      data: status,
+      cachedAt: Date.now(),
+    };
 
     return NextResponse.json(status);
   } catch (error) {

@@ -2,6 +2,56 @@ import type { Database } from '@publisheriq/database';
 
 export type AppType = Database['public']['Enums']['app_type'];
 
+export const CHANGE_ACTIVITY_VIEWS = [
+  'overview',
+  'launch-watch',
+  'commercial-moves',
+  'store-refreshes',
+  'all-activity',
+] as const;
+
+export type ChangeActivityView = (typeof CHANGE_ACTIVITY_VIEWS)[number];
+
+export const CHANGE_ACTIVITY_MODES = ['all', 'changes', 'announcements'] as const;
+
+export type ChangeActivityMode = (typeof CHANGE_ACTIVITY_MODES)[number];
+
+export const CHANGE_ACTIVITY_SORTS = [
+  'relevant',
+  'newest',
+  'biggest-change',
+  'most-commercial',
+  'most-launch-relevant',
+] as const;
+
+export type ChangeActivitySort = (typeof CHANGE_ACTIVITY_SORTS)[number];
+
+export const CHANGE_ACTIVITY_SIGNAL_FAMILIES = [
+  'announcement',
+  'release',
+  'pricing',
+  'store-page',
+  'media',
+  'taxonomy',
+  'platform',
+  'build',
+] as const;
+
+export type ChangeActivitySignalFamily = (typeof CHANGE_ACTIVITY_SIGNAL_FAMILIES)[number];
+
+export const CHANGE_ACTIVITY_STORY_KINDS = [
+  'announcement',
+  'release-prep',
+  'commercial-move',
+  'store-refresh',
+  'positioning-shift',
+  'platform-expansion',
+  'build-activity',
+  'general-update',
+] as const;
+
+export type ChangeActivityStoryKind = (typeof CHANGE_ACTIVITY_STORY_KINDS)[number];
+
 export type JsonValue =
   | string
   | number
@@ -48,6 +98,99 @@ export const CHANGE_FEED_APP_TYPES: AppType[] = [
 export interface ChangeFeedCursor {
   time: string;
   key: string;
+}
+
+export interface ChangeActivityParamsCursor {
+  score: number;
+  time: string;
+  id: string;
+}
+
+export interface ChangeDiffPreview {
+  id: string;
+  label: string;
+  kind: 'scalar' | 'list' | 'text' | 'media' | 'note';
+  beforeText: string | null;
+  afterText: string | null;
+  added: string[];
+  removed: string[];
+  beforeImageUrl: string | null;
+  afterImageUrl: string | null;
+  note: string | null;
+}
+
+export interface ChangeAnnouncementPreview {
+  gid: string;
+  title: string | null;
+  url: string | null;
+  feedLabel: string | null;
+  feedName: string | null;
+  publishedAt: string | null;
+  firstSeenAt: string | null;
+  excerpt: string | null;
+}
+
+export interface ChangeActivityRow {
+  activityId: string;
+  activityKind: 'change' | 'announcement';
+  storyKind: ChangeActivityStoryKind;
+  appid: number;
+  appName: string;
+  appType: AppType | null;
+  isReleased: boolean | null;
+  releaseDate: string | null;
+  occurredAt: string;
+  headline: string;
+  summary: string;
+  facts: string[];
+  highlightLabels: string[];
+  signalFamilies: ChangeActivitySignalFamily[];
+  hasBeforeAfter: boolean;
+  relatedAnnouncementCount: number;
+  externalUrl: string | null;
+}
+
+export interface ChangeActivityDetail {
+  activityId: string;
+  activityKind: 'change' | 'announcement';
+  storyKind: ChangeActivityStoryKind;
+  appid: number;
+  appName: string;
+  appType: AppType | null;
+  isReleased: boolean | null;
+  releaseDate: string | null;
+  occurredAt: string;
+  headline: string;
+  summary: string;
+  facts: string[];
+  highlightLabels: string[];
+  signalFamilies: ChangeActivitySignalFamily[];
+  hasBeforeAfter: boolean;
+  relatedAnnouncementCount: number;
+  externalUrl: string | null;
+  diffs: ChangeDiffPreview[];
+  relatedAnnouncements: ChangeAnnouncementPreview[];
+  aftermath: ChangeBurstImpact | null;
+  body: string | null;
+}
+
+export interface ChangeFeedActivityResponse {
+  items: ChangeActivityRow[];
+  nextCursor: string | null;
+  meta: {
+    days: number;
+    view: ChangeActivityView;
+    mode: ChangeActivityMode;
+    sort: ChangeActivitySort;
+    limit: number;
+    appTypes: AppType[] | null;
+    signalFamilies: ChangeActivitySignalFamily[] | null;
+    search: string | null;
+  };
+}
+
+export interface ChangeFeedActivityDetailResponse {
+  item: ChangeActivityDetail;
 }
 
 export interface ChangeBurstImpactWindow {
@@ -165,6 +308,27 @@ export interface ChangeFeedNewsResponse {
 
 export interface ChangeBurstDetailResponse {
   item: ChangeBurstDetail;
+}
+
+export interface RawChangeActivityRow {
+  activity_id: string;
+  activity_kind: 'change' | 'announcement';
+  story_kind: ChangeActivityStoryKind;
+  appid: number;
+  app_name: string;
+  app_type: AppType | null;
+  is_released: boolean | null;
+  release_date: string | null;
+  occurred_at: string;
+  headline: string;
+  summary: string;
+  facts: unknown;
+  highlight_labels: unknown;
+  signal_families: unknown;
+  has_before_after: boolean;
+  related_announcement_count: number;
+  external_url: string | null;
+  sort_score: number | null;
 }
 
 export interface RawChangeBurstRow {

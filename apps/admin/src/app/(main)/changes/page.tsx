@@ -2,18 +2,18 @@ import type { Metadata } from 'next';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { getUser } from '@/lib/supabase/server';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
-import type { ChangeFeedBurstsResponse, ChangeFeedNewsResponse } from './lib';
+import type { ChangeFeedActivityResponse } from './lib';
 import {
-  fetchChangeFeedBurstsResponse,
-  fetchChangeFeedNewsResponse,
-  parseChangeFeedBurstParams,
-  parseChangeFeedNewsParams,
+  fetchChangeFeedActivityResponse,
+  parseChangeFeedActivityParams,
+  parseChangeActivityMode,
+  parseChangeActivityView,
 } from './lib';
 import { ChangeFeedPageClient } from './ChangeFeedPageClient';
 
 export const metadata: Metadata = {
-  title: 'Change Feed | PublisherIQ',
-  description: 'Track Steam storefront, media, PICS, and news changes in a dense feed.',
+  title: 'Steam Activity | PublisherIQ',
+  description: 'Track Steam activity in one readable exploration feed with announcement context and before/after detail.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -32,12 +32,15 @@ function toUrlSearchParams(params: Record<string, string | undefined>): URLSearc
 
 interface PageProps {
   searchParams: Promise<{
-    tab?: string;
-    preset?: string;
+    mode?: string;
+    view?: string;
     range?: string;
     appTypes?: string;
-    source?: string;
+    signals?: string;
+    sort?: string;
     search?: string;
+    tab?: string;
+    preset?: string;
   }>;
 }
 
@@ -48,36 +51,47 @@ export default async function ChangeFeedPage({ searchParams }: PageProps) {
 
   const params = await searchParams;
   const urlSearchParams = toUrlSearchParams(params);
-  const activeTab = params.tab === 'news' ? 'news' : 'feed';
-  let initialFeedResponse: ChangeFeedBurstsResponse | undefined;
-  let initialNewsResponse: ChangeFeedNewsResponse | undefined;
+  const legacyMode =
+    !params.mode && params.tab ? (params.tab === 'news' ? 'announcements' : 'changes') : undefined;
+  const legacyView =
+    !params.view && params.preset
+      ? params.preset === 'upcoming-radar'
+        ? 'launch-watch'
+        : params.preset === 'all-changes'
+          ? 'all-activity'
+          : 'overview'
+      : undefined;
+
+  if (legacyMode) {
+    urlSearchParams.set('mode', parseChangeActivityMode(legacyMode));
+  }
+
+  if (legacyView) {
+    urlSearchParams.set('view', parseChangeActivityView(legacyView));
+  }
+
+  let initialActivityResponse: ChangeFeedActivityResponse | undefined;
 
   if (await getUser()) {
     try {
-      if (activeTab === 'news') {
-        initialNewsResponse = await fetchChangeFeedNewsResponse(
-          parseChangeFeedNewsParams(urlSearchParams)
-        );
-      } else {
-        initialFeedResponse = await fetchChangeFeedBurstsResponse(
-          parseChangeFeedBurstParams(urlSearchParams)
-        );
-      }
+      initialActivityResponse = await fetchChangeFeedActivityResponse(
+        parseChangeFeedActivityParams(urlSearchParams)
+      );
     } catch (error) {
-      console.error(`Failed to prefetch Change Feed ${activeTab} data:`, error);
+      console.error('Failed to prefetch Steam Activity data:', error);
     }
   }
 
   return (
     <ChangeFeedPageClient
-      initialTab={params.tab}
-      initialPreset={params.preset}
+      initialMode={params.mode ?? legacyMode}
+      initialView={params.view ?? legacyView}
       initialRange={params.range}
       initialAppTypes={params.appTypes}
-      initialSource={params.source}
+      initialSignals={params.signals}
+      initialSort={params.sort}
       initialSearch={params.search}
-      initialFeedResponse={initialFeedResponse}
-      initialNewsResponse={initialNewsResponse}
+      initialActivityResponse={initialActivityResponse}
     />
   );
 }
