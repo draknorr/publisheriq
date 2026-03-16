@@ -1,17 +1,12 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { Badge, Card } from "@/components/ui";
+import { Badge } from "@/components/ui";
 import {
   HERO_LOOP,
   HERO_SIGNAL_TILES,
   LANDING_AUDIENCES,
   LANDING_JOBS,
 } from "./config/content";
-
-const HERO_NOTES = [
-  { label: "Launch watch", value: "14 grouped moves" },
-  { label: "Company pattern", value: "3 repeated pricing plays" },
-] as const;
 
 const primaryLinkStyles =
   "landing-button inline-flex items-center justify-center gap-2 rounded-md bg-accent-primary px-5 py-3 text-body font-medium text-white shadow-subtle transition-all duration-150 hover:bg-accent-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -21,19 +16,19 @@ const secondaryLinkStyles =
 
 export function HeroSection() {
   return (
-    <section className="px-4 pb-10 pt-14 sm:px-6 sm:pb-14 sm:pt-20">
-      <div className="mx-auto grid max-w-7xl gap-10 xl:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)] xl:items-end">
-        <div className="max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2 animate-fade-in-up">
+    <section className="px-4 pb-14 pt-14 sm:px-6 sm:pb-16 sm:pt-20">
+      <div className="mx-auto max-w-6xl">
+        <div className="max-w-4xl">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="primary">Invite-only beta</Badge>
             <Badge variant="default">Deepest on Steam today</Badge>
           </div>
 
-          <h1 className="mt-6 max-w-3xl text-display-lg text-text-primary sm:text-[4.25rem]">
+          <h1 className="mt-6 max-w-4xl text-display-lg text-text-primary sm:text-[4.25rem]">
             The most advanced market-intelligence workflow in games.
           </h1>
 
-          <p className="mt-5 max-w-2xl text-body-lg text-text-secondary">
+          <p className="mt-5 max-w-3xl text-body-lg text-text-secondary">
             Track launch timing, pricing, store changes, company moves, and
             market signals in one system. Ask questions in plain English,
             compare the titles and companies behind the move, and open the
@@ -59,105 +54,63 @@ export function HeroSection() {
               <span>Sign in</span>
             </Link>
           </div>
+        </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {LANDING_JOBS.map((job, index) => (
-              <Card
-                key={job.title}
-                className="landing-panel h-full animate-fade-in-up"
-                style={{ animationDelay: `${120 + index * 60}ms` }}
-              >
-                <div className="flex items-center justify-between gap-3">
+        <div className="mt-14 grid gap-10 border-t border-border-subtle pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <p className="text-caption uppercase tracking-[0.16em] text-text-tertiary">
+              What it does
+            </p>
+            <div className="mt-5 space-y-5">
+              {LANDING_JOBS.map((job) => (
+                <div key={job.title} className="border-b border-border-subtle pb-5 last:border-b-0 last:pb-0">
                   <p className="text-caption uppercase tracking-[0.16em] text-text-tertiary">
                     {job.title}
                   </p>
-                  <span className="text-accent-primary">
-                    <span className="landing-beacon" />
-                  </span>
+                  <p className="mt-2 text-body text-text-secondary">
+                    {job.description}
+                  </p>
                 </div>
-                <p className="mt-3 text-body text-text-secondary">
-                  {job.description}
-                </p>
-              </Card>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-caption uppercase tracking-[0.16em] text-text-tertiary">
+              How the workflow works
+            </p>
+            <div className="mt-5 space-y-5">
+              {HERO_LOOP.map((item) => (
+                <div key={item.step} className="grid grid-cols-[auto_1fr] gap-4 border-b border-border-subtle pb-5 last:border-b-0 last:pb-0">
+                  <span className="font-data text-caption text-accent-primary">
+                    {item.step}
+                  </span>
+                  <div>
+                    <p className="text-body font-medium text-text-primary">
+                      {item.title}
+                    </p>
+                    <p className="mt-2 text-body-sm text-text-secondary">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <Card variant="elevated" className="landing-panel overflow-hidden">
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border-subtle pb-4">
-            <div>
-              <p className="text-caption uppercase tracking-[0.16em] text-text-tertiary">
-                The operating loop
+        <div className="mt-12 grid gap-4 border-t border-border-subtle pt-10 sm:grid-cols-2 xl:grid-cols-4">
+          {HERO_SIGNAL_TILES.map((tile) => (
+            <div key={tile.label}>
+              <p className="font-data text-display-sm text-text-primary">
+                {tile.value}
               </p>
-              <p className="mt-3 text-heading-sm text-text-primary">
-                Ask once. Follow the thread to proof.
+              <p className="mt-2 text-body-sm text-text-secondary">
+                {tile.label}
               </p>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-3 py-1 text-caption text-text-secondary shadow-xs">
-              <span className="text-accent-primary">
-                <span className="landing-beacon" />
-              </span>
-              Live workflow
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-4">
-            {HERO_LOOP.map((item) => (
-              <div
-                key={item.step}
-                className="grid grid-cols-[auto_1fr] gap-3 rounded-2xl px-2 py-1 transition-colors duration-150 hover:bg-surface"
-              >
-                <span className="font-data text-caption text-accent-primary">
-                  {item.step}
-                </span>
-                <div>
-                  <p className="text-body font-medium text-text-primary">
-                    {item.title}
-                  </p>
-                  <p className="mt-1 text-body-sm text-text-secondary">
-                    {item.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {HERO_SIGNAL_TILES.map((tile) => (
-              <div
-                key={tile.label}
-                className="landing-panel rounded-xl border border-border-subtle bg-surface p-3"
-              >
-                <p className="font-data text-heading-sm text-text-primary">
-                  {tile.value}
-                </p>
-                <p className="mt-1 text-body-sm text-text-secondary">
-                  {tile.label}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            {HERO_NOTES.map((note, index) => (
-              <div
-                key={note.label}
-                className={`rounded-2xl border border-border-subtle bg-surface px-3 py-2 shadow-xs transition-transform duration-200 ${
-                  index % 2 === 0
-                    ? "-rotate-[0.5deg] hover:rotate-0"
-                    : "rotate-[0.5deg] hover:rotate-0"
-                }`}
-              >
-                <p className="text-caption uppercase tracking-[0.16em] text-text-tertiary">
-                  {note.label}
-                </p>
-                <p className="mt-1 text-body-sm font-medium text-text-primary">
-                  {note.value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
+          ))}
+        </div>
       </div>
     </section>
   );
