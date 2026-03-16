@@ -26,6 +26,7 @@ import {
 } from '../change-intel/storefront.js';
 
 const log = logger.child({ component: 'change-intel-support' });
+const STEAM_NEWS_MAX_LENGTH = 20_000;
 
 export function buildHintCursor(lastModified: number, priceChangeNumber: number): string {
   return `${lastModified}:${priceChangeNumber}`;
@@ -124,7 +125,7 @@ async function fetchReachableNewsHistory(appid: number, maxPages: number): Promi
     const batch = await fetchAppNews(appid, {
       count: 100,
       endDateUnix,
-      maxLength: 5000,
+      maxLength: STEAM_NEWS_MAX_LENGTH,
     });
 
     if (batch.length === 0) {
