@@ -12,7 +12,7 @@ import {
 import { ChangeFeedPageClient } from './ChangeFeedPageClient';
 
 export const metadata: Metadata = {
-  title: 'Steam Activity | PublisherIQ',
+  title: 'Steam Change Feed | PublisherIQ',
   description: 'Track Steam activity in one readable exploration feed with announcement context and before/after detail.',
 };
 

@@ -1174,8 +1174,7 @@ export function ChangeFeedPageClient({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Steam Activity"
-        description="A live exploration feed for Steam activity with readable cards, announcement context, and expandable before/after detail."
+        title="Steam Change Feed"
         actions={
           <div className="flex items-center gap-2">
             {status && (
