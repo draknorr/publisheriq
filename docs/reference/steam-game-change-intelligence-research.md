@@ -2,6 +2,8 @@
 
 Last updated: March 13, 2026
 
+> Current-state note (March 15, 2026): parts of this memo describe future-state capabilities. PublisherIQ now has implemented capture for storefront/news/media/PICS change history and a live `/changes` surface, but roadmap sections below should still be read as a mix of shipped behavior and next-step recommendations.
+
 ## Summary
 
 This memo answers a narrow question: what data can PublisherIQ acquire to detect meaningful changes to a Steam game's market presentation or product direction, and what needs to be snapshotted over time to support reliable before/after analysis.

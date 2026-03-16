@@ -1,6 +1,6 @@
 # Global Search
 
-PublisherIQ includes a global search feature that lets you quickly find games, publishers, and developers from anywhere in the application.
+PublisherIQ includes a global search feature that lets you quickly find games and company entities from anywhere in the application.
 
 ---
 
@@ -40,7 +40,7 @@ The search queries three entity types simultaneously:
 | **Publishers** | Publisher names | `/publishers/{id}` |
 | **Developers** | Developer names | `/developers/{id}` |
 
-Results are ranked by match quality, with near-exact matches appearing first.
+Results are ranked by match quality, with near-exact matches appearing first. The primary company browse surface is `/companies`, but search opens the entity detail pages directly.
 
 ---
 
@@ -142,7 +142,7 @@ Clicking an action:
 ## Tips
 
 - **Be specific**: "Half-Life 2" finds the exact game faster than "half life"
-- **Search publishers**: Type a publisher name to see all their games
+- **Search companies**: Type a publisher or developer name to jump directly to its detail page
 - **Quick navigation**: Use search as a fast way to jump between pages
 - **Partial matches work**: "rock" finds "Rockstar Games" and games with "rock" in the title
 

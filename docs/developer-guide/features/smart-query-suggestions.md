@@ -141,7 +141,7 @@ Assistant response completes
 
 ## Testing
 
-1. Run `pnpm --filter admin dev`
+1. Run `pnpm --filter @publisheriq/admin dev`
 2. Navigate to `/chat`
 3. Test autocomplete:
    - Focus input (empty) → See example prompts

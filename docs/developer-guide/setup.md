@@ -263,15 +263,16 @@ LOG_JSON=false
 ### Check database connection
 
 ```bash
-# Should output table names
-pnpm --filter database test-connection
+# Build shared packages and ensure types are sound
+pnpm build
+pnpm check-types
 ```
 
 ### Check Steam API
 
 ```bash
-# Run a quick sync test
-pnpm --filter ingestion run sync:applist --limit 10
+# Run a quick worker smoke test
+BATCH_SIZE=10 pnpm --filter @publisheriq/ingestion storefront-sync
 ```
 
 ### Check LLM connection
@@ -279,8 +280,8 @@ pnpm --filter ingestion run sync:applist --limit 10
 Start the dashboard and try a chat query:
 
 ```bash
-pnpm --filter admin dev
-# Visit http://localhost:3000 and use the chat interface
+pnpm --filter @publisheriq/admin dev
+# Visit http://localhost:3001 and use the chat interface
 ```
 
 ## Next Steps

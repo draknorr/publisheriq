@@ -6,6 +6,13 @@ Steam change intelligence is split across three runtimes:
 - `change-intel-worker`: long-running queue drainer for `storefront`, `news`, and `hero_asset` capture sources. Railway should run this continuously with `pnpm --filter @publisheriq/ingestion change-intel-worker`.
 - `services/pics-service`: writes normalized PICS snapshots and diff events inline before the existing latest-state upserts.
 
+## Recent Behavior Notes
+
+- Diff canonicalization now normalizes JSON payload ordering before comparison, which reduces false positives caused by key-order churn in stored JSON values.
+- Storefront latest-state writes keep parsed `release_date` strict; non-parseable release text remains raw text instead of overwriting typed dates.
+- PICS history capture retries transient and schema-cache failures, updates `last_seen_at` for unchanged normalized snapshots, and cools down temporarily if historical writes keep failing.
+- Latest-state PICS upserts continue even when the historical-write cooldown is active.
+
 ## Queue Ownership
 
 - PICS does not use `app_capture_queue`.
@@ -24,6 +31,8 @@ Steam change intelligence is split across three runtimes:
 - `CLAIM_STALE_AFTER_MS`: requeue `claimed` queue rows older than this threshold so abandoned work is not stranded during worker churn or replica scale-down. Default `1800000` (`30` minutes). Set `0` to disable.
 - `STALE_CLAIM_SWEEP_INTERVAL_MS`: how often the worker checks for stale claimed rows. Default `60000`.
 
+When stale claims are requeued, the completion path records the `stale_claim_requeued` reason so abandoned rows do not stay stranded.
+
 ## Storage Guardrails
 
 - Bucket: `steam-hero-assets`
@@ -39,6 +48,15 @@ Steam change intelligence is split across three runtimes:
 - `.github/workflows/app-change-hints.yml`: scheduled hourly hint sweep plus manual dispatch.
 - `.github/workflows/news-catchup.yml`: manual bounded news catch-up using `QUEUE_SOURCES=news` and `MAX_IDLE_POLLS`.
 - `.github/workflows/storefront-initial-sync.yml`: existing manual storefront bootstrap workflow.
+
+## Read Surfaces
+
+The user-facing `/changes` page reads from:
+
+- `get_change_feed_bursts`
+- `get_change_feed_burst_detail`
+- `get_change_feed_news`
+- `/api/change-feed/status`
 
 ## Verification
 

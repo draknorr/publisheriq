@@ -1,16 +1,13 @@
 # Internal API Reference
 
-This document describes the internal API endpoints used by the PublisherIQ dashboard.
-
-> **Note:** These are internal APIs for the dashboard frontend. For Steam API documentation, see [API Endpoints](./api-endpoints.md).
-
----
+This document describes the main internal endpoints used by the PublisherIQ dashboard.
 
 ## Authentication
 
-All internal APIs require authentication via Supabase Auth. Include the session cookie or Authorization header.
+Most endpoints require an authenticated Supabase session cookie.
 
-**Error Response (401):**
+Typical unauthenticated response:
+
 ```json
 {
   "error": "unauthorized",
@@ -18,409 +15,129 @@ All internal APIs require authentication via Supabase Auth. Include the session 
 }
 ```
 
----
+## Chat
 
-## Chat API
+### `POST /api/chat/stream`
 
-### POST /api/chat/stream
+Streaming chat endpoint using SSE.
 
-Streaming chat endpoint using Server-Sent Events (SSE).
+Key events:
 
-**Request:**
-```json
-{
-  "messages": [
-    { "role": "user", "content": "Show me top puzzle games" }
-  ]
-}
-```
+- `text_delta`
+- `tool_start`
+- `tool_result`
+- `message_end`
+- `error`
 
-**Response:** SSE stream with event types:
-- `text_delta` - Incremental text from LLM
-- `tool_start` - Tool execution started
-- `tool_result` - Tool execution completed
-- `message_end` - Response complete
-- `error` - Error occurred
+Related doc: [Streaming API](./streaming-api.md)
 
-See [Streaming API Protocol](../developer-guide/architecture/chat-data-system.md#streaming-api-protocol) for detailed event schemas.
+## Change Feed
 
-**Error Responses:**
-| Status | Error | Description |
-|--------|-------|-------------|
-| 401 | unauthorized | Not authenticated |
-| 402 | insufficient_credits | Not enough credits |
-| 429 | rate_limited | Too many requests |
+### `GET /api/change-feed/bursts`
 
----
+Returns grouped change bursts.
 
-## Pins API
+Important query params:
 
-### GET /api/pins
+- `days`
+- `preset`
+- `appTypes`
+- `source`
+- `search`
+- `cursorTime`
+- `cursorKey`
+- `limit`
 
-Fetch all pins for the current user.
+### `GET /api/change-feed/bursts/[burstId]`
 
-**Response:**
-```json
-{
-  "pins": [
-    {
-      "id": "uuid",
-      "entity_type": "game",
-      "entity_id": "730",
-      "display_name": "Counter-Strike 2",
-      "created_at": "2026-01-15T12:00:00Z"
-    }
-  ]
-}
-```
+Returns detail for one burst, including:
 
-### POST /api/pins
+- individual change events
+- related news
+- impact windows
 
-Create a new pin.
+### `GET /api/change-feed/news`
 
-**Request:**
-```json
-{
-  "entity_type": "game",
-  "entity_id": "730",
-  "display_name": "Counter-Strike 2"
-}
-```
+Returns recent Steam news rows.
 
-**Response:**
-```json
-{
-  "id": "uuid",
-  "entity_type": "game",
-  "entity_id": "730",
-  "display_name": "Counter-Strike 2",
-  "created_at": "2026-01-15T12:00:00Z"
-}
-```
+Important query params:
 
-### DELETE /api/pins/[id]
+- `days`
+- `appTypes`
+- `search`
+- `cursorTime`
+- `cursorKey`
+- `limit`
+
+### `GET /api/change-feed/status`
+
+Returns change-capture health state:
+
+- `healthy`
+- `catching_up`
+- `delayed`
+
+## Pins
+
+### `GET /api/pins`
+
+Fetch current user pins.
+
+### `POST /api/pins`
+
+Create a pin.
+
+### `DELETE /api/pins/[id]`
 
 Remove a pin.
 
-**Response:** 204 No Content
+### `GET /api/pins/check`
 
-### GET /api/pins/check
+Check whether a specific entity is pinned.
 
-Check if an entity is pinned.
+### `GET` / `PUT /api/pins/[id]/alert-settings`
 
-**Query Parameters:**
-- `entity_type`: game, publisher, or developer
-- `entity_id`: Entity ID
+Read or update per-pin alert settings.
 
-**Response:**
-```json
-{
-  "isPinned": true,
-  "pinId": "uuid"
-}
-```
+## Alerts
 
-### GET /api/pins/[id]/alert-settings
-
-Get alert settings for a specific pin.
-
-**Response:**
-```json
-{
-  "alerts_enabled": true,
-  "ccu_sensitivity": 1.0,
-  "review_sensitivity": 1.0,
-  "sentiment_sensitivity": 1.0,
-  "alert_types": {
-    "ccu_spike": true,
-    "ccu_drop": true,
-    "trend_reversal": true,
-    "review_surge": true,
-    "sentiment_shift": true,
-    "price_change": true,
-    "new_release": true,
-    "milestone": true
-  }
-}
-```
-
-### PUT /api/pins/[id]/alert-settings
-
-Update alert settings for a pin.
-
-**Request:**
-```json
-{
-  "alerts_enabled": true,
-  "ccu_sensitivity": 1.5,
-  "alert_types": {
-    "ccu_spike": true,
-    "price_change": false
-  }
-}
-```
-
----
-
-## Alerts API
-
-### GET /api/alerts
+### `GET /api/alerts`
 
 Fetch alerts for the current user.
 
-**Query Parameters:**
-- `limit`: Maximum alerts to return (default: 50)
-- `unread_only`: Only return unread alerts (default: false)
+### `GET /api/alerts/count`
 
-**Response:**
-```json
-{
-  "alerts": [
-    {
-      "id": "uuid",
-      "alert_type": "ccu_spike",
-      "severity": "high",
-      "title": "CCU Spike Detected",
-      "description": "Counter-Strike 2 CCU increased by 150%",
-      "entity_type": "game",
-      "entity_id": "730",
-      "entity_name": "Counter-Strike 2",
-      "is_read": false,
-      "created_at": "2026-01-15T12:00:00Z"
-    }
-  ]
-}
-```
+Fetch unread alert count.
 
-### GET /api/alerts/count
-
-Get unread alert count.
-
-**Response:**
-```json
-{
-  "unread_count": 5
-}
-```
-
-### PUT /api/alerts/[id]/read
+### `PUT /api/alerts/[id]/read`
 
 Mark an alert as read.
 
-**Response:** 204 No Content
-
-### DELETE /api/alerts/[id]
+### `DELETE /api/alerts/[id]`
 
 Delete an alert.
 
-**Response:** 204 No Content
+### `GET` / `PUT /api/alerts/preferences`
 
-### GET /api/alerts/preferences
+Read or update global alert preferences.
 
-Get user's global alert preferences.
+## Auth Support
 
-**Response:**
-```json
-{
-  "alerts_enabled": true,
-  "ccu_sensitivity": 1.0,
-  "review_sensitivity": 1.0,
-  "sentiment_sensitivity": 1.0,
-  "alert_types": {
-    "ccu_spike": true,
-    "ccu_drop": true,
-    "trend_reversal": true,
-    "review_surge": true,
-    "sentiment_shift": true,
-    "price_change": true,
-    "new_release": true,
-    "milestone": true
-  }
-}
-```
+### `POST /api/auth/validate-email`
 
-### PUT /api/alerts/preferences
+Checks whether an email is approved for sign-in before OTP delivery is attempted.
 
-Update global alert preferences.
+### `GET /api/auth/callback`
 
-**Request:** Same format as GET response.
+Server-side callback router that validates origin handling and forwards callback state to the client callback surface.
 
----
+## Notes
 
-## Apps API
-
-### GET /api/apps
-
-Fetch apps with filters.
-
-**Query Parameters:**
-- `type`: game, dlc, demo, or all
-- `limit`: Maximum results (default: 50)
-- `offset`: Pagination offset
-- `sort`: Sort field
-- `order`: asc or desc
-- Various filter parameters (see Games Page)
-
-**Response:**
-```json
-{
-  "apps": [...],
-  "total": 1000,
-  "hasMore": true
-}
-```
-
----
-
-## Search API
-
-### GET /api/search
-
-Unified search across entities.
-
-**Query Parameters:**
-- `q`: Search query
-- `type`: game, publisher, developer, or all
-- `limit`: Maximum results per type (default: 10)
-
-**Response:**
-```json
-{
-  "games": [
-    { "appid": 730, "name": "Counter-Strike 2" }
-  ],
-  "publishers": [
-    { "id": 1, "name": "Valve" }
-  ],
-  "developers": [
-    { "id": 1, "name": "Valve" }
-  ]
-}
-```
-
----
-
-## Similarity API
-
-### POST /api/similarity
-
-Find similar entities using vector search.
-
-**Request:**
-```json
-{
-  "entity_type": "game",
-  "reference_name": "Hades",
-  "filters": {
-    "popularity_comparison": "similar",
-    "min_reviews": 100
-  },
-  "limit": 10
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "results": [
-    {
-      "appid": 1145360,
-      "name": "Hades II",
-      "similarity": 0.95,
-      "owners": 500000,
-      "reviewScore": 95
-    }
-  ]
-}
-```
-
----
-
-## Autocomplete API
-
-### GET /api/autocomplete/tags
-
-Tag autocomplete for filter inputs.
-
-**Query Parameters:**
-- `q`: Search query
-- `type`: tags, genres, or categories
-- `limit`: Maximum results (default: 20)
-
-**Response:**
-```json
-{
-  "results": [
-    { "id": 1, "name": "Action", "count": 15000 }
-  ]
-}
-```
-
----
-
-## Admin APIs
-
-> **Access:** Requires `admin` role.
-
-### POST /api/admin/send-invite
-
-Send signup invitation to a waitlist applicant.
-
-**Request:**
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Invite sent"
-}
-```
-
----
-
-## Error Responses
-
-All APIs return errors in a consistent format:
-
-```json
-{
-  "error": "error_code",
-  "message": "Human-readable description"
-}
-```
-
-**Common Error Codes:**
-
-| Code | Status | Description |
-|------|--------|-------------|
-| unauthorized | 401 | Not authenticated |
-| forbidden | 403 | Insufficient permissions |
-| not_found | 404 | Resource not found |
-| validation_error | 400 | Invalid request parameters |
-| rate_limited | 429 | Too many requests |
-| insufficient_credits | 402 | Not enough credits |
-| server_error | 500 | Internal server error |
-
----
-
-## Rate Limits
-
-| Endpoint | Limit |
-|----------|-------|
-| /api/chat/stream | 10/min, 100/hour per user |
-| /api/search | 60/min |
-| /api/similarity | 30/min |
-| Other endpoints | 120/min |
-
----
+- Change Feed endpoints return `503` when the required SQL read surfaces are not available yet.
+- Burst and news lists use keyset pagination rather than offset pagination.
+- Protected-route UX redirects through `/login?next=...`; APIs return JSON errors instead of redirects.
 
 ## Related Documentation
 
-- [Chat Data System](../developer-guide/architecture/chat-data-system.md) - Streaming API protocol
-- [Steam API](./steam-api.md) - Steam API reference
+- [Change Feed Feature](../developer-guide/features/change-feed.md)
+- [Steam Change Intelligence](../developer-guide/workers/steam-change-intelligence.md)

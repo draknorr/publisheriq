@@ -13,12 +13,13 @@ PublisherIQ is an enterprise-grade analytics platform for Steam game data. It co
    - [Games Page](#21-games-page)
    - [Companies Page](#22-companies-page)
    - [Insights Dashboard](#23-insights-dashboard)
-   - [Command Palette & Search](#24-command-palette--search)
-   - [AI Chat Interface](#25-ai-chat-interface)
-   - [Personalization & Alerts](#26-personalization--alerts)
-   - [Credit System](#27-credit-system)
-   - [Account & Authentication](#28-account--authentication)
-   - [Admin Dashboard](#29-admin-dashboard)
+   - [Change Feed](#24-change-feed)
+   - [Command Palette & Search](#25-command-palette--search)
+   - [AI Chat Interface](#26-ai-chat-interface)
+   - [Personalization & Alerts](#27-personalization--alerts)
+   - [Credit System](#28-credit-system)
+   - [Account & Authentication](#29-account--authentication)
+   - [Admin Dashboard](#210-admin-dashboard)
 3. [Data Sources & Collection](#3-data-sources--collection)
 4. [Metrics & Analytics](#4-metrics--analytics)
 5. [Architecture & Infrastructure](#5-architecture--infrastructure)
@@ -40,6 +41,7 @@ PublisherIQ is a data analytics platform purpose-built for the Steam gaming ecos
 
 - **Unified View**: All Steam game data consolidated into a single, searchable platform
 - **Real-Time Tracking**: Hourly concurrent user monitoring for top games, with tiered polling for the full catalog
+- **Change Intelligence**: Track grouped storefront, media, PICS, and news changes in a dense feed
 - **AI-Powered Analysis**: Ask natural language questions and receive structured, data-backed answers
 - **Deep Discovery**: 12 preset views, 40+ filter parameters, and 6 computed insight metrics for finding hidden gems, tracking trends, and comparing games
 - **Personalized Monitoring**: Pin games and companies, receive alerts on CCU spikes, trend reversals, review surges, and more
@@ -297,7 +299,49 @@ Columns hide progressively on smaller screens:
 
 ---
 
-### 2.4 Command Palette & Search
+### 2.4 Change Feed
+
+The Change Feed (`/changes`) surfaces recent grouped changes across storefront metadata, media updates, PICS-derived signals, and Steam news.
+
+#### Tabs
+
+- **Feed** - grouped change bursts for a single app
+- **News** - recent Steam news posts
+
+#### Feed Presets
+
+| Preset | Purpose |
+|--------|---------|
+| High Signal | Higher-value non-trivial bursts |
+| Upcoming Radar | Upcoming games and recent launches |
+| All Changes | Full recency stream |
+
+#### Filters
+
+- time range: `24h`, `7d`, `30d`
+- app type
+- source filter on the Feed tab
+- search by app name
+
+#### Detail View
+
+Each burst can expand into:
+
+- individual change events
+- related news posts
+- impact windows showing pre/post movement in key metrics
+
+#### Status
+
+The page also shows capture health states:
+
+- `healthy`
+- `catching_up`
+- `delayed`
+
+---
+
+### 2.5 Command Palette & Search
 
 #### Command Palette
 
@@ -348,7 +392,7 @@ Open with `Cmd+K` / `Ctrl+K` from any page:
 
 ---
 
-### 2.5 AI Chat Interface
+### 2.6 AI Chat Interface
 
 The AI chat interface (`/chat`) enables natural language querying of all platform data.
 
@@ -415,7 +459,7 @@ Two complementary features assist users:
 
 ---
 
-### 2.6 Personalization & Alerts
+### 2.7 Personalization & Alerts
 
 #### Pin System
 
@@ -450,7 +494,7 @@ Pin any game, publisher, or developer from its detail page to track it on your p
 
 ---
 
-### 2.7 Credit System
+### 2.8 Credit System
 
 The credit system manages AI chat usage with transparent cost tracking.
 
@@ -483,15 +527,16 @@ Credits are reserved before chat execution and finalized after completion. If a 
 
 ---
 
-### 2.8 Account & Authentication
+### 2.9 Account & Authentication
 
-#### OTP Magic Link Authentication
+#### OTP-First Authentication with Compatibility Callbacks
 
 | Setting | Value |
 |---------|-------|
 | Code format | 8-digit numeric |
 | Code expiry | 10 minutes |
 | Rate limit | 3 attempts per 15 minutes |
+| Resend cooldown | 60 seconds |
 
 **Login Flow:**
 1. Enter email on `/login`
@@ -499,6 +544,12 @@ Credits are reserved before chat execution and finalized after completion. If a 
 3. OTP email sent with 8-digit code
 4. Enter code to complete sign-in
 5. Session established with secure cookies
+6. Redirect back to the requested route via `?next=...`
+
+**Operational Notes:**
+- `/auth/callback` and `/auth/confirm` remain for callback compatibility
+- browser redirects are normalized through `NEXT_PUBLIC_SITE_URL`
+- the browser waits for an authoritative authenticated user before redirecting
 
 #### Invite-Only Access
 
@@ -506,7 +557,7 @@ New users apply via a waitlist form. Administrators review and approve applicati
 
 ---
 
-### 2.9 Admin Dashboard
+### 2.10 Admin Dashboard
 
 The admin dashboard provides system health monitoring and user management across four pages.
 
@@ -1161,6 +1212,7 @@ Key UI components:
 | **v2.6** | Jan 16, 2026 | Games page rebuild, 12 presets, 12 quick filters, 33 columns, 6 computed insight metrics (Momentum, Sentiment Delta, Active Player %, Review Rate, Value Score, vs Publisher Avg), 40+ filter parameters, 7 new materialized views |
 | **v2.7** | Jan 25, 2026 | Command palette (Cmd+K) with filter syntax, active filter bar with color-coded chips, warm stone color palette, DM Sans + JetBrains Mono typography |
 | **v2.8** | Jan 31, 2026 | 14 security vulnerabilities patched, OTP authentication (8-digit codes), token refresh loop fix, apps/companies page sparkline and timeout fixes, standardized Supabase client patterns |
+| **v2.9** | Mar 15, 2026 | New Change Feed at `/changes`, OTP/session hardening, origin validation, Change Feed SQL read surfaces, stale-claim recovery, improved change-intel and PICS history capture |
 
 ### Feature Matrix
 
@@ -1178,6 +1230,8 @@ Key UI components:
 | Companies Page | v2.5 | Active |
 | Games Page (rebuilt) | v2.6 | Active |
 | Computed Insight Metrics | v2.6 | Active |
+| Change Feed | v2.9 | Active |
+| Change-Intelligence Runtime | v2.9 | Active |
 | Command Palette | v2.7 | Active |
 | Filter Syntax | v2.7 | Active |
 | Design System (Warm Stone) | v2.7 | Active |

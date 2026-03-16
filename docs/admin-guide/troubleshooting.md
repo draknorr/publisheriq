@@ -450,6 +450,7 @@ pnpm build
 
 - After 3 failed attempts, wait 15 minutes
 - Check spam folder for OTP emails
+- Wait 60 seconds before requesting another code
 
 ### Token Refresh Loop (v2.8+)
 
@@ -468,11 +469,15 @@ pnpm build
 3. Hard refresh the page (Cmd+Shift+R / Ctrl+Shift+R)
 4. Try incognito/private browsing mode
 
-### "Magic link expired"
+### Callback Link Expired
 
-**Cause:** Link older than 10 minutes (OTP) or 1 hour (magic link).
+**Cause:** A fallback callback or confirm link was opened too late, or the redirect origin is misconfigured.
 
-**Solution:** Request a new code from `/login`
+**Solution:**
+
+1. Request a fresh code from `/login`
+2. Verify `NEXT_PUBLIC_SITE_URL` matches the deployment hostname
+3. If testing older links, clear stale cookies/local storage and retry
 
 ### "Insufficient credits"
 

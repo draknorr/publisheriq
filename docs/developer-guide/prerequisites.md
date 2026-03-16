@@ -108,4 +108,4 @@ For deploying the PICS service:
 
 Once you have all prerequisites:
 1. [Installation](installation.md) - Clone and set up the project
-2. [Environment Setup](environment-setup.md) - Configure environment variables
+2. [Environment Setup](setup.md) - Configure environment variables

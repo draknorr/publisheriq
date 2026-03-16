@@ -1,79 +1,82 @@
 # PublisherIQ
 
-Steam Publisher & Developer data acquisition platform for tracking games, reviews, trends, and historical metrics. Features an AI-powered natural language interface for querying the database.
+Steam analytics platform for browsing games and companies, tracking change intelligence, and querying the warehouse through an AI chat interface.
 
-## Features
+## Current Highlights
 
-- **Data Ingestion** - Automated collection from Steam APIs, SteamSpy, and PICS
-- **Historical Tracking** - Daily snapshots of reviews, CCU, and pricing
-- **Trend Analysis** - 30/90-day trend calculations with review velocity
-- **Chat Interface** - Natural language queries powered by Claude AI
-- **Admin Dashboard** - Browse publishers, developers, games, and sync status
+- **Change Feed** at `/changes` for grouped storefront, PICS, media, and news activity
+- **Games + Companies analytics** with advanced filters, saved views, compare, and export
+- **Insights dashboard** for top games, newest releases, and personalized monitoring
+- **AI chat** backed by Cube.js, Qdrant, and streaming responses
+- **OTP-first auth** with waitlist approval, `?next=` redirects, and hardened callback handling
+- **Change-intelligence runtime** across TypeScript workers, SQL read surfaces, and the PICS service
 
 ## Quick Start
 
 ```bash
-# Clone and install
-git clone https://github.com/yourusername/publisheriq.git
-cd publisheriq
 pnpm install
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your Supabase and Steam API credentials
-
-# Build and run
 pnpm build
-pnpm --filter admin dev
+pnpm --filter @publisheriq/admin dev
 ```
 
-Visit [http://localhost:3001](http://localhost:3001) to see the dashboard.
+The dashboard runs on `http://localhost:3001`.
+
+## Key Commands
+
+```bash
+pnpm build
+pnpm lint
+pnpm check-types
+
+pnpm --filter @publisheriq/admin dev
+
+pnpm --filter @publisheriq/ingestion applist-sync
+pnpm --filter @publisheriq/ingestion storefront-sync
+pnpm --filter @publisheriq/ingestion change-intel-worker
+
+cd services/pics-service && pytest
+```
 
 ## Documentation
 
-Full documentation is available in the [docs/](docs/) directory:
+Start with [docs/START-HERE.md](docs/START-HERE.md).
 
-| Section | Description |
-|---------|-------------|
-| [Getting Started](docs/getting-started/) | Installation, setup, first run |
-| [Architecture](docs/architecture/) | System design, data sources, database |
-| [Deployment](docs/deployment/) | Vercel, Railway, GitHub Actions, Supabase |
-| [Guides](docs/guides/) | Chat interface, workers, troubleshooting |
-| [Reference](docs/reference/) | API specs, rate limits, SQL examples |
+| Area | Path |
+|------|------|
+| Documentation index | [docs/README.md](docs/README.md) |
+| User guides | [docs/user-guide/](docs/user-guide/) |
+| Admin guides | [docs/admin-guide/](docs/admin-guide/) |
+| Developer guides | [docs/developer-guide/](docs/developer-guide/) |
+| API docs | [docs/api/](docs/api/) |
+| Reference docs | [docs/reference/](docs/reference/) |
+| Release notes | [docs/releases/](docs/releases/) |
 
-## Project Structure
+## Monorepo Layout
 
-```
+```text
 publisheriq/
 ├── apps/admin/              # Next.js 15 dashboard
-├── packages/
-│   ├── database/            # Supabase client + types
-│   ├── ingestion/           # API clients, workers
-│   └── shared/              # Utilities, logger
+├── packages/database/       # Supabase client + generated types
+├── packages/ingestion/      # Steam clients, workers, change-intel runtime
+├── packages/qdrant/         # Qdrant client + collection schemas
+├── packages/shared/         # Shared utilities and logger
+├── packages/cube/           # Cube.js semantic layer
 ├── services/pics-service/   # Python PICS microservice
-├── supabase/migrations/     # Database schema
-├── .github/workflows/       # Scheduled sync jobs
-└── docs/                    # Documentation
+├── supabase/migrations/     # Database migrations
+└── docs/                    # Canonical documentation
 ```
 
-## Tech Stack
+## Core Routes
 
-| Component | Technology |
-|-----------|------------|
-| Dashboard | Next.js 15, React 19, TailwindCSS |
-| Database | Supabase (PostgreSQL) |
-| Workers | GitHub Actions, TypeScript |
-| PICS Service | Python, SteamKit2, Railway |
-| AI | Claude 3.5 Haiku / GPT-4o-mini |
-
-## Development
-
-```bash
-pnpm build        # Build all packages
-pnpm check-types  # Type checking
-pnpm format       # Format code
-```
+- `/dashboard` - home dashboard
+- `/chat` - AI query interface
+- `/insights` - top, newest, trending, and personalized views
+- `/changes` - change feed and Steam news monitoring
+- `/apps` - game analytics
+- `/companies` - unified company analytics
+- `/admin` - admin system status
+- `/updates` - in-app patch notes
 
 ## License
 
-Private
+Private.

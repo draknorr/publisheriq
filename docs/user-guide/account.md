@@ -1,135 +1,82 @@
-# Account Page Guide
+# Account Guide
 
-This guide explains how to use your account page in PublisherIQ to view your profile, credit balance, and transaction history.
-
----
+This guide covers sign-in, account access, and credit visibility in PublisherIQ.
 
 ## Signing In
 
-PublisherIQ uses email-based authentication with one-time codes.
+PublisherIQ uses email OTPs as the primary sign-in flow.
 
 ### Login Flow
 
-1. Go to `/login` and enter your email address
-2. Check your inbox for an email with an **8-digit code**
-3. Enter the code on the login page
-4. You'll be redirected to the dashboard
+1. Go to `/login`
+2. Enter your approved email address
+3. Check your inbox for an **8-digit code**
+4. Enter the code on the login page
+5. If you were redirected from a protected route, you return there through `?next=...`
 
-### OTP Code Details
+### OTP Details
 
 | Setting | Value |
 |---------|-------|
 | Code length | 8 digits |
-| Code expiry | 1 hour |
-| Rate limit | 3 attempts per 15 minutes |
+| Code expiry | 10 minutes |
+| Resend cooldown | 60 seconds |
+| Rate limit | 3 failed attempts per 15 minutes |
+
+### Important Notes
+
+- Access is invite-only. Unapproved emails are sent to the waitlist flow.
+- PublisherIQ waits for a fully established browser session before redirecting after verification.
+- `/auth/callback` and `/auth/confirm` still exist for callback compatibility, but the main UX is OTP entry on `/login`.
 
 ### Troubleshooting Login
 
-**Code not arriving:**
-- Check spam/junk folder
-- Verify your email is on the approved waitlist
-- Wait 60 seconds before requesting a new code
+**Code not arriving**
+- check spam or junk
+- confirm the email was approved
+- wait for the resend cooldown before requesting another code
 
-**Code expired:**
-- Codes expire after 1 hour
-- Return to `/login` and request a new code
+**Code expired**
+- return to `/login`
+- request a new code
 
-**"Email not approved" error:**
-- Your email must be approved by an administrator
-- Contact your admin to be added to the waitlist
-
----
+**Redirected back to login**
+- verify `NEXT_PUBLIC_SITE_URL` is configured correctly in the deployment
+- clear stale cookies/local storage if you were testing older auth builds
 
 ## Accessing Your Account
 
-Navigate to your account page by:
-1. Clicking your avatar/email in the navigation header
-2. Selecting **Account** from the dropdown
-
----
+Navigate to `/account` from the signed-in navigation.
 
 ## Account Overview
 
-### Profile Information
-
-Your account page displays:
+Your account page shows:
 
 | Field | Description |
 |-------|-------------|
-| **Email** | Your login email address |
-| **Name** | Your display name (if set) |
-| **Role** | Your access level (`user` or `admin`) |
-| **Member Since** | Account creation date |
-
-### Credit Balance
-
-Your current credit balance is prominently displayed:
-
-- **Current Balance**: Number of credits available
-- **Status Indicator**: Warning if balance is low
-
-**Low Balance Warning:**
-A warning appears when your balance is below the minimum required for chat (4 credits).
-
----
+| **Email** | Login email address |
+| **Name** | Display name, if present |
+| **Role** | `user` or `admin` |
+| **Member Since** | Account creation timestamp |
+| **Credit Balance** | Credits currently available for chat |
 
 ## Transaction History
 
-View your recent credit transactions:
+Recent credit transactions include:
 
 | Column | Description |
 |--------|-------------|
-| **Date** | When the transaction occurred |
-| **Type** | Transaction category |
-| **Amount** | Credits added (+) or consumed (-) |
-| **Description** | Details about the transaction |
+| **Date** | When the transaction happened |
+| **Type** | Usage, signup bonus, refund, or admin adjustment |
+| **Amount** | Credits added or consumed |
+| **Description** | Human-readable detail |
 
-### Transaction Types
+## Sign Out
 
-| Type | Meaning |
-|------|---------|
-| **Signup Bonus** | Initial credits received on registration |
-| **Usage** | Credits consumed by chat |
-| **Refund** | Credits returned due to errors |
-| **Admin Adjustment** | Manual credit grant by administrator |
-
-### Filtering Transactions
-
-Use the filter options to:
-- View by transaction type
-- Select date range
-- Search by description
-
----
-
-## Account Actions
-
-### Sign Out
-
-To sign out:
-1. Click **Sign Out** at the bottom of the account page
-2. You'll be redirected to the login page
-
-### Need More Credits?
-
-If your balance is low:
-1. Contact your administrator
-2. Admins can grant credits through the admin panel
-
----
-
-## Credit Usage Details
-
-After each chat message, you can see:
-- Credits charged for that message
-- Tool breakdown (which tools were used)
-- Token usage (input/output)
-
-This information is included in the message completion event.
-
----
+Use the **Sign Out** action on `/account` to clear the session and return to `/login`.
 
 ## Related Documentation
 
-- [Credit System Guide](./credit-system.md) - How credits work
-- [Chat Interface Guide](./chat-interface.md) - Using the chat system
+- [Credit System](./credit-system.md)
+- [Chat Interface](./chat-interface.md)
+- [Troubleshooting](../admin-guide/troubleshooting.md)

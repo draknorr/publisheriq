@@ -138,7 +138,7 @@ module.exports = {
   // CORS for dashboard access
   http: {
     cors: {
-      origin: ['https://your-dashboard.vercel.app', 'http://localhost:3000']
+      origin: ['https://your-dashboard.vercel.app', 'http://localhost:3001']
     }
   }
 };

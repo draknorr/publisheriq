@@ -151,6 +151,77 @@ function VersionCard({ version, isLatest }: { version: Version; isLatest: boolea
 // All versions data
 const versions: Version[] = [
   {
+    version: 'v2.9',
+    name: 'Change Feed & Auth Hardening',
+    date: 'March 2026',
+    headline: 'Track what changed, trust the session flow, and run change intelligence with better operational guardrails',
+    accentColor: 'bg-accent-blue/10',
+    icon: <Zap className="h-6 w-6 text-accent-blue" />,
+    highlights: [
+      'New /changes page for grouped storefront, media, PICS, and news activity',
+      'OTP-first login hardened with authoritative session establishment before redirect',
+      'Safe callback origin normalization through NEXT_PUBLIC_SITE_URL',
+      'Change-intel runtime improved with stale-claim recovery and stronger PICS history capture',
+    ],
+    features: [
+      {
+        title: 'Change Feed',
+        description: 'Browse grouped bursts of recent changes, inspect related news, and drill into before/after event detail for a single app.',
+        icon: <Sparkles className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Feed Health States',
+        description: 'The Change Feed now exposes healthy, catching_up, and delayed states so capture freshness and backlog health are visible in-product.',
+        icon: <Gauge className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Auth Session Hardening',
+        description: 'OTP login now waits for an authoritative authenticated browser user, respects ?next= redirects, and handles callback origins more safely.',
+        icon: <Lock className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Operational Change Intelligence',
+        description: 'Stale queue claims are requeued automatically and PICS-side history capture now retries and cools down without blocking latest-state writes.',
+        icon: <Shield className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      'News RPC pagination optimized for recent-first keyset access',
+      'Diff canonicalization reduces false positives from JSON key-order churn',
+      'Release-date handling stays strict and preserves raw text when no parsed date exists',
+    ],
+  },
+  {
+    version: 'v2.8',
+    name: 'Security Fixes',
+    date: 'January 2026',
+    headline: 'Authentication and client-session issues were tightened up across the dashboard',
+    accentColor: 'bg-accent-orange/10',
+    icon: <Shield className="h-6 w-6 text-accent-orange" />,
+    highlights: [
+      'OTP authentication standardized on 8-digit codes',
+      'Token refresh loop fixed on the login page',
+      'NEXT_PUBLIC_SITE_URL introduced for safer redirect handling',
+      'Session-aware client usage standardized across app surfaces',
+    ],
+    features: [
+      {
+        title: 'OTP Sign-In',
+        description: 'PublisherIQ moved to a clearer OTP sign-in flow with secure browser-session handling and waitlist validation before delivery.',
+        icon: <Lock className="h-4 w-4 text-text-tertiary" />,
+      },
+      {
+        title: 'Secure Redirect Handling',
+        description: 'Redirect construction now depends on a canonical site URL instead of trusting arbitrary request origins.',
+        icon: <Shield className="h-4 w-4 text-text-tertiary" />,
+      },
+    ],
+    improvements: [
+      'Apps and companies client hooks were aligned with session-aware Supabase patterns',
+      'Login reliability improved for stale-token and refresh-loop cases',
+    ],
+  },
+  {
     version: 'v2.7',
     name: 'Command Palette',
     date: 'January 2026',

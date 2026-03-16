@@ -1,144 +1,96 @@
 # Admin Dashboard
 
-Next.js 15 admin dashboard for PublisherIQ.
+Next.js 15 dashboard for PublisherIQ.
 
 ## Overview
 
-The admin dashboard provides a web interface for:
-- Browsing games, publishers, and developers
-- Monitoring sync job status
-- Querying data via AI-powered chat interface
+The dashboard provides:
 
-## Tech Stack
-
-- **Framework:** Next.js 15 (App Router)
-- **React:** 19.0
-- **Styling:** TailwindCSS
-- **Icons:** Lucide React
-- **Charts:** Recharts
-- **Syntax Highlighting:** Shiki
+- game and company analytics
+- the `/changes` Change Feed
+- Insights and personalization surfaces
+- admin system-status pages
+- OTP-first authentication and invite/waitlist flows
 
 ## Development
 
 ```bash
-# Start development server
-pnpm --filter admin dev
-
-# Build for production
-pnpm --filter admin build
-
-# Start production server
-pnpm --filter admin start
+pnpm --filter @publisheriq/admin dev
+pnpm --filter @publisheriq/admin build
+pnpm --filter @publisheriq/admin start
+pnpm --filter @publisheriq/admin lint
 ```
 
-The development server runs on [http://localhost:3001](http://localhost:3001).
+The development server runs on `http://localhost:3001`.
 
-## Project Structure
+## Important Routes
 
-```
+| Route | Purpose |
+|-------|---------|
+| `/` | Public landing page |
+| `/login` | OTP-first login |
+| `/waitlist` | Access request flow |
+| `/dashboard` | Signed-in home dashboard |
+| `/chat` | AI query interface |
+| `/insights` | Top, newest, trending, and personalized insights |
+| `/changes` | Change Feed and Steam news |
+| `/apps` | Games analytics |
+| `/companies` | Unified publisher/developer browse surface |
+| `/publishers/[id]` | Publisher detail page |
+| `/developers/[id]` | Developer detail page |
+| `/account` | Profile and credits |
+| `/admin` | System status |
+| `/admin/users` | User administration |
+| `/admin/waitlist` | Waitlist review |
+| `/admin/usage` | Credit usage analytics |
+| `/updates` | In-app patch notes |
+
+## Structure
+
+```text
 src/
-├── app/                    # App Router pages
-│   ├── api/
-│   │   ├── auth/           # Authentication API
-│   │   └── chat/           # Chat API endpoint
-│   ├── apps/               # Games listing
-│   ├── chat/               # Chat interface page
-│   ├── developers/         # Developers listing
-│   ├── publishers/         # Publishers listing
-│   ├── sync/               # Sync status monitoring
-│   ├── layout.tsx          # Root layout
-│   └── page.tsx            # Dashboard home
-│
-├── components/
-│   ├── chat/               # Chat interface components
-│   ├── ui/                 # Shared UI components
-│   └── ...                 # Feature components
-│
-├── lib/
-│   ├── llm/                # LLM integration
-│   │   ├── providers/      # Anthropic, OpenAI clients
-│   │   ├── system-prompt.ts
-│   │   └── tools.ts
-│   ├── query-executor.ts   # SQL validation & execution
-│   └── ...                 # Utilities
-│
-└── middleware.ts           # Auth middleware
+├── app/
+│   ├── (auth)/                  # Login + waitlist
+│   ├── (main)/                  # Signed-in routes
+│   │   ├── apps/                # Games page
+│   │   ├── changes/             # Change Feed UI + server helpers
+│   │   ├── companies/           # Unified companies page
+│   │   ├── insights/            # Insights dashboard
+│   │   └── admin/               # Admin pages
+│   ├── api/                     # Internal route handlers
+│   └── auth/                    # Auth callback + confirm handlers
+├── components/                  # Shared UI and feature components
+├── contexts/                    # Sidebar and theme context
+├── hooks/                       # Client hooks
+└── lib/                         # Auth, Supabase, LLM, search, and data helpers
 ```
 
-## Pages
+## Auth and Environment
 
-| Route | Description |
-|-------|-------------|
-| `/` | Dashboard overview |
-| `/apps` | Browse all games |
-| `/apps/[appid]` | Game detail page |
-| `/publishers` | Browse publishers |
-| `/publishers/[id]` | Publisher detail |
-| `/developers` | Browse developers |
-| `/developers/[id]` | Developer detail |
-| `/sync` | Sync job monitoring |
-| `/chat` | AI chat interface |
-
-## Chat Interface
-
-The chat interface uses LLM to convert natural language to SQL:
-
-1. User asks a question
-2. LLM generates SQL query
-3. Query is validated (read-only, blocked keywords)
-4. Query executed via Supabase RPC
-5. Results returned as formatted markdown
-
-**Security:**
-- Only SELECT queries allowed
-- Dual validation (client + database)
-- 50 row result limit
-- Dangerous keywords blocked
-
-## Environment Variables
+Required variables:
 
 ```bash
-# Required
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_KEY=eyJ...
-
-# LLM Provider (choose one)
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-# or
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
+NEXT_PUBLIC_SITE_URL=https://www.publisheriq.app
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_KEY=...
 ```
 
-## Features
+Optional diagnostics:
 
-### Data Browsing
+```bash
+NEXT_PUBLIC_AUTH_DEBUG=false
+```
 
-- Paginated tables with sorting
-- Search and filtering
-- Clickable links between related entities
+Notes:
 
-### Sync Monitoring
-
-- Recent job history
-- Success/failure rates
-- Error messages
-- Job duration tracking
-
-### Chat Interface
-
-- Natural language queries
-- SQL syntax highlighting
-- Expandable query details
-- Clickable game links
-
-## Dependencies
-
-This app depends on workspace packages:
-- `@publisheriq/database` - Supabase client and types
+- The login UI is OTP-first with 8-digit codes and a 10-minute expiry.
+- Protected-route redirects use `?next=...`, not `?redirect=...`.
+- `NEXT_PUBLIC_SITE_URL` is required for safe callback and redirect handling.
 
 ## Related Documentation
 
-- [Chat Interface Guide](../../docs/guides/chat-interface.md)
-- [Vercel Deployment](../../docs/deployment/vercel.md)
-- [Environment Setup](../../docs/getting-started/environment-setup.md)
+- [Documentation Index](../../docs/README.md)
+- [Change Feed User Guide](../../docs/user-guide/change-feed.md)
+- [Change Feed Developer Guide](../../docs/developer-guide/features/change-feed.md)
+- [Admin Guide](../../docs/admin-guide/overview.md)

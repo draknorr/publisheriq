@@ -77,6 +77,8 @@ Shows how apps are distributed across sync tiers:
 | **Due in 6h** | Apps scheduled for sync in the next 6 hours |
 | **Due in 24h** | Apps scheduled for sync in the next 24 hours |
 
+This section is also the quickest signal that the broader change-intelligence runtime may be falling behind, especially when storefront or news capture work begins to accumulate.
+
 ### PICS Service Section
 
 Displays PICS (Product Info Cache Service) status:
@@ -87,6 +89,11 @@ Displays PICS (Product Info Cache Service) status:
 | **Last Update** | Time since last PICS sync |
 | **Apps with PICS** | Number of apps with PICS data |
 | **Coverage** | Breakdown by data type (tags, genres, categories, etc.) |
+
+Operational note:
+
+- the PICS service now contributes to change intelligence by writing normalized history snapshots and PICS diff events before latest-state upserts
+- a temporary history-capture cooldown does not necessarily mean the latest-state PICS sync is stopped
 
 ### Sync Errors Section
 

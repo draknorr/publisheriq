@@ -2,6 +2,8 @@
 Date: 2026-02-24
 Scope: `apps/admin` login reliability + auth session continuity
 
+> Historical note (March 15, 2026): this document records the February 24, 2026 remediation plan, not the current canonical auth state. For the current flow, use [docs/user-guide/account.md](/Users/ryanbohmann/Desktop/publisheriq/docs/user-guide/account.md), [docs/admin-guide/troubleshooting.md](/Users/ryanbohmann/Desktop/publisheriq/docs/admin-guide/troubleshooting.md), and [docs/releases/v2.9-change-feed-auth-intelligence.md](/Users/ryanbohmann/Desktop/publisheriq/docs/releases/v2.9-change-feed-auth-intelligence.md).
+
 ## Goal
 Stabilize login so users can:
 1. Consistently stay authenticated after OTP verify.

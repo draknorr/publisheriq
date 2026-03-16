@@ -2,6 +2,14 @@
 
 Complete reference for data available from Steam's PICS (Product Info Cache Server).
 
+## Authority Rules
+
+PICS is an enrichment and fallback source in PublisherIQ.
+
+- Storefront is authoritative for parsed `release_date` and `is_free`
+- PICS release metadata should not overwrite a valid Storefront-derived `release_date`
+- when Storefront only exposes non-parseable release text, preserve the raw text instead of forcing a typed date
+
 ## Data Structure
 
 ```
@@ -30,7 +38,7 @@ The `common` section contains the most relevant metadata.
 | `developer` | string | Developer name |
 | `publisher` | string | Publisher name |
 | `gameid` | int | Steam game ID (usually same as appid) |
-| `steam_release_date` | timestamp | Official Steam release date (Unix) |
+| `steam_release_date` | timestamp | PICS-side Steam release timestamp; useful as enrichment or fallback, not the primary Storefront authority |
 | `original_release_date` | timestamp | Original release date (if released elsewhere first) |
 | `releasestate` | string | "released", "prerelease", "unavailable", "preloadonly" |
 | `store_asset_mtime` | timestamp | Store page creation time (v2.2: replaces page scraping) |
@@ -62,7 +70,7 @@ The `common` section contains the most relevant metadata.
 |-------|------|-------------|
 | `oslist` | string | Platforms: "windows", "macos", "linux" (comma-separated) |
 | `controller_support` | string | "full", "partial", or absent |
-| `isfreeapp` | string | "1" if free, absent/0 otherwise |
+| `isfreeapp` | string | PICS-side free flag; Storefront remains authoritative for `is_free` |
 
 ### Store Metadata
 

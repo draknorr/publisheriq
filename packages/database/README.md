@@ -70,7 +70,7 @@ When the database schema changes:
 export SUPABASE_PROJECT_ID=xxx
 
 # Generate types
-pnpm --filter database generate-types
+pnpm --filter @publisheriq/database generate-types
 ```
 
 This updates `src/types.ts` with the latest schema.
@@ -99,13 +99,13 @@ SUPABASE_SERVICE_KEY=eyJ...  # For service client
 
 ```bash
 # Build package
-pnpm --filter database build
+pnpm --filter @publisheriq/database build
 
 # Type check
-pnpm --filter database check-types
+pnpm --filter @publisheriq/database check-types
 
 # Generate types from Supabase
-pnpm --filter database generate-types
+pnpm --filter @publisheriq/database generate-types
 ```
 
 ## Project Structure
@@ -119,5 +119,5 @@ src/
 
 ## Related Documentation
 
-- [Database Schema](../../docs/architecture/database-schema.md)
-- [Supabase Setup](../../docs/deployment/supabase.md)
+- [Database Schema](../../docs/developer-guide/architecture/database-schema.md)
+- [Supabase Setup](../../docs/developer-guide/deployment/supabase.md)

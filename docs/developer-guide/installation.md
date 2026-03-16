@@ -45,7 +45,7 @@ cp .env.example .env
 cp apps/admin/.env.example apps/admin/.env.local
 ```
 
-See [Environment Setup](environment-setup.md) for detailed configuration.
+See [Environment Setup](setup.md) for detailed configuration.
 
 ## 5. Set Up Database
 
@@ -88,10 +88,10 @@ pnpm check-types
 Start the development server:
 
 ```bash
-pnpm --filter admin dev
+pnpm --filter @publisheriq/admin dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to see the dashboard.
+Visit [http://localhost:3001](http://localhost:3001) to see the dashboard.
 
 ## Project Structure
 
@@ -143,10 +143,10 @@ pnpm build
 
 ```bash
 # Use a different port
-pnpm --filter admin dev -- --port 3001
+pnpm --filter @publisheriq/admin dev -- --port 3001
 ```
 
 ## Next Steps
 
-1. [Environment Setup](environment-setup.md) - Configure all environment variables
+1. [Environment Setup](setup.md) - Configure all environment variables
 2. [First Run](first-run.md) - Run your first data sync

@@ -1,5 +1,7 @@
 # Login / Auth System Review (PublisherIQ)
 
+> Historical note (March 15, 2026): this document captures the January 29, 2026 auth audit state, not the current canonical behavior. For the current login flow and operational guidance, use [docs/user-guide/account.md](/Users/ryanbohmann/Desktop/publisheriq/docs/user-guide/account.md), [docs/admin-guide/troubleshooting.md](/Users/ryanbohmann/Desktop/publisheriq/docs/admin-guide/troubleshooting.md), and [docs/releases/v2.9-change-feed-auth-intelligence.md](/Users/ryanbohmann/Desktop/publisheriq/docs/releases/v2.9-change-feed-auth-intelligence.md).
+
 Date: 2026-01-29
 
 ## Scope
@@ -387,4 +389,3 @@ Suggested improvements (without removing the bypass):
 4. **Fix AUTH-02 / AUTH-07** (open redirects / host header issues).
 5. **Fix AUTH-03 / AUTH-04** (return-to UX + validate-email correctness).
 6. Simplify flow (AUTH-08) and standardize Supabase clients (AUTH-10).
-

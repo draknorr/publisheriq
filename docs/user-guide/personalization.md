@@ -25,6 +25,8 @@ The **Pin** button appears on entity detail pages:
 - **Publishers**: `/publishers/{id}` - Pin publishers to track their portfolio
 - **Developers**: `/developers/{id}` - Pin developers to track their releases
 
+Use `/companies` to browse publishers and developers; pinning still happens from the entity detail pages.
+
 ### How to Pin
 
 1. Navigate to a game, publisher, or developer detail page

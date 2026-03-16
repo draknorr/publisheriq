@@ -126,13 +126,13 @@ try {
 
 ```bash
 # Build package
-pnpm --filter shared build
+pnpm --filter @publisheriq/shared build
 
 # Type check
-pnpm --filter shared check-types
+pnpm --filter @publisheriq/shared check-types
 ```
 
 ## Related Documentation
 
-- [Project Architecture](../../docs/architecture/overview.md)
-- [Adding New Workers](../../docs/guides/adding-new-worker.md)
+- [Project Architecture](../../docs/developer-guide/architecture/overview.md)
+- [Adding New Workers](../../docs/developer-guide/workers/adding-workers.md)

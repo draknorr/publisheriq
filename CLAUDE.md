@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data analytics platform with AI chat interface. Next.js 15 + Supabase + Cube.js + Qdrant. Last updated: February 5, 2026.
+> Steam data analytics platform with AI chat interface. Next.js 15 + Supabase + Cube.js + Qdrant. Last updated: March 15, 2026.
 
 ## When Uncertain, Ask
 
@@ -41,11 +41,14 @@ Before ANY write operation, STOP and explain:
 ```bash
 pnpm install && pnpm build              # Build all packages
 pnpm check-types                        # TypeScript type checking
-pnpm --filter admin dev                 # Dashboard on http://localhost:3001
+pnpm --filter @publisheriq/admin dev    # Dashboard on http://localhost:3001
 pnpm --filter database generate         # Regenerate Supabase types
 ```
 
-**No test suite exists.** Verification is `pnpm build` + `pnpm check-types`.
+Primary verification is `pnpm build` + `pnpm check-types`.
+Targeted suites also exist for change intelligence:
+- `pnpm --filter @publisheriq/ingestion test:change-intel`
+- `cd services/pics-service && pytest`
 
 Worker scripts: `pnpm --filter @publisheriq/ingestion <script-name>`. See `.claude/skills/data-pipeline/` for the full list.
 
@@ -93,6 +96,14 @@ All paths relative to `apps/admin/src/` unless fully qualified.
 - Shared utilities: `import { logger } from '@publisheriq/shared'`
 - Ingestion package: `@publisheriq/ingestion`
 
+### Auth and Change Feed Surfaces
+- Primary sign-in flow is OTP-first at `/login`
+- Protected-route redirects use `?next=...`
+- Auth redirect normalization lives in `apps/admin/src/lib/auth/origin.ts`
+- Browser session readiness helper lives in `apps/admin/src/lib/auth/browser-session.ts`
+- Change Feed UI lives in `apps/admin/src/app/(main)/changes/`
+- Change Feed read APIs live in `apps/admin/src/app/api/change-feed/`
+
 ### Command Palette & Filters
 Each page has its **own** filter system (NOT shared):
 - Games: `app/(main)/apps/lib/filter-registry.ts` + `app/(main)/apps/components/command-palette/`
@@ -105,6 +116,9 @@ Each page has its **own** filter system (NOT shared):
 - `Discovery.js` contains 5 cubes: Discovery, Genres, AppGenres, Tags, AppTags
 - Chat LLM files: `apps/admin/src/lib/llm/` (tools, system prompt, providers, entity links)
 - When modifying cubes, always update `cube-system-prompt.ts` too
+- Change Feed SQL read surfaces are created by:
+  - `20260315114500_add_change_feed_read_surfaces.sql`
+  - `20260315143000_optimize_change_feed_news_rpc.sql`
 
 ---
 

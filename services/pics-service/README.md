@@ -1,153 +1,103 @@
 # PICS Service
 
-Steam PICS (Product Info Cache Server) data fetching microservice for PublisherIQ.
+Python microservice for Steam PICS ingestion and PICS-side change intelligence.
 
 ## Overview
 
-This service fetches game metadata directly from Steam's PICS system using SteamKit2, providing:
-- **Bulk sync**: Fetch all ~70k apps in ~3 minutes
-- **Real-time monitoring**: Continuous polling for changes
+The PICS service connects directly to Steam's Product Info Cache Server and now serves two jobs:
 
-## Quick Start
+- bulk and ongoing PICS metadata ingestion
+- normalized PICS history capture for change intelligence
 
-### Local Development
-
-```bash
-# Install dependencies
-poetry install
-
-# Copy environment template
-cp .env.example .env
-
-# Edit .env with your Supabase credentials
-# SUPABASE_URL=https://your-project.supabase.co
-# SUPABASE_SERVICE_KEY=eyJ...
-
-# Run bulk sync
-MODE=bulk_sync python -m src.main
-
-# Or run change monitor
-MODE=change_monitor python -m src.main
-```
-
-### Railway Deployment
-
-1. Create a new Railway service
-2. Connect this directory as the source
-3. Set environment variables:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_KEY`
-   - `MODE` (bulk_sync or change_monitor)
-4. Deploy
+During change monitoring, the service writes normalized snapshots and PICS diff events before the latest-state upserts that keep the `apps` table and relationship tables current.
 
 ## Modes
 
-### Bulk Sync (`MODE=bulk_sync`)
+### `MODE=bulk_sync`
 
-One-time sync of all apps from database. Run this first to populate PICS data.
+- one-time backfill of PICS metadata for apps already in the warehouse
+- exits when complete
+- useful for initial population or large repair runs
 
-- Fetches 200 apps per request
-- ~3 minutes for 70k apps
-- Exits when complete
+### `MODE=change_monitor`
 
-### Change Monitor (`MODE=change_monitor`)
+- long-running polling of Steam PICS change numbers
+- fetches changed app payloads
+- writes normalized history snapshots and diff events
+- then performs latest-state upserts for apps and relationships
 
-Continuous monitoring for Steam data changes.
+## Runtime Behavior
 
-- Polls every 30 seconds
-- Queues changed apps for re-fetch
-- Runs indefinitely
+- history capture retries bounded transient and schema-cache failures before giving up
+- unchanged normalized snapshots update `last_seen_at` instead of producing duplicate history rows
+- structured PICS diff events are only written when the normalized snapshot hash changes
+- repeated history failures trigger a short cooldown for history capture rather than blocking the whole batch
+- latest-state upserts continue even when historical writes are temporarily cooled down
 
-## Configuration
+## Source-of-Truth Rules
+
+- Storefront remains authoritative for parsed `release_date` and `is_free`
+- PICS fields are enrichment and fallback data
+- use raw text fields when the Storefront date is not parseable instead of forcing invalid typed dates
+
+## Local Development
+
+```bash
+poetry install
+cp .env.example .env
+MODE=bulk_sync python -m src.main
+MODE=change_monitor python -m src.main
+```
+
+## Key Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SUPABASE_URL` | required | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | required | Supabase service role key |
 | `MODE` | `change_monitor` | `bulk_sync` or `change_monitor` |
-| `PORT` | `8080` | Health check port |
+| `PORT` | `8080` | Health-check port |
 | `BULK_BATCH_SIZE` | `200` | Apps per PICS request |
-| `BULK_REQUEST_DELAY` | `0.5` | Seconds between requests |
-| `POLL_INTERVAL` | `30` | Seconds between change polls |
+| `BULK_REQUEST_DELAY` | `0.5` | Seconds between bulk requests |
+| `POLL_INTERVAL` | `30` | Seconds between PICS change polls |
 | `PROCESS_BATCH_SIZE` | `100` | Apps per queue processing batch |
 | `MAX_QUEUE_SIZE` | `10000` | Maximum queued apps |
 | `LOG_LEVEL` | `INFO` | Logging level |
-| `LOG_JSON` | `true` | JSON logging format |
+| `LOG_JSON` | `true` | JSON log formatting |
 
-## Health Check
+## Health Endpoints
 
-The service exposes HTTP endpoints for Railway health checks:
+- `GET /`
+- `GET /health`
+- `GET /status`
 
-- `GET /` or `/health` - Returns `200 OK`
-- `GET /status` - Returns JSON with current status
+## Tests
 
-## Data Extracted
-
-From PICS, this service extracts:
-
-- Steam Deck compatibility
-- Parent/DLC relationships
-- Franchise associations
-- Review scores (1-9 scale)
-- Store tags (IDs)
-- Categories (feature flags)
-- Genres
-- Platforms
-- Controller support
-- Content descriptors
-- Languages
-- Last content update timestamp
-
-## Database Schema
-
-Requires migration: `supabase/migrations/20251230000000_add_pics_data.sql`
-
-New tables:
-- `steam_tags` - Tag ID to name mapping
-- `steam_genres` - Genre reference
-- `steam_categories` - Category reference
-- `franchises` - Franchise names
-- `app_steam_tags` - App-tag relationships
-- `app_genres` - App-genre relationships
-- `app_categories` - App-category relationships
-- `app_franchises` - App-franchise relationships
-- `app_steam_deck` - Steam Deck compatibility
-- `pics_sync_state` - Change number tracking
-
-New columns on `apps`:
-- `controller_support`
-- `pics_review_score`
-- `pics_review_percentage`
-- `metacritic_score`
-- `metacritic_url`
-- `platforms`
-- `release_state`
-- `parent_appid`
-- `homepage_url`
-- `app_state`
-- `last_content_update`
-- `current_build_id`
-- `content_descriptors`
-- `languages`
-
-## Architecture
-
+```bash
+cd services/pics-service
+pytest
 ```
+
+Focused suites:
+
+```bash
+pytest tests/test_change_intelligence.py tests/test_operations_change_history.py tests/test_operations_relationship_sync.py
+```
+
+## Package Layout
+
+```text
 src/
-├── main.py              # Entry point
-├── config/
-│   └── settings.py      # Pydantic settings
-├── steam/
-│   ├── client.py        # Steam client wrapper
-│   └── pics.py          # PICS operations
-├── extractors/
-│   └── common.py        # Data extraction
-├── database/
-│   ├── client.py        # Supabase client
-│   └── operations.py    # Bulk operations
-├── workers/
-│   ├── bulk_sync.py     # Initial sync
-│   └── change_monitor.py # Real-time updates
-└── health/
-    └── server.py        # HTTP health checks
+├── config/                 # Settings
+├── database/               # Supabase operations and change-intel helpers
+├── extractors/             # PICS field extraction
+├── health/                 # HTTP health server
+├── steam/                  # Steam client + PICS operations
+└── workers/                # bulk_sync and change_monitor
 ```
+
+## Related Documentation
+
+- [PICS Data Fields Reference](../../docs/reference/pics-data-fields.md)
+- [Data Sources](../../docs/developer-guide/architecture/data-sources.md)
+- [Steam Change Intelligence](../../docs/developer-guide/workers/steam-change-intelligence.md)
