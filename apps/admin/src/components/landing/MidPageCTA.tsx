@@ -18,8 +18,7 @@ export function MidPageCTA() {
             The advantage is not more data. It is what you can do with it.
           </h2>
           <p className="mt-4 text-body-lg text-text-secondary">
-            Anyone can dump more rows on the screen. PublisherIQ gives you a
-            workflow that moves from signal to decision while the window still
+            PublisherIQ moves from signal to decision while the window still
             matters, with less hunting, less re-querying, and less noise.
           </p>
           <div className="mt-8">

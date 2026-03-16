@@ -22,7 +22,7 @@ export function WaitlistCTA() {
               <p className="mt-4 max-w-2xl text-body-lg text-text-secondary">
                 Tell us what you need to research or monitor. We are
                 prioritizing teams that need depth, repeatability, and
-                evidence, not another generic dashboard.
+                evidence.
               </p>
             </div>
 

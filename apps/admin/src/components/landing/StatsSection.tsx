@@ -12,9 +12,8 @@ export function StatsSection() {
             Coverage built for action, not database tourism.
           </h2>
           <p className="mt-4 text-body-lg text-text-secondary">
-            Plenty of products can show you more rows. The hard part is turning
-            breadth into something operators can actually monitor, query, and
-            compare.
+            The hard part is turning breadth into something operators can
+            actually monitor, query, and compare.
           </p>
         </div>
 

@@ -9,17 +9,17 @@ export const LANDING_JOBS = [
   {
     title: "Change intelligence",
     description:
-      "See release timing, pricing, store-page, and announcement moves as one readable story instead of a pile of diffs.",
+      "See release timing, pricing, store-page, and announcement moves as one readable story.",
   },
   {
     title: "Market research",
     description:
-      "Ask about games, genres, publishers, and developers in plain English, then open the evidence trail behind the answer.",
+      "Ask about games, genres, publishers, and developers in plain English, then open the evidence trail.",
   },
   {
     title: "Company intelligence",
     description:
-      "Compare portfolios, commercial patterns, and momentum before you make a launch, BD, or investment call.",
+      "Compare portfolios, commercial patterns, and momentum before you make the call.",
   },
 ] as const;
 
@@ -28,7 +28,7 @@ export const HERO_LOOP = [
     step: "01",
     title: "Ask the real question",
     description:
-      "Start with the market question you actually need answered, not the filters you have to assemble first.",
+      "Start with the market question, not the filters you have to assemble first.",
   },
   {
     step: "02",
@@ -56,14 +56,14 @@ export const PREVIEW_PANELS = [
     eyebrow: "Change Feed",
     title: "14 upcoming titles tightened release timing in the last 24 hours",
     description:
-      "Grouped change cards turn scattered market movement into an immediate launch-watch view, with the related evidence already attached.",
+      "Grouped change cards turn scattered market movement into an immediate launch-watch view, with the evidence attached.",
     tags: ["Launch Watch", "Release timing", "Store refresh"],
   },
   {
     eyebrow: "Companies",
     title: "3 publishers are repeating the same pricing playbook this week",
     description:
-      "Open the portfolios, compare the pattern, and decide whether it is opportunistic discounting, launch setup, or something bigger.",
+      "Open the portfolios, compare the pattern, and decide whether it is discounting, launch setup, or something bigger.",
     tags: ["Commercial Moves", "Pricing", "Benchmark"],
   },
 ] as const;
@@ -104,7 +104,7 @@ export const FEATURES = [
     eyebrow: "Ask",
     title: "Ask the market a real question",
     description:
-      "Most platforms give you a database. PublisherIQ gives you a working answer path: ask in plain English, resolve to the right entities, then inspect the proof without losing the thread.",
+      "Ask in plain English, resolve to the right entities, then inspect the proof without losing the thread.",
     points: [
       "Go from a question to the exact game, company, or pattern worth opening.",
       "Keep the answer tied to the dataset instead of a generic summary.",
@@ -114,7 +114,7 @@ export const FEATURES = [
     eyebrow: "Monitor",
     title: "See the move before it turns into consensus",
     description:
-      "Change intelligence is built for the work other tools leave scattered: release timing, pricing, store refreshes, announcements, and the response that follows.",
+      "Change intelligence tracks release timing, pricing, store refreshes, announcements, and the response that follows.",
     points: [
       "Grouped activity makes noisy updates readable without hiding the proof.",
       "See commercial, launch, and presentation changes in one operating surface.",
@@ -124,7 +124,7 @@ export const FEATURES = [
     eyebrow: "Compare",
     title: "Benchmark companies and titles without breaking context",
     description:
-      "Research, monitoring, and comparison live in one workflow, so you can move from a game to a publisher to the wider pattern without starting over.",
+      "Move from a game to a publisher to the wider pattern without starting over.",
     points: [
       "Compare portfolios, momentum, and commercial behavior in the same system.",
       "Carry context from one signal into the next decision.",
@@ -164,7 +164,7 @@ export const COVERAGE_STATS = [
     value: "15M+",
     label: "Tracked data points",
     description:
-      "Enough depth to support monitoring, benchmarking, and plain-English analysis instead of vanity dashboards.",
+      "Enough depth to support monitoring, benchmarking, and plain-English analysis.",
   },
   {
     value: "4",

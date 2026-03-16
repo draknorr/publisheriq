@@ -36,10 +36,10 @@ export function HeroSection() {
           <p className="mt-5 max-w-2xl text-body-lg text-text-secondary">
             PublisherIQ gives publishers, studios, investors, and analysts
             tools no other platform puts in one system: evidence-linked change
-            intelligence, company benchmarking, and plain-English research that
-            stays grounded in the data. Start with the deepest Steam workflows
-            in the market and carry the same research flow into broader signals
-            as the platform expands.
+            intelligence, company benchmarking, and plain-English research
+            grounded in the data. Start with the deepest Steam workflows in
+            the market and carry the same research flow into broader signals
+            over time.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">

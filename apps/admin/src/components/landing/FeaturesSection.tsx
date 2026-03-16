@@ -21,9 +21,7 @@ export function FeaturesSection() {
           </h2>
           <p className="mt-4 text-body-lg text-text-secondary">
             PublisherIQ is built for operators who need to research, monitor,
-            and compare without losing the thread. That is why it feels faster
-            than a database, more grounded than generic AI, and more useful
-            than another dashboard.
+            and compare without losing the thread.
           </p>
         </div>
 
