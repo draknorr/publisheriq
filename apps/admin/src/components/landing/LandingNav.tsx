@@ -29,7 +29,7 @@ export function LandingNav() {
           href="/"
           className="group flex min-w-0 items-center gap-2.5 text-text-primary transition-opacity hover:opacity-80"
         >
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-accent-primary text-white shadow-subtle transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-[1.04]">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-accent-primary text-white shadow-subtle transition-transform duration-200 group-hover:scale-[1.02]">
             <Gamepad2 className="h-4 w-4" />
           </div>
           <div className="min-w-0">

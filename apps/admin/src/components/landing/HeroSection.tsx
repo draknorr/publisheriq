@@ -104,7 +104,7 @@ export function HeroSection() {
             {HERO_LOOP.map((item) => (
               <div
                 key={item.step}
-                className="grid grid-cols-[auto_1fr] gap-3 rounded-2xl px-2 py-1 transition-transform duration-200 hover:translate-x-1"
+                className="grid grid-cols-[auto_1fr] gap-3 rounded-2xl px-2 py-1 transition-colors duration-150 hover:bg-surface"
               >
                 <span className="font-data text-caption text-accent-primary">
                   {item.step}
@@ -141,10 +141,10 @@ export function HeroSection() {
             {HERO_NOTES.map((note, index) => (
               <div
                 key={note.label}
-                className={`rounded-2xl border border-border-subtle bg-surface px-3 py-2 shadow-xs transition-transform duration-300 ${
+                className={`rounded-2xl border border-border-subtle bg-surface px-3 py-2 shadow-xs transition-transform duration-200 ${
                   index % 2 === 0
-                    ? "-rotate-1 hover:rotate-0"
-                    : "rotate-1 hover:rotate-0"
+                    ? "-rotate-[0.5deg] hover:rotate-0"
+                    : "rotate-[0.5deg] hover:rotate-0"
                 }`}
               >
                 <p className="text-caption uppercase tracking-[0.16em] text-text-tertiary">
