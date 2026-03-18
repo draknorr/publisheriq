@@ -1,3 +1,5 @@
+import 'server-only';
+
 /**
  * Shared CCU (Concurrent Users) data fetching utilities
  * Used across entity detail pages (apps, publishers, developers)
@@ -6,7 +8,7 @@
  * TypeScript types may not include it yet - we use type assertions where needed.
  */
 
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 // ============================================================================
 // Types
@@ -138,7 +140,7 @@ export async function getAppDailyPeakSparkline(
   appid: number,
   days: 7 | 30 = 7
 ): Promise<CCUSparklineData> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data, error } = await supabase.rpc('get_app_sparkline_data', {
     p_appids: [appid],
@@ -182,7 +184,7 @@ export async function getCCUSparklinesBatch(
   appIds: number[],
   timeRange: TimeRange = '7d'
 ): Promise<Map<number, CCUSparklineData>> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
   const { cutoffTime, targetPoints } = getTimeRangeParams(timeRange);
 
   const result = new Map<number, CCUSparklineData>();
@@ -267,7 +269,7 @@ export async function getPortfolioCCUSparkline(
   appIds: number[],
   timeRange: TimeRange = '7d'
 ): Promise<CCUSparklineData> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
   const { cutoffTime, targetPoints } = getTimeRangeParams(timeRange);
 
   // Return empty data for empty input

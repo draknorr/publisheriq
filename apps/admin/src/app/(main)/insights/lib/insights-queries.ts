@@ -1,3 +1,5 @@
+import 'server-only';
+
 /**
  * Data fetching functions for the Insights dashboard
  * Uses Supabase client to query CCU data from ccu_snapshots and related tables
@@ -7,7 +9,7 @@
  * Run `pnpm --filter database generate` after applying migrations to fix types.
  */
 
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import type { TimeRange, GameInsight, TimeRangeConfig, NewestSortMode } from './insights-types';
 
 // Type for snapshot row (not yet in generated types)
@@ -96,7 +98,7 @@ async function getCCUSparklinesBatch(
   appIds: number[],
   timeRange: TimeRange
 ): Promise<Map<number, { dataPoints: number[]; trend: 'up' | 'down' | 'stable' }>> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Calculate cutoff time
   const cutoffTime = new Date();
@@ -187,7 +189,7 @@ export const TIME_RANGE_CONFIG: Record<TimeRange, TimeRangeConfig> = {
  * 2. ccu_tier_assignments.recent_peak_ccu - 7-day peak fallback (includes SteamSpy data)
  */
 export async function getTopGames(timeRange: TimeRange): Promise<GameInsight[]> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Calculate the cutoff time
   const cutoffTime = new Date();
@@ -348,7 +350,7 @@ export async function getNewestGames(
   timeRange: TimeRange,
   sortBy: NewestSortMode = 'release'
 ): Promise<GameInsight[]> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Get games released in the past year
   const oneYearAgo = new Date();
@@ -520,7 +522,7 @@ export async function getNewestGames(
  * Get trending games by CCU growth percentage
  */
 export async function getTrendingGames(timeRange: TimeRange): Promise<GameInsight[]> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Calculate time boundaries
   const now = new Date();
@@ -706,7 +708,7 @@ export async function getInsightsSummary(_timeRange: TimeRange): Promise<{
   tier2Count: number;
   avgCcu: number;
 }> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Get tier stats (using type assertion for new table)
   const { data: tierData, count: totalGamesTracked } = await (supabase as any)

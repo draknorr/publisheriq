@@ -1,3 +1,5 @@
+import 'server-only';
+
 /**
  * Unified Search Service
  *
@@ -5,7 +7,7 @@
  * Used by the global spotlight search.
  */
 
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import type {
   GameSearchResult,
   PublisherSearchResult,
@@ -62,7 +64,7 @@ async function getSparklinesBatch(
 ): Promise<Map<number, { dataPoints: number[]; trend: 'up' | 'down' | 'stable' }>> {
   if (appIds.length === 0) return new Map();
 
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
   const cutoffTime = new Date();
   cutoffTime.setDate(cutoffTime.getDate() - 7);
 
@@ -117,7 +119,7 @@ async function searchGames(
   query: string,
   limit: number
 ): Promise<SearchResultWithScore<GameSearchResult>> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Try fuzzy search RPC first
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,7 +175,7 @@ async function searchGames(
  * Fallback game search using simple ILIKE (if RPC unavailable)
  */
 async function searchGamesFallback(query: string, limit: number): Promise<GameSearchResult[]> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data, error } = await supabase
     .from('apps')
@@ -229,7 +231,7 @@ async function searchPublishers(
   query: string,
   limit: number
 ): Promise<SearchResultWithScore<PublisherSearchResult>> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Try fuzzy search RPC first
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -268,7 +270,7 @@ async function searchPublishersFallback(
   query: string,
   limit: number
 ): Promise<PublisherSearchResult[]> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data, error } = await supabase
     .from('publishers')
@@ -300,7 +302,7 @@ async function searchDevelopers(
   query: string,
   limit: number
 ): Promise<SearchResultWithScore<DeveloperSearchResult>> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Try fuzzy search RPC first
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -339,7 +341,7 @@ async function searchDevelopersFallback(
   query: string,
   limit: number
 ): Promise<DeveloperSearchResult[]> {
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data, error } = await supabase
     .from('developers')

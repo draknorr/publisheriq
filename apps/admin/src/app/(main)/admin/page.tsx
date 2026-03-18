@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import {
   getSyncHealthData,
@@ -84,7 +85,7 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
     return cached;
   }
 
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Phase 1: Fetch shared data first to avoid duplicate queries
   // These are used by multiple functions below

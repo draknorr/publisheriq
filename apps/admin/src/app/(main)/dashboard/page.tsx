@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
 import { Card } from '@/components/ui';
 import { Gamepad2, Building2, Users, ArrowRight, Sparkles } from 'lucide-react';
@@ -16,7 +17,7 @@ async function getStats() {
   if (!isSupabaseConfigured()) {
     return null;
   }
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Query the pre-computed stats cache (single row, instant response)
   // This avoids expensive COUNT queries that can timeout on cold start

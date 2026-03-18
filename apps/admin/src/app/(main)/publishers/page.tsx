@@ -162,6 +162,8 @@ function formatOwners(min: number, max: number): string {
     return n.toString();
   };
 
+  if (min === max) return formatNum(max);
+
   return `${formatNum(min)} - ${formatNum(max)}`;
 }
 

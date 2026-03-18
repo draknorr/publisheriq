@@ -61,7 +61,7 @@ async function getUserStats() {
 }
 
 export default async function AdminUsersPage() {
-  const result = await requireAdmin();
+  await requireAdmin();
   const [users, stats] = await Promise.all([getUsers(), getUserStats()]);
 
   return (
@@ -98,7 +98,7 @@ export default async function AdminUsersPage() {
             <h2 className="text-subheading text-text-primary">All Users</h2>
           </div>
         </div>
-        <UsersTable users={users} currentUserId={result.user.id} />
+        <UsersTable users={users} />
       </Card>
     </div>
   );

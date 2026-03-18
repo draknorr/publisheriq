@@ -1,4 +1,7 @@
-import { getSupabase, isSupabaseConfigured } from './supabase';
+import 'server-only';
+
+import { isSupabaseConfigured } from './supabase';
+import { getServiceSupabase } from './supabase-service';
 
 // Types
 export type EntityType = 'developer' | 'publisher';
@@ -75,7 +78,7 @@ const CONTENT_DESCRIPTOR_MAP: Record<string, { label: string; severity: 'high' |
 // Helper: Get all appids for an entity
 async function getEntityAppIds(entityType: EntityType, entityId: number): Promise<number[]> {
   if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const junctionTable = entityType === 'developer' ? 'app_developers' : 'app_publishers';
   const idColumn = entityType === 'developer' ? 'developer_id' : 'publisher_id';
@@ -91,7 +94,7 @@ async function getEntityAppIds(entityType: EntityType, entityId: number): Promis
 // Get genre distribution
 async function getPortfolioGenres(appIds: number[]): Promise<PortfolioGenre[]> {
   if (appIds.length === 0) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Query genres - note: is_primary exists in DB but may not be in generated types yet
   const { data: genres } = await supabase
@@ -125,7 +128,7 @@ async function getPortfolioGenres(appIds: number[]): Promise<PortfolioGenre[]> {
 // Get category/feature distribution
 async function getPortfolioCategories(appIds: number[]): Promise<PortfolioCategory[]> {
   if (appIds.length === 0) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data: categories } = await supabase
     .from('app_categories')
@@ -163,7 +166,7 @@ async function getPortfolioPlatformStats(appIds: number[]): Promise<PortfolioPla
   };
 
   if (appIds.length === 0) return emptyStats;
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Get platform and controller data from apps table
   const { data: apps } = await supabase
@@ -220,7 +223,7 @@ async function getPortfolioPlatformStats(appIds: number[]): Promise<PortfolioPla
 // Get franchises
 async function getPortfolioFranchises(appIds: number[]): Promise<PortfolioFranchise[]> {
   if (appIds.length === 0) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data: franchiseLinks } = await supabase
     .from('app_franchises')
@@ -251,7 +254,7 @@ async function getPortfolioFranchises(appIds: number[]): Promise<PortfolioFranch
 // Get language support
 async function getPortfolioLanguages(appIds: number[]): Promise<PortfolioLanguage[]> {
   if (appIds.length === 0) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data: apps } = await supabase
     .from('apps')
@@ -279,7 +282,7 @@ async function getPortfolioLanguages(appIds: number[]): Promise<PortfolioLanguag
 // Get content descriptors
 async function getPortfolioContentDescriptors(appIds: number[]): Promise<PortfolioContentDescriptor[]> {
   if (appIds.length === 0) return [];
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   const { data: apps } = await supabase
     .from('apps')

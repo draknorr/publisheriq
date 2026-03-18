@@ -3019,6 +3019,13 @@ export type Database = {
           success: boolean
         }[]
       }
+      admin_adjust_user_credits: {
+        Args: { p_amount: number; p_description: string; p_user_id: string }
+        Returns: {
+          new_balance: number
+          success: boolean
+        }[]
+      }
       aggregate_daily_ccu_peaks: {
         Args: { target_date?: string }
         Returns: number
@@ -3469,6 +3476,41 @@ export type Database = {
           velocity_acceleration: number
           velocity_tier: string
           vs_publisher_avg: number
+        }[]
+      }
+      get_change_feed_activity: {
+        Args: {
+          p_app_types?: string[]
+          p_cursor_activity_id?: string
+          p_cursor_score?: number
+          p_cursor_time?: string
+          p_days?: number
+          p_limit?: number
+          p_mode?: string
+          p_search?: string
+          p_signal_families?: string[]
+          p_sort?: string
+          p_view?: string
+        }
+        Returns: {
+          activity_id: string
+          activity_kind: string
+          app_name: string
+          app_type: string
+          appid: number
+          external_url: string
+          facts: string[]
+          has_before_after: boolean
+          headline: string
+          highlight_labels: string[]
+          is_released: boolean
+          occurred_at: string
+          related_announcement_count: number
+          release_date: string
+          signal_families: string[]
+          sort_score: number
+          story_kind: string
+          summary: string
         }[]
       }
       get_change_feed_burst_detail: {

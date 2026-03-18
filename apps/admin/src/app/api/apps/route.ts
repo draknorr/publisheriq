@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
 import { createServerClient } from '@/lib/supabase/server';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import type { AppsFilterParams, AggregateStats } from '@/app/(main)/apps/lib/apps-types';
 
 /**
@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = getSupabase();
+    const supabase = getServiceSupabase();
 
     // Fetch apps data first (main query)
     // NOTE: Sequential execution prevents connection pool exhaustion under concurrent load.

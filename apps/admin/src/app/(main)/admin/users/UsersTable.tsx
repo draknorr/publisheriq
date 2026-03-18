@@ -23,7 +23,6 @@ interface UserWithProfile {
 
 interface UsersTableProps {
   users: UserWithProfile[];
-  currentUserId: string;
 }
 
 function formatDate(dateString: string): string {
@@ -34,7 +33,7 @@ function formatDate(dateString: string): string {
   });
 }
 
-export function UsersTable({ users, currentUserId }: UsersTableProps) {
+export function UsersTable({ users }: UsersTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserWithProfile | null>(null);
   const [creditAmount, setCreditAmount] = useState('');
@@ -66,8 +65,7 @@ export function UsersTable({ users, currentUserId }: UsersTableProps) {
       const supabase = createBrowserClient();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: rpcError } = await (supabase.rpc as any)('admin_adjust_credits', {
-        p_admin_id: currentUserId,
+      const { data, error: rpcError } = await (supabase.rpc as any)('admin_adjust_user_credits', {
         p_user_id: selectedUser.id,
         p_amount: amount,
         p_description: creditReason,

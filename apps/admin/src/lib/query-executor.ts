@@ -1,3 +1,6 @@
+import 'server-only';
+
+import { getServiceSupabase } from './supabase-service';
 import type { QueryResult } from './llm/types';
 
 // Dangerous SQL keywords that indicate non-SELECT operations
@@ -44,6 +47,21 @@ const DANGEROUS_PATTERNS = [
 
 const MAX_ROWS = 50;
 const MAX_QUERY_LENGTH = 5000;
+const BLOCKED_RELATION_PATTERNS = [
+  /\buser_profiles\b/i,
+  /\bwaitlist\b/i,
+  /\bcredit_transactions\b/i,
+  /\bcredit_reservations\b/i,
+  /\brate_limit_state\b/i,
+  /\bchat_query_logs\b/i,
+  /\buser_pins\b/i,
+  /\buser_alerts\b/i,
+  /\buser_alert_preferences\b/i,
+  /\buser_pin_alert_settings\b/i,
+  /\balert_detection_state\b/i,
+  /\bauth\./i,
+  /\bstorage\./i,
+];
 
 interface ValidationResult {
   valid: boolean;
@@ -78,6 +96,12 @@ export function validateQuery(sql: string): ValidationResult {
   for (const pattern of DANGEROUS_PATTERNS) {
     if (pattern.test(sql)) {
       return { valid: false, error: 'Query contains forbidden pattern' };
+    }
+  }
+
+  for (const pattern of BLOCKED_RELATION_PATTERNS) {
+    if (pattern.test(sql)) {
+      return { valid: false, error: 'Query references a restricted table or schema' };
     }
   }
 
@@ -129,37 +153,21 @@ export async function executeQuery(sql: string): Promise<QueryResult> {
   const sanitizedSql = validation.sanitizedSql!;
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabase = getServiceSupabase();
 
-    if (!supabaseUrl || !supabaseKey) {
-      return {
-        success: false,
-        error: 'Database not configured',
-      };
-    }
-
-    // Execute via RPC function using REST API directly
-    // This avoids type issues since the function may not be in generated types yet
-    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/execute_readonly_query`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({ query_text: sanitizedSql }),
+    // Use the service-role client from the server so the RPC is no longer callable
+    // through the public anon REST surface.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)('execute_readonly_query', {
+      query_text: sanitizedSql,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (error) {
       return {
         success: false,
-        error: `Database error: ${errorText}`,
+        error: `Database error: ${error.message}`,
       };
     }
-
-    const data = await response.json();
 
     // Handle null/empty results
     const rows = Array.isArray(data) ? data : [];
