@@ -10,6 +10,7 @@ import { getServiceClient } from '@publisheriq/database';
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
 
 const log = logger.child({ worker: 'trends-sync' });
+const APPID_PAGE_SIZE = 1000;
 
 interface HistogramEntry {
   appid: number;
@@ -28,6 +29,80 @@ interface TrendResult {
   previous_positive_ratio: number;
   review_velocity_7d: number;
   review_velocity_30d: number;
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const record = error as Record<string, unknown>;
+    const parts = [
+      typeof record.message === 'string' ? record.message : null,
+      typeof record.code === 'string' ? `code=${record.code}` : null,
+      typeof record.details === 'string' ? `details=${record.details}` : null,
+      typeof record.hint === 'string' ? `hint=${record.hint}` : null,
+    ].filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(' | ');
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
+async function fetchHistogramAppidPage(
+  supabase: ReturnType<typeof getServiceClient>,
+  lastAppid: number
+): Promise<{ appids: number[]; nextCursor: number; hasMore: boolean; rowsFetched: number }> {
+  const { data: appidRows, error: appidError } = await supabase
+    .from('review_histogram')
+    .select('appid')
+    .gt('appid', lastAppid)
+    .order('appid', { ascending: true })
+    .limit(APPID_PAGE_SIZE);
+
+  if (appidError) {
+    throw new Error(
+      `Failed to fetch appids from review_histogram: ${formatUnknownError(appidError)}`
+    );
+  }
+
+  if (!appidRows || appidRows.length === 0) {
+    return {
+      appids: [],
+      nextCursor: lastAppid,
+      hasMore: false,
+      rowsFetched: 0,
+    };
+  }
+
+  const appids: number[] = [];
+  let previousAppid = lastAppid;
+
+  for (const row of appidRows) {
+    if (row.appid !== previousAppid) {
+      appids.push(row.appid);
+      previousAppid = row.appid;
+    }
+  }
+
+  const nextCursor = appidRows[appidRows.length - 1]?.appid ?? lastAppid;
+
+  return {
+    appids,
+    nextCursor,
+    hasMore: appidRows.length === APPID_PAGE_SIZE,
+    rowsFetched: appidRows.length,
+  };
 }
 
 function calculateTrendForApp(histogram: HistogramEntry[]): Omit<TrendResult, 'appid'> | null {
@@ -150,70 +225,54 @@ async function main(): Promise<void> {
   let failed = 0;
 
   try {
-    // Get distinct appids using paginated RPC (Supabase/PostgREST has ~1000 row limit for RPC)
-    log.info('Fetching distinct appids from review_histogram via RPC...');
+    log.info('Fetching appids directly from review_histogram');
 
-    const PAGE_SIZE = 1000; // Supabase/PostgREST enforces ~1000 row limit on all responses
-    const uniqueAppids: number[] = [];
-    let offset = 0;
+    let appidCursor = 0;
+    let hasMoreAppids = true;
+    let appidPagesFetched = 0;
+    let appidRowsFetched = 0;
+    let discoveredAppids = 0;
+    const pendingAppids: number[] = [];
+    let batchIndex = 0;
 
-    while (true) {
-      const { data: appidRows, error: appidError } = await supabase.rpc(
-        'get_histogram_appids',
-        { p_limit: PAGE_SIZE, p_offset: offset }
-      );
+    while (hasMoreAppids || pendingAppids.length > 0) {
+      while (hasMoreAppids && pendingAppids.length < batchSize) {
+        const page = await fetchHistogramAppidPage(supabase, appidCursor);
 
-      if (appidError) {
-        log.error('Failed to fetch appids via RPC', { error: appidError, offset });
-        throw appidError;
+        if (page.appids.length === 0) {
+          hasMoreAppids = false;
+          break;
+        }
+
+        pendingAppids.push(...page.appids);
+        appidCursor = page.nextCursor;
+        hasMoreAppids = page.hasMore;
+        appidPagesFetched++;
+        appidRowsFetched += page.rowsFetched;
+        discoveredAppids += page.appids.length;
+
+        log.info('Fetched histogram appid page', {
+          pageIndex: appidPagesFetched,
+          rowsFetched: page.rowsFetched,
+          appidsDiscovered: page.appids.length,
+          pendingAppids: pendingAppids.length,
+          discoveredAppids,
+          lastAppid: appidCursor,
+        });
       }
 
-      if (!appidRows || appidRows.length === 0) {
+      const batch = pendingAppids.splice(0, batchSize);
+
+      if (batch.length === 0) {
         break;
       }
 
-      uniqueAppids.push(...appidRows.map((row: { appid: number }) => row.appid));
-      log.info('Fetched appid batch', {
-        batchSize: appidRows.length,
-        totalSoFar: uniqueAppids.length,
-        offset,
-      });
-
-      if (appidRows.length < PAGE_SIZE) {
-        break; // Last page
-      }
-
-      offset += PAGE_SIZE;
-    }
-
-    if (uniqueAppids.length === 0) {
-      log.info('No apps with histogram data');
-
-      // Mark job as completed with 0 items
-      if (job) {
-        await supabase
-          .from('sync_jobs')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            items_processed: 0,
-            items_succeeded: 0,
-            items_failed: 0,
-          })
-          .eq('id', job.id);
-      }
-      return;
-    }
-    log.info('Found apps with histogram data', { count: uniqueAppids.length });
-
-    // Process in batches
-    for (let i = 0; i < uniqueAppids.length; i += batchSize) {
-      const batch = uniqueAppids.slice(i, i + batchSize);
+      batchIndex++;
 
       // Fetch histogram data for batch
       const { data: histogramData } = await supabase
         .from('review_histogram')
-        .select('*')
+        .select('appid, month_start, recommendations_up, recommendations_down')
         .in('appid', batch)
         .order('month_start', { ascending: false });
 
@@ -257,7 +316,10 @@ async function main(): Promise<void> {
         );
 
         if (error) {
-          log.error('Failed to upsert trends', { error });
+          log.error('Failed to upsert trends', {
+            error: formatUnknownError(error),
+            batchIndex,
+          });
         }
       }
 
@@ -265,8 +327,33 @@ async function main(): Promise<void> {
         processed,
         succeeded,
         failed,
-        batchIndex: Math.floor(i / batchSize) + 1,
+        batchIndex,
+        batchSize: batch.length,
+        pendingAppids: pendingAppids.length,
+        discoveredAppids,
+        appidPagesFetched,
+        appidRowsFetched,
+        lastAppid: appidCursor,
       });
+    }
+
+    if (discoveredAppids === 0) {
+      log.info('No apps with histogram data');
+
+      // Mark job as completed with 0 items
+      if (job) {
+        await supabase
+          .from('sync_jobs')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            items_processed: 0,
+            items_succeeded: 0,
+            items_failed: 0,
+          })
+          .eq('id', job.id);
+      }
+      return;
     }
 
     if (job) {
@@ -285,7 +372,8 @@ async function main(): Promise<void> {
     const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
     log.info('Trends calculation completed', { processed, succeeded, failed, durationMinutes: duration });
   } catch (error) {
-    log.error('Trends calculation failed', { error });
+    const errorMessage = formatUnknownError(error);
+    log.error('Trends calculation failed', { error: errorMessage });
 
     if (job) {
       await supabase
@@ -293,7 +381,7 @@ async function main(): Promise<void> {
         .update({
           status: 'failed',
           completed_at: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : String(error),
+          error_message: errorMessage,
         })
         .eq('id', job.id);
     }

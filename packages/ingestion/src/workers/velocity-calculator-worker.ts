@@ -12,6 +12,34 @@ import { logger } from '@publisheriq/shared';
 
 const log = logger.child({ worker: 'velocity-calc' });
 
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const record = error as Record<string, unknown>;
+    const parts = [
+      typeof record.message === 'string' ? record.message : null,
+      typeof record.code === 'string' ? `code=${record.code}` : null,
+      typeof record.details === 'string' ? `details=${record.details}` : null,
+      typeof record.hint === 'string' ? `hint=${record.hint}` : null,
+    ].filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(' | ');
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
 async function main(): Promise<void> {
   const startTime = Date.now();
   const githubRunId = process.env.GITHUB_RUN_ID;
@@ -35,10 +63,12 @@ async function main(): Promise<void> {
   try {
     // 1. Refresh the materialized view
     log.info('Refreshing review_velocity_stats materialized view');
-    const { error: refreshError } = await supabase.rpc('refresh_review_velocity_stats');
+    const { error: refreshError } = await supabase.rpc('refresh_materialized_view', {
+      view_name: 'review_velocity_stats',
+    });
 
     if (refreshError) {
-      throw new Error(`Failed to refresh velocity stats: ${refreshError.message}`);
+      throw new Error(`Failed to refresh velocity stats: ${formatUnknownError(refreshError)}`);
     }
 
     log.info('Materialized view refreshed successfully');
@@ -50,7 +80,7 @@ async function main(): Promise<void> {
     );
 
     if (updateError) {
-      throw new Error(`Failed to update velocity tiers: ${updateError.message}`);
+      throw new Error(`Failed to update velocity tiers: ${formatUnknownError(updateError)}`);
     }
 
     const updatedCount = updateResult?.[0]?.count ?? 0;
@@ -95,7 +125,8 @@ async function main(): Promise<void> {
       tierDistribution,
     });
   } catch (error) {
-    log.error('Velocity calculation failed', { error });
+    const errorMessage = formatUnknownError(error);
+    log.error('Velocity calculation failed', { error: errorMessage });
 
     if (job) {
       await supabase
@@ -103,7 +134,7 @@ async function main(): Promise<void> {
         .update({
           status: 'failed',
           completed_at: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : String(error),
+          error_message: errorMessage,
         })
         .eq('id', job.id);
     }
