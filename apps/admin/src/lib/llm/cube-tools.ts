@@ -21,7 +21,9 @@ export const QUERY_ANALYTICS_TOOL: Tool = {
     description: `Query game, publisher, and developer analytics using pre-defined semantic models.
 
 CUBES:
-- Discovery: Games with all metrics (default for game queries)
+- Discovery: Games with discovery, trend, and metacritic metrics
+- GameCatalog: One-row-per-game catalog for specific lookups and generalized price/review discovery
+- DlcRelations: Parent-to-DLC relationship lookup with metadata completeness flags
 - PublisherMetrics: Publisher ALL-TIME aggregations
 - PublisherYearMetrics: Publisher stats by release year
 - PublisherGameMetrics: Games by publisher with rolling periods (lastYear, last6Months, etc.)
@@ -47,7 +49,7 @@ IMPORTANT - USE SEGMENTS FOR COMMON FILTERS:
 
 Only use filters for custom thresholds not covered by segments.
 
-ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid, Discovery.name).`,
+ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid + Discovery.name or GameCatalog.appid + GameCatalog.name).`,
     parameters: {
       type: 'object',
       properties: {
@@ -55,6 +57,8 @@ ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid, 
           type: 'string',
           enum: [
             'Discovery',
+            'GameCatalog',
+            'DlcRelations',
             'PublisherMetrics',
             'PublisherYearMetrics',
             'PublisherGameMetrics',
@@ -66,7 +70,7 @@ ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid, 
             'MonthlyGameMetrics',
             'MonthlyPublisherMetrics',
           ],
-          description: 'The cube to query. Use Discovery for game queries.',
+          description: 'The cube to query. Use GameCatalog for specific game lookups and broad price/review discovery; use Discovery for discovery/trend/metacritic queries.',
         },
         dimensions: {
           type: 'array',
@@ -310,12 +314,24 @@ Supports fuzzy tag matching - you don't need exact tag names.`,
           },
           description: 'Review score filter',
         },
+        min_reviews: {
+          type: 'number',
+          description: 'Minimum total review count',
+        },
         metacritic_score: {
           type: 'object',
           properties: {
             gte: { type: 'number', description: 'Minimum Metacritic score (0-100)' },
           },
           description: 'Metacritic score filter',
+        },
+        min_price_cents: {
+          type: 'number',
+          description: 'Minimum price in cents (e.g., 4000 for $40.00)',
+        },
+        max_price_cents: {
+          type: 'number',
+          description: 'Maximum price in cents (e.g., 999 for $9.99)',
         },
         is_free: {
           type: 'boolean',
@@ -324,6 +340,10 @@ Supports fuzzy tag matching - you don't need exact tag names.`,
         on_sale: {
           type: 'boolean',
           description: 'Filter to games currently on sale (has active discount)',
+        },
+        min_discount_percent: {
+          type: 'number',
+          description: 'Minimum active discount percentage (0-100)',
         },
         limit: {
           type: 'number',

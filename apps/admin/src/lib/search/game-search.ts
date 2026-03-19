@@ -5,7 +5,7 @@
  * Uses EXISTS subqueries for efficient filtering without row multiplication.
  */
 
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 /**
  * Common tag/category name normalizations
@@ -34,9 +34,13 @@ export interface SearchGamesArgs {
   steam_deck?: ('verified' | 'playable')[];
   release_year?: { gte?: number; lte?: number };
   review_percentage?: { gte?: number };
+  min_reviews?: number;
   metacritic_score?: { gte?: number };
+  min_price_cents?: number;
+  max_price_cents?: number;
   is_free?: boolean;
   on_sale?: boolean;
+  min_discount_percent?: number;
   limit?: number;
   order_by?: 'reviews' | 'score' | 'release_date' | 'owners';
 }
@@ -50,7 +54,9 @@ export interface GameSearchResult {
   platforms: string | null;
   controller_support: string | null;
   steam_deck_category: string | null;
+  release_date: string | null;
   release_year: number | null;
+  release_state: string | null;
   review_percentage: number | null;
   metacritic_score: number | null;
   total_reviews: number | null;
@@ -109,9 +115,13 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     steam_deck,
     release_year,
     review_percentage,
+    min_reviews,
     metacritic_score,
+    min_price_cents,
+    max_price_cents,
     is_free,
     on_sale,
+    min_discount_percent,
     limit = DEFAULT_RESULTS,
     order_by = 'reviews',
   } = args;
@@ -127,7 +137,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
   debug.steps.push(`Starting search with limit=${actualLimit}`);
 
   try {
-    const supabase = getSupabase();
+    const supabase = getServiceSupabase();
 
     // Track which filters were applied
     if (tags && tags.length > 0) {
@@ -157,14 +167,26 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     if (review_percentage?.gte !== undefined) {
       filtersApplied.push(`review_percentage >= ${review_percentage.gte}`);
     }
+    if (min_reviews !== undefined) {
+      filtersApplied.push(`min_reviews >= ${min_reviews}`);
+    }
     if (metacritic_score?.gte !== undefined) {
       filtersApplied.push(`metacritic_score >= ${metacritic_score.gte}`);
+    }
+    if (min_price_cents !== undefined) {
+      filtersApplied.push(`min_price_cents >= ${min_price_cents}`);
+    }
+    if (max_price_cents !== undefined) {
+      filtersApplied.push(`max_price_cents <= ${max_price_cents}`);
     }
     if (is_free !== undefined) {
       filtersApplied.push(`is_free: ${is_free}`);
     }
     if (on_sale === true) {
       filtersApplied.push('on_sale: true');
+    }
+    if (min_discount_percent !== undefined) {
+      filtersApplied.push(`min_discount_percent >= ${min_discount_percent}`);
     }
 
     // We use a hybrid approach:
@@ -282,6 +304,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         controller_support,
         is_free,
         release_date,
+        release_state,
         current_price_cents,
         current_discount_percent,
         pics_review_percentage,
@@ -327,9 +350,21 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       queryBuilder = queryBuilder.eq('is_free', is_free);
     }
 
+    if (min_price_cents !== undefined) {
+      queryBuilder = queryBuilder.gte('current_price_cents', min_price_cents);
+    }
+
+    if (max_price_cents !== undefined) {
+      queryBuilder = queryBuilder.lte('current_price_cents', max_price_cents);
+    }
+
     // On sale - filter to only discounted games
     if (on_sale === true) {
       queryBuilder = queryBuilder.gt('current_discount_percent', 0);
+    }
+
+    if (min_discount_percent !== undefined) {
+      queryBuilder = queryBuilder.gte('current_discount_percent', min_discount_percent);
     }
 
     // Release year filtering - filter at database level for efficiency
@@ -360,9 +395,11 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
     // Determine fetch limit based on filtering needs
     // If we have post-filters that can't be fully pushed to DB, fetch more rows
-    const hasPostFilters = review_percentage?.gte !== undefined;
-    const fetchMultiplier = hasPostFilters ? 5 : 2;
-    const fetchLimit = actualLimit * fetchMultiplier;
+    const hasPostFilters = review_percentage?.gte !== undefined || min_reviews !== undefined;
+    const needsInMemoryMetricSort = order_by === 'reviews' || order_by === 'owners';
+    const fetchLimit = candidateAppids !== null && (hasPostFilters || needsInMemoryMetricSort)
+      ? Math.min(candidateAppids.length, 3000)
+      : Math.min(actualLimit * (hasPostFilters || needsInMemoryMetricSort ? 10 : 2), 1000);
 
     // Add ordering at DB level to get best candidates first
     // This ensures we fetch the most relevant rows before hitting the limit
@@ -402,6 +439,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       controller_support: string | null;
       is_free: boolean;
       release_date: string | null;
+      release_state: string | null;
       current_price_cents: number | null;
       current_discount_percent: number | null;
       pics_review_percentage: number | null;
@@ -424,7 +462,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         const releaseYear = row.release_date ? new Date(row.release_date).getFullYear() : null;
         const reviewPct =
           metrics?.[0]?.positive_percentage ?? row.pics_review_percentage ?? null;
-        const priceDollars = row.current_price_cents ? row.current_price_cents / 100 : null;
+        const priceDollars = row.current_price_cents !== null ? row.current_price_cents / 100 : null;
 
         // Extract first publisher (games can have multiple, take first)
         const firstPublisher = row.app_publishers?.[0]?.publishers;
@@ -442,7 +480,9 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
           platforms: row.platforms,
           controller_support: row.controller_support,
           steam_deck_category: steamDeck?.[0]?.category ?? null,
+          release_date: row.release_date,
           release_year: releaseYear,
+          release_state: row.release_state,
           review_percentage: reviewPct,
           metacritic_score: row.metacritic_score,
           total_reviews: metrics?.[0]?.total_reviews ?? null,
@@ -475,17 +515,28 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       debug.steps.push(`After release year filter: ${afterReleaseFilter.length} (from ${mappedResults.length})`);
     }
 
-    // Filter by review percentage
+    // Filter by review percentage and review count
     const results = afterReleaseFilter.filter((r) => {
       if (review_percentage?.gte !== undefined) {
-        return r.review_percentage !== null && r.review_percentage >= review_percentage.gte;
+        if (r.review_percentage === null || r.review_percentage < review_percentage.gte) {
+          return false;
+        }
+      }
+      if (min_reviews !== undefined) {
+        if (r.total_reviews === null || r.total_reviews < min_reviews) {
+          return false;
+        }
       }
       return true;
     });
 
     debug.after_review_filter = results.length;
-    if (review_percentage?.gte !== undefined) {
-      debug.steps.push(`After review % filter (>=${review_percentage.gte}): ${results.length} (from ${afterReleaseFilter.length})`);
+    if (review_percentage?.gte !== undefined || min_reviews !== undefined) {
+      const filterSummary = [
+        review_percentage?.gte !== undefined ? `review % >= ${review_percentage.gte}` : null,
+        min_reviews !== undefined ? `reviews >= ${min_reviews}` : null,
+      ].filter(Boolean).join(', ');
+      debug.steps.push(`After post-filters (${filterSummary}): ${results.length} (from ${afterReleaseFilter.length})`);
     }
     // Steam Deck filtering is now done at database level (candidate appids)
 
@@ -536,7 +587,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
  * Get appids matching all specified tags (fuzzy match)
  */
 async function getAppidsMatchingTags(
-  supabase: ReturnType<typeof getSupabase>,
+  supabase: ReturnType<typeof getServiceSupabase>,
   tags: string[]
 ): Promise<number[]> {
   // For each tag, get matching appids, then intersect
@@ -582,7 +633,7 @@ async function getAppidsMatchingTags(
  * Get appids matching all specified genres (fuzzy match)
  */
 async function getAppidsMatchingGenres(
-  supabase: ReturnType<typeof getSupabase>,
+  supabase: ReturnType<typeof getServiceSupabase>,
   genres: string[]
 ): Promise<number[]> {
   const appidSets: Set<number>[] = [];
@@ -624,7 +675,7 @@ async function getAppidsMatchingGenres(
  * Get appids matching all specified categories (fuzzy match)
  */
 async function getAppidsMatchingCategories(
-  supabase: ReturnType<typeof getSupabase>,
+  supabase: ReturnType<typeof getServiceSupabase>,
   categories: string[]
 ): Promise<number[]> {
   const appidSets: Set<number>[] = [];

@@ -39,6 +39,17 @@ function formatRowWithLinks(row: Record<string, unknown>): Record<string, unknow
     }
   }
 
+  // Format other game-name pairs like parentAppid/parentName or dlcAppid/dlcName.
+  for (const [key, value] of Object.entries(row)) {
+    if (!key.endsWith('Appid') || typeof value !== 'number') continue;
+
+    const nameKey = `${key.slice(0, -5)}Name`;
+    const rawName = row[nameKey];
+    if (typeof rawName !== 'string' || rawName.startsWith('[')) continue;
+
+    formatted[nameKey] = `[${rawName}](game:${value})`;
+  }
+
   // Format developer links
   const developerId = row.developerId as number | undefined;
   if (developerId && row.developerName && typeof row.developerName === 'string') {

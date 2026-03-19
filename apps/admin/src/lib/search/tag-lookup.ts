@@ -5,7 +5,7 @@
  * Cache is loaded on first request and refreshed every hour.
  */
 
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 // Cache structure
 interface TagCache {
@@ -27,7 +27,7 @@ async function getTagCache(): Promise<TagCache> {
     return tagCache;
   }
 
-  const supabase = getSupabase();
+  const supabase = getServiceSupabase();
 
   // Load all in parallel
   const [tagsResult, genresResult, categoriesResult] = await Promise.all([
