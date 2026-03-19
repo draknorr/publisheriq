@@ -2,10 +2,10 @@
  * Game Lookup Service
  *
  * Provides efficient database lookups for game names.
- * Uses direct ILIKE queries for partial matching.
+ * Prefers the trigram-backed fuzzy search RPC and falls back to ILIKE.
  */
 
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 /**
  * Arguments for lookup_games tool
@@ -21,7 +21,13 @@ export interface LookupGamesArgs {
 export interface LookupGamesResult {
   success: boolean;
   query: string;
-  results: Array<{ appid: number; name: string; releaseYear: number | null }>;
+  results: Array<{
+    appid: number;
+    name: string;
+    releaseYear: number | null;
+    similarityScore?: number;
+    isExactMatch?: boolean;
+  }>;
   error?: string;
 }
 
@@ -41,10 +47,41 @@ export async function lookupGames(args: LookupGamesArgs): Promise<LookupGamesRes
   }
 
   try {
-    const supabase = getSupabase();
+    const supabase = getServiceSupabase();
     const maxResults = Math.min(limit, 20); // Hard cap at 20
 
-    // Direct ILIKE query - efficient with database index
+    // Prefer the fuzzy search RPC so chat tolerates typos, spacing differences,
+    // and near matches on a very large catalog.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: fuzzyData, error: fuzzyError } = await (supabase as any).rpc('search_games_fuzzy', {
+      p_query: query,
+      p_limit: maxResults,
+    }) as {
+      data: Array<{
+        appid: number;
+        name: string;
+        release_date: string | null;
+        similarity_score: number | null;
+        is_exact_match: boolean | null;
+      }> | null;
+      error: { message: string } | null;
+    };
+
+    if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
+      return {
+        success: true,
+        query,
+        results: fuzzyData.map((g) => ({
+          appid: g.appid,
+          name: g.name,
+          releaseYear: g.release_date ? new Date(g.release_date).getFullYear() : null,
+          similarityScore: g.similarity_score ?? undefined,
+          isExactMatch: g.is_exact_match ?? undefined,
+        })),
+      };
+    }
+
+    // Direct ILIKE fallback if the RPC is unavailable.
     const { data, error } = await supabase
       .from('apps')
       .select('appid, name, release_date')

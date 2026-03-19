@@ -4,6 +4,13 @@
  */
 
 export const EXAMPLE_PROMPTS = [
+  // Change Intelligence
+  'Show me the biggest Steam store-page changes in the last 30 days',
+  'What changed on Hades II before and after its last big update?',
+  'Which upcoming games changed release timing recently?',
+  'Find games that refreshed screenshots or trailers without an announcement',
+  'Which titles look like they started a new marketing push this month?',
+
   // Game Discovery
   "Find me Steam Deck verified roguelikes with great reviews",
   "What are the best VR games on Steam?",

@@ -10,7 +10,12 @@ import { createProvider } from '@/lib/llm/providers';
 import { buildCubeSystemPrompt } from '@/lib/llm/cube-system-prompt';
 import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
 import { executeCubeQuery } from '@/lib/cube-executor';
-import { findSimilarWithTimeout, type FindSimilarArgs } from '@/lib/qdrant/search-service';
+import {
+  findSimilarWithTimeout,
+  searchByConceptWithTimeout,
+  type FindSimilarArgs,
+  type SearchByConceptArgs,
+} from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
 import {
@@ -19,7 +24,22 @@ import {
   type LookupPublishersArgs,
   type LookupDevelopersArgs,
 } from '@/lib/search/publisher-lookup';
+import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
+import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
+import {
+  compareChangeBeforeAfter,
+  findChangePatterns,
+  getChangeActivityDetail,
+  getGameChangeTimeline,
+  queryChangeActivity,
+  type CompareChangeBeforeAfterArgs,
+  type FindChangePatternsArgs,
+  type GetChangeActivityDetailArgs,
+  type GetGameChangeTimelineArgs,
+  type QueryChangeActivityArgs,
+} from '@/lib/chat/change-intel-service';
+import { createServerClient } from '@/lib/supabase/server';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse } from '@/lib/llm/types';
 
 // Maximum tool call iterations to prevent infinite loops
@@ -42,6 +62,15 @@ interface QueryAnalyticsArgs {
 
 export async function POST(request: NextRequest): Promise<NextResponse<ChatResponse>> {
   try {
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { response: '', error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const body = (await request.json()) as ChatRequest;
 
     if (!body.messages || !Array.isArray(body.messages)) {
@@ -137,6 +166,27 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             toolCallId: toolCall.id,
             content: formatResultWithEntityLinks(similarityResult),
           });
+        } else if (toolCall.name === 'search_by_concept') {
+          const args = toolCall.arguments as unknown as SearchByConceptArgs;
+          const conceptResult = await searchByConceptWithTimeout(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: conceptResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(conceptResult),
+          });
         } else if (toolCall.name === 'search_games') {
           const args = toolCall.arguments as unknown as SearchGamesArgs;
 
@@ -214,6 +264,153 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             role: 'tool',
             toolCallId: toolCall.id,
             content: JSON.stringify(lookupResult),
+          });
+        } else if (toolCall.name === 'lookup_games') {
+          const args = toolCall.arguments as unknown as LookupGamesArgs;
+          const lookupResult = await lookupGames(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: lookupResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: JSON.stringify(lookupResult),
+          });
+        } else if (toolCall.name === 'discover_trending') {
+          const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
+          const trendResult = await discoverTrending(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: trendResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(trendResult),
+          });
+        } else if (toolCall.name === 'query_change_activity') {
+          const args = toolCall.arguments as unknown as QueryChangeActivityArgs;
+          const changeResult = await queryChangeActivity(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: changeResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(changeResult),
+          });
+        } else if (toolCall.name === 'get_game_change_timeline') {
+          const args = toolCall.arguments as unknown as GetGameChangeTimelineArgs;
+          const timelineResult = await getGameChangeTimeline(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: timelineResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(timelineResult),
+          });
+        } else if (toolCall.name === 'get_change_activity_detail') {
+          const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;
+          const detailResult = await getChangeActivityDetail(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: detailResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(detailResult),
+          });
+        } else if (toolCall.name === 'compare_change_before_after') {
+          const args = toolCall.arguments as unknown as CompareChangeBeforeAfterArgs;
+          const comparisonResult = await compareChangeBeforeAfter(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: comparisonResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(comparisonResult),
+          });
+        } else if (toolCall.name === 'find_change_patterns') {
+          const args = toolCall.arguments as unknown as FindChangePatternsArgs;
+          const patternResult = await findChangePatterns(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: patternResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(patternResult),
           });
         } else if (toolCall.name === 'lookup_developers') {
           const args = toolCall.arguments as unknown as LookupDevelopersArgs;

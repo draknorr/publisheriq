@@ -10,6 +10,9 @@ interface ResultWithData {
   success?: boolean;
   data?: Record<string, unknown>[];
   results?: Record<string, unknown>[];
+  candidates?: Record<string, unknown>[];
+  app?: Record<string, unknown>;
+  detail?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -29,6 +32,10 @@ function formatRowWithLinks(row: Record<string, unknown>): Record<string, unknow
     // name field (from Discovery, search_games)
     if (row.name && typeof row.name === 'string') {
       formatted.name = `[${row.name}](game:${appid})`;
+    }
+    // appName field (from change-intel activity/detail surfaces)
+    if (row.appName && typeof row.appName === 'string') {
+      formatted.appName = `[${row.appName}](game:${appid})`;
     }
   }
 
@@ -88,9 +95,11 @@ export function formatResultWithEntityLinks(result: unknown): string {
 
   const typedResult = result as ResultWithData;
 
-  // Handle unsuccessful results - return as-is
-  if (typedResult.success === false) {
-    return JSON.stringify(result);
+  if (Array.isArray(typedResult.candidates) && typedResult.candidates.length > 0) {
+    const formattedCandidates = typedResult.candidates.map((row) =>
+      formatRowWithLinks(row as Record<string, unknown>)
+    );
+    return JSON.stringify({ ...typedResult, candidates: formattedCandidates });
   }
 
   // Handle query_analytics and search_games results (have 'data' array)
@@ -102,12 +111,29 @@ export function formatResultWithEntityLinks(result: unknown): string {
     return JSON.stringify({ ...typedResult, data: formattedData });
   }
 
+  if (typedResult.app && typeof typedResult.app === 'object') {
+    const formattedApp = formatRowWithLinks(typedResult.app);
+    return JSON.stringify({ ...typedResult, app: formattedApp });
+  }
+
+  if (typedResult.detail && typeof typedResult.detail === 'object') {
+    const formattedDetail = formatRowWithLinks(typedResult.detail);
+    return JSON.stringify({ ...typedResult, detail: formattedDetail });
+  }
+
   // Handle find_similar results (have 'results' array with 'type' field)
   if (Array.isArray(typedResult.results) && typedResult.results.length > 0) {
-    const formattedResults = formatSimilarityResults(
-      typedResult.results as Record<string, unknown>[]
-    );
+    const results = typedResult.results as Record<string, unknown>[];
+    const hasTypedSimilarityResults = results.some((item) => typeof item.type === 'string');
+    const formattedResults = hasTypedSimilarityResults
+      ? formatSimilarityResults(results)
+      : results.map((row) => formatRowWithLinks(row));
     return JSON.stringify({ ...typedResult, results: formattedResults });
+  }
+
+  // Handle unsuccessful results - return as-is
+  if (typedResult.success === false) {
+    return JSON.stringify(result);
   }
 
   // No data to format - return as-is

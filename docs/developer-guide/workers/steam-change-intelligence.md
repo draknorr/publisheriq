@@ -64,5 +64,6 @@ The user-facing `/changes` page reads from:
 - Node typecheck: `cd packages/ingestion && pnpm check-types`
 - Python tests: `cd services/pics-service && pytest tests/test_change_intelligence.py tests/test_operations_change_history.py`
 - Python syntax smoke: run `python3 -m py_compile` on the changed PICS modules and tests.
+- Chat smoke: open `/admin/chat-smoke` and run the change-intelligence groups through `/chat`, then inspect Query Details and Admin Chat Logs.
 
-The migration for this feature is drafted in [20260313130000_add_steam_change_intelligence.sql](/Users/ryanbohmann/Desktop/publisheriq/supabase/migrations/20260313130000_add_steam_change_intelligence.sql). It has not been applied automatically.
+The foundational migration for this feature is [20260313130000_add_steam_change_intelligence.sql](/Users/ryanbohmann/Desktop/publisheriq/supabase/migrations/20260313130000_add_steam_change_intelligence.sql). The chat bounds hardening migration is [20260318153000_harden_change_intel_chat_query_bounds.sql](/Users/ryanbohmann/Desktop/publisheriq/supabase/migrations/20260318153000_harden_change_intel_chat_query_bounds.sql), and it was applied manually via `psql` on 2026-03-18 so the live RPCs enforce the same bounds as the chat service.

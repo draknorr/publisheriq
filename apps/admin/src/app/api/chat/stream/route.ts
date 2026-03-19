@@ -1,8 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createProvider } from '@/lib/llm/providers';
-import { buildSystemPrompt } from '@/lib/llm/system-prompt';
 import { buildCubeSystemPrompt } from '@/lib/llm/cube-system-prompt';
-import { TOOLS } from '@/lib/llm/tools';
 import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
 import { executeQuery } from '@/lib/query-executor';
 import { executeCubeQuery } from '@/lib/cube-executor';
@@ -24,6 +22,18 @@ import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import { logChatQuery } from '@/lib/chat-query-logger';
+import {
+  compareChangeBeforeAfter,
+  findChangePatterns,
+  getChangeActivityDetail,
+  getGameChangeTimeline,
+  queryChangeActivity,
+  type CompareChangeBeforeAfterArgs,
+  type FindChangePatternsArgs,
+  type GetChangeActivityDetailArgs,
+  type GetGameChangeTimelineArgs,
+  type QueryChangeActivityArgs,
+} from '@/lib/chat/change-intel-service';
 import { createServerClient } from '@/lib/supabase/server';
 import {
   calculateTotalCredits,
@@ -42,7 +52,6 @@ import type {
   StreamDebugInfo,
 } from '@/lib/llm/streaming-types';
 
-const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
 const CREDITS_ENABLED = process.env.CREDITS_ENABLED === 'true';
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -97,6 +106,21 @@ async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; erro
   } else if (toolCall.name === 'discover_trending') {
     const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
     return discoverTrending(args);
+  } else if (toolCall.name === 'query_change_activity') {
+    const args = toolCall.arguments as unknown as QueryChangeActivityArgs;
+    return queryChangeActivity(args);
+  } else if (toolCall.name === 'get_game_change_timeline') {
+    const args = toolCall.arguments as unknown as GetGameChangeTimelineArgs;
+    return getGameChangeTimeline(args);
+  } else if (toolCall.name === 'get_change_activity_detail') {
+    const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;
+    return getChangeActivityDetail(args);
+  } else if (toolCall.name === 'compare_change_before_after') {
+    const args = toolCall.arguments as unknown as CompareChangeBeforeAfterArgs;
+    return compareChangeBeforeAfter(args);
+  } else if (toolCall.name === 'find_change_patterns') {
+    const args = toolCall.arguments as unknown as FindChangePatternsArgs;
+    return findChangePatterns(args);
   }
   return { success: false, error: `Unknown tool: ${toolCall.name}` };
 }
@@ -214,8 +238,11 @@ export async function POST(request: NextRequest): Promise<Response> {
           return;
         }
 
-        const systemPrompt = USE_CUBE ? buildCubeSystemPrompt() : buildSystemPrompt();
-        const tools: Tool[] = USE_CUBE ? CUBE_TOOLS : TOOLS;
+        // Streaming /chat is the canonical production runtime. Keep one
+        // structured tool surface here so change-intel behavior does not
+        // silently disappear behind legacy SQL-mode environment toggles.
+        const systemPrompt = buildCubeSystemPrompt();
+        const tools: Tool[] = CUBE_TOOLS;
 
         const messages: Message[] = [{ role: 'system', content: systemPrompt }, ...body.messages];
 

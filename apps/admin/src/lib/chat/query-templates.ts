@@ -30,6 +30,8 @@ export const GAME_TEMPLATES = [
   'games like {game} but less popular',
   'Steam Deck games like {game}',
   'tell me about {game}',
+  'show me the recent Steam changes for {game}',
+  'what changed on {game} before and after its latest major update?',
 ];
 
 // Publisher/developer query templates
@@ -42,6 +44,10 @@ export const ENTITY_TEMPLATES = [
 
 // Discovery templates (no variable replacement)
 export const DISCOVERY_TEMPLATES = [
+  'biggest Steam store-page changes this month',
+  'games that started a new marketing push recently',
+  'upcoming games with recent release timing changes',
+  'games that refreshed trailers or screenshots without an announcement',
   "what's breaking out right now?",
   'trending games this week',
   'best indie games this year',

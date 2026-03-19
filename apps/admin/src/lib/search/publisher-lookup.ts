@@ -2,10 +2,10 @@
  * Publisher/Developer Lookup Service
  *
  * Provides efficient database lookups for publisher and developer names.
- * Uses direct ilike queries instead of caching all entities.
+ * Prefers trigram-backed fuzzy search RPCs and falls back to ILIKE.
  */
 
-import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 /**
  * Arguments for lookup_publishers tool
@@ -21,7 +21,12 @@ export interface LookupPublishersArgs {
 export interface LookupPublishersResult {
   success: boolean;
   query: string;
-  results: Array<{ id: number; name: string }>;
+  results: Array<{
+    id: number;
+    name: string;
+    similarityScore?: number;
+    isExactMatch?: boolean;
+  }>;
   error?: string;
 }
 
@@ -41,10 +46,37 @@ export async function lookupPublishers(args: LookupPublishersArgs): Promise<Look
   }
 
   try {
-    const supabase = getSupabase();
+    const supabase = getServiceSupabase();
     const maxResults = Math.min(limit, 20); // Hard cap at 20
 
-    // Direct ilike query - efficient with database index
+    // Prefer fuzzy RPC for natural-language entity resolution.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: fuzzyData, error: fuzzyError } = await (supabase as any).rpc('search_publishers_fuzzy', {
+      p_query: query,
+      p_limit: maxResults,
+    }) as {
+      data: Array<{
+        id: number;
+        name: string;
+        similarity_score: number | null;
+        is_exact_match: boolean | null;
+      }> | null;
+      error: { message: string } | null;
+    };
+
+    if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
+      return {
+        success: true,
+        query,
+        results: fuzzyData.map((p) => ({
+          id: p.id,
+          name: p.name,
+          similarityScore: p.similarity_score ?? undefined,
+          isExactMatch: p.is_exact_match ?? undefined,
+        })),
+      };
+    }
+
     const { data, error } = await supabase
       .from('publishers')
       .select('id, name')
@@ -91,7 +123,12 @@ export interface LookupDevelopersArgs {
 export interface LookupDevelopersResult {
   success: boolean;
   query: string;
-  results: Array<{ id: number; name: string }>;
+  results: Array<{
+    id: number;
+    name: string;
+    similarityScore?: number;
+    isExactMatch?: boolean;
+  }>;
   error?: string;
 }
 
@@ -111,10 +148,37 @@ export async function lookupDevelopers(args: LookupDevelopersArgs): Promise<Look
   }
 
   try {
-    const supabase = getSupabase();
+    const supabase = getServiceSupabase();
     const maxResults = Math.min(limit, 20); // Hard cap at 20
 
-    // Direct ilike query - efficient with database index
+    // Prefer fuzzy RPC for natural-language entity resolution.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: fuzzyData, error: fuzzyError } = await (supabase as any).rpc('search_developers_fuzzy', {
+      p_query: query,
+      p_limit: maxResults,
+    }) as {
+      data: Array<{
+        id: number;
+        name: string;
+        similarity_score: number | null;
+        is_exact_match: boolean | null;
+      }> | null;
+      error: { message: string } | null;
+    };
+
+    if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
+      return {
+        success: true,
+        query,
+        results: fuzzyData.map((d) => ({
+          id: d.id,
+          name: d.name,
+          similarityScore: d.similarity_score ?? undefined,
+          isExactMatch: d.is_exact_match ?? undefined,
+        })),
+      };
+    }
+
     const { data, error } = await supabase
       .from('developers')
       .select('id, name')

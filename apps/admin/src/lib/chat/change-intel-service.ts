@@ -1,0 +1,1115 @@
+import 'server-only';
+
+import type { Database } from '@publisheriq/database';
+import {
+  buildDiffPreview,
+  fetchChangeFeedActivityDetail,
+  fetchChangeFeedActivityResponse,
+  fetchChangeFeedBurstDetail,
+  formatChangeLabel,
+  parseActivityId,
+  type ChangeActivityDetail,
+  type ChangeActivityMode,
+  type ChangeActivityRow,
+  type ChangeActivitySignalFamily,
+  type ChangeActivitySort,
+  type ChangeActivityView,
+  type ChangeDetailEvent,
+  type JsonValue,
+} from '@/app/(main)/changes/lib';
+import { lookupGames } from '@/lib/search/game-lookup';
+import { getServiceSupabase } from '@/lib/supabase-service';
+
+type AppType = Database['public']['Enums']['app_type'];
+
+const DEFAULT_ACTIVITY_DAYS = 30;
+const MAX_ACTIVITY_DAYS = 180;
+const DEFAULT_TIMELINE_DAYS = 90;
+const MAX_TIMELINE_DAYS = 365;
+const DEFAULT_ACTIVITY_LIMIT = 10;
+const MAX_ACTIVITY_LIMIT = 25;
+const DEFAULT_TIMELINE_LIMIT = 20;
+const MAX_TIMELINE_LIMIT = 50;
+const DEFAULT_PATTERN_LIMIT = 10;
+const MAX_PATTERN_LIMIT = 10;
+const INTERNAL_PATTERN_ACTIVITY_LIMIT = 100;
+const HIGH_CONFIDENCE_SIMILARITY = 0.72;
+const MINIMUM_CONFIDENCE_SIMILARITY = 0.45;
+const CLEAR_CONFIDENCE_MARGIN = 0.08;
+const MAX_AMBIGUITY_CANDIDATES = 3;
+
+export type ChangePattern =
+  | 'marketing_push'
+  | 'relaunch_pattern'
+  | 'update_tease'
+  | 'under_marketed'
+  | 'signable_candidate'
+  | 'rescue_candidate'
+  | 'sustained_response';
+
+export interface QueryChangeActivityArgs {
+  days?: number;
+  view?: ChangeActivityView;
+  mode?: ChangeActivityMode;
+  sort?: ChangeActivitySort;
+  app_types?: AppType[];
+  signal_families?: ChangeActivitySignalFamily[];
+  search?: string;
+  limit?: number;
+}
+
+export interface GetGameChangeTimelineArgs {
+  app_name?: string;
+  appid?: number;
+  days?: number;
+  limit?: number;
+  signal_families?: ChangeActivitySignalFamily[];
+}
+
+export interface GetChangeActivityDetailArgs {
+  activity_id: string;
+}
+
+export interface CompareChangeBeforeAfterArgs {
+  activity_id?: string;
+  app_name?: string;
+  appid?: number;
+  days?: number;
+}
+
+export interface FindChangePatternsArgs {
+  pattern: ChangePattern;
+  days?: number;
+  search?: string;
+  app_types?: AppType[];
+  limit?: number;
+}
+
+interface ResolvedApp {
+  appid: number;
+  name: string;
+  appType: AppType;
+  releaseYear: number | null;
+  similarityScore?: number;
+  isExactMatch?: boolean;
+  alternatives: Array<{
+    appid: number;
+    name: string;
+    releaseYear: number | null;
+    similarityScore?: number;
+    isExactMatch?: boolean;
+  }>;
+}
+
+interface ResolveAppReferenceResult {
+  app: ResolvedApp | null;
+  error?: string;
+  candidates?: ResolvedApp['alternatives'];
+}
+
+interface MetricsWindow {
+  ccuPeak: number | null;
+  totalReviews: number | null;
+  positiveReviews: number | null;
+  negativeReviews: number | null;
+  reviewScore: number | null;
+  reviewScoreLabel: string | null;
+  priceCents: number | null;
+  discountPercent: number | null;
+}
+
+interface AppMetrics {
+  appid: number;
+  positivePercentage: number | null;
+  totalReviews: number | null;
+  ccuPeak: number | null;
+  priceCents: number | null;
+  discountPercent: number | null;
+  reviewVelocity7d: number | null;
+  reviewVelocity30d: number | null;
+  trend30dDirection: string | null;
+  ccuTrend7dPct: number | null;
+}
+
+interface PatternCandidate {
+  appid: number;
+  name: string;
+  occurredAt: string;
+  confidence: 'high' | 'medium';
+  reasons: string[];
+  signalFamilies: ChangeActivitySignalFamily[];
+  storyKinds: string[];
+  activityIds: string[];
+  metrics: AppMetrics | null;
+}
+
+interface RawAppChangeFeedRow {
+  event_id: number;
+  appid: number;
+  app_name: string;
+  source: string;
+  change_type: Database['public']['Enums']['app_change_type'];
+  occurred_at: string;
+  before_value: JsonValue;
+  after_value: JsonValue;
+  context: JsonValue;
+  baseline_7d: JsonValue;
+  baseline_30d: JsonValue;
+  response_1d: JsonValue;
+  response_7d: JsonValue;
+  response_30d: JsonValue;
+}
+
+function clamp(value: number | undefined, fallback: number, min: number, max: number): number {
+  const candidate = value ?? fallback;
+  return Math.min(Math.max(candidate, min), max);
+}
+
+function normalizeSearch(value: string | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeEntityKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function isConfidentGameResolution(
+  query: string,
+  best: NonNullable<Awaited<ReturnType<typeof lookupGames>>['results'][number]>,
+  secondBest: Awaited<ReturnType<typeof lookupGames>>['results'][number] | undefined
+): boolean {
+  const normalizedQuery = normalizeEntityKey(query);
+  const normalizedBest = normalizeEntityKey(best.name);
+  const bestScore = best.similarityScore ?? 0;
+  const secondScore = secondBest?.similarityScore ?? 0;
+
+  if (best.isExactMatch || normalizedBest === normalizedQuery) {
+    return true;
+  }
+
+  if (bestScore >= HIGH_CONFIDENCE_SIMILARITY) {
+    return true;
+  }
+
+  if (bestScore < MINIMUM_CONFIDENCE_SIMILARITY) {
+    return false;
+  }
+
+  return bestScore - secondScore >= CLEAR_CONFIDENCE_MARGIN;
+}
+
+function formatCandidateLabel(candidate: {
+  name: string;
+  releaseYear: number | null;
+}): string {
+  return candidate.releaseYear ? `${candidate.name} (${candidate.releaseYear})` : candidate.name;
+}
+
+function buildAmbiguousGameError(query: string, candidates: ResolvedApp['alternatives']): string {
+  const labels = candidates.map(formatCandidateLabel);
+
+  if (labels.length === 0) {
+    return `The game name "${query}" is ambiguous. Ask the user to provide the exact Steam title or appid.`;
+  }
+
+  return `The game name "${query}" matched multiple Steam titles. Ask the user to clarify which one they mean: ${labels.join(', ')}.`;
+}
+
+function familyForChangeType(changeType: string): ChangeActivitySignalFamily {
+  switch (changeType) {
+    case 'release_date_text_change':
+      return 'release';
+    case 'price_change':
+    case 'discount_start':
+    case 'discount_end':
+    case 'dlc_references_changed':
+    case 'package_references_changed':
+      return 'pricing';
+    case 'description_rewrite':
+    case 'short_description_rewrite':
+      return 'store-page';
+    case 'capsule_url_changed':
+    case 'header_url_changed':
+    case 'background_url_changed':
+    case 'screenshot_added':
+    case 'screenshot_removed':
+    case 'screenshot_reordered':
+    case 'trailer_added':
+    case 'trailer_removed':
+    case 'trailer_reordered':
+    case 'trailer_thumbnail_changed':
+      return 'media';
+    case 'tags_added':
+    case 'tags_removed':
+    case 'genres_changed':
+    case 'categories_changed':
+    case 'publisher_association_changed':
+    case 'developer_association_changed':
+      return 'taxonomy';
+    case 'languages_changed':
+    case 'platforms_changed':
+    case 'controller_support_changed':
+    case 'steam_deck_status_changed':
+      return 'platform';
+    case 'news_published':
+    case 'news_edited':
+      return 'announcement';
+    case 'build_id_changed':
+    case 'last_content_update_changed':
+      return 'build';
+    default:
+      return 'store-page';
+  }
+}
+
+function toChangeDetailEvent(row: RawAppChangeFeedRow): ChangeDetailEvent {
+  return {
+    eventId: row.event_id,
+    appid: row.appid,
+    source: row.source as 'storefront' | 'pics' | 'media',
+    changeType: row.change_type,
+    occurredAt: row.occurred_at,
+    beforeValue: row.before_value,
+    afterValue: row.after_value,
+    context:
+      row.context && typeof row.context === 'object' && !Array.isArray(row.context)
+        ? (row.context as Record<string, JsonValue | undefined>)
+        : {},
+  };
+}
+
+function normalizeMetricsWindow(value: JsonValue): MetricsWindow | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const payload = value as {
+    daily_metrics?: {
+      avg_price_cents?: number | null;
+      avg_discount_percent?: number | null;
+      max_total_reviews?: number | null;
+      avg_review_score?: number | null;
+      max_ccu_peak?: number | null;
+      max_positive_reviews?: number | null;
+      max_negative_reviews?: number | null;
+      review_score_desc?: string | null;
+    } | null;
+    ccu?: {
+      max_player_count?: number | null;
+    } | null;
+  };
+
+  const dailyMetrics = payload.daily_metrics ?? null;
+  const ccu = payload.ccu ?? null;
+
+  const normalized: MetricsWindow = {
+    ccuPeak: ccu?.max_player_count ?? dailyMetrics?.max_ccu_peak ?? null,
+    totalReviews: dailyMetrics?.max_total_reviews ?? null,
+    positiveReviews: dailyMetrics?.max_positive_reviews ?? null,
+    negativeReviews: dailyMetrics?.max_negative_reviews ?? null,
+    reviewScore: dailyMetrics?.avg_review_score ?? null,
+    reviewScoreLabel: dailyMetrics?.review_score_desc ?? null,
+    priceCents: dailyMetrics?.avg_price_cents ?? null,
+    discountPercent: dailyMetrics?.avg_discount_percent ?? null,
+  };
+
+  return Object.values(normalized).some((field) => field !== null) ? normalized : null;
+}
+
+function metricDelta(afterValue: number | null, beforeValue: number | null): number | null {
+  if (afterValue == null || beforeValue == null) {
+    return null;
+  }
+
+  return afterValue - beforeValue;
+}
+
+function percentLift(afterValue: number | null, beforeValue: number | null): number | null {
+  if (afterValue == null || beforeValue == null || beforeValue <= 0) {
+    return null;
+  }
+
+  return ((afterValue - beforeValue) / beforeValue) * 100;
+}
+
+async function resolveAppReference(args: {
+  appid?: number;
+  app_name?: string;
+}): Promise<ResolveAppReferenceResult> {
+  const supabase = getServiceSupabase();
+
+  if (args.appid) {
+    const { data, error } = await supabase
+      .from('apps')
+      .select('appid, name, release_date, type')
+      .eq('appid', args.appid)
+      .maybeSingle();
+
+    if (error || !data) {
+      return {
+        app: null,
+        error: 'Unable to resolve the requested game. Use the exact Steam appid or closest Steam title.',
+      };
+    }
+
+    return {
+      app: {
+        appid: data.appid,
+        name: data.name,
+        appType: data.type ?? 'game',
+        releaseYear: data.release_date ? new Date(data.release_date).getFullYear() : null,
+        alternatives: [],
+      },
+    };
+  }
+
+  const appName = normalizeSearch(args.app_name);
+  if (!appName) {
+    return {
+      app: null,
+      error: 'A Steam game name or appid is required.',
+    };
+  }
+
+  const lookup = await lookupGames({ query: appName, limit: 5 });
+  const best = lookup.results[0];
+
+  if (!lookup.success || !best) {
+    return {
+      app: null,
+      error: `Unable to resolve "${appName}" to a Steam game. Ask the user for the exact title or appid.`,
+    };
+  }
+
+  if (!isConfidentGameResolution(appName, best, lookup.results[1])) {
+    const candidates = lookup.results
+      .slice(0, MAX_AMBIGUITY_CANDIDATES)
+      .map((candidate) => ({
+        appid: candidate.appid,
+        name: candidate.name,
+        releaseYear: candidate.releaseYear,
+        similarityScore: candidate.similarityScore,
+        isExactMatch: candidate.isExactMatch,
+      }));
+
+    return {
+      app: null,
+      error: buildAmbiguousGameError(appName, candidates),
+      candidates,
+    };
+  }
+
+  return {
+    app: {
+      appid: best.appid,
+      name: best.name,
+      appType: 'game',
+      releaseYear: best.releaseYear,
+      similarityScore: best.similarityScore,
+      isExactMatch: best.isExactMatch,
+      alternatives: lookup.results.slice(1),
+    },
+  };
+}
+
+async function fetchWindowMetrics(
+  appid: number,
+  start: string,
+  end: string
+): Promise<MetricsWindow | null> {
+  const supabase = getServiceSupabase();
+
+  // Generated DB types lag migrations for some of the change-intel surfaces.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('get_change_window_metrics', {
+    p_appid: appid,
+    p_start: start,
+    p_end: end,
+  }) as { data: JsonValue; error: { message: string } | null };
+
+  if (error) {
+    throw new Error(`Failed to fetch change window metrics: ${error.message}`);
+  }
+
+  return normalizeMetricsWindow(data);
+}
+
+async function fetchAppMetrics(appIds: number[]): Promise<Map<number, AppMetrics>> {
+  if (appIds.length === 0) {
+    return new Map();
+  }
+
+  const supabase = getServiceSupabase();
+  const uniqueAppIds = Array.from(new Set(appIds));
+
+  const [latestMetricsResult, trendResult] = await Promise.all([
+    supabase
+      .from('latest_daily_metrics')
+      .select('appid, positive_percentage, total_reviews, ccu_peak, price_cents, discount_percent')
+      .in('appid', uniqueAppIds),
+    supabase
+      .from('app_trends')
+      .select('appid, review_velocity_7d, review_velocity_30d, trend_30d_direction, ccu_trend_7d_pct')
+      .in('appid', uniqueAppIds),
+  ]);
+
+  const metricsByApp = new Map<number, AppMetrics>();
+
+  for (const row of latestMetricsResult.data ?? []) {
+    if (row.appid == null) {
+      continue;
+    }
+
+    metricsByApp.set(row.appid, {
+      appid: row.appid,
+      positivePercentage: row.positive_percentage,
+      totalReviews: row.total_reviews,
+      ccuPeak: row.ccu_peak,
+      priceCents: row.price_cents,
+      discountPercent: row.discount_percent,
+      reviewVelocity7d: null,
+      reviewVelocity30d: null,
+      trend30dDirection: null,
+      ccuTrend7dPct: null,
+    });
+  }
+
+  for (const row of trendResult.data ?? []) {
+    const existing = metricsByApp.get(row.appid) ?? {
+      appid: row.appid,
+      positivePercentage: null,
+      totalReviews: null,
+      ccuPeak: null,
+      priceCents: null,
+      discountPercent: null,
+      reviewVelocity7d: null,
+      reviewVelocity30d: null,
+      trend30dDirection: null,
+      ccuTrend7dPct: null,
+    };
+
+    existing.reviewVelocity7d = row.review_velocity_7d;
+    existing.reviewVelocity30d = row.review_velocity_30d;
+    existing.trend30dDirection = row.trend_30d_direction;
+    existing.ccuTrend7dPct = row.ccu_trend_7d_pct;
+    metricsByApp.set(row.appid, existing);
+  }
+
+  return metricsByApp;
+}
+
+function mapActivityRow(row: ChangeActivityRow) {
+  return {
+    activityId: row.activityId,
+    activityKind: row.activityKind,
+    storyKind: row.storyKind,
+    appid: row.appid,
+    name: row.appName,
+    appType: row.appType,
+    isReleased: row.isReleased,
+    releaseDate: row.releaseDate,
+    occurredAt: row.occurredAt,
+    headline: row.headline,
+    summary: row.summary,
+    facts: row.facts,
+    highlightLabels: row.highlightLabels,
+    signalFamilies: row.signalFamilies,
+    relatedAnnouncementCount: row.relatedAnnouncementCount,
+    externalUrl: row.externalUrl,
+  };
+}
+
+export async function queryChangeActivity(args: QueryChangeActivityArgs) {
+  const days = clamp(args.days, DEFAULT_ACTIVITY_DAYS, 1, MAX_ACTIVITY_DAYS);
+  const limit = clamp(args.limit, DEFAULT_ACTIVITY_LIMIT, 1, MAX_ACTIVITY_LIMIT);
+
+  const response = await fetchChangeFeedActivityResponse({
+    days,
+    view: args.view ?? 'overview',
+    mode: args.mode ?? 'all',
+    sort: args.sort ?? 'relevant',
+    appTypes: args.app_types ?? null,
+    signalFamilies: args.signal_families ?? null,
+    search: normalizeSearch(args.search),
+    cursor: null,
+    limit,
+  });
+
+  return {
+    success: true,
+    results: response.items.map(mapActivityRow),
+    total_found: response.items.length,
+    meta: response.meta,
+  };
+}
+
+export async function getGameChangeTimeline(args: GetGameChangeTimelineArgs) {
+  const days = clamp(args.days, DEFAULT_TIMELINE_DAYS, 1, MAX_TIMELINE_DAYS);
+  const limit = clamp(args.limit, DEFAULT_TIMELINE_LIMIT, 1, MAX_TIMELINE_LIMIT);
+  const resolved = await resolveAppReference({
+    appid: args.appid,
+    app_name: args.app_name,
+  });
+  const app = resolved.app;
+
+  if (!app) {
+    return {
+      success: false,
+      error: resolved.error ?? 'Unable to resolve the requested game. Use the closest Steam app name or appid.',
+      candidates: resolved.candidates ?? [],
+    };
+  }
+
+  const supabase = getServiceSupabase();
+  const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const to = new Date().toISOString();
+
+  // Generated DB types lag migrations for some of the change-intel surfaces.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('get_app_change_feed', {
+    p_appid: app.appid,
+    p_from: from,
+    p_to: to,
+    p_limit: limit,
+  }) as { data: RawAppChangeFeedRow[] | null; error: { message: string } | null };
+
+  if (error) {
+    return {
+      success: false,
+      error: `Failed to load app change feed: ${error.message}`,
+    };
+  }
+
+  const events = (data ?? [])
+    .map((row) => {
+      const detailEvent = toChangeDetailEvent(row);
+      const diff = buildDiffPreview(detailEvent);
+      return {
+        eventId: row.event_id,
+        occurredAt: row.occurred_at,
+        source: row.source,
+        changeType: row.change_type,
+        signalFamily: familyForChangeType(row.change_type),
+        label: diff?.label ?? formatChangeLabel(row.change_type),
+        kind: diff?.kind ?? 'note',
+        beforeText: diff?.beforeText ?? null,
+        afterText: diff?.afterText ?? null,
+        added: diff?.added ?? [],
+        removed: diff?.removed ?? [],
+        beforeImageUrl: diff?.beforeImageUrl ?? null,
+        afterImageUrl: diff?.afterImageUrl ?? null,
+        note: diff?.note ?? null,
+        baseline7d: normalizeMetricsWindow(row.baseline_7d),
+        baseline30d: normalizeMetricsWindow(row.baseline_30d),
+        response1d: normalizeMetricsWindow(row.response_1d),
+        response7d: normalizeMetricsWindow(row.response_7d),
+        response30d: normalizeMetricsWindow(row.response_30d),
+      };
+    })
+    .filter((event) => {
+      if (!args.signal_families || args.signal_families.length === 0) {
+        return true;
+      }
+
+      return args.signal_families.includes(event.signalFamily);
+    });
+
+  return {
+    success: true,
+    app,
+    total_found: events.length,
+    events,
+    meta: {
+      days,
+      limit,
+      signalFamilies: args.signal_families ?? null,
+    },
+  };
+}
+
+export async function getChangeActivityDetail(args: GetChangeActivityDetailArgs) {
+  const detail = await fetchChangeFeedActivityDetail(args.activity_id);
+
+  if (!detail) {
+    return {
+      success: false,
+      error: 'Change activity not found.',
+    };
+  }
+
+  return {
+    success: true,
+    detail: {
+      activityId: detail.activityId,
+      activityKind: detail.activityKind,
+      storyKind: detail.storyKind,
+      appid: detail.appid,
+      name: detail.appName,
+      appType: detail.appType,
+      occurredAt: detail.occurredAt,
+      headline: detail.headline,
+      summary: detail.summary,
+      facts: detail.facts,
+      highlightLabels: detail.highlightLabels,
+      signalFamilies: detail.signalFamilies,
+      diffs: detail.diffs,
+      relatedAnnouncements: detail.relatedAnnouncements,
+      aftermath: detail.aftermath,
+      externalUrl: detail.externalUrl,
+      body: detail.body,
+    },
+  };
+}
+
+async function resolveComparisonBurst(
+  args: CompareChangeBeforeAfterArgs
+): Promise<{
+  app: ResolvedApp | null;
+  error?: string;
+  candidates?: ResolvedApp['alternatives'];
+  detail: ChangeActivityDetail | null;
+  burstDetail: Awaited<ReturnType<typeof fetchChangeFeedBurstDetail>> | null;
+  activityId: string | null;
+}> {
+  if (args.activity_id) {
+    const parsed = parseActivityId(args.activity_id);
+    if (!parsed) {
+      return {
+        app: null,
+        detail: null,
+        burstDetail: null,
+        activityId: null,
+      };
+    }
+
+    if (parsed.kind !== 'change') {
+      throw new Error('compare_change_before_after only supports change activities, not announcement-only cards.');
+    }
+
+    const [detail, burstDetail] = await Promise.all([
+      fetchChangeFeedActivityDetail(args.activity_id),
+      fetchChangeFeedBurstDetail(parsed.value),
+    ]);
+
+    return {
+      app: detail
+        ? {
+            appid: detail.appid,
+            name: detail.appName,
+            appType: detail.appType ?? 'game',
+            releaseYear: detail.releaseDate ? new Date(detail.releaseDate).getFullYear() : null,
+            alternatives: [],
+          }
+        : null,
+      detail,
+      burstDetail,
+      activityId: args.activity_id,
+    };
+  }
+
+  const resolvedApp = await resolveAppReference({
+    appid: args.appid,
+    app_name: args.app_name,
+  });
+  const app = resolvedApp.app;
+
+  if (!app) {
+    return {
+      app: null,
+      error: resolvedApp.error,
+      candidates: resolvedApp.candidates,
+      detail: null,
+      burstDetail: null,
+      activityId: null,
+    };
+  }
+
+  const response = await fetchChangeFeedActivityResponse({
+    days: clamp(args.days, DEFAULT_TIMELINE_DAYS, 1, MAX_TIMELINE_DAYS),
+    view: 'all-activity',
+    mode: 'changes',
+    sort: 'newest',
+    appTypes: app.appType ? [app.appType] : null,
+    signalFamilies: null,
+    search: app.name,
+    cursor: null,
+    limit: 25,
+  });
+
+  const matchedActivity = response.items
+    .filter((item) => item.appid === app.appid && item.activityKind === 'change')
+    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
+
+  if (!matchedActivity) {
+    return {
+      app,
+      detail: null,
+      burstDetail: null,
+      activityId: null,
+    };
+  }
+
+  const parsed = parseActivityId(matchedActivity.activityId);
+  if (!parsed || parsed.kind !== 'change') {
+    return {
+      app,
+      detail: null,
+      burstDetail: null,
+      activityId: matchedActivity.activityId,
+    };
+  }
+
+  const [detail, burstDetail] = await Promise.all([
+    fetchChangeFeedActivityDetail(matchedActivity.activityId),
+    fetchChangeFeedBurstDetail(parsed.value),
+  ]);
+
+  return {
+    app,
+    detail,
+    burstDetail,
+    activityId: matchedActivity.activityId,
+  };
+}
+
+export async function compareChangeBeforeAfter(args: CompareChangeBeforeAfterArgs) {
+  const resolved = await resolveComparisonBurst(args);
+
+  if (!resolved.app) {
+    return {
+      success: false,
+      error: resolved.error ?? 'Unable to resolve the requested game or activity.',
+      candidates: resolved.candidates ?? [],
+    };
+  }
+
+  if (!resolved.detail || !resolved.burstDetail || !resolved.activityId) {
+    return {
+      success: false,
+      error: `I didn't find a recent change burst for ${resolved.app.name} in the requested window.`,
+    };
+  }
+
+  const baseline30d = await fetchWindowMetrics(
+    resolved.app.appid,
+    new Date(Date.parse(resolved.burstDetail.burstStartedAt) - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    resolved.burstDetail.burstStartedAt
+  );
+
+  const response30d = await fetchWindowMetrics(
+    resolved.app.appid,
+    resolved.burstDetail.burstEndedAt,
+    new Date(Date.parse(resolved.burstDetail.burstEndedAt) + 30 * 24 * 60 * 60 * 1000).toISOString()
+  );
+
+  return {
+    success: true,
+    app: resolved.app,
+    activityId: resolved.activityId,
+    selectedActivity: {
+      headline: resolved.detail.headline,
+      summary: resolved.detail.summary,
+      occurredAt: resolved.detail.occurredAt,
+      signalFamilies: resolved.detail.signalFamilies,
+      storyKind: resolved.detail.storyKind,
+    },
+    diffs: resolved.detail.diffs,
+    relatedAnnouncements: resolved.detail.relatedAnnouncements,
+    windows: {
+      baseline7d: resolved.detail.aftermath?.baseline7d ?? null,
+      baseline30d,
+      response1d: resolved.detail.aftermath?.response1d ?? null,
+      response7d: resolved.detail.aftermath?.response7d ?? null,
+      response30d,
+    },
+  };
+}
+
+function buildReasons(pattern: ChangePattern, aggregate: {
+  activities: ReturnType<typeof mapActivityRow>[];
+  signalFamilies: Set<ChangeActivitySignalFamily>;
+  storyKinds: Set<string>;
+  announcementCount: number;
+  changeCount: number;
+}, metrics: AppMetrics | null): { confidence: 'high' | 'medium'; reasons: string[] } | null {
+  const reasons: string[] = [];
+
+  switch (pattern) {
+    case 'marketing_push': {
+      const hasPricing = aggregate.signalFamilies.has('pricing');
+      const hasMerch = aggregate.signalFamilies.has('media') || aggregate.signalFamilies.has('store-page');
+      const hasAnnouncement = aggregate.announcementCount > 0;
+
+      if (!(hasPricing && hasMerch && hasAnnouncement)) {
+        return null;
+      }
+
+      reasons.push('Announcement activity landed in the same window.');
+      reasons.push('Pricing or discount movement is visible.');
+      reasons.push('Store-page or media refresh activity is visible.');
+      return { confidence: 'high', reasons };
+    }
+
+    case 'relaunch_pattern': {
+      const hasPricing = aggregate.signalFamilies.has('pricing');
+      const hasRefresh = aggregate.signalFamilies.has('media') || aggregate.signalFamilies.has('store-page');
+      const hasLaunchSignal =
+        aggregate.storyKinds.has('release-prep') || aggregate.announcementCount > 0;
+
+      if (!(hasPricing && hasRefresh && hasLaunchSignal)) {
+        return null;
+      }
+
+      reasons.push('Pricing changed in the same window as presentation changes.');
+      reasons.push('Store-page or media refresh suggests a packaged beat.');
+      reasons.push('Launch-adjacent or announcement activity supports a relaunch interpretation.');
+      return { confidence: 'high', reasons };
+    }
+
+    case 'update_tease': {
+      const hasAnnouncement = aggregate.announcementCount > 0;
+      const hasRefresh = aggregate.signalFamilies.has('media') || aggregate.signalFamilies.has('store-page');
+      const hasBuild = aggregate.signalFamilies.has('build');
+
+      if (!(hasAnnouncement && hasRefresh) || hasBuild) {
+        return null;
+      }
+
+      reasons.push('Announcements are present without matching build activity yet.');
+      reasons.push('Presentation changes suggest setup or teasing behavior.');
+      return { confidence: 'medium', reasons };
+    }
+
+    case 'under_marketed': {
+      if (
+        !metrics ||
+        (metrics.positivePercentage ?? 0) < 80 ||
+        (metrics.totalReviews ?? 0) < 200 ||
+        ((metrics.reviewVelocity30d ?? 0) < 1 && !aggregate.signalFamilies.has('build')) ||
+        aggregate.announcementCount > 0 ||
+        aggregate.signalFamilies.has('media') ||
+        aggregate.signalFamilies.has('store-page')
+      ) {
+        return null;
+      }
+
+      reasons.push(`Review quality is ${metrics.positivePercentage}% positive on ${(metrics.totalReviews ?? 0).toLocaleString()} reviews.`);
+      reasons.push('Recent build or review-velocity evidence suggests active product work.');
+      reasons.push('There is little recent announcement or storefront-refresh evidence.');
+      return { confidence: 'medium', reasons };
+    }
+
+    case 'signable_candidate': {
+      if (
+        !metrics ||
+        (metrics.positivePercentage ?? 0) < 85 ||
+        (metrics.totalReviews ?? 0) < 300 ||
+        ((metrics.reviewVelocity30d ?? 0) < 1 && !aggregate.signalFamilies.has('build')) ||
+        aggregate.signalFamilies.has('media') ||
+        aggregate.signalFamilies.has('store-page')
+      ) {
+        return null;
+      }
+
+      reasons.push(`Review quality is ${metrics.positivePercentage}% positive with ${(metrics.totalReviews ?? 0).toLocaleString()} reviews.`);
+      reasons.push('Recent activity suggests the product is still moving.');
+      reasons.push('Public marketing execution looks lighter than product quality would justify.');
+      return { confidence: 'medium', reasons };
+    }
+
+    case 'rescue_candidate': {
+      const hasPricing = aggregate.signalFamilies.has('pricing');
+      const declining =
+        metrics?.trend30dDirection === 'down' ||
+        (metrics?.ccuTrend7dPct ?? 0) < 0;
+
+      if (
+        !metrics ||
+        (metrics.positivePercentage ?? 0) < 70 ||
+        (metrics.totalReviews ?? 0) < 100 ||
+        !hasPricing ||
+        !declining
+      ) {
+        return null;
+      }
+
+      reasons.push(`Sentiment remains ${metrics.positivePercentage}% positive on ${(metrics.totalReviews ?? 0).toLocaleString()} reviews.`);
+      reasons.push('Recent pricing or discount activity is visible.');
+      reasons.push('Trend data points to softening demand or momentum.');
+      return { confidence: 'medium', reasons };
+    }
+
+    case 'sustained_response':
+      return null;
+  }
+}
+
+export async function findChangePatterns(args: FindChangePatternsArgs) {
+  const days = clamp(args.days, DEFAULT_ACTIVITY_DAYS, 1, MAX_ACTIVITY_DAYS);
+  const limit = clamp(args.limit, DEFAULT_PATTERN_LIMIT, 1, MAX_PATTERN_LIMIT);
+
+  if (args.pattern === 'sustained_response') {
+    const response = await fetchChangeFeedActivityResponse({
+      days,
+      view: 'all-activity',
+      mode: 'changes',
+      sort: 'relevant',
+      appTypes: args.app_types ?? null,
+      signalFamilies: null,
+      search: normalizeSearch(args.search),
+      cursor: null,
+      limit: Math.min(INTERNAL_PATTERN_ACTIVITY_LIMIT, 30),
+    });
+
+    const details = await Promise.all(
+      response.items.slice(0, 12).map(async (item) => {
+        const detail = await fetchChangeFeedActivityDetail(item.activityId);
+        if (!detail?.aftermath) {
+          return null;
+        }
+
+        const reviewDelta = metricDelta(
+          detail.aftermath.response7d?.totalReviews ?? null,
+          detail.aftermath.baseline7d?.totalReviews ?? null
+        );
+        const ccuLift = percentLift(
+          detail.aftermath.response7d?.ccuPeak ?? null,
+          detail.aftermath.baseline7d?.ccuPeak ?? null
+        );
+
+        if ((reviewDelta ?? 0) < 25 && (ccuLift ?? 0) < 15) {
+          return null;
+        }
+
+        const reasons: string[] = [];
+        if (reviewDelta != null && reviewDelta >= 25) {
+          reasons.push(`7-day review total rose by ${reviewDelta.toLocaleString()} after the change window.`);
+        }
+        if (ccuLift != null && ccuLift >= 15) {
+          reasons.push(`7-day CCU peak was ${ccuLift.toFixed(0)}% above the baseline window.`);
+        }
+
+        return {
+          appid: detail.appid,
+          name: detail.appName,
+          occurredAt: detail.occurredAt,
+          confidence: reviewDelta != null && reviewDelta >= 50 ? 'high' : 'medium',
+          activityId: detail.activityId,
+          headline: detail.headline,
+          reasons,
+          signalFamilies: detail.signalFamilies,
+          aftermath: detail.aftermath,
+        };
+      })
+    );
+
+    const results = details.filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, limit);
+
+    return {
+      success: true,
+      pattern: args.pattern,
+      results,
+      total_found: results.length,
+      meta: { days, limit, search: normalizeSearch(args.search) },
+    };
+  }
+
+  const activityResponse = await fetchChangeFeedActivityResponse({
+    days,
+    view: 'all-activity',
+    mode: 'all',
+    sort: 'relevant',
+    appTypes: args.app_types ?? null,
+    signalFamilies: null,
+    search: normalizeSearch(args.search),
+    cursor: null,
+    limit: INTERNAL_PATTERN_ACTIVITY_LIMIT,
+  });
+
+  const grouped = new Map<number, {
+    appid: number;
+    name: string;
+    latestOccurredAt: string;
+    activities: ReturnType<typeof mapActivityRow>[];
+    signalFamilies: Set<ChangeActivitySignalFamily>;
+    storyKinds: Set<string>;
+    announcementCount: number;
+    changeCount: number;
+  }>();
+
+  for (const item of activityResponse.items) {
+    const mapped = mapActivityRow(item);
+    const existing = grouped.get(item.appid) ?? {
+      appid: item.appid,
+      name: item.appName,
+      latestOccurredAt: item.occurredAt,
+      activities: [],
+      signalFamilies: new Set<ChangeActivitySignalFamily>(),
+      storyKinds: new Set<string>(),
+      announcementCount: 0,
+      changeCount: 0,
+    };
+
+    existing.latestOccurredAt =
+      existing.latestOccurredAt > item.occurredAt ? existing.latestOccurredAt : item.occurredAt;
+    existing.activities.push(mapped);
+    existing.storyKinds.add(item.storyKind);
+    item.signalFamilies.forEach((family) => existing.signalFamilies.add(family));
+    if (item.activityKind === 'announcement') {
+      existing.announcementCount += 1;
+    } else {
+      existing.changeCount += 1;
+    }
+
+    grouped.set(item.appid, existing);
+  }
+
+  const metricsByApp = await fetchAppMetrics(Array.from(grouped.keys()));
+  const candidates: PatternCandidate[] = [];
+
+  for (const aggregate of grouped.values()) {
+    const metrics = metricsByApp.get(aggregate.appid) ?? null;
+    const decision = buildReasons(args.pattern, aggregate, metrics);
+
+    if (!decision) {
+      continue;
+    }
+
+    candidates.push({
+      appid: aggregate.appid,
+      name: aggregate.name,
+      occurredAt: aggregate.latestOccurredAt,
+      confidence: decision.confidence,
+      reasons: decision.reasons,
+      signalFamilies: Array.from(aggregate.signalFamilies),
+      storyKinds: Array.from(aggregate.storyKinds),
+      activityIds: aggregate.activities.slice(0, 3).map((item) => item.activityId),
+      metrics,
+    });
+  }
+
+  candidates.sort((left, right) => {
+    if (left.confidence !== right.confidence) {
+      return left.confidence === 'high' ? -1 : 1;
+    }
+
+    const rightReviews = right.metrics?.totalReviews ?? 0;
+    const leftReviews = left.metrics?.totalReviews ?? 0;
+    if (rightReviews !== leftReviews) {
+      return rightReviews - leftReviews;
+    }
+
+    return right.occurredAt.localeCompare(left.occurredAt);
+  });
+
+  const results = candidates.slice(0, limit);
+
+  return {
+    success: true,
+    pattern: args.pattern,
+    results,
+    total_found: results.length,
+    meta: { days, limit, search: normalizeSearch(args.search) },
+  };
+}

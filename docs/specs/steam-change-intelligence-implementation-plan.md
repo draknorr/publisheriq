@@ -1,429 +1,382 @@
 # Steam Change Intelligence Implementation Plan
 
-Last updated: 2026-03-14
+Last updated: 2026-03-18
 
-## Goal
+## Goal And UX Principles
 
-Build SteamDB-style change intelligence for PublisherIQ by continuously capturing Storefront, PICS, Steam News, and media-change signals, versioning meaningful changes over time, and joining those changes to existing price, review, and CCU history.
+Build a production-grade Steam change-intelligence system that powers a natural `/chat` experience over Storefront, PICS, Steam News, media changes, and downstream price/review/CCU response.
 
-## Core Outcome
+Core product principles:
 
-PublisherIQ should be able to answer questions like:
-
-- What changed on a game's Steam page in the last 30/90 days?
-- Which games changed release-date messaging, tags, genres, copy, prices, or hero assets?
-- Which games look like they started a new marketing push?
-- Which major updates had strong or weak downstream CCU/review response?
-
-## Current Status
-
-As of 2026-03-14:
-
-- Checkpoints 1 through 7 are implemented and live.
-- Checkpoint 8 is implemented in SQL and available for read/query use.
-- Checkpoint 9 read RPCs are implemented, but bounded-query and output-shape validation is still lighter than the original plan intended.
-- Checkpoint 10 is in progress. The production backlog is actively draining, but bootstrap/backfill is not finished.
-- Checkpoint 11 is partial. A worker/runbook document exists, but backlog/throttle playbooks and some cohort-policy docs still need tightening.
-
-Intentional implementation deviation:
-
-- Background hero images are still tracked in Storefront snapshots, media versions, and `background_url_changed` events.
-- Background binaries are no longer archived to object storage.
-
-## Locked Decisions
-
-- Track all apps already in `apps` from day one.
-- Start forward collection immediately and backfill recent reachable history in parallel.
-- Use hybrid storage.
-- Store normalized snapshots and diff events in Postgres.
-- Store only bounded raw artifacts in object storage.
-- High-frequency queue consumers run on Railway by default.
-- GitHub Actions remain for coarse sweeps, bootstrap jobs, and existing scheduled jobs.
-- Treat `IStoreService/GetAppList.last_modified` and `price_change_number` as capture triggers only, not as business events.
-- Treat PICS change numbers as capture triggers only, not as business events.
-- Full-catalog media detection is required.
-- Full-catalog media archival is not required.
-- Visual archival is limited to changed hero assets for a priority cohort.
-- Screenshots are URL/order tracked only.
-- Video binaries are never stored in v1/v2.
-
-## Scope
-
-In scope:
-
-- Storefront snapshot history
-- PICS snapshot history
-- Steam News history and edit history
-- Structured change events
-- Hero asset visual history for a priority cohort
-- Outcome-window joins to price, CCU, and review history
-- Read/query interfaces needed for future chat tooling
-
-Out of scope for v1/v2:
-
-- Full screenshot archival
-- Trailer/video binary archival
-- Full rendered page screenshots for all apps
-- Steamworks owner-only data such as wishlists, traffic, update visibility, depot manifests
-- Composite scoring and chat interpretation logic beyond the storage/query foundation
-
-## Data Model
+- `/chat` is the primary interface for this capability.
+- Users should not need exact prompt wording to get the right answer.
+- Users should not need exact entity spelling if the intended game, publisher, or developer is reasonably recoverable.
+- Chat must prefer bounded typed tools over free-form SQL for change-intel workloads.
+- On a database of this size, latency and bounded scans matter as much as feature completeness.
+- Higher-inference answers must stay evidence-backed and say when confidence is only medium.
 
-Add these database resources:
+## Current State Snapshot
 
-- `app_source_snapshots`
-- `app_change_events`
-- `app_capture_queue`
-- `steam_news_items`
-- `steam_news_versions`
-- `app_media_versions`
+Implemented today:
 
-Extend `sync_status` with:
+- Storefront, PICS, News, media, and hero-asset change capture foundations are in repo code and migrations.
+- `/changes` already has bounded read surfaces and typed server helpers.
+- `/chat` now has initial change-intel tool contracts and a chat-specific change-intel service layer.
+- The streaming `/api/chat/stream` runtime is now locked to the structured Cube plus change-intel tool registry instead of depending on the legacy SQL-mode toggle.
+- The legacy JSON `/api/chat` route is now aligned to the same structured Cube plus change-intel tool surface as the streaming route.
+- `/chat` entity resolution now prefers fuzzy trigram-backed RPCs instead of plain `ILIKE`.
+- The raw change-intel bounds migration has been applied manually to the live database to hard-cap raw query windows for chat safety.
+- `/admin/chat-smoke` now includes change-intelligence smoke queries and paraphrase variants.
 
-- `steam_last_modified`
-- `steam_price_change_number`
-- `last_news_sync`
-- `last_media_sync`
+Still incomplete:
 
-## Snapshot Rules
+- Bootstrap/backfill is not finished.
+- PICS bootstrap/runbook coverage is still partial.
+- Formal prompt evals and latency profiling for the new chat path are not complete.
+- Ops docs for archive cohort rules and backlog/throttle playbooks still need tightening.
+- The legacy non-streaming chat routes are not the canonical implementation path.
 
-- Store one source-specific normalized snapshot whenever the normalized content hash changes.
-- If the fetched content matches the previous normalized hash, do not insert a new version row.
-- Instead, extend `last_seen_at` on the existing version.
-- Keep `observed_at`, `first_seen_at`, `last_seen_at`, `content_hash`, `previous_snapshot_id`, `trigger_reason`, and `trigger_cursor`.
-- Keep raw JSON out of Postgres unless explicitly needed for later reprocessing.
-- If raw JSON is stored, keep it in object storage, not in hot relational tables.
+## Phase Tracker
 
-## Diff Rules
+| Phase | Status | Last Updated | Owner / Workstream | Next Action | Exit Criteria |
+| --- | --- | --- | --- | --- | --- |
+| Phase 0: Data Foundation Audit | partial | 2026-03-18 | Data / Ops | Finish bootstrap/backfill status accounting | Capture/runtime/read layer is fully mapped with no ambiguous ownership |
+| Phase 1: SQL And Read-Layer Hardening For Chat | in_progress | 2026-03-18 | SQL / Perf | Optimize the remaining slow cross-app read paths | Raw change-intel reads are bounded, indexed, and profiled for chat workloads |
+| Phase 2: Chat Data Service And Tool Contracts | in_progress | 2026-03-18 | Chat Tooling | Expand coverage and benchmark pattern heuristics | Typed tools cover change inspection, detail, comparison, and pattern questions |
+| Phase 3: Unified `/chat` Orchestrator | in_progress | 2026-03-18 | Chat Runtime | Bring any stale non-streaming paths to parity or retire them | Streaming `/chat` is the clear single production path |
+| Phase 4: Natural-Language Robustness And UX | in_progress | 2026-03-18 | Prompting / UX | Add paraphrase evals and ambiguity handling polish | Paraphrased prompts and fuzzy entity inputs resolve reliably |
+| Phase 5: Eval, Billing, And Performance | partial | 2026-03-18 | Eval / Product Ops | Add prompt eval suite and latency SLO checks | Prompt families pass, costs are correct, and chat stays within latency targets |
+| Phase 6: Ops, Backfill, And Completion | partial | 2026-03-18 | Ops / Platform | Finish runbooks and freshness coverage | Backfill is complete, freshness is visible, and operators have complete playbooks |
 
-Emit structured change events for:
+## Phase Details
 
-- description or short-description rewrite
-- release-date text change
-- price change
-- discount start
-- discount end
-- tags added
-- tags removed
-- genres changed
-- categories changed
-- languages changed
-- platforms changed
-- controller support changed
-- Steam Deck status changed
-- publisher/developer association changed
-- DLC/package references changed
-- build ID changed
-- last content update changed
-- news published
-- news edited
-- capsule URL changed
-- header URL changed
-- background URL changed
-- screenshot added
-- screenshot removed
-- screenshot reordered
-- trailer added
-- trailer removed
-- trailer reordered
-- trailer thumbnail changed
+### Phase 0: Data Foundation Audit
 
-## Media Policy
+Status: `partial`
 
-All apps get media change detection.
+Shipped:
 
-For all apps, capture and version:
+- Storefront, PICS, News, media, hero-asset, queue, and event schemas exist in `20260313130000_add_steam_change_intelligence.sql`.
+- Change-feed product RPCs exist and were optimized in follow-up migrations.
+- Worker/runtime docs exist in `docs/developer-guide/workers/steam-change-intelligence.md`.
 
-- hero image URLs
-- screenshot URLs and order
-- trailer/movie metadata
-- trailer/movie URLs
-- trailer thumbnail URLs
+Remaining:
 
-Visual archive cohort:
+- Finish backlog accounting for Storefront, News, and PICS bootstrap coverage.
+- Add explicit status notes for which capture surfaces are fully backfilled versus forward-only.
+- Keep this document synced with real implementation state instead of checkpoint-only state.
 
-- apps with `refresh_tier IN ('active', 'moderate')`
-- or `release_date >= CURRENT_DATE - INTERVAL '365 days'`
-- or `is_released = FALSE`
+Exit criteria:
 
-For the visual archive cohort only:
+- Anyone resuming work can see which data surfaces are complete, partial, or still operationally incomplete without repo archaeology.
 
-- fetch changed `header` and `capsule` image binaries
-- compute `sha256`
-- store binary in `steam-hero-assets` bucket only if hash is new
-- persist object key, hash, mime type, content length, width, height, first seen, last seen
+### Phase 1: SQL And Read-Layer Hardening For Chat
 
-Background images:
+Status: `in_progress`
 
-- keep URL-level history and `background_url_changed` events
-- do not archive background binaries in the current implementation
+Why this phase exists:
 
-Non-cohort apps:
+- The database is very large. Chat cannot rely on unbounded time windows, broad text scans, or permissive generic query paths.
+- Raw change-intel reads were originally designed as foundational interfaces, not final chat-safe interfaces.
 
-- do not store hero image binaries
-- keep hero asset history as URL-based versions only
+Shipped in code:
 
-Screenshots:
+- Chat entity resolution now uses the fuzzy RPCs `search_games_fuzzy`, `search_publishers_fuzzy`, and `search_developers_fuzzy` through the lookup helpers instead of plain `ILIKE`.
+- Migration `20260318153000_harden_change_intel_chat_query_bounds.sql` is now applied to the live database and caps:
+  - `get_app_change_feed` to a maximum effective lookback of `365 days`
+  - `get_recent_app_changes` to a maximum effective lookback of `180 days`
+  - both raw RPC limits to `1..100`
+- The chat service layer already enforces tighter application-side bounds even before the migration is applied:
+  - cross-app activity tools clamp to `1..180 days` and `1..25` results
+  - per-app timeline tools clamp to `1..365 days` and `1..50` events
+  - pattern detection clamps to `1..180 days` and `1..10` user-facing results
 
-- no binary storage in v1/v2
-- detect only URL add/remove/reorder changes
+Remaining:
 
-Videos:
+- Continue profiling `get_change_feed_activity`, `get_app_change_feed`, and `get_recent_app_changes` against representative chat workloads with `EXPLAIN`.
+- Add a faster cross-app read path for the heavy `all-activity` case or narrow its usage, because it still misses the target envelope.
+- Replace or substantially optimize `get_recent_app_changes`, which is still too slow for direct chat use.
 
-- no `mp4` or `webm` storage in v1/v2
-- track movie metadata, URLs, and thumbnail URLs only
+Verified live database state on 2026-03-18:
 
-## Cost Guardrails
+- `apps`: `166,303`
+- `latest_daily_metrics`: `166,293`
+- `sync_status`: `166,293`
+- `app_change_events`: `1,353,667`
+- `steam_news_versions`: `1,300,757`
+- `review_deltas`: `1,893,760`
+- `app_steam_tags`: `2,491,834`
+- `ccu_snapshots`: `8,155,808`
+- `daily_metrics`: `9,008,757`
 
-Storage is the main cost risk.
+Verified live RPC state on 2026-03-18:
 
-Rules:
+- `get_change_feed_activity` already caps `p_limit` to `100` in SQL.
+- `get_app_change_feed` still allows `LIMIT ... <= 500` in the live database definition until the drafted migration is applied.
+- `get_recent_app_changes` still allows `LIMIT ... <= 500` in the live database definition until the drafted migration is applied.
+- Fuzzy entity search is backed by live trigram indexes on `apps`, `publishers`, and `developers`.
+- `app_change_events` already has live indexes on `(appid, occurred_at)`, source plus time, and change type plus time.
 
-- keep normalized snapshots and diff rows in Postgres
-- never store media binaries in Postgres
-- separate hero image archive bucket from any raw JSON archive bucket
-- reserve at most `50 GB` for `steam-hero-assets`
-- warn at `20 GB`
-- tighten archive cohort at `35 GB`
-- pause new hero binary archival at `50 GB` pending manual review
-- do not store screenshot binaries in v1/v2
-- do not store video binaries in v1/v2
+Read-path benchmarks captured on 2026-03-18:
 
-Estimated storage behavior:
+- Post-migration verification: `get_app_change_feed(1029780, now() - interval '720 days', now(), 200)` returned `100` rows in about `238 ms`, confirming the new SQL-side cap is enforced.
+- Warm-cache activity path: `get_change_feed_activity(30, 'overview', 'all', ARRAY['game'], NULL, NULL, 'relevant', NULL, NULL, NULL, 10)` completed in about `949 ms`.
+- Warm-cache heavy activity path: `get_change_feed_activity(30, 'all-activity', 'all', ARRAY['game'], NULL, NULL, 'relevant', NULL, NULL, NULL, 25)` completed in about `4.0 s`.
+- Pre-migration cold-cache activity runs were materially slower, around `11.9 s` for `overview/10` and `17.3 s` for `all-activity/25`.
+- `get_recent_app_changes(7, NULL, 5)` still hit the role-level `statement_timeout` even after raising the session timeout to `120s`.
 
-- hero assets for all `~200k` apps would likely be too expensive and risky
-- hero assets for a `~10k-25k` priority cohort is acceptable
-- screenshots at full scale are the main runaway storage risk
-- trailer binaries are not acceptable for default retention
+Decision rules:
 
-## Rate Limits and Throttling
+- Cross-app pattern tools default to `30` days and cap at `180`.
+- Per-app timeline/comparison tools default to `90` days and cap at `365`.
+- Cross-app chat tools should return at most `25` user-facing rows.
+- Per-app timeline tools should return at most `50` user-facing events.
+- Do not add full-body text search over `steam_news_versions.contents` in v1.
+- If any common cross-app detector exceeds `P95 1500ms`, add a dedicated bounded SQL surface rather than pushing more logic into the LLM or app layer.
 
-Use per-source budgets.
+Exit criteria:
 
-`IStoreService/GetAppList`:
+- Chat-safe raw reads are bounded in SQL, fuzzy entity resolution is the default, and representative workloads are benchmarked.
 
-- run hourly
-- budget is negligible
-- expected full sweep is only a few paginated requests
+### Phase 2: Chat Data Service And Tool Contracts
 
-Storefront `appdetails`:
+Status: `in_progress`
 
-- start at the actual repo limiter in code
-- `0.33 req/sec`
-- burst `3`
-- current rollout target is two active Storefront queue consumers
-- only increase after stable observation
+Shipped in code:
 
-Steam News:
+- Added a chat-specific change-intel service layer in `apps/admin/src/lib/chat/change-intel-service.ts`.
+- Added these typed tools:
+  - `query_change_activity`
+  - `get_game_change_timeline`
+  - `get_change_activity_detail`
+  - `compare_change_before_after`
+  - `find_change_patterns`
 
-- add explicit limiter
-- `1 req/sec`
-- burst `5`
+Current behavior:
 
-Hero asset fetching:
+- Cross-game change discovery uses bounded activity reads.
+- Single-game inspection uses fuzzy app resolution plus per-app timeline reads.
+- Before/after questions can anchor on a known activity or infer the most relevant recent burst.
+- Pattern questions route to deterministic app-layer heuristics instead of free-form model reasoning.
 
-- only for changed hero assets in the archive cohort
-- max `2` concurrent downloads
-- max `2 MB` per fetched hero asset
-- daily download budget `10 GB` during bootstrap/archive phases
+Remaining:
 
-PICS:
+- Expand heuristic depth only where evals show real misses.
+- Add a dedicated SQL surface for pattern candidates or a materially faster cross-app activity read path, because current cross-app benchmarks are outside the target envelope.
+- Decide whether any additional low-level tool is needed for precise event-window or announcement-body retrieval.
 
-- keep current `30s` poll interval
-- keep current `100` app processing batches
-- keep current `10k` queue ceiling
+Exit criteria:
 
-Backpressure rules:
+- The typed tool layer covers direct change inspection, before/after comparison, and composite pattern discovery without relying on ad hoc SQL.
 
-- if queue lag grows, preserve PICS and Storefront snapshot capture first
-- shed hero-asset archival before shedding snapshots
-- shed news catch-up before shedding snapshots
-- keep retries exponential and bounded
-- dedupe queue items by `appid + source + trigger_cursor`
+### Phase 3: Unified `/chat` Orchestrator
 
-## Runtime Model
+Status: `in_progress`
 
-GitHub Actions:
+Shipped in code:
 
-- hourly `app-change-hints` sweep
-- existing `storefront-sync` safety-net sweep
-- bootstrap/backfill workflows
-- coarse scheduled maintenance
+- The streaming `/api/chat/stream` path is wired to the new change-intel tools.
+- The legacy JSON `/api/chat` route now uses the same structured change-intel plus Cube tool surface as the streaming route.
+- Tool billing now includes the current discovery tools plus the new change-intel tools.
 
-Railway:
+Locked decisions:
 
-- long-running `change-intel-worker`
-- queue draining for Storefront recaptures
-- queue draining for News recaptures
-- bounded hero-asset archival
+- `/chat` remains the only primary chat surface.
+- Streaming chat is the production path.
+- Change-intel chat answers should use typed tools, not generic SQL, as the default route.
 
-## Query Interfaces
+Remaining:
 
-Add read interfaces for future app/chat use:
+- Either retire `cube-route.ts` or explicitly keep it as a non-production template.
+- Consider extracting shared tool execution into a single module if route parity work becomes noisy.
 
-- `get_app_change_feed(p_appid, p_from, p_to, p_limit)`
-- `get_recent_app_changes(p_days, p_types, p_limit)`
+Exit criteria:
 
-These should support:
+- One canonical chat runtime exists in practice and docs, with no ambiguity about which route path is authoritative.
 
-- time-bounded diff retrieval
-- before/after snapshot comparisons
-- event feed inspection
-- later composition into chat tools and pattern detectors
+### Phase 4: Natural-Language Robustness And UX
 
-## Checkpoints
+Status: `in_progress`
 
-### Checkpoint 1: Schema Foundation
+Shipped in code:
 
-- [x] Draft migration for `app_source_snapshots`
-- [x] Draft migration for `app_change_events`
-- [x] Draft migration for `app_capture_queue`
-- [x] Draft migration for `steam_news_items`
-- [x] Draft migration for `steam_news_versions`
-- [x] Draft migration for `app_media_versions`
-- [x] Draft `sync_status` extensions
-- [x] Add indexes needed for queue draining and time-bounded reads
-- [x] Add types regeneration plan but do not apply migration without approval
+- Added change-intel routing guidance to the Cube chat system prompt.
+- Added change-intel example prompts and autocomplete templates.
+- Added follow-up suggestions for change-intel outputs.
+- Added generic tool-detail rendering so new tool results remain inspectable in the chat UI.
+- Added ambiguity handling so fuzzy title resolution can ask for clarification instead of silently picking the wrong game.
 
-### Checkpoint 2: Change Hint Intake
+Natural-language requirements:
 
-- [x] Add hourly `app-change-hints` worker using `IStoreService/GetAppList`
-- [x] Persist `last_modified` and `price_change_number` into `sync_status`
-- [x] Enqueue Storefront recapture jobs only when hints changed
-- [x] Ensure queue dedupe by source and trigger cursor
-- [x] Add job tracking and metrics
+- Prompts must route by intent family, not exact phrase.
+- Fuzzy entity resolution should tolerate spacing differences, abbreviations, and common misspellings.
+- Relative dates must be normalized into exact dates in the final answer.
+- Multi-signal interpretations should explicitly say when evidence is suggestive rather than conclusive.
 
-### Checkpoint 3: Storefront Snapshot Versioning
+Remaining:
 
-- [x] Extend Storefront normalization to include full diff surface
-- [x] Write normalized snapshot rows only on content-hash change
-- [x] Extend `last_seen_at` on unchanged content
-- [x] Emit structured Storefront diff events
-- [x] Keep existing latest-state upsert behavior intact
+- Tune tool-selection guidance based on prompt eval misses.
 
-### Checkpoint 4: PICS Snapshot Versioning
+Exit criteria:
 
-- [x] Persist PICS normalized snapshots before latest-state upsert
-- [x] Tag snapshots with PICS change number
-- [x] Emit structured PICS diff events
-- [x] Ensure unchanged PICS payloads only update `last_seen_at`
-- [x] Preserve existing PICS service reliability and queue behavior
+- Example prompts and paraphrases behave similarly, and chat stays understandable even when the user is informal or imprecise.
 
-### Checkpoint 5: Steam News Versioning
+### Phase 5: Eval, Billing, And Performance
 
-- [x] Add `news-sync` worker
-- [x] Persist base item records keyed by `gid`
-- [x] Persist version rows on content-hash change
-- [x] Emit `news_published` and `news_edited` events
-- [x] Add touched-app queue path plus low-priority catch-up path
+Status: `partial`
 
-### Checkpoint 6: Media Detection
+Shipped in code:
 
-- [x] Persist hero image URLs, screenshot URLs/order, and trailer metadata from Storefront snapshots
-- [x] Emit URL/order-based media events for all apps
-- [x] Add media version records needed for change inspection
-- [x] Do not store screenshot or trailer binaries
+- Credit costs now cover the current discovery tools and the new change-intel tools.
+- `/admin/chat-smoke` now includes change-intelligence query groups and natural-language paraphrase coverage.
 
-### Checkpoint 7: Hero Asset Visual Archive
+Required eval coverage:
 
-- [x] Implement archive cohort selection rules
-- [x] Add bounded hero image downloader
-- [x] Hash hero asset binaries
-- [x] Deduplicate objects by content hash
-- [x] Store changed hero assets in `steam-hero-assets`
-- [x] Enforce content-size cap and daily download budget
-- [x] Add storage-usage monitoring and guardrails
+- Every research-doc prompt example.
+- `5-10` paraphrases per prompt family.
+- typo and spacing variants for named entities.
+- operator-style terse phrasing.
+- conversational phrasing.
 
-### Checkpoint 8: Outcome Windows
+Required latency targets:
 
-- [x] Join change events to existing `daily_metrics`, `review_deltas`, and `ccu_snapshots`
-- [x] Add baseline windows for `T-7d` and `T-30d`
-- [x] Add response windows for `T+1d`, `T+7d`, and `T+30d`
-- [x] Store enough event context for later analysis and chat summaries
+- fuzzy entity resolution: `P95 < 300ms`
+- per-app change tools: `P95 < 800ms`
+- cross-app activity and pattern tools: `P95 < 1500ms`
 
-### Checkpoint 9: Read Layer
+Remaining:
 
-- [x] Implement `get_app_change_feed`
-- [x] Implement `get_recent_app_changes`
-- [ ] Verify time-bounded queries stay indexed and bounded
-- [ ] Validate output shape against the prompt examples in the research doc
+- Add prompt eval artifacts for the change-intel tool path.
+- Track actual latency continuously instead of relying on one-off profiling snapshots.
 
-Status note:
+Exit criteria:
 
-- The RPCs exist and are deployed.
-- Formal bounded-query verification and example-shape validation are still pending.
+- Prompt-family evals pass, tool billing is correct, and latency targets are met or explicitly documented as exceptions.
 
-### Checkpoint 10: Bootstrap and Backfill
+### Phase 6: Ops, Backfill, And Completion
 
-- [ ] Bootstrap one current Storefront snapshot for all apps
-- [ ] Bootstrap one current PICS snapshot for all apps
-- [ ] Backfill reachable Steam News history
-- [x] Do not attempt impossible historical Storefront/PICS reconstruction
-- [x] Run bootstrap under strict source budgets and storage budgets
+Status: `partial`
 
-Status note:
+Known incomplete items:
 
-- Production bootstrap is running now through the queue-backed storefront/news drain.
-- The backlog is still in progress, so this checkpoint is not complete yet.
+- Storefront/bootstrap backlog is still draining.
+- PICS bootstrap is not documented as a first-class manual workflow the same way Storefront and News are.
+- Archive cohort policy needs a more explicit operator doc.
+- Backlog and throttle incident playbooks need fuller runbook detail.
+- Current status surfaces do not yet expose the full freshness picture for PICS or completion progress.
 
-### Checkpoint 11: Documentation and Ops
+Exit criteria:
 
-- [x] Document queue workers, rate limits, and storage policy
-- [ ] Document archive cohort rules
-- [x] Document cost guardrails and pause conditions
-- [x] Document what is and is not visually reviewable later
-- [ ] Update runbooks for backlog handling and throttle incidents
+- Backfill status is explicit, change freshness is visible, and the operator runbook is complete enough for handoff.
 
-Status note:
+## SQL And Performance Workstream
 
-- The current runbook lives in `docs/developer-guide/workers/steam-change-intelligence.md`.
-- Cohort-rule detail and backlog/throttle playbooks still need more explicit operator guidance.
+Large-database assumptions:
 
-## Acceptance Criteria
+- Verified live approximate row counts on 2026-03-18:
+- `apps`: `166,303`
+- `latest_daily_metrics`: `166,293`
+- `sync_status`: `166,293`
+- `app_change_events`: `1,353,667`
+- `steam_news_versions`: `1,300,757`
+- `review_deltas`: `1,893,760`
+- `app_steam_tags`: `2,491,834`
+- `ccu_snapshots`: `8,155,808`
+- `daily_metrics`: `9,008,757`
 
-- We can answer "what changed" for Storefront, PICS, and News over a time window.
-- We can detect hero asset changes for all apps.
-- We can visually inspect old hero assets for archive-cohort apps.
-- We can detect screenshot and trailer changes without storing those binaries.
-- Snapshot growth is hash-gated.
-- Media storage growth is bounded by explicit cohort and bucket limits.
-- Source throttling is enforced in code and operable in production.
-- The system forms the data foundation needed for the prompt examples in `docs/reference/steam-game-change-intelligence-research.md`.
+Rules for change-intel chat:
 
-## Prompt Coverage
+- Never depend on unbounded raw change RPCs.
+- Never require full-catalog text-body scans to answer common prompts.
+- Prefer pre-bounded product RPCs or chat service composition over model-generated joins.
+- Use existing trigram indexes and fuzzy RPCs for entity resolution.
 
-This plan directly supports the data foundation for:
+Current SQL work items:
 
-- biggest store-page changes
-- before/after page changes around updates
+- Drafted: `20260318153000_harden_change_intel_chat_query_bounds.sql`
+- To benchmark after approval:
+  - `get_change_feed_activity`
+  - `get_app_change_feed`
+  - `get_recent_app_changes`
+- To add only if profiling justifies it:
+  - dedicated SQL surface for cross-app pattern candidate retrieval
+
+## Prompt Coverage And Natural-Language Acceptance
+
+Supported prompt families:
+
+- direct app change inspection
+- before/after update analysis
+- recent cross-app change discovery
 - release-date messaging changes
-- tag/genre/category drift
-- announcement + discount + asset-refresh detection
-- relaunch pattern detection
-- weak vs strong downstream demand response
+- tag/genre/category/platform drift
+- announcement plus pricing plus asset-refresh questions
+- relaunch-pattern and marketing-push questions
+- weak versus strong downstream response questions
+- under-marketed, signable, and rescue-candidate discovery
 
-This plan does not yet implement:
+Acceptance standard:
 
-- composite scoring
-- agency lead ranking
-- rescue-candidate scoring
-- hidden-upside scoring
-- final chat interpretation layer
+- The system must work for natural variants of these prompts, not just the exact examples in the research doc.
+- The answer path should be driven by:
+  - fuzzy entity resolution
+  - typed change-intel tools
+  - existing analytics/search tools when supporting evidence is needed
+- The answer should fail gracefully when evidence is weak or data freshness is incomplete.
 
-Those should be a follow-on implementation after this capture layer is complete.
+## Agent Workstreams
 
-## Implementation Handoff Notes
+Workstream 1: SQL / Perf
 
-When resuming after context clear, use one of these prompts:
+- own bounded raw RPCs
+- own latency profiling
+- own any dedicated SQL surfaces added later
 
-- `Implement Checkpoint 1 only. Draft migrations and any code/type changes, but do not apply migrations.`
-- `Implement Checkpoints 2 and 3 only. Queue-based app-change-hints plus Storefront snapshot versioning.`
-- `Implement Checkpoint 5 only. Add Steam News history/versioning.`
-- `Implement Checkpoint 7 only. Add bounded hero asset archival for the archive cohort.`
+Workstream 2: Chat Tooling
 
-Always preserve these constraints:
+- own change-intel service layer
+- own typed tool contracts
+- own route wiring
 
-- never apply migrations without explicit approval
-- keep screenshot binaries out of storage
-- keep trailer binaries out of storage
-- enforce the declared rate limits and storage guardrails
+Workstream 3: Prompting / UX
+
+- own system-prompt routing
+- own example prompts, autocomplete, and follow-ups
+- own tool-detail rendering polish
+
+Workstream 4: Eval / Ops
+
+- own prompt evals and smoke coverage
+- own runbooks, freshness/status, and handoff docs
+
+## Iteration Log
+
+### 2026-03-18
+
+- Replaced the checkpoint-only spec with a phased roadmap and status tracker.
+- Documented `/chat` as the primary product surface for change intelligence.
+- Locked the streaming `/chat` runtime to the structured change-intel tool surface.
+- Aligned the legacy JSON `/api/chat` route with the same structured tool surface.
+- Recorded the need for bounded SQL on raw change-intel reads for large-database safety.
+- Recorded the verified live database scale and the current live RPC bounds that still need migration hardening.
+- Applied the raw change-intel bounds migration manually to the live database.
+- Recorded live benchmark results showing per-app reads are healthy, `overview` is within target on a warm cache, `all-activity` is improved but still slow, and `get_recent_app_changes` still misses the target envelope.
+- Recorded fuzzy entity resolution as a hard requirement for natural-language chat.
+- Marked the chat tool/service implementation as in progress.
+
+## Appendix: Checkpoint Mapping
+
+Legacy checkpoints map into the phased plan as follows:
+
+- Checkpoints 1-8 map primarily to `Phase 0`.
+- Checkpoint 9 maps to `Phase 1`.
+- Chat implementation work previously described as "follow-on" now maps to `Phases 2-5`.
+- Checkpoint 10 maps to `Phase 6`.
+- Checkpoint 11 maps to `Phase 6`, with some UX/status overlap in `Phase 4` and `Phase 5`.
+
+Legacy status snapshot retained for reference:
+
+- Checkpoints `1-8`: implemented
+- Checkpoint `9`: partial
+- Checkpoint `10`: in progress
+- Checkpoint `11`: partial

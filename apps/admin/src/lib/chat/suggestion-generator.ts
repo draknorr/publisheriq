@@ -131,6 +131,29 @@ function extractEntities(toolCalls: ChatToolCall[]): ExtractedEntities {
       }
     }
 
+    if (tc.name === 'query_change_activity' && tc.result.results) {
+      const results = tc.result.results as Array<{ name: string; appid: number }>;
+      for (const item of results.slice(0, 3)) {
+        if (item.name) {
+          entities.games.push({ name: item.name, appid: item.appid });
+        }
+      }
+    }
+
+    if (tc.name === 'get_game_change_timeline' && tc.result.app) {
+      const app = tc.result.app as { name?: string; appid?: number };
+      if (app.name) {
+        entities.games.unshift({ name: app.name, appid: app.appid });
+      }
+    }
+
+    if (tc.name === 'compare_change_before_after' && tc.result.app) {
+      const app = tc.result.app as { name?: string; appid?: number };
+      if (app.name) {
+        entities.games.unshift({ name: app.name, appid: app.appid });
+      }
+    }
+
     // Extract tags from arguments
     const args = tc.arguments as Record<string, unknown>;
     if (args.tags && Array.isArray(args.tags)) {
@@ -237,6 +260,33 @@ function generateToolBasedSuggestions(
       label: `Games like ${game.name}`,
       query: `games similar to ${game.name}`,
       category: 'game',
+    });
+  }
+
+  if ((toolNames.has('query_change_activity') || toolNames.has('get_game_change_timeline')) && entities.games.length > 0) {
+    const game = entities.games[0];
+    suggestions.push({
+      label: `Recent changes for ${game.name}`,
+      query: `Show me the recent Steam changes for ${game.name}`,
+      category: 'game',
+    });
+    suggestions.push({
+      label: `Compare ${game.name} before and after`,
+      query: `What changed on ${game.name} before and after its latest major update?`,
+      category: 'game',
+    });
+  }
+
+  if (toolNames.has('find_change_patterns')) {
+    suggestions.push({
+      label: 'Recent marketing pushes',
+      query: 'Which games look like they started a new marketing push recently?',
+      category: 'template',
+    });
+    suggestions.push({
+      label: 'Recent relaunch patterns',
+      query: 'Show me games that used a likely relaunch pattern recently',
+      category: 'template',
     });
   }
 

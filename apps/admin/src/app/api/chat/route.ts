@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createProvider } from '@/lib/llm/providers';
-import { buildSystemPrompt } from '@/lib/llm/system-prompt';
 import { buildCubeSystemPrompt } from '@/lib/llm/cube-system-prompt';
-import { TOOLS } from '@/lib/llm/tools';
 import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
 import { executeQuery } from '@/lib/query-executor';
 import { executeCubeQuery } from '@/lib/cube-executor';
-import { findSimilarWithTimeout, type FindSimilarArgs } from '@/lib/qdrant/search-service';
+import {
+  findSimilarWithTimeout,
+  searchByConceptWithTimeout,
+  type FindSimilarArgs,
+  type SearchByConceptArgs,
+} from '@/lib/qdrant/search-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
 import {
@@ -15,11 +18,23 @@ import {
   type LookupPublishersArgs,
   type LookupDevelopersArgs,
 } from '@/lib/search/publisher-lookup';
+import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
+import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
+import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
+import {
+  compareChangeBeforeAfter,
+  findChangePatterns,
+  getChangeActivityDetail,
+  getGameChangeTimeline,
+  queryChangeActivity,
+  type CompareChangeBeforeAfterArgs,
+  type FindChangePatternsArgs,
+  type GetChangeActivityDetailArgs,
+  type GetGameChangeTimelineArgs,
+  type QueryChangeActivityArgs,
+} from '@/lib/chat/change-intel-service';
 import { createServerClient } from '@/lib/supabase/server';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, ChatTiming, LLMResponse, Tool } from '@/lib/llm/types';
-
-// Set to true to use Cube.dev semantic layer, false for legacy SQL
-const USE_CUBE = process.env.USE_CUBE_CHAT === 'true';
 
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -60,9 +75,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
 
     const provider = createProvider();
 
-    // Choose system prompt and tools based on mode
-    const systemPrompt = USE_CUBE ? buildCubeSystemPrompt() : buildSystemPrompt();
-    const tools: Tool[] = USE_CUBE ? CUBE_TOOLS : TOOLS;
+    // Keep the legacy JSON route aligned with the streaming /chat route so
+    // direct callers see the same structured tool surface.
+    const systemPrompt = buildCubeSystemPrompt();
+    const tools: Tool[] = CUBE_TOOLS;
 
     const messages: Message[] = [{ role: 'system', content: systemPrompt }, ...body.messages];
     const executedToolCalls: ChatToolCall[] = [];
@@ -92,11 +108,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         const toolStart = performance.now();
 
         if (toolCall.name === 'query_database') {
-          // Legacy SQL mode
           const args = toolCall.arguments as { sql: string; reasoning: string };
           result = await executeQuery(args.sql);
         } else if (toolCall.name === 'query_analytics') {
-          // Cube.dev mode
           const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
           result = await executeCubeQuery({
             cube: args.cube,
@@ -110,6 +124,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         } else if (toolCall.name === 'find_similar') {
           const args = toolCall.arguments as unknown as FindSimilarArgs;
           result = await findSimilarWithTimeout(args);
+        } else if (toolCall.name === 'search_by_concept') {
+          const args = toolCall.arguments as unknown as SearchByConceptArgs;
+          result = await searchByConceptWithTimeout(args);
         } else if (toolCall.name === 'search_games') {
           const args = toolCall.arguments as unknown as SearchGamesArgs;
           result = await searchGames(args);
@@ -122,6 +139,27 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         } else if (toolCall.name === 'lookup_developers') {
           const args = toolCall.arguments as unknown as LookupDevelopersArgs;
           result = await lookupDevelopers(args);
+        } else if (toolCall.name === 'lookup_games') {
+          const args = toolCall.arguments as unknown as LookupGamesArgs;
+          result = await lookupGames(args);
+        } else if (toolCall.name === 'discover_trending') {
+          const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
+          result = await discoverTrending(args);
+        } else if (toolCall.name === 'query_change_activity') {
+          const args = toolCall.arguments as unknown as QueryChangeActivityArgs;
+          result = await queryChangeActivity(args);
+        } else if (toolCall.name === 'get_game_change_timeline') {
+          const args = toolCall.arguments as unknown as GetGameChangeTimelineArgs;
+          result = await getGameChangeTimeline(args);
+        } else if (toolCall.name === 'get_change_activity_detail') {
+          const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;
+          result = await getChangeActivityDetail(args);
+        } else if (toolCall.name === 'compare_change_before_after') {
+          const args = toolCall.arguments as unknown as CompareChangeBeforeAfterArgs;
+          result = await compareChangeBeforeAfter(args);
+        } else if (toolCall.name === 'find_change_patterns') {
+          const args = toolCall.arguments as unknown as FindChangePatternsArgs;
+          result = await findChangePatterns(args);
         } else {
           result = { success: false, error: `Unknown tool: ${toolCall.name}` };
         }
@@ -147,7 +185,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         messages.push({
           role: 'tool',
           toolCallId: toolCall.id,
-          content: JSON.stringify(result),
+          content: formatResultWithEntityLinks(result),
         });
       }
     }

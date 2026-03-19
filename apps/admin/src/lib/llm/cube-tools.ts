@@ -6,6 +6,13 @@
  */
 
 import type { Tool } from './types';
+import {
+  COMPARE_CHANGE_BEFORE_AFTER_TOOL,
+  FIND_CHANGE_PATTERNS_TOOL,
+  GET_CHANGE_ACTIVITY_DETAIL_TOOL,
+  GET_GAME_CHANGE_TIMELINE_TOOL,
+  QUERY_CHANGE_ACTIVITY_TOOL,
+} from './change-intel-tools';
 
 export const QUERY_ANALYTICS_TOOL: Tool = {
   type: 'function',
@@ -619,6 +626,11 @@ Returns matching games with appid and name. Use the appid in subsequent query_an
 
 // Export all tools for the chat interface
 export const CUBE_TOOLS: Tool[] = [
+  QUERY_CHANGE_ACTIVITY_TOOL,
+  GET_GAME_CHANGE_TIMELINE_TOOL,
+  GET_CHANGE_ACTIVITY_DETAIL_TOOL,
+  COMPARE_CHANGE_BEFORE_AFTER_TOOL,
+  FIND_CHANGE_PATTERNS_TOOL,
   QUERY_ANALYTICS_TOOL,
   FIND_SIMILAR_TOOL,
   SEARCH_BY_CONCEPT_TOOL,

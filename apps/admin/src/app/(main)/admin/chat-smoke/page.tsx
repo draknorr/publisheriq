@@ -17,6 +17,43 @@ type SmokeTestGroup = {
 
 const SMOKE_TESTS: SmokeTestGroup[] = [
   {
+    tool: 'query_change_activity',
+    note: 'Cross-game change discovery and natural-language variations',
+    queries: [
+      'Show me the biggest Steam store-page changes in the last 30 days',
+      'What are the biggest Steam page refreshes lately?',
+      'Which upcoming games changed release timing recently?',
+      'Find games that refreshed screenshots or trailers without an announcement',
+    ],
+  },
+  {
+    tool: 'get_game_change_timeline',
+    note: 'Single-game timeline with fuzzy title handling',
+    queries: [
+      'Show me the recent Steam changes for Hades II',
+      'What changed on No Rest for the Wicked recently?',
+      'Show me recent Steam page changes for hades 2',
+    ],
+  },
+  {
+    tool: 'compare_change_before_after',
+    note: 'Single-game before/after comparison',
+    queries: [
+      'What changed on Hades II before and after its latest major update?',
+      'Compare the latest Steam-page refresh for No Rest for the Wicked',
+    ],
+  },
+  {
+    tool: 'find_change_patterns',
+    note: 'Pattern detection and inference prompts',
+    queries: [
+      'Which titles look like they started a new marketing push this month?',
+      'Show me games that used a likely relaunch pattern recently',
+      'Find games teasing a big update without build movement yet',
+      'Which games showed a sustained response after recent Steam changes?',
+    ],
+  },
+  {
     tool: 'query_analytics',
     queries: [
       'What are the top 10 games by total reviews?',
@@ -97,11 +134,13 @@ export default async function AdminChatSmokeTestsPage() {
         {SMOKE_TESTS.map((group) => (
           <Card key={group.tool} variant="default" padding="md">
             <div className="flex items-center justify-between gap-3 mb-3">
-              <h2 className="text-subheading text-text-primary">{group.tool}</h2>
-              <Link
-                href="/admin"
-                className="text-caption text-accent-primary hover:text-accent-primary/80"
-              >
+              <div>
+                <h2 className="text-subheading text-text-primary">{group.tool}</h2>
+                {group.note ? (
+                  <p className="mt-1 text-caption text-text-secondary">{group.note}</p>
+                ) : null}
+              </div>
+              <Link href="/admin" className="text-caption text-accent-primary hover:text-accent-primary/80">
                 View Chat Logs →
               </Link>
             </div>

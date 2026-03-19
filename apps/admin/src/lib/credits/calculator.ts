@@ -7,10 +7,18 @@
 export const TOOL_COSTS: Record<string, number> = {
   lookup_publishers: 4,
   lookup_developers: 4,
+  lookup_games: 4,
   lookup_tags: 4,
   query_analytics: 8,
+  query_change_activity: 8,
+  get_change_activity_detail: 8,
   search_games: 8,
+  get_game_change_timeline: 10,
+  compare_change_before_after: 12,
+  search_by_concept: 12,
   find_similar: 12,
+  discover_trending: 12,
+  find_change_patterns: 14,
 } as const;
 
 // LLM token costs (per 1,000 tokens)

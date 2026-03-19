@@ -26,6 +26,30 @@ function formatMs(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function summarizeToolResult(result: Record<string, unknown>): string {
+  if (typeof result.total_found === 'number') {
+    return `${result.total_found} results`;
+  }
+
+  if (Array.isArray(result.results)) {
+    return `${result.results.length} results`;
+  }
+
+  if (Array.isArray(result.events)) {
+    return `${result.events.length} timeline events`;
+  }
+
+  if (result.detail && typeof result.detail === 'object') {
+    return 'detail loaded';
+  }
+
+  if (Array.isArray(result.diffs)) {
+    return `${result.diffs.length} diffs`;
+  }
+
+  return 'completed';
+}
+
 interface ChatMessageProps {
   message: DisplayMessage;
   isStreaming?: boolean;
@@ -512,10 +536,41 @@ export function ChatMessage({
                       );
                     }
 
-                    // Unknown tool
+                    const genericResult = tc.result as Record<string, unknown>;
+
+                    // Generic fallback for newer tools
                     return (
-                      <div key={idx} className="text-body-sm text-text-muted">
-                        Unknown tool: {tc.name}
+                      <div key={idx} className="space-y-2">
+                        <p className="text-body-sm text-text-secondary italic">
+                          Executed {tc.name}
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {genericResult.success !== false ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                              {summarizeToolResult(genericResult)}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                              Error: {typeof genericResult.error === 'string' ? genericResult.error : 'Unknown error'}
+                            </span>
+                          )}
+                          {tc.timing && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-caption bg-surface-elevated text-text-muted">
+                              <Clock className="w-3 h-3" />
+                              {formatMs(tc.timing.executionMs)}
+                            </span>
+                          )}
+                        </div>
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-caption text-text-muted hover:text-text-secondary">
+                            Raw Result
+                          </summary>
+                          <pre className="mt-1 p-2 bg-surface-base rounded text-xs overflow-x-auto max-h-48">
+                            {JSON.stringify(genericResult, null, 2)}
+                          </pre>
+                        </details>
                       </div>
                     );
                   })}
