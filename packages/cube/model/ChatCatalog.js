@@ -451,6 +451,7 @@ cube('DeveloperRelationshipMetrics', {
 });
 
 cube('PublisherChatScreenMetrics', {
+  sqlAlias: `pcs`,
   sql: `
     WITH publisher_core AS (
       SELECT
@@ -641,6 +642,7 @@ cube('PublisherChatScreenMetrics', {
 });
 
 cube('DeveloperChatScreenMetrics', {
+  sqlAlias: `dcs`,
   sql: `
     WITH developer_core AS (
       SELECT
@@ -831,6 +833,7 @@ cube('DeveloperChatScreenMetrics', {
 });
 
 cube('PublisherChatWindowMetrics', {
+  sqlAlias: `pcw`,
   sql: `
     WITH publisher_core AS (
       SELECT
@@ -1082,6 +1085,7 @@ cube('PublisherChatWindowMetrics', {
 });
 
 cube('DeveloperChatWindowMetrics', {
+  sqlAlias: `dcw`,
   sql: `
     WITH developer_core AS (
       SELECT
