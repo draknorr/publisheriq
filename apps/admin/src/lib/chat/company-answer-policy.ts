@@ -1041,6 +1041,32 @@ function buildCompanySimilarityHints(sparse: boolean): CompanyAnswerHints {
   };
 }
 
+function annotateTerminalCompanySimilarityResult(
+  result: CompanyResultShape
+): CompanyResultShape {
+  const rows = Array.isArray(result.results) ? result.results : [];
+  const candidates = Array.isArray(result.candidates) ? result.candidates : [];
+
+  if (candidates.length > 0) {
+    return {
+      ...result,
+      companyAnswerHints: buildCompanySimilarityHints(true),
+      sufficient_to_answer: true,
+      sufficiency_reason: 'Company similarity needs a short clarification before any more tool calls. Ask the user which company they meant and stay constrained to the candidate list.',
+    };
+  }
+
+  return {
+    ...result,
+    results: rows,
+    companyAnswerHints: buildCompanySimilarityHints(true),
+    sufficient_to_answer: true,
+    sufficiency_reason: result.success === false
+      ? 'Company similarity did not return a strong peer set. Respond directly, stay constrained to the requested company, and say that strong comparable peers were not found right now.'
+      : 'No strong company peers survived the precision-first similarity filters. Respond directly and say the comparable peer set is limited.',
+  };
+}
+
 function normalizeCompanyWindowRows(
   family: CompanyIntentFamily,
   userPrompt: string,
@@ -1368,7 +1394,7 @@ async function enrichSimilarityResultsWithTitles(
   const rows = Array.isArray(result.results) ? result.results : [];
 
   if (!entityType || rows.length === 0) {
-    return result;
+    return annotateTerminalCompanySimilarityResult(result);
   }
 
   const ids = rows
@@ -1398,7 +1424,7 @@ async function enrichSimilarityResultsWithTitles(
     ...result,
     results: trimmedResults,
     companyAnswerHints: buildCompanySimilarityHints(sparse),
-    sufficient_to_answer: trimmedResults.length > 0,
+    sufficient_to_answer: true,
     sufficiency_reason: sparse
       ? heuristic
         ? 'Returned a sparse but precise heuristic portfolio-similarity set. Respond directly and label it as heuristic portfolio similarity.'
@@ -1479,10 +1505,13 @@ export async function applyCompanyToolResultPolicy<
 
   if (
     toolCall.name === 'find_similar' &&
-    family === 'company_similarity' &&
-    result.success === true
+    family === 'company_similarity'
   ) {
-    return await enrichSimilarityResultsWithTitles(result as CompanyResultShape) as T;
+    if (result.success === true) {
+      return await enrichSimilarityResultsWithTitles(result as CompanyResultShape) as T;
+    }
+
+    return annotateTerminalCompanySimilarityResult(result as CompanyResultShape) as T;
   }
 
   if (toolCall.name !== 'query_analytics' || result.success !== true || !Array.isArray(result.data)) {
@@ -1516,11 +1545,25 @@ export function buildGenericCompanyLookupSkipResult(
   toolCall: ToolCall
 ): ({ success: true; skipped_generic_company_lookup: true; debug: Record<string, unknown> } & ToolSufficiencyMetadata & Record<string, unknown>) | null {
   const family = classifyCompanyIntent(userPrompt);
-  if (family !== 'relationship_screen') {
+  if (toolCall.name !== 'lookup_publishers' && toolCall.name !== 'lookup_developers') {
     return null;
   }
 
-  if (toolCall.name !== 'lookup_publishers' && toolCall.name !== 'lookup_developers') {
+  if (family === 'company_similarity') {
+    return {
+      success: true,
+      skipped_generic_company_lookup: true,
+      sufficient_to_answer: false,
+      sufficiency_reason: 'Skipped lookup because company similarity resolves company identity inside find_similar. Use find_similar directly and stay constrained to the requested company.',
+      debug: {
+        genericCompanyLookupSkipped: true,
+        genericCompanyLookupReason: `Skipped ${toolCall.name} during company similarity because find_similar resolves company identity internally.`,
+        companyIntentFamily: family,
+      },
+    };
+  }
+
+  if (family !== 'relationship_screen') {
     return null;
   }
 
@@ -1550,6 +1593,20 @@ export function extractCompanyAnswerState(
   const family = classifyCompanyIntent(userPrompt);
   if (!family) {
     return null;
+  }
+
+  if (
+    family === 'company_similarity' &&
+    toolCall.name === 'find_similar' &&
+    result.sufficient_to_answer === true
+  ) {
+    return {
+      family,
+      blockFurtherTools: true,
+      reason: typeof result.sufficiency_reason === 'string'
+        ? result.sufficiency_reason
+        : 'Company similarity is terminal for this turn. Respond directly from the peer set or explain that strong peers were not found.',
+    };
   }
 
   if (

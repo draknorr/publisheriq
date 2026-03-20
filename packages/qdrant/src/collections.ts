@@ -48,6 +48,7 @@ const VECTOR_CONFIG = {
  * Only index fields that will be used in filters
  */
 const GAME_INDEXES = [
+  { field: 'appid', schema: 'integer' },
   { field: 'genres', schema: 'keyword' },
   { field: 'tags', schema: 'keyword' },
   { field: 'categories', schema: 'keyword' },

@@ -142,7 +142,7 @@ export interface ChatTiming {
 }
 
 // Similarity search result
-export interface SimilarityResult {
+export interface SimilarityResult extends ToolSufficiencyMetadata {
   success: boolean;
   mode?: 'semantic' | 'heuristic_portfolio';
   entityType?: 'publisher' | 'developer';
@@ -164,6 +164,13 @@ export interface SimilarityResult {
     game_count?: number;
     is_major?: boolean;
     matchReasons?: string[];
+    flagshipTitles?: Array<{
+      appid: number;
+      name: string;
+      totalReviews?: number;
+      reviewPercentage?: number | null;
+      releaseDate?: string | null;
+    }>;
   }>;
   candidates?: Array<{
     id: number;
@@ -172,6 +179,7 @@ export interface SimilarityResult {
   total_found?: number;
   error?: string;
   debug?: DebugInfo;
+  companyAnswerHints?: Record<string, unknown>;
 }
 
 export interface ChatResponse {

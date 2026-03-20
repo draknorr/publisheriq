@@ -88,6 +88,11 @@ const COMPANY_GENERIC_WORDS = new Set([
   'indie',
 ]);
 
+type CompanySimilarityFailureStage =
+  | 'game_evidence_search'
+  | 'company_collection_search'
+  | 'company_similarity_fallback';
+
 function isTimeoutError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -95,6 +100,35 @@ function isTimeoutError(error: unknown): boolean {
 
   const message = error.message.toLowerCase();
   return message.includes('timeout') || message.includes('aborted');
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function buildCompanySimilarityFailure(
+  entityType: CompanyEntityType,
+  reference: { id: number; name: string },
+  stage: CompanySimilarityFailureStage,
+  error: unknown
+): FindSimilarResult {
+  return {
+    success: false,
+    entityType,
+    reference: {
+      id: reference.id,
+      name: reference.name,
+      type: entityType,
+    },
+    error: `Company similarity search failed during ${stage.replaceAll('_', ' ')}: ${errorMessage(error)}`,
+    debug: {
+      searchParams: {
+        entity_type: entityType,
+        reference_id: reference.id,
+        failureStage: stage,
+      },
+    },
+  };
 }
 
 async function withSearchTimeout<T extends { success: boolean; error?: string }>(
@@ -603,9 +637,19 @@ async function findSimilarCompaniesFallback(
           };
         })()
       : {};
-  const gameEvidenceByCompany = canUseGameEvidence
-    ? await buildCompanyGameEvidenceMap(entityType, reference, sourcePayloads)
-    : new Map<number, CompanyGameEvidence>();
+  let gameEvidenceByCompany = new Map<number, CompanyGameEvidence>();
+  if (canUseGameEvidence) {
+    try {
+      gameEvidenceByCompany = await buildCompanyGameEvidenceMap(entityType, reference, sourcePayloads);
+    } catch (error) {
+      return buildCompanySimilarityFailure(
+        entityType,
+        reference,
+        'game_evidence_search',
+        error
+      );
+    }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase.from(table as any) as any)
@@ -1042,28 +1086,34 @@ async function buildCompanyGameEvidenceMap(
     }
 
     const filter = buildGameFilter({
-      exclude_appids: [seed.appid],
       exclude_delisted: true,
       is_released: true,
       min_reviews: MIN_COMPANY_GAME_EVIDENCE_REVIEWS,
     });
 
-    const searchResult = await client.search(collection, {
-      vector: qdrantData.vector,
-      filter,
-      limit: COMPANY_GAME_EVIDENCE_NEIGHBORS,
-      with_payload: {
-        include: [
-          'name',
-          'developer_ids',
-          'publisher_ids',
-          'genres',
-          'tags',
-          'review_percentage',
-          'total_reviews',
-        ],
-      },
-    });
+    let searchResult;
+    try {
+      searchResult = await client.search(collection, {
+        vector: qdrantData.vector,
+        filter,
+        limit: COMPANY_GAME_EVIDENCE_NEIGHBORS,
+        with_payload: {
+          include: [
+            'name',
+            'developer_ids',
+            'publisher_ids',
+            'genres',
+            'tags',
+            'review_percentage',
+            'total_reviews',
+          ],
+        },
+      });
+    } catch (error) {
+      throw new Error(
+        `game_evidence_search: ${entityType} seed ${seed.appid} failed: ${errorMessage(error)}`
+      );
+    }
 
     return searchResult
       .filter((point) => point.id !== seed.appid)
@@ -1178,14 +1228,21 @@ async function searchCompanyCollection(
     ? ['name', 'game_count', 'top_genres', 'top_tags', 'avg_review_percentage', 'is_major', 'is_indie', 'total_reviews']
     : ['name', 'game_count', 'top_game_names', 'top_game_appids', 'top_game_genres', 'flagship_game_appid', 'avg_review_percentage', 'is_major', 'is_indie'];
 
-  const searchResult = await client.search(collection, {
-    vector,
-    filter: qdrantFilter,
-    limit,
-    with_payload: {
-      include: payloadFields,
-    },
-  });
+  let searchResult;
+  try {
+    searchResult = await client.search(collection, {
+      vector,
+      filter: qdrantFilter,
+      limit,
+      with_payload: {
+        include: payloadFields,
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      `company_collection_search: ${entityType}/${variant} failed: ${errorMessage(error)}`
+    );
+  }
 
   return searchResult.map((point) => ({
     id: point.id as number,
@@ -1869,6 +1926,8 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
   }
 
   if (entity_type !== 'game') {
+    let semanticFailure: FindSimilarResult | null = null;
+
     try {
       const semanticCompanyResult = await findSimilarCompaniesSemantic(
         entity_type,
@@ -1882,10 +1941,42 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
         return semanticCompanyResult;
       }
     } catch (searchError) {
-      console.error('Company similarity search error:', searchError);
+      semanticFailure = buildCompanySimilarityFailure(
+        entity_type,
+        entity,
+        errorMessage(searchError).startsWith('company_collection_search:')
+          ? 'company_collection_search'
+          : 'game_evidence_search',
+        searchError
+      );
+      console.error('Company similarity search error:', semanticFailure);
     }
 
-    return findSimilarCompaniesFallback(entity_type, entity, filters, requestedLimit);
+    let fallbackResult: FindSimilarResult;
+    try {
+      fallbackResult = await findSimilarCompaniesFallback(entity_type, entity, filters, requestedLimit);
+    } catch (searchError) {
+      fallbackResult = buildCompanySimilarityFailure(
+        entity_type,
+        entity,
+        'company_similarity_fallback',
+        searchError
+      );
+    }
+    if (fallbackResult.success || !semanticFailure) {
+      return fallbackResult;
+    }
+
+    return {
+      ...fallbackResult,
+      error: fallbackResult.error ?? semanticFailure.error,
+      debug: {
+        searchParams: {
+          ...(fallbackResult.debug?.searchParams ?? {}),
+          semanticFailureStage: semanticFailure.debug?.searchParams?.failureStage ?? null,
+        },
+      },
+    };
   }
 
   // Get vector and payload for the entity from Qdrant

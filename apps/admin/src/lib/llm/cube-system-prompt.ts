@@ -390,6 +390,7 @@ String matching:
 {"member":"PublisherMetrics.publisherId","operator":"equals","values":[2132]}
 \`\`\`
 This ensures you match the canonical company row when user input maps to aliases like "Krafton" or "FromSoftware".
+Exception: for company similarity prompts like "publishers similar to X" or "developers like Y", call \`find_similar\` directly. It resolves company identity internally.
 
 **CRITICAL - Company Query Routing:**
 - Specific company profile / all-time portfolio stats → DeveloperMetrics or PublisherMetrics
@@ -404,6 +405,8 @@ This ensures you match the canonical company row when user input maps to aliases
 - For constrained company screens, prove the claim with the minimum or universal review metric when available; do not describe "all above X%" using average review percentage
 - For company top-title prompts like "top games from X", "best games by X", or "flagship titles", default to review-backed popularity ranking unless the prompt explicitly asks for recent/latest/newest titles
 - For company similarity, precision is better than filler. Return a smaller, stronger peer set rather than padding with weak lexical lookalikes
+- For company similarity, \`find_similar\` is usually the only tool call. Do not follow it with \`lookup_*\` or \`query_analytics\` unless the user explicitly pivots to a different task
+- If company similarity returns no strong peers or fails, stay constrained and say that the comparable peer set is limited or unavailable right now. Do not broaden into a generic company ranking
 - For company answers, never use external Steam publisher/developer URLs when an internal company link is available
 
 ## IMPORTANT: Prefer Segments Over Filters
@@ -460,7 +463,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
    - DeveloperGameMetrics/PublisherGameMetrics for "past 12 months", "past 3 months"
 10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
-12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers, then use canonical \`developerId\` / \`publisherId\` filters. If lookup says \`needsDisambiguation: true\`, ask a short clarification question.
+12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers, then use canonical \`developerId\` / \`publisherId\` filters. If lookup says \`needsDisambiguation: true\`, ask a short clarification question. Exception: company similarity prompts should call \`find_similar\` directly instead of doing lookup first.
 13. **When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews)**: Add a "set" filter to exclude NULLs - otherwise queries return 0 rows
 14. **Discovery time segments are for RELEASE DATE only**: \`lastYear\`, \`last6Months\`, \`last3Months\` filter by when a game was RELEASED, not when it was played. For played hours by month, use MonthlyGameMetrics cube instead.
 15. **Do NOT use search_games for specific title lookups or DLC lookup** - use GameCatalog or DlcRelations after lookup_games
@@ -713,6 +716,7 @@ Use this for trend-focused discovery questions about momentum and activity.
 - Do NOT make a second broad discovery query just to add an adjacent slice like "also on sale" or "also very positive" unless the user explicitly asked for multiple lists
 - Maximum tool iterations is 5 - if you haven't responded by then, your answer will be cut off
 - **After ANY successful tool call with relevant data, respond to the user immediately**
+- For company similarity, \`find_similar\` is terminal: if it returns peers, answer from them; if it returns a constrained failure or sparse set, say that directly and do not broaden into lookup or analytics queries
 
 Example: If user asks "show me games from Valve" and query_analytics returns 4 games - RESPOND with those 4 games. Do NOT call more tools.
 

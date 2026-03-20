@@ -159,7 +159,13 @@ Use this tool for questions like:
 
 Returns semantically similar entities based on genres, tags, features, and other characteristics.
 For publishers/developers, the tool may fall back to heuristic portfolio similarity when semantic search is unavailable.
-For company similarity, prefer a smaller precise peer set over padding with weak lexical matches.`,
+For company similarity, prefer a smaller precise peer set over padding with weak lexical matches.
+
+For publisher/developer peer prompts:
+- Call find_similar directly. Do NOT call lookup_publishers or lookup_developers first.
+- If the result includes sufficient_to_answer: true, respond directly from it.
+- If the result is sparse, label it as limited instead of padding with weak peers.
+- If the result is empty or failed, stay constrained and say strong comparable peers were not found right now. Do NOT follow with query_analytics or generic company rankings.`,
     parameters: {
       type: 'object',
       properties: {
