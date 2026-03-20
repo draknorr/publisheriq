@@ -8,6 +8,8 @@
  */
 
 import { getServiceSupabase } from '@/lib/supabase-service';
+import { buildSearchGamesSufficiencyMetadata } from '@/lib/chat/discovery-guardrails';
+import type { ToolSufficiencyMetadata } from '@/lib/llm/types';
 
 /**
  * Common tag/category name normalizations
@@ -106,12 +108,16 @@ export interface SearchDebugInfo {
   final_count?: number;
   coverage_complete?: boolean;
   sparse_result?: boolean;
+  resultShape?: ToolSufficiencyMetadata['result_shape'];
+  sufficientToAnswer?: boolean;
+  sufficiencyReason?: string;
+  allowFollowUpRelaxation?: boolean;
 }
 
 /**
  * Result from search_games
  */
-export interface SearchGamesResult {
+export interface SearchGamesResult extends ToolSufficiencyMetadata {
   success: boolean;
   results?: GameSearchResult[];
   total_found?: number;
@@ -380,9 +386,17 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     debug.final_candidates = candidateAppids?.length ?? null;
 
     if (candidateAppids !== null && candidateAppids.length === 0) {
+      const sufficiency = buildSearchGamesSufficiencyMetadata(args, 0, true, false);
       debug.coverage_complete = true;
       debug.sparse_result = false;
+      debug.resultShape = sufficiency.result_shape;
+      debug.sufficientToAnswer = sufficiency.sufficient_to_answer;
+      debug.sufficiencyReason = sufficiency.sufficiency_reason;
+      debug.allowFollowUpRelaxation = sufficiency.allow_follow_up_relaxation;
       debug.steps.push('No candidates remain after filtering, returning empty');
+      if (sufficiency.sufficiency_reason) {
+        debug.steps.push(`Sufficiency: ${sufficiency.sufficiency_reason}`);
+      }
       return {
         success: true,
         results: [],
@@ -390,6 +404,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
         filters_applied: filtersApplied,
         coverage_complete: true,
         sparse_result: false,
+        ...sufficiency,
         debug,
       };
     }
@@ -517,13 +532,26 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     const totalFound = coverageComplete ? results.length : Math.min(results.length, actualLimit);
 
     const finalResults = results.slice(0, actualLimit).map(stripInternalOwnersMetric);
+    const sufficiency = buildSearchGamesSufficiencyMetadata(
+      args,
+      finalResults.length,
+      coverageComplete,
+      sparseResult
+    );
 
     debug.coverage_complete = coverageComplete;
     debug.sparse_result = sparseResult;
+    debug.resultShape = sufficiency.result_shape;
+    debug.sufficientToAnswer = sufficiency.sufficient_to_answer;
+    debug.sufficiencyReason = sufficiency.sufficiency_reason;
+    debug.allowFollowUpRelaxation = sufficiency.allow_follow_up_relaxation;
     debug.final_count = finalResults.length;
     debug.steps.push(`Coverage complete: ${coverageComplete}`);
     if (sparseResult) {
       debug.steps.push(`Sparse result set detected: ${results.length} qualifying rows`);
+    }
+    if (sufficiency.sufficiency_reason) {
+      debug.steps.push(`Sufficiency: ${sufficiency.sufficiency_reason}`);
     }
     debug.steps.push(`Final result count: ${finalResults.length}`);
 
@@ -534,6 +562,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       filters_applied: filtersApplied,
       coverage_complete: coverageComplete,
       sparse_result: sparseResult,
+      ...sufficiency,
       debug,
     };
   } catch (error) {

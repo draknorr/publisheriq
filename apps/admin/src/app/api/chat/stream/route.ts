@@ -21,6 +21,11 @@ import {
 import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
+import {
+  buildRedundantDiscoverySkipResult,
+  extractBroadDiscoveryState,
+  type BroadDiscoveryState,
+} from '@/lib/chat/discovery-guardrails';
 import { logChatQuery } from '@/lib/chat-query-logger';
 import {
   compareChangeBeforeAfter,
@@ -249,7 +254,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         let iterations = 0;
         let totalLlmMs = 0;
         let totalToolsMs = 0;
-        const allToolNames: string[] = []; // Track all tool names for logging
+        const executedToolNames: string[] = []; // Track only executed tools for logging + credits
+        let lastBroadDiscoveryState: BroadDiscoveryState | null = null;
+        const lastUserPrompt = body.messages.filter((message) => message.role === 'user').pop()?.content ?? '';
 
         // Debug stats - zero additional cost, just counters
         const debugStats: StreamDebugInfo = {
@@ -317,13 +324,39 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
 
           // Execute all tool calls and collect results
-          const toolResults: Array<{ toolCall: ToolCall; result: QueryResult | SimilarityResult }> = [];
+          const toolResults: Array<{ toolCall: ToolCall; result: QueryResult | SimilarityResult | Record<string, unknown> }> = [];
           for (const toolCall of completedToolCalls) {
-            allToolNames.push(toolCall.name);
+            const redundantSkipResult = buildRedundantDiscoverySkipResult(
+              lastBroadDiscoveryState,
+              toolCall,
+              lastUserPrompt
+            );
+
+            if (redundantSkipResult) {
+              const toolResultEvent: ToolResultEvent = {
+                type: 'tool_result',
+                toolCallId: toolCall.id,
+                name: toolCall.name,
+                arguments: toolCall.arguments,
+                result: redundantSkipResult,
+                timing: { executionMs: 0 },
+              };
+              controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
+
+              toolResults.push({ toolCall, result: redundantSkipResult });
+              lastBroadDiscoveryState = extractBroadDiscoveryState(
+                toolCall.name,
+                toolCall.arguments,
+                redundantSkipResult
+              ) ?? lastBroadDiscoveryState;
+              continue;
+            }
+
             const toolStart = performance.now();
             const result = await executeTool(toolCall);
             const toolExecutionMs = performance.now() - toolStart;
             totalToolsMs += toolExecutionMs;
+            executedToolNames.push(toolCall.name);
 
             const toolResultEvent: ToolResultEvent = {
               type: 'tool_result',
@@ -336,6 +369,11 @@ export async function POST(request: NextRequest): Promise<Response> {
             controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
 
             toolResults.push({ toolCall, result });
+            lastBroadDiscoveryState = extractBroadDiscoveryState(
+              toolCall.name,
+              toolCall.arguments,
+              result
+            ) ?? lastBroadDiscoveryState;
           }
 
           // Add assistant message ONCE with ALL tool calls
@@ -370,13 +408,13 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Calculate credits if enabled
         if (CREDITS_ENABLED && reservationId) {
           creditsCharged = calculateTotalCredits(
-            allToolNames,
+            executedToolNames,
             totalInputTokens,
             totalOutputTokens
           );
 
           // Finalize credits (charge actual, refund excess)
-          const breakdown = getCreditBreakdown(allToolNames, totalInputTokens, totalOutputTokens);
+          const breakdown = getCreditBreakdown(executedToolNames, totalInputTokens, totalOutputTokens);
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.rpc as any)('finalize_credits', {
@@ -396,7 +434,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           try {
             await logChatQuery({
               query_text: lastUserMessage.content.slice(0, 2000),
-              tool_names: [...new Set(allToolNames)],
+              tool_names: [...new Set(executedToolNames)],
               tool_count: debugStats.toolCallCount,
               iteration_count: debugStats.iterations,
               response_length: debugStats.totalChars,
@@ -407,7 +445,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               user_id: userId ?? undefined,
               input_tokens: totalInputTokens > 0 ? totalInputTokens : undefined,
               output_tokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
-              tool_credits_used: CREDITS_ENABLED ? getCreditBreakdown(allToolNames, 0, 0).toolCredits : undefined,
+              tool_credits_used: CREDITS_ENABLED ? getCreditBreakdown(executedToolNames, 0, 0).toolCredits : undefined,
               total_credits_charged: CREDITS_ENABLED ? creditsCharged : undefined,
             });
           } catch (logError) {

@@ -6,6 +6,8 @@
  */
 
 import jwt from 'jsonwebtoken';
+import { buildQueryAnalyticsSufficiencyMetadata } from '@/lib/chat/discovery-guardrails';
+import type { ToolResultShape, ToolSufficiencyMetadata } from '@/lib/llm/types';
 
 // Retry configuration for transient errors
 interface RetryConfig {
@@ -302,7 +304,7 @@ interface CubeQuery {
   limit?: number;
 }
 
-interface CubeResult {
+interface CubeResult extends ToolSufficiencyMetadata {
   success: boolean;
   data: Record<string, unknown>[];
   rowCount: number;
@@ -320,6 +322,10 @@ interface CubeResult {
     limit?: number;
     canonicalizedFromCube?: string;
     canonicalizationReason?: string;
+    resultShape?: ToolResultShape;
+    sufficientToAnswer?: boolean;
+    sufficiencyReason?: string;
+    allowFollowUpRelaxation?: boolean;
   };
 }
 
@@ -499,12 +505,18 @@ async function executeCubeQueryInternal(
           console.log(`[Cube] Query succeeded after ${attempt + 1} attempts`);
         }
 
+        const sufficiency = buildQueryAnalyticsSufficiencyMetadata(
+          effectiveQuery,
+          simplifiedData.length
+        );
+
         return {
           success: true,
           data: sortedData,
           rowCount: simplifiedData.length,
           cached: result.query?.hitPreAggregations || false,
           retryInfo: attempt > 0 ? { attempts: attempt + 1, succeeded: true } : undefined,
+          ...sufficiency,
           debug: {
             cubeQuery: cubeQuery,
             filters: cubeQuery.filters as unknown[],
@@ -513,6 +525,10 @@ async function executeCubeQueryInternal(
             limit: cubeQuery.limit as number,
             canonicalizedFromCube: canonicalized.canonicalizedFromCube,
             canonicalizationReason: canonicalized.canonicalizationReason,
+            resultShape: sufficiency.result_shape,
+            sufficientToAnswer: sufficiency.sufficient_to_answer,
+            sufficiencyReason: sufficiency.sufficiency_reason,
+            allowFollowUpRelaxation: sufficiency.allow_follow_up_relaxation,
           },
         };
       } finally {

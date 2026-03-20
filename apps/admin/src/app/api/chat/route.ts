@@ -22,6 +22,11 @@ import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import {
+  buildRedundantDiscoverySkipResult,
+  extractBroadDiscoveryState,
+  type BroadDiscoveryState,
+} from '@/lib/chat/discovery-guardrails';
+import {
   compareChangeBeforeAfter,
   findChangePatterns,
   getChangeActivityDetail,
@@ -82,11 +87,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
 
     const messages: Message[] = [{ role: 'system', content: systemPrompt }, ...body.messages];
     const executedToolCalls: ChatToolCall[] = [];
+    const lastUserPrompt = body.messages.filter((message) => message.role === 'user').pop()?.content ?? '';
 
     let iterations = 0;
     let response: LLMResponse | undefined;
     let totalLlmMs = 0;
     let totalToolsMs = 0;
+    let lastBroadDiscoveryState: BroadDiscoveryState | null = null;
 
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
@@ -104,68 +111,78 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let result: { success: boolean; error?: string; [key: string]: any };
 
-        // Time each tool execution
-        const toolStart = performance.now();
+        const redundantSkipResult = buildRedundantDiscoverySkipResult(
+          lastBroadDiscoveryState,
+          toolCall,
+          lastUserPrompt
+        );
 
-        if (toolCall.name === 'query_database') {
-          const args = toolCall.arguments as { sql: string; reasoning: string };
-          result = await executeQuery(args.sql);
-        } else if (toolCall.name === 'query_analytics') {
-          const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
-          result = await executeCubeQuery({
-            cube: args.cube,
-            dimensions: args.dimensions,
-            measures: args.measures,
-            filters: args.filters,
-            segments: args.segments,
-            order: args.order,
-            limit: args.limit,
-          });
-        } else if (toolCall.name === 'find_similar') {
-          const args = toolCall.arguments as unknown as FindSimilarArgs;
-          result = await findSimilarWithTimeout(args);
-        } else if (toolCall.name === 'search_by_concept') {
-          const args = toolCall.arguments as unknown as SearchByConceptArgs;
-          result = await searchByConceptWithTimeout(args);
-        } else if (toolCall.name === 'search_games') {
-          const args = toolCall.arguments as unknown as SearchGamesArgs;
-          result = await searchGames(args);
-        } else if (toolCall.name === 'lookup_tags') {
-          const args = toolCall.arguments as unknown as LookupTagsArgs;
-          result = await lookupTags(args);
-        } else if (toolCall.name === 'lookup_publishers') {
-          const args = toolCall.arguments as unknown as LookupPublishersArgs;
-          result = await lookupPublishers(args);
-        } else if (toolCall.name === 'lookup_developers') {
-          const args = toolCall.arguments as unknown as LookupDevelopersArgs;
-          result = await lookupDevelopers(args);
-        } else if (toolCall.name === 'lookup_games') {
-          const args = toolCall.arguments as unknown as LookupGamesArgs;
-          result = await lookupGames(args);
-        } else if (toolCall.name === 'discover_trending') {
-          const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
-          result = await discoverTrending(args);
-        } else if (toolCall.name === 'query_change_activity') {
-          const args = toolCall.arguments as unknown as QueryChangeActivityArgs;
-          result = await queryChangeActivity(args);
-        } else if (toolCall.name === 'get_game_change_timeline') {
-          const args = toolCall.arguments as unknown as GetGameChangeTimelineArgs;
-          result = await getGameChangeTimeline(args);
-        } else if (toolCall.name === 'get_change_activity_detail') {
-          const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;
-          result = await getChangeActivityDetail(args);
-        } else if (toolCall.name === 'compare_change_before_after') {
-          const args = toolCall.arguments as unknown as CompareChangeBeforeAfterArgs;
-          result = await compareChangeBeforeAfter(args);
-        } else if (toolCall.name === 'find_change_patterns') {
-          const args = toolCall.arguments as unknown as FindChangePatternsArgs;
-          result = await findChangePatterns(args);
+        let toolExecutionMs = 0;
+        if (redundantSkipResult) {
+          result = redundantSkipResult;
         } else {
-          result = { success: false, error: `Unknown tool: ${toolCall.name}` };
-        }
+          const toolStart = performance.now();
 
-        const toolExecutionMs = performance.now() - toolStart;
-        totalToolsMs += toolExecutionMs;
+          if (toolCall.name === 'query_database') {
+            const args = toolCall.arguments as { sql: string; reasoning: string };
+            result = await executeQuery(args.sql);
+          } else if (toolCall.name === 'query_analytics') {
+            const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
+            result = await executeCubeQuery({
+              cube: args.cube,
+              dimensions: args.dimensions,
+              measures: args.measures,
+              filters: args.filters,
+              segments: args.segments,
+              order: args.order,
+              limit: args.limit,
+            });
+          } else if (toolCall.name === 'find_similar') {
+            const args = toolCall.arguments as unknown as FindSimilarArgs;
+            result = await findSimilarWithTimeout(args);
+          } else if (toolCall.name === 'search_by_concept') {
+            const args = toolCall.arguments as unknown as SearchByConceptArgs;
+            result = await searchByConceptWithTimeout(args);
+          } else if (toolCall.name === 'search_games') {
+            const args = toolCall.arguments as unknown as SearchGamesArgs;
+            result = await searchGames(args);
+          } else if (toolCall.name === 'lookup_tags') {
+            const args = toolCall.arguments as unknown as LookupTagsArgs;
+            result = await lookupTags(args);
+          } else if (toolCall.name === 'lookup_publishers') {
+            const args = toolCall.arguments as unknown as LookupPublishersArgs;
+            result = await lookupPublishers(args);
+          } else if (toolCall.name === 'lookup_developers') {
+            const args = toolCall.arguments as unknown as LookupDevelopersArgs;
+            result = await lookupDevelopers(args);
+          } else if (toolCall.name === 'lookup_games') {
+            const args = toolCall.arguments as unknown as LookupGamesArgs;
+            result = await lookupGames(args);
+          } else if (toolCall.name === 'discover_trending') {
+            const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
+            result = await discoverTrending(args);
+          } else if (toolCall.name === 'query_change_activity') {
+            const args = toolCall.arguments as unknown as QueryChangeActivityArgs;
+            result = await queryChangeActivity(args);
+          } else if (toolCall.name === 'get_game_change_timeline') {
+            const args = toolCall.arguments as unknown as GetGameChangeTimelineArgs;
+            result = await getGameChangeTimeline(args);
+          } else if (toolCall.name === 'get_change_activity_detail') {
+            const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;
+            result = await getChangeActivityDetail(args);
+          } else if (toolCall.name === 'compare_change_before_after') {
+            const args = toolCall.arguments as unknown as CompareChangeBeforeAfterArgs;
+            result = await compareChangeBeforeAfter(args);
+          } else if (toolCall.name === 'find_change_patterns') {
+            const args = toolCall.arguments as unknown as FindChangePatternsArgs;
+            result = await findChangePatterns(args);
+          } else {
+            result = { success: false, error: `Unknown tool: ${toolCall.name}` };
+          }
+
+          toolExecutionMs = performance.now() - toolStart;
+          totalToolsMs += toolExecutionMs;
+        }
 
         executedToolCalls.push({
           name: toolCall.name,
@@ -175,6 +192,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             executionMs: Math.round(toolExecutionMs),
           },
         });
+        lastBroadDiscoveryState = extractBroadDiscoveryState(
+          toolCall.name,
+          toolCall.arguments as Record<string, unknown>,
+          result
+        ) ?? lastBroadDiscoveryState;
 
         messages.push({
           role: 'assistant',

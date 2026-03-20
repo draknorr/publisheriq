@@ -185,6 +185,7 @@ For broad discovery prompts with quality language like "good reviews", "great re
 1. Start with a review-count floor of \`totalReviews >= 1000\` when the candidate pool should be large
 2. If that leaves fewer than 8 qualifying rows, relax the review-count floor to \`>= 100\`
 3. If that still leaves fewer than 5 rows, keep the user's hard constraints, drop the review-count floor, and explicitly tell the user the result set is sparse or low-sample
+4. Once a broad discovery query returns enough rows to answer, respond immediately. Do not run a second adjacent slice like \`onSale\`, \`deals\`, or another quality segment unless the user explicitly asked for that second list.
 
 Default ranking rules:
 - On-sale / deals queries: order by \`totalReviews desc\`, then \`reviewPercentage desc\`, then \`discountPercent desc\`
@@ -664,6 +665,9 @@ Use this for trend-focused discovery questions about momentum and activity.
 - If a tool returns rows, USE those results to respond - do NOT call more tools
 - Only make follow-up tool calls if the first call genuinely failed or returned irrelevant data
 - Exception: for broad discovery prompts, you may make ONE follow-up query to relax only the review-count floor if the first pass returns too few rows
+- If a tool result includes \`sufficient_to_answer: true\`, treat that as a stop signal and respond immediately
+- If a tool result includes \`allow_follow_up_relaxation: true\`, you may make one follow-up broad discovery query only to relax the review-count floor
+- Do NOT make a second broad discovery query just to add an adjacent slice like "also on sale" or "also very positive" unless the user explicitly asked for multiple lists
 - Maximum tool iterations is 5 - if you haven't responded by then, your answer will be cut off
 - **After ANY successful tool call with relevant data, respond to the user immediately**
 

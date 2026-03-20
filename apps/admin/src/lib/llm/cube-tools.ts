@@ -49,7 +49,9 @@ IMPORTANT - USE SEGMENTS FOR COMMON FILTERS:
 
 Only use filters for custom thresholds not covered by segments.
 
-ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid + Discovery.name or GameCatalog.appid + GameCatalog.name).`,
+ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid + Discovery.name or GameCatalog.appid + GameCatalog.name).
+
+When the tool result includes sufficient_to_answer: true, respond from those rows instead of issuing another adjacent broad discovery query.`,
     parameters: {
       type: 'object',
       properties: {
@@ -265,7 +267,9 @@ Use this tool when users ask for games with specific characteristics like:
 - "Metroidvania games on Steam Deck"
 - "Games with Workshop support"
 
-Supports fuzzy tag matching - you don't need exact tag names.`,
+Supports fuzzy tag matching - you don't need exact tag names.
+
+When the tool result includes sufficient_to_answer: true, respond from those rows instead of issuing another adjacent discovery query.`,
     parameters: {
       type: 'object',
       properties: {

@@ -92,10 +92,25 @@ export interface DebugInfo {
     after_review_filter?: number;
     final_count?: number;
   };
+  resultShape?: ToolResultShape;
+  sufficientToAnswer?: boolean;
+  sufficiencyReason?: string;
+  allowFollowUpRelaxation?: boolean;
+  redundantDiscoveryQueryBlocked?: boolean;
+  redundantDiscoveryBlockReason?: string;
+}
+
+export type ToolResultShape = 'broad_discovery' | 'lookup' | 'aggregation' | 'timeseries' | 'other';
+
+export interface ToolSufficiencyMetadata {
+  result_shape?: ToolResultShape;
+  sufficient_to_answer?: boolean;
+  sufficiency_reason?: string;
+  allow_follow_up_relaxation?: boolean;
 }
 
 // Query execution
-export interface QueryResult {
+export interface QueryResult extends ToolSufficiencyMetadata {
   success: boolean;
   data?: Record<string, unknown>[];
   rowCount?: number;
