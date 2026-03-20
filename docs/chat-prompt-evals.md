@@ -1,22 +1,1778 @@
 # /chat Prompt Evaluations
 
-Critique-suite ledger for the live prompts called out in `docs/chat-output-user-critique.md` sections `1` and `2`.
+Critique-suite ledger for targeted live prompt runs drawn from `docs/chat-output-user-critique.md`.
 
 ## Suite
 
-- Scope: `Game Lookups and Filtered Discovery` and `Publisher, Developer, and Company Answers`
-- Prompt count per run: `23` for the full critique suite; targeted reruns may use smaller subsets
-- Runbook: `docs/chat-prompt-evals-runbook.md`
+- Scope: section-specific live runs from `docs/chat-output-user-critique.md`; compare only runs with matching prompt scope
+- Prompt count per run: `23` for the full section `1`/`2` suite, `13` for the full section `3`/`4` suite; targeted reruns may use smaller subsets
+- Runbook: `docs/chat-prompt-evals-runbook.md` documents the checked-in section `1`/`2` and `3`/`4` wrappers
 - Primary scoring mode: curated user-centric review from one primary persona per prompt
 - Rubric: `Directness 15%`, `Completeness 15%`, `Relevance 15%`, `Trustworthiness 20%`, `Decision value/usefulness 25%`, `Grace under ambiguity 10%`
 - Verdict bands: `Strong 8.5-10`, `Good 7.0-8.4`, `Mixed 5.5-6.9`, `Weak 4.0-5.4`, `Failure <4.0`
 
 ## Run Index
 
-| Run | Date | Prompts | Avg Time | Median | P95 | Avg User Score | Weak+Failure | Artifacts |
-|---|---|---:|---:|---:|---:|---:|---:|---|
-| `2026-03-20T20:04:36.504Z` | 2026-03-20T20:04:36.504Z | 5 | 11596ms | 5847ms | 34281ms | 6.8/10 | 0 | `/tmp/publisheriq-chat-evals/fix-under-5.yaJk8U/live-post-deploy` |
-| `2026-03-20T18:58:22.282Z` | 2026-03-20T18:58:22.282Z | 23 | 18106ms | 16620ms | 35040ms | 6.6/10 | 7 | `/tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T18-51-04Z` |
+| Run | Date | Scope | Prompts | Avg Time | Median | P95 | Avg User Score | Weak+Failure | Artifacts |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|
+| `2026-03-20T22:06:10.675Z` | 2026-03-20T22:06:10.675Z | `Sections 3-4 post-fix live pass` | 13 | 13338ms | 12346ms | 27633ms | 6.1/10 | 4 | `/tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-20T22-03-08-096Z` |
+| `2026-03-20T21:24:50.094Z` | 2026-03-20T21:24:50.094Z | `Sections 3-4 initial live pass` | 13 | 15353ms | 13846ms | 28592ms | 4.4/10 | 11 | `/tmp/publisheriq-chat-evals/critique-sections-3-4.jiAw32` |
+| `2026-03-20T20:16:22.850Z` | 2026-03-20T20:16:22.850Z | `Sections 1-2 full round 2` | 23 | 14393ms | 13108ms | 30065ms | 7.4/10 | 1 | `/tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T20-10-40-725Z` |
+| `2026-03-20T20:04:36.504Z` | 2026-03-20T20:04:36.504Z | `Sections 1-2 targeted rerun` | 5 | 11596ms | 5847ms | 34281ms | 6.8/10 | 0 | `/tmp/publisheriq-chat-evals/fix-under-5.yaJk8U/live-post-deploy` |
+| `2026-03-20T18:58:22.282Z` | 2026-03-20T18:58:22.282Z | `Sections 1-2 baseline full run` | 23 | 18106ms | 16620ms | 35040ms | 6.6/10 | 7 | `/tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T18-51-04Z` |
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-20T22:06:10.675Z","generatedAt":"2026-03-20T22:06:10.675Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":13,"averageTotalMs":13338,"medianTotalMs":12346,"p95TotalMs":27633,"averageUserScore":6.1,"weakOrFailureCount":4,"artifactPath":"/tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-20T22-03-08-096Z","scope":"full_sections_3_4_post_fix_live_pass","promptIds":[51,49,132,134,170,171,190,18,195,19,186,42,229]} -->
+## Run 2026-03-20T22:06:10.675Z
+
+- Generated: 2026-03-20T22:06:10.675Z
+- Scope: post-fix full live rerun of the 13-prompt critique suite for sections `3` and `4` (`Similarity and Comp-Finding Answers`, `Concept and Taste-Based Discovery`)
+- Prompt IDs: `51`, `49`, `132`, `134`, `170`, `171`, `190`, `18`, `195`, `19`, `186`, `42`, `229`
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-20T22-03-08-096Z
+- Generic runner report: /tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-20T22-03-08-096Z/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-20T22-03-08-096Z/results.json
+- Prompt count: 13
+- Average user score: 6.1/10
+- Verdict mix: Strong 1 | Good 2 | Mixed 6 | Weak 3 | Failure 1
+- Delta vs `2026-03-20T21:24:50.094Z`: `+1.7` average user-score points, `Weak+Failure` count improved from `11` to `4`
+- Full prompt outputs and tool calls for all 13 prompts are preserved below and in the raw report and JSON artifacts above.
+
+### Assessment
+
+- This rerun is materially better than the initial section `3`/`4` live pass. The system moved from mostly untrustworthy to mostly usable, with one clear strong answer and several mixed-but-serviceable answers.
+- Constraint fidelity improved the most. `same series` is now exact for Dark Souls, and the `<10K reviews` similarity prompt now visibly obeys the hard cap instead of breaking it.
+- Concept retrieval improved meaningfully on horror/investigation and tactical/roguelike prompts. Those answers now look like real discovery starting points instead of obvious lexical scrapes.
+- The remaining weak set is concentrated in two failure modes: `Hollow Knight` and `Hades II` similarity answers that still overfit loose semantic neighbors or title words, and taste prompts like `beautiful art` that still collapse into low-signal jigsaw/coloring matches.
+- Net assessment: sections `3` and `4` are no longer a trust failure, but they are not yet consistently product-quality. Similarity still needs sharper comp logic, and aesthetic/taste discovery still needs stronger curation floors.
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 13338ms | 12346ms | 27633ms | 6125ms | 27633ms |
+
+### Ranking
+
+| Rank | Critique ID | Prompt | Section | Family | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---:|---|---|---|---|---:|---|---:|---|
+| 1 | 42 | Relaxing puzzle games with beautiful art | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 3.4/10 | Failure | 10059 | Still a low-signal jigsaw and coloring answer rather than curated artful puzzle discovery. |
+| 2 | 51 | Steam Deck games like Hades II | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 4.8/10 | Weak | 20787 | Better than before, but missing visible Steam Deck proof and still contaminated by title-adjacent matches. |
+| 3 | 132 | Games similar to Hollow Knight with better reviews | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 4.9/10 | Weak | 8864 | The review constraint is fixed, but the comp neighborhood is still too broad to trust as real Hollow Knight alternatives. |
+| 4 | 49 | Games like Hollow Knight but with pixel art | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 5.2/10 | Weak | 27633 | The top rows are useful, but the answer still collapses into a long `Hollow` lexical tail. |
+| 5 | 170 | What publishers are similar to Devolver Digital? | 3. Similarity and Comp-Finding Answers | publisher_similarity | Publishing Strategy Lead | 5.7/10 | Mixed | 8343 | No longer a dead end, but the peer set is still too broad and AAA-heavy to feel precise. |
+| 6 | 19 | Tactical games with deck building | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 5.9/10 | Mixed | 14959 | A real improvement, but still too card-broad and not focused enough on actual tactical deckbuilders. |
+| 7 | 186 | Tactical roguelikes | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 6.0/10 | Mixed | 12621 | Now directionally useful, though still partly anchored on generic `Rogue` neighbors rather than a tight subgenre set. |
+| 8 | 229 | Fast-paced action games with pixel art | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 6.3/10 | Mixed | 9137 | Several rows fit, but generic `Pixel`-title leakage still weakens taste quality. |
+| 9 | 134 | Games like Hollow Knight but with fewer than 10K reviews | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 6.7/10 | Mixed | 7300 | The hard review cap is now enforced and several rows are usable, even though a few comps remain noisy. |
+| 10 | 18 | horror games with investigation elements | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 6.9/10 | Mixed | 15845 | Mostly credible now, with a few surveillance/anomaly and lexical rows keeping it just below good. |
+| 11 | 195 | Horror games with investigation and puzzle elements | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 7.2/10 | Good | 19373 | The strongest concept answer in the run: coherent, useful, and mostly trustworthy with only minor filler. |
+| 12 | 171 | Show me developers similar to Supergiant Games | 3. Similarity and Comp-Finding Answers | developer_similarity | Developer Studio Lead or Product Lead | 7.3/10 | Good | 12346 | Still the best company-similarity answer: credible peers, flagship context, and enough rationale to act on. |
+| 13 | 190 | Find games in the same series as Dark Souls | 3. Similarity and Comp-Finding Answers | franchise_lookup | Developer Studio Lead or Product Lead | 8.8/10 | Strong | 6125 | Exact constraint handling and concise franchise output make this finally trustworthy and useful. |
+
+### Detailed Results
+
+#### #51 Steam Deck games like Hades II
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 4.8/10
+- Verdict: Weak
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 2/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 3/5
+- Usefulness summary: Better than before, but missing visible Steam Deck proof and still contaminated by title-adjacent matches.
+- Rationale: This improved from the first run because the answer is cleaner and at least plausibly in the action-roguelike neighborhood, but it still does not prove the Steam Deck constraint in-row and it still includes weak lexical neighbors like `Hades' Star` and `Hadean Tactics`. A studio lead could use the top of the list as a starting point, but not trust the full table.
+- Timing: total 20787ms | llm 19967ms | tools 474ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games similar to [Hades II](game:1145350) that are compatible with Steam Deck:
+
+| Game | Review Score | Price |
+|------|--------------|-------|
+| [Hades](game:1145360) | 98% | $24.99 |
+| [Perseus: Titan Slayer](game:2003050) | 64% | $0.79 |
+| [Darksiders II Deathinitive Edition](game:388410) | 78% | $29.99 |
+| [Rogue Legacy 2](game:1253920) | 90% | $24.99 |
+| [Neon Abyss 2](game:2235200) | 67% | $15.99 |
+| [Darksiders III](game:606280) | 76% | $39.99 |
+| [Darksiders Genesis](game:710920) | 81% | $29.99 |
+| [Dark Deity 2](game:2446600) | 91% | $24.99 |
+| [Hadean Tactics](game:1260590) | 89% | $19.99 |
+| [Hades' Star](game:755800) | 72% | Free |
+
+These games share similar themes or gameplay mechanics with Hades II and are well-reviewed, making them great options for fans of action roguelikes.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hades II",
+      "filters": {
+        "steam_deck": [
+          "verified",
+          "playable"
+        ]
+      }
+    },
+    "executionMs": 474,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #49 Games like Hollow Knight but with pixel art
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 5.2/10
+- Verdict: Weak
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 2/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 4/5
+- Usefulness summary: The top rows are useful, but the answer still collapses into a long `Hollow` lexical tail.
+- Rationale: `Dead Cells`, `Hyper Light Drifter`, and `Shovel Knight: Specter of Torment` are legitimate comps, so the answer is more useful than the original run. The problem is that the second half still spills into pure `Hollow` title contamination and low-signal filler, which drags the whole result back under the trust bar.
+- Timing: total 27633ms | llm 26497ms | tools 858ms | iterations 2
+- Tools: find_similar, search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games similar to **[Hollow Knight](game:367520)** that feature pixel art:
+
+### Similar Games
+| Game | Review Score | Price |
+|------|--------------|-------|
+| [Dead Cells](game:588650) | 97% | $12.49 |
+| [Hyper Light Drifter](game:257850) | 92% | $19.99 |
+| [Shovel Knight: Specter of Torment](game:589510) | 94% | $9.99 |
+| [Hollowroot](game:3625820) | N/A | $4.99 |
+| [Hollow Floor](game:2815150) | 94% | $2.99 |
+| [Dark Blood](game:1080440) | 8% | $11.99 |
+| [Moonlighter](game:606150) | 82% | $2.99 |
+| [Grimm's Hollow](game:1170880) | 98% | Free |
+| [A Song in Elyel Nalore](game:3408600) | N/A | $4.99 |
+| [FINAL KNIGHT](game:2072980) | 78% | $13.99 |
+
+### Additional Pixel Art Games
+| Game | Review Score | Price |
+|------|--------------|-------|
+| [Hollow Ghost](game:1510780) | N/A | $3.99 |
+| [Hollow's Land](game:338840) | 66% | $0.49 |
+| [Hollow: Cook Off](game:2640380) | N/A | Free |
+| [Hollowed](game:669630) | 80% | Free |
+| [Hollowing](game:3757960) | 83% | Free |
+| [Hollow Witch](game:1486030) | 78% | $4.99 |
+| [Hollow Jump](game:3744900) | 93% | $6.99 |
+
+These games share similar gameplay elements or aesthetics with **Hollow Knight** while incorporating pixel art styles.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hollow Knight",
+      "filters": {
+        "tags": [
+          "Pixel Graphics"
+        ]
+      },
+      "limit": 10
+    },
+    "executionMs": 483,
+    "success": true,
+    "result_summary": "10 results"
+  },
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "pixel art games similar to Hollow Knight"
+    },
+    "executionMs": 375,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #132 Games similar to Hollow Knight with better reviews
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 4.9/10
+- Verdict: Weak
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 2/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 3/5
+- Usefulness summary: The review constraint is fixed, but the comp neighborhood is still too broad to trust as real Hollow Knight alternatives.
+- Rationale: This run is better than the first one because the `better reviews` condition is no longer visibly broken. The bigger problem now is relevance: `Dishonored`, `Subnautica`, `Monument Valley`, and a duplicate `Dishonored` entry do not feel like the answer a user wanted when they asked for games similar to Hollow Knight.
+- Timing: total 8864ms | llm 7969ms | tools 453ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games similar to [Hollow Knight](game:367520) that have better reviews:
+
+| Game | Review Score | Total Reviews | Price |
+|------|--------------|---------------|-------|
+| [Dead Cells](game:588650) | 97% | 168,464 | $12.49 |
+| [Hades](game:1145360) | 98% | 137,599 | $24.99 |
+| [Dishonored](game:205100) | 97% | 37,768 | $9.99 |
+| [Subnautica](game:264710) | 97% | 171,360 | $29.99 |
+| [Monument Valley](game:1927720) | 98% | 6,309 | $2.79 |
+| [Scarlet Hollow](game:1609230) | 98% | 3,071 | $24.99 |
+| [Northern Journey](game:1639790) | 97% | 2,781 | $11.99 |
+| [Dishonored](game:217980) | 97% | 1,655 | $11.24 |
+| [Hollow Mine](game:2465060) | 100% | N/A | $11.99 |
+| [Shell of a King](game:2384130) | 100% | 20 | $5.99 |
+
+These games share similar elements with [Hollow Knight](game:367520) and have received high praise from players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hollow Knight",
+      "filters": {
+        "review_comparison": "better_only"
+      },
+      "limit": 10
+    },
+    "executionMs": 453,
+    "success": true,
+    "result_summary": "40 results"
+  }
+]
+```
+
+</details>
+
+#### #134 Games like Hollow Knight but with fewer than 10K reviews
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 6.7/10
+- Verdict: Mixed
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 3/5 | Trustworthiness 4/5 | Decision value 3/5 | Grace 4/5
+- Usefulness summary: The hard review cap is now enforced and several rows are usable, even though a few comps remain noisy.
+- Rationale: This is one of the clearest improvements in the rerun. The `fewer than 10K reviews` constraint is now visibly satisfied, and the list contains several believable mid-size metroidvania/action-platformer comps like `Moonlighter`, `The Knight Witch`, `BIOMORPH`, and `Aeterna Noctis`. It is not fully clean, but it is now actually useful.
+- Timing: total 7300ms | llm 6706ms | tools 310ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games similar to [Hollow Knight](game:367520) that have fewer than 10,000 reviews:
+
+| Game | Review Score | Total Reviews | Price |
+|------|--------------|---------------|-------|
+| [Drake Hollow](game:739650) | 77% | 583 | $29.99 |
+| [Shovel Knight: Specter of Torment](game:589510) | 94% | 468 | $9.99 |
+| [Moonlighter](game:606150) | 82% | 7,034 | $2.99 |
+| [The Knight Witch](game:1872680) | 72% | 773 | $19.99 |
+| [KINGDOM HEARTS -HD 1.5+2.5 ReMIX-](game:2552430) | 85% | 5,964 | $24.99 |
+| [Hollowed](game:669630) | 80% | 157 | Free |
+| [Hyper Knights](game:597150) | 88% | 799 | $1.24 |
+| [HunterX](game:1918450) | 84% | 653 | $14.99 |
+| [BIOMORPH](game:1430220) | 92% | 562 | $19.99 |
+| [Aeterna Noctis](game:1517970) | 75% | 1,756 | $29.99 |
+
+These games share similar themes or gameplay mechanics with Hollow Knight while maintaining a smaller review count.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hollow Knight",
+      "filters": {
+        "max_reviews": 10000
+      },
+      "limit": 10
+    },
+    "executionMs": 310,
+    "success": true,
+    "result_summary": "40 results"
+  }
+]
+```
+
+</details>
+
+#### #170 What publishers are similar to Devolver Digital?
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: publisher_similarity
+- Primary persona: Publishing Strategy Lead
+- User score: 5.7/10
+- Verdict: Mixed
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 4/5
+- Usefulness summary: No longer a dead end, but the peer set is still too broad and AAA-heavy to feel precise.
+- Rationale: This answer is materially better than the first pass because it now returns an actual peer set with internal links and an explicit limitation note. The problem is quality of fit: `PLAYISM` and `Team17` are defensible, but `Square Enix` and `Xbox Game Studios` do not feel like Devolver-style peers from a publishing strategy standpoint.
+- Timing: total 8343ms | llm 5116ms | tools 2826ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some publishers that are similar to [Devolver Digital](/publishers/2132). The comparable peer set is limited, but these publishers share similar genres and have overlapping portfolios:
+
+| Publisher | Review Percentage | Why It Matches |
+|-----------|-------------------|----------------|
+| [Square Enix](/publishers/1692) | 86% | Similar genre footprint, overlapping portfolio tags, comparable review footprint |
+| [PLAYISM](/publishers/2278) | 92% | Similar genre footprint, overlapping portfolio tags, comparable review footprint |
+| [Xbox Game Studios](/publishers/1946) | 88% | Similar genre footprint, overlapping portfolio tags, comparable review footprint |
+| [Team17](/publishers/2681) | 87% | Similar genre footprint, overlapping portfolio tags, comparable review footprint |
+
+These publishers have a strong presence in the gaming industry and are known for their quality titles.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "publisher",
+      "reference_name": "Devolver Digital",
+      "limit": 6
+    },
+    "executionMs": 2826,
+    "success": true,
+    "result_summary": "4 results"
+  }
+]
+```
+
+</details>
+
+#### #171 Show me developers similar to Supergiant Games
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: developer_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 7.3/10
+- Verdict: Good
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Usefulness summary: Still the best company-similarity answer: credible peers, flagship context, and enough rationale to act on.
+- Rationale: This remains one of the strongest answers in the suite. The top of the set is believable, the table shape is informative, and the answer gives a studio lead enough context to keep researching. The tail is still weaker than the top, but it stays inside a defensible peer neighborhood.
+- Timing: total 12346ms | llm 10401ms | tools 1491ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some developers similar to [Supergiant Games](/developers/2024), along with their flagship titles and review percentages:
+
+| Developer | Flagship Titles | Review Percentage | Why It Matches |
+|-----------|----------------|-------------------|----------------|
+| [Crate Entertainment](/developers/6464) | [Grim Dawn](game:219990) (2016) - 93.7% <br> [Farthest Frontier](game:1044720) (2025) - 86.6% | 92% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, and overlapping portfolio tags. |
+| [Cellar Door Games](/developers/115196) | [Rogue Legacy](game:241600) (2013) - 92.5% <br> [Rogue Legacy 2](game:1253920) (2022) - 90.9% | 92% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, and overlapping portfolio tags. |
+| [Veewo Games](/developers/300515) | [Neon Abyss](game:788100) (2020) - 86.2% <br> [Super Phantom Cat](game:988100) (2019) - 82.8% | 86% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, and overlapping portfolio tags. |
+| [Gunfire Games](/developers/3078) | [REMNANT II](game:1282100) (2023) - 82.6% <br> [Remnant: From the Ashes](game:617290) (2019) - 84.5% | 82% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, and overlapping portfolio tags. |
+| [Dumativa](/developers/49516) | [Enigma of Fear](game:1507580) (2024) - 96.6% <br> [Songs for a Hero - Definitive Edition](game:389170) (2016) - 96.6% | 97% | The flagship title has close game-neighbor matches in this portfolio, similar genre footprint, and overlapping portfolio tags. |
+| [Panic Art Studios Ltd](/developers/254308) | [Hero Siege](game:269210) (2014) - 68.5% | 69% | The flagship title has close game-neighbor matches in this portfolio, similar genre footprint, and overlapping portfolio tags. |
+
+These developers share similarities with [Supergiant Games](/developers/2024) in terms of genre and game characteristics.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "developer",
+      "reference_name": "Supergiant Games",
+      "limit": 6
+    },
+    "executionMs": 1491,
+    "success": true,
+    "result_summary": "46 results"
+  }
+]
+```
+
+</details>
+
+#### #190 Find games in the same series as Dark Souls
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: franchise_lookup
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 8.8/10
+- Verdict: Strong
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 5/5 | Decision value 4/5 | Grace 4/5
+- Usefulness summary: Exact constraint handling and concise franchise output make this finally trustworthy and useful.
+- Rationale: This is the cleanest improvement in the whole rerun. The answer stays inside the Dark Souls franchise, avoids drifting into Soulslikes, and answers the user’s exact request with no wasted motion. The only missing piece is that it does not explicitly restate the original Dark Souls entry.
+- Timing: total 6125ms | llm 4730ms | tools 1138ms | iterations 3
+- Tools: find_similar, lookup_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games in the same series as **Dark Souls**:
+
+| Game | Release Year |
+|------|--------------|
+| [DARK SOULS II](game:236430) | 2014 |
+| [DARK SOULS™ III](game:374320) | 2016 |
+| [DARK SOULS: REMASTERED](game:570940) | 2018 |
+| [DARK SOULS™ II: Scholar of the First Sin](game:335300) | 2015 |
+
+These titles are part of the **Dark Souls** franchise and share similar gameplay mechanics and themes.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Dark Souls",
+      "filters": {
+        "same_franchise_only": true
+      },
+      "limit": 10
+    },
+    "executionMs": 549,
+    "success": false,
+    "result_summary": null
+  },
+  {
+    "name": "lookup_games",
+    "arguments": {
+      "query": "Dark Souls"
+    },
+    "executionMs": 589,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #18 horror games with investigation elements
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 6.9/10
+- Verdict: Mixed
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Usefulness summary: Mostly credible now, with a few surveillance/anomaly and lexical rows keeping it just below good.
+- Rationale: This is a substantial improvement over the initial run. The answer now contains real horror-investigation titles like `The Painscreek Killings` and `Scene Investigators`, plus some believable anomaly-surveillance entries. It still has a little title leakage and some genre drift, but it is now usable as a discovery list.
+- Timing: total 15845ms | llm 14815ms | tools 739ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some horror games with investigation elements that you might enjoy:
+
+| Game | Price | Review Score | Total Reviews | Steam Deck Compatibility |
+|------|-------|--------------|---------------|--------------------------|
+| [The Painscreek Killings](game:624270) | $19.99 | 91% | 5,217 | Playable |
+| [Haunted Investigation](game:2400880) | $3.99 | 83% | 238 | Unknown |
+| [The Horrorscope](game:1241520) | $1.99 | 93% | 1,096 | Verified |
+| [SONG OF HORROR COMPLETE EDITION](game:1096570) | $17.99 | 78% | 1,207 | Playable |
+| [Sinister Night 2](game:2761670) | $9.99 | 87% | 1,823 | Playable |
+| [I'm on Observation Duty](game:1046820) | $2.99 | 95% | 1,312 | Playable |
+| [I'm on Observation Duty 4](game:1730360) | $4.99 | 97% | 777 | Verified |
+| [I'm on Observation Duty 6](game:2137700) | $11.99 | 93% | 586 | Verified |
+| [Scene Investigators](game:1159830) | $24.99 | 75% | 802 | Playable |
+| [I'm on Observation Duty 5](game:1850550) | $9.99 | 96% | 730 | Verified |
+
+These games combine elements of horror with investigation mechanics, providing a thrilling experience.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "horror game with investigation elements",
+      "filters": {
+        "min_reviews": 100,
+        "review_percentage": {
+          "gte": 70
+        }
+      }
+    },
+    "executionMs": 739,
+    "success": true,
+    "result_summary": "50 results"
+  }
+]
+```
+
+</details>
+
+#### #195 Horror games with investigation and puzzle elements
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 7.2/10
+- Verdict: Good
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Usefulness summary: The strongest concept answer in the run: coherent, useful, and mostly trustworthy with only minor filler.
+- Rationale: This answer finally looks like the system understood the concept instead of chasing title words. `The Painscreek Killings`, `Rusty Lake`, and the stronger `Observation Duty` entries create a coherent cluster, with only a couple of weaker rows around the edges.
+- Timing: total 19373ms | llm 17892ms | tools 1180ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some horror games that feature investigation and puzzle elements, all of which have received strong reviews:
+
+| Game | Price | Review Count | Review Percentage | Steam Deck Compatibility |
+|------|-------|--------------|-------------------|--------------------------|
+| [The Painscreek Killings](game:624270) | $19.99 | 5,217 | 91% | Playable |
+| [Rusty Lake: Roots](game:532110) | $3.99 | 7,743 | 96% | Verified |
+| [I'm on Observation Duty 4](game:1730360) | $4.99 | 777 | 97% | Verified |
+| [Haunted Investigation](game:2400880) | $3.99 | 238 | 83% | Unknown |
+| [Rusty Lake Paradise](game:744190) | $3.99 | 1,162 | 95% | Playable |
+| [I'm on Observation Duty](game:1046820) | $2.99 | 1,312 | 95% | Playable |
+| [I'm on Observation Duty 5](game:1850550) | $9.99 | 730 | 96% | Verified |
+| [Curious Cases](game:1045080) | $6.99 | 372 | 70% | Playable |
+| [SONG OF HORROR COMPLETE EDITION](game:1096570) | $17.99 | 1,207 | 78% | Playable |
+| [I'm on Observation Duty 6](game:2137700) | $11.99 | 586 | 93% | Verified |
+
+These games combine elements of horror with investigation and puzzles, making them engaging for players who enjoy those mechanics.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "horror game with investigation and puzzle elements",
+      "filters": {
+        "min_reviews": 100,
+        "review_percentage": {
+          "gte": 70
+        }
+      }
+    },
+    "executionMs": 1180,
+    "success": true,
+    "result_summary": "50 results"
+  }
+]
+```
+
+</details>
+
+#### #19 Tactical games with deck building
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 5.9/10
+- Verdict: Mixed
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 3/5 | Grace 4/5
+- Usefulness summary: A real improvement, but still too card-broad and not focused enough on actual tactical deckbuilders.
+- Rationale: This answer is no longer the catastrophic `Deck` keyword scrape from the initial live pass, which is real progress. It still misses the tighter comp set a user probably wanted, though, because too many rows are generic card games or only loosely tactical.
+- Timing: total 14959ms | llm 13464ms | tools 1186ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some tactical games with deck-building mechanics that you might enjoy:
+
+| Game | Price | Review Score | Total Reviews | Steam Deck Compatibility |
+|------|-------|--------------|---------------|--------------------------|
+| [Decktamer](game:2870340) | $15.99 | 84% | 531 | Playable |
+| [Terracards](game:2464880) | $8.99 | 85% | 696 | Playable |
+| [KARDS - The WWII Card Game](game:544810) | Free | 70% | 38,679 | Unsupported |
+| [Fights in Tight Spaces](game:1265820) | $24.99 | 90% | 3,305 | Verified |
+| [Cards & Tankards](game:1506850) | Free | 88% | 872 | Playable |
+| [Fights in Tight Spaces (Prologue)](game:1478070) | Free | 93% | 811 | Playable |
+| [Deck Casters](game:739050) | $15.99 | 90% | 115 | Unknown |
+| [Magic: The Gathering - Duels of the Planeswalkers 2013](game:97330) | Free | 87% | 1,329 | Unsupported |
+| [Circadian Dice](game:1893620) | $5.99 | 94% | 578 | Playable |
+| [Kingdom's Deck](game:2655590) | $9.99 | 78% | 283 | Playable |
+
+These games feature a combination of tactical strategy and deck-building elements, making them engaging for fans of both genres.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "tactical game with deck building mechanics",
+      "filters": {
+        "min_reviews": 100
+      },
+      "limit": 10
+    },
+    "executionMs": 1186,
+    "success": true,
+    "result_summary": "50 results"
+  }
+]
+```
+
+</details>
+
+#### #186 Tactical roguelikes
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 6.0/10
+- Verdict: Mixed
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 3/5
+- Usefulness summary: Now directionally useful, though still partly anchored on generic `Rogue` neighbors rather than a tight subgenre set.
+- Rationale: This is a lot more serviceable than the initial run, especially with entries like `Fights in Tight Spaces`, `Abalon`, and `Templar Battleforce`. It still pulls in several rows because they live near the roguelike lexical neighborhood instead of because they are clearly tactical roguelikes.
+- Timing: total 12621ms | llm 11811ms | tools 520ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some tactical roguelikes that you might enjoy, all of which have received strong reviews:
+
+| Game | Price | Review Score | Total Reviews | Steam Deck Compatibility |
+|------|-------|--------------|---------------|--------------------------|
+| [Rogue: Genesia](game:2067920) | $14.99 | 91% | 7,568 | Playable |
+| [Fights in Tight Spaces](game:1265820) | $24.99 | 90% | 3,305 | Verified |
+| [Rogue Tower](game:1843760) | $14.99 | 82% | 5,633 | Playable |
+| [Rogue](game:1443430) | $2.99 | 94% | 444 | Playable |
+| [HyperRogue](game:342610) | $9.99 | 95% | 453 | Playable |
+| [DungeonTop](game:1146230) | $6.39 | 81% | 552 | Playable |
+| [Abalon: Roguelike Tactics CCG](game:1681840) | $29.99 | 94% | 584 | Verified |
+| [Templar Battleforce](game:370020) | $9.99 | 93% | 950 | Playable |
+| [Roguebook](game:1076200) | $2.49 | 83% | 3,856 | Playable |
+| [Rogue Empire: Dungeon Crawler RPG](game:650940) | $3.44 | 86% | 383 | Playable |
+
+These games combine tactical strategy elements with roguelike mechanics, ensuring a challenging and engaging experience.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "tactical roguelike",
+      "filters": {
+        "min_reviews": 100,
+        "review_percentage": {
+          "gte": 70
+        }
+      }
+    },
+    "executionMs": 520,
+    "success": true,
+    "result_summary": "50 results"
+  }
+]
+```
+
+</details>
+
+#### #42 Relaxing puzzle games with beautiful art
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 3.4/10
+- Verdict: Failure
+- Score breakdown: Directness 3/5 | Completeness 2/5 | Relevance 1/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 3/5
+- Usefulness summary: Still a low-signal jigsaw and coloring answer rather than curated artful puzzle discovery.
+- Rationale: This is the main prompt that did not really recover. The result is cleaner and review-filtered now, but it still interprets `beautiful art` as low-signal jigsaw/coloring content instead of returning atmospheric, visually distinctive puzzle games a product lead would actually want to comp against.
+- Timing: total 10059ms | llm 8826ms | tools 942ms | iterations 2
+- Tools: search_by_concept, search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some relaxing puzzle games with beautiful art that you might enjoy:
+
+### Relaxing Puzzle Games with Beautiful Art
+
+| Game | Review Score | Total Reviews | Price |
+|------|--------------|---------------|-------|
+| [Pleasure Puzzle:Portrait 趣拼拼：肖像画](game:939620) | 90% | 1,854 | $0.99 |
+| [Gnome Jigsaw Puzzles](game:1520250) | 96% | 114 | $1.99 |
+| [Daylife in Japan - Pixel Art Jigsaw Puzzle](game:1172530) | 86% | 120 | $1.99 |
+| [Sudoku Jigsaw / 拼图数独](game:858040) | 94% | 225 | $0.89 |
+| [Dark Fantasy: Jigsaw Puzzle](game:955320) | 90% | 359 | $2.99 |
+| [Coloring Pixels](game:897330) | 96% | 7,919 | Free |
+| [Coloring Game](game:1026820) | 92% | 3,582 | Free |
+| [Coloring Game 3](game:1275640) | 95% | 1,340 | Free |
+| [Coloring Game 2](game:1216200) | 96% | 3,112 | Free |
+| [Coloring Game: Pixel](game:1173830) | 98% | 204 | $4.99 |
+
+These games are well-reviewed and offer a relaxing experience with beautiful visuals. Enjoy your gaming!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "relaxing puzzle games with beautiful art",
+      "filters": {
+        "review_percentage": {
+          "gte": 70
+        },
+        "min_reviews": 100
+      },
+      "limit": 10
+    },
+    "executionMs": 702,
+    "success": true,
+    "result_summary": "50 results"
+  },
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "puzzle games with beautiful art",
+      "filters": {
+        "review_percentage": {
+          "gte": 70
+        },
+        "min_reviews": 100
+      },
+      "limit": 10
+    },
+    "executionMs": 241,
+    "success": true,
+    "result_summary": "50 results"
+  }
+]
+```
+
+</details>
+
+#### #229 Fast-paced action games with pixel art
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 6.3/10
+- Verdict: Mixed
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Usefulness summary: Several rows fit, but generic `Pixel`-title leakage still weakens taste quality.
+- Rationale: This answer is directionally useful now. It includes a handful of credible fits like `Picayune Dreams`, `HYPERFIGHT`, `PixelJunk Shooter`, and `Cyber Shadow`, but it still overweights titles with `Pixel` in the name and does not feel fully curated from a taste standpoint.
+- Timing: total 9137ms | llm 8103ms | tools 747ms | iterations 2
+- Tools: search_by_concept, lookup_tags
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some fast-paced action games with pixel art that you might enjoy:
+
+| Game | Review Score | Price | Steam Deck Compatibility |
+|------|--------------|-------|--------------------------|
+| [PAC-MAN 256](game:455400) | 92% | $4.99 | Playable |
+| [Picayune Dreams](game:2088840) | 98% | $4.99 | Playable |
+| [Pixel Strike 3D](game:915320) | 74% | Free | Unknown |
+| [Soviet Jump Game](game:1072710) | 80% | Free | Playable |
+| [Pixel Samurai](game:2017270) | 89% | $2.99 | Unknown |
+| [HYPERFIGHT](game:1005870) | 90% | Free | Playable |
+| [PixelJunk Shooter](game:255870) | 90% | $8.99 | Verified |
+| [Cyber Shadow](game:861250) | 83% | $19.99 | Verified |
+| [Pixel Galaxy](game:370480) | 86% | $2.99 | Verified |
+| [ARCADE GAME SERIES: PAC-MAN](game:394160) | 89% | $3.99 | Playable |
+
+These games have received strong reviews and feature fast-paced action gameplay with pixel art aesthetics. Enjoy exploring them!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "fast-paced action game with pixel art",
+      "filters": {
+        "min_reviews": 100,
+        "review_percentage": {
+          "gte": 70
+        }
+      }
+    },
+    "executionMs": 325,
+    "success": true,
+    "result_summary": "50 results"
+  },
+  {
+    "name": "lookup_tags",
+    "arguments": {
+      "query": "pixel art",
+      "type": "tags"
+    },
+    "executionMs": 421,
+    "success": true,
+    "result_summary": null
+  }
+]
+```
+
+</details>
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-20T21:24:50.094Z","generatedAt":"2026-03-20T21:24:50.094Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":13,"averageTotalMs":15353,"medianTotalMs":13846,"p95TotalMs":28592,"averageUserScore":4.4,"weakOrFailureCount":11,"artifactPath":"/tmp/publisheriq-chat-evals/critique-sections-3-4.jiAw32","scope":"full_sections_3_4_initial_live_pass","promptIds":[51,49,132,134,170,171,190,18,195,19,186,42,229]} -->
+## Run 2026-03-20T21:24:50.094Z
+
+- Generated: 2026-03-20T21:24:50.094Z
+- Scope: first full live round of the 13-prompt critique suite for sections `3` and `4` (`Similarity and Comp-Finding Answers`, `Concept and Taste-Based Discovery`)
+- Prompt IDs: `51`, `49`, `132`, `134`, `170`, `171`, `190`, `18`, `195`, `19`, `186`, `42`, `229`
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/critique-sections-3-4.jiAw32
+- Generic runner report: /tmp/publisheriq-chat-evals/critique-sections-3-4.jiAw32/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/critique-sections-3-4.jiAw32/results.json
+- Prompt count: 13
+- Average user score: 4.4/10
+- Verdict mix: Good 1 | Mixed 1 | Weak 6 | Failure 5
+- Full prompt outputs and tool calls for all 13 prompts are preserved below and in the raw report and JSON artifacts above.
+
+### Assessment
+
+- The persona-scored result is materially worse than the generic raw report: surface fluency looked strong, but user usefulness and trust were weak.
+- Section `3` is still unstable on constraint fidelity. The live answers continue to violate `better reviews`, `<10K reviews`, and `same series`, which makes the output feel polished but unreliable.
+- Section `4` remains the biggest product problem. The system is still over-indexing on lexical title matches like `Deck`, `Rogue`, `Pixel`, `Investigation`, and `Beauty` instead of interpreting concept and taste.
+- Only `#171` feels close to a professional answer. `#49` is directionally better, but the rest of the similarity set still needs stronger guardrails and per-row comp logic.
+- Net assessment: sections `3` and `4` are not at the trust bar described in `docs/chat-output-user-critique.md`. Retrieval quality and curation floors need more work than phrasing or formatting.
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 15353ms | 13846ms | 28592ms | 6655ms | 28592ms |
+
+### Ranking
+
+| Rank | Critique ID | Prompt | Section | Family | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---:|---|---|---|---|---:|---|---:|---|
+| 1 | 42 | Relaxing puzzle games with beautiful art | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 3.1/10 | Failure | 10095 | Literal beauty-title scraping and bargain jigsaw filler make this unusable as a taste-driven discovery answer. |
+| 2 | 19 | Tactical games with deck building | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 3.3/10 | Failure | 11035 | Mostly `Deck`-in-the-title results rather than believable tactical deck-builders. |
+| 3 | 18 | horror games with investigation elements | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 3.4/10 | Failure | 11669 | The list is dominated by `investigation` title collisions with weak quality signals. |
+| 4 | 186 | Tactical roguelikes | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 3.6/10 | Failure | 6655 | Still reads like a `Rogue` keyword scrape rather than a trustworthy subgenre list. |
+| 5 | 195 | Horror games with investigation and puzzle elements | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 3.6/10 | Failure | 13846 | Slightly broader than `#18`, but still mostly lexical investigation matches instead of concept understanding. |
+| 6 | 229 | Fast-paced action games with pixel art | 4. Concept and Taste-Based Discovery | concept_search | Developer Studio Lead or Product Lead | 4.1/10 | Weak | 9260 | Some rows fit, but the answer still looks like a `pixel` title scrape with no taste curation. |
+| 7 | 190 | Find games in the same series as Dark Souls | 3. Similarity and Comp-Finding Answers | franchise_lookup | Developer Studio Lead or Product Lead | 4.1/10 | Weak | 16556 | It starts correctly and then drifts into Souls-like and title-adjacent noise, breaking the asked constraint. |
+| 8 | 132 | Games similar to Hollow Knight with better reviews | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 4.1/10 | Weak | 17408 | The `better reviews` filter is visibly not enforced, so the comp list is not trustworthy. |
+| 9 | 134 | Games like Hollow Knight but with fewer than 10K reviews | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 4.1/10 | Weak | 15827 | The hard review-count cap is broken by obvious over-10K titles. |
+| 10 | 170 | What publishers are similar to Devolver Digital? | 3. Similarity and Comp-Finding Answers | publisher_similarity | Publishing Strategy Lead | 5.0/10 | Weak | 6989 | It avoids the old lexical junk, but it is still a graceful dead end instead of a peer answer. |
+| 11 | 51 | Steam Deck games like Hades II | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 5.0/10 | Weak | 28592 | A few real comps help, but lexical contamination and missing Steam Deck evidence keep this weak. |
+| 12 | 49 | Games like Hollow Knight but with pixel art | 3. Similarity and Comp-Finding Answers | game_similarity | Developer Studio Lead or Product Lead | 5.9/10 | Mixed | 24440 | The top of the list is directionally useful, but the answer still collapses into Hollow-title contamination and low-signal filler. |
+| 13 | 171 | Show me developers similar to Supergiant Games | 3. Similarity and Comp-Finding Answers | developer_similarity | Developer Studio Lead or Product Lead | 7.6/10 | Good | 27222 | Credible peer set, flagship context, and fit reasons make this the one genuinely useful result in the run. |
+
+### Detailed Results
+
+#### #42 Relaxing puzzle games with beautiful art
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 3.1/10
+- Verdict: Failure
+- Score breakdown: Directness 3/5 | Completeness 2/5 | Relevance 1/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 2/5
+- Usefulness summary: Literal beauty-title scraping and bargain jigsaw filler make this unusable as a taste-driven discovery answer.
+- Rationale: This is almost exactly the failure the critique doc warned about. The model interpreted `beautiful art` as `Beauty` in the title and returned low-signal jigsaws and anime puzzles instead of curated atmospheric puzzle games a studio lead would actually comp against.
+- Timing: total 10095ms | llm 8579ms | tools 1231ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some relaxing puzzle games with beautiful art:
+
+| Game | Price | Review Percentage |
+|------|-------|-------------------|
+| [Beauty Jigsaw](game:2972300) | $0.99 | 90% |
+| [Beautiful Japanese Scenery - Animated Jigsaws](game:514090) | $0.99 | 86% |
+| [Pieces of Beauty](game:1749380) | $0.59 | 95% |
+| [Lovely Anime Puzzle: Christmas](game:3376830) | $2.99 | N/A |
+| [Pieces of Beauty 3](game:1884890) | $1.99 | 93% |
+| [Pieces of Beauty 2](game:1779220) | $2.99 | 92% |
+| [Lovely Anime Puzzle: Valentine](game:3471440) | $2.99 | N/A |
+| [Jigsaw Puzzles: Master Artists of Old](game:1368750) | Free | 87% |
+| [Relaxing Sudoku and Futoshiki](game:3877060) | $2.99 | N/A |
+| [Lovely Anime Puzzle: Easter](game:4235220) | $1.99 | N/A |
+
+These games feature beautiful visuals and are designed to provide a relaxing experience.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "relaxing puzzle games with beautiful art"
+    },
+    "executionMs": 1231,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #19 Tactical games with deck building
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 3.3/10
+- Verdict: Failure
+- Score breakdown: Directness 3/5 | Completeness 2/5 | Relevance 1/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 3/5
+- Usefulness summary: Mostly `Deck`-in-the-title results rather than believable tactical deck-builders.
+- Rationale: The system is still treating concept search like title-word search. A user asking for tactical deck-building comps expects games in the Slay the Spire / Monster Train / Trials of Fire neighborhood, not a table full of `Deck` lexical matches with weak or missing review signal.
+- Timing: total 11035ms | llm 9544ms | tools 1160ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some tactical games that feature deck building mechanics:
+
+| Game | Price | Review Percentage |
+|------|-------|-------------------|
+| [Decks Of Power](game:2216700) | $0.99 | N/A |
+| [Command Deck](game:3084740) | $11.99 | 100% |
+| [Tales of the Deck](game:1190760) | $9.99 | 63% |
+| [Decktamer](game:2870340) | $15.99 | 84% |
+| [Cardow! - Battle of Decks](game:1814090) | $2.99 | N/A |
+| [Towers Deck](game:2261750) | $9.99 | 75% |
+| [Deck Dash](game:2829750) | Free | 69% |
+| [SPACE INVADERS: Deck Commander](game:3060310) | $4.99 | N/A |
+| [DECK COLLECTOR](game:3633390) | $11.99 | N/A |
+| [Cards & Tankards](game:1506850) | Free | 88% |
+
+These games vary in price and review scores, providing a range of options for players interested in tactical deck-building experiences.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "tactical games with deck building"
+    },
+    "executionMs": 1160,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #18 horror games with investigation elements
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 3.4/10
+- Verdict: Failure
+- Score breakdown: Directness 3/5 | Completeness 3/5 | Relevance 1/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 2/5
+- Usefulness summary: The list is dominated by `investigation` title collisions with weak quality signals.
+- Rationale: This is still a lexical retrieval answer disguised as concept search. The returned set is full of low-signal titles and missing review data, with no evidence that the system understood the underlying tone or mechanics of horror investigation games.
+- Timing: total 11669ms | llm 9975ms | tools 1420ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some horror games with investigation elements:
+
+| Game | Price | Review Percentage |
+|------|-------|-------------------|
+| [Investigation](game:3168120) | $5.00 | 75% |
+| [Dark Investigation : Experiment](game:2780600) | $2.49 | N/A |
+| [H.I.A: Horror Investigation Agency](game:2363590) | Free | 51% |
+| [Paranormal Investigation](game:3602540) | $4.99 | N/A |
+| [Unnatural Investigations](game:1596360) | $1.99 | 60% |
+| [Haunted Investigation](game:2400880) | $3.99 | 83% |
+| [Story 210](game:3788190) | $5.99 | N/A |
+| [Hidden Investigation 2: Homicide](game:1778760) | $9.99 | N/A |
+| [Horror Prison](game:3172530) | $1.99 | 57% |
+| [S.I.N. Unit: Ghost Investigation & Removal](game:1724630) | $1.99 | 57% |
+
+These games incorporate elements of horror and investigation, providing a mix of thrilling gameplay and mystery-solving.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "horror games with investigation elements"
+    },
+    "executionMs": 1420,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #186 Tactical roguelikes
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 3.6/10
+- Verdict: Failure
+- Score breakdown: Directness 3/5 | Completeness 3/5 | Relevance 1/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 3/5
+- Usefulness summary: Still reads like a `Rogue` keyword scrape rather than a trustworthy subgenre list.
+- Rationale: The product should understand tactical roguelikes as a recognizable design space. Instead it returns a pile of `Rogue`-named titles with thin signal and little reason to believe these are meaningful comps.
+- Timing: total 6655ms | llm 5976ms | tools 374ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some tactical roguelikes you might enjoy:
+
+| Game | Price | Review Percentage |
+|------|-------|-------------------|
+| [Rogue Tiles](game:2999990) | $4.99 | 59% |
+| [Hexrogue](game:1924940) | $8.99 | 93% |
+| [Rogue Tactics](game:2345740) | $4.99 | 100% |
+| [ByteRogue](game:3647870) | $2.55 | N/A |
+| [RogueCraft](game:3470340) | $9.99 | 82% |
+| [OneShotRogue](game:1954440) | $14.99 | N/A |
+| [RoguePG](game:1896140) | $0.99 | N/A |
+| [Rogue Dungeon](game:1822640) | $14.99 | 74% |
+| [ROGUELINE](game:2069960) | $2.99 | N/A |
+| [Knights of the Rogue Dungeon](game:2739140) | $9.99 | N/A |
+
+Feel free to ask if you want more information about any specific game!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "tactical roguelike"
+    },
+    "executionMs": 374,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #195 Horror games with investigation and puzzle elements
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 3.6/10
+- Verdict: Failure
+- Score breakdown: Directness 3/5 | Completeness 3/5 | Relevance 1/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 3/5
+- Usefulness summary: Slightly broader than `#18`, but still mostly lexical investigation matches instead of concept understanding.
+- Rationale: Adding `puzzle elements` should have pushed the system toward a more curated psychological-horror puzzle set. Instead the answer remains dominated by `Investigation` titles and weak-signal rows, with only a marginally better mix than `#18`.
+- Timing: total 13846ms | llm 13132ms | tools 436ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some horror games that feature investigation and puzzle elements:
+
+| Game | Price | Review Percentage |
+|------|-------|-------------------|
+| [Investigation](game:3168120) | $5.00 | 75% |
+| [Dark Investigation : Experiment](game:2780600) | $2.49 | N/A |
+| [H.I.A: Horror Investigation Agency](game:2363590) | Free | 51% |
+| [Curious Cases](game:1045080) | $6.99 | 70% |
+| [Horror Prison](game:3172530) | $1.99 | 57% |
+| [Paranormal Investigation](game:3602540) | $4.99 | N/A |
+| [怪谈调查局](game:3694330) | $1.99 | N/A |
+| [Unnatural Investigations](game:1596360) | $1.99 | 60% |
+| [Story 210](game:3788190) | $5.99 | N/A |
+| [Psychic Investigation of Sakuragi Haru](game:2328690) | $2.99 | N/A |
+
+These games vary in price and review scores, providing a range of options for horror enthusiasts interested in investigation and puzzle-solving gameplay.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "horror games with investigation and puzzle elements"
+    },
+    "executionMs": 436,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #229 Fast-paced action games with pixel art
+
+- Section: 4. Concept and Taste-Based Discovery
+- Family: concept_search
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 4.1/10
+- Verdict: Weak
+- Score breakdown: Directness 4/5 | Completeness 2/5 | Relevance 2/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 4/5
+- Usefulness summary: Some rows fit, but the answer still looks like a `pixel` title scrape with no taste curation.
+- Rationale: There are a couple of plausible rows here, but the set is still overrun by `Pixel` lexical matches, missing review data, and weak action filtering. A user looking for stylistic action comps would not trust this list.
+- Timing: total 9260ms | llm 8505ms | tools 315ms | iterations 2
+- Tools: search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some fast-paced action games with pixel art:
+
+| Game | Price | Review Percentage |
+|------|-------|-------------------|
+| [Turbo Light Rush](game:2022510) | $0.99 | N/A |
+| [Impossible Pixels](game:1385920) | $9.99 | 90% |
+| [Pixel-Warfare: Pro](game:530240) | $0.99 | 56% |
+| [Hard, Fast, & Flashy](game:1226880) | Free | 88% |
+| [Pixelgroove](game:2871570) | $4.99 | N/A |
+| [Pixel Ninja](game:1379040) | $7.99 | N/A |
+| [Tiny Pixels Vol. 1 - Ninpo Blast](game:2959110) | $2.49 | N/A |
+| [Anarkade](game:1517800) | $14.99 | N/A |
+| [GO FKN FAST](game:3398230) | $2.99 | N/A |
+| [PixelGround](game:1598470) | $4.99 | 71% |
+
+These games feature pixel art and offer various gameplay styles within the action genre.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "fast-paced action games with pixel art"
+    },
+    "executionMs": 315,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #190 Find games in the same series as Dark Souls
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: franchise_lookup
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 4.1/10
+- Verdict: Weak
+- Score breakdown: Directness 3/5 | Completeness 2/5 | Relevance 2/5 | Trustworthiness 1/5 | Decision value 2/5 | Grace 3/5
+- Usefulness summary: It starts correctly and then drifts into Souls-like and title-adjacent noise, breaking the asked constraint.
+- Rationale: A franchise lookup needs to stay clean. Once the answer pads the Dark Souls series with Elden Ring, Lords of the Fallen, and title-adjacent noise like `Red Souls` and `BLACK SOULS II`, the user stops trusting the result.
+- Timing: total 16556ms | llm 15557ms | tools 725ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games in the same series as **[Dark Souls](game:335300)**, along with a few similar titles:
+
+| Game | Review Score | Price |
+|------|--------------|-------|
+| [DARK SOULS II](game:236430) | 88% | $39.99 |
+| [DARK SOULS III](game:374320) | 94% | $59.99 |
+| [DARK SOULS: REMASTERED](game:570940) | 92% | $39.99 |
+| [DARK SOULS: Prepare To Die Edition](game:211420) | 91% | Free |
+| [ELDEN RING](game:1245620) | 93% | $59.99 |
+| [Red Souls](game:3333250) | N/A | N/A |
+| [Lords of the Fallen](game:1501750) | 67% | $29.99 |
+| [BLACK SOULS II](game:3855540) | 97% | $13.99 |
+| [Soulbringer](game:283310) | 60% | $2.99 |
+
+These games share similar themes and gameplay mechanics, often categorized as "Souls-like" titles.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Dark Souls"
+    },
+    "executionMs": 725,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #132 Games similar to Hollow Knight with better reviews
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 4.1/10
+- Verdict: Weak
+- Score breakdown: Directness 3/5 | Completeness 2/5 | Relevance 2/5 | Trustworthiness 1/5 | Decision value 2/5 | Grace 3/5
+- Usefulness summary: The `better reviews` filter is visibly not enforced, so the comp list is not trustworthy.
+- Rationale: The answer looks tidy, but it breaks its own central constraint. Once obviously lower-reviewed or roughly similar-reviewed games appear in a `better reviews` answer, the user has no reason to trust the rest of the list.
+- Timing: total 17408ms | llm 16573ms | tools 531ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games similar to [Hollow Knight](game:367520) that have better reviews:
+
+| Game | Review Percentage | Price |
+|------|-------------------|-------|
+| [Hollow Knight: Silksong](game:1030300) | 88% | $19.99 |
+| [Dead Cells](game:588650) | 97% | $12.49 |
+| [Hyper Light Drifter](game:257850) | 92% | $19.99 |
+| [Shovel Knight: Specter of Torment](game:589510) | 94% | $9.99 |
+| [Hollowed](game:669630) | 80% (Free) | Free |
+| [Hollow Floor](game:2815150) | 94% | $2.99 |
+| [The Knightling](game:1471650) | 88% | $29.99 |
+| [Hollowdeep](game:3631260) | 90% | $2.67 |
+
+These games share similar themes and gameplay elements with Hollow Knight, and they have received positive reviews from players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hollow Knight",
+      "review_comparison": "better_only"
+    },
+    "executionMs": 531,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #134 Games like Hollow Knight but with fewer than 10K reviews
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 4.1/10
+- Verdict: Weak
+- Score breakdown: Directness 3/5 | Completeness 3/5 | Relevance 2/5 | Trustworthiness 1/5 | Decision value 2/5 | Grace 3/5
+- Usefulness summary: The hard review-count cap is broken by obvious over-10K titles.
+- Rationale: This is a good example of fluent wrongness. The system clearly understood the general comp intent, but not the hard popularity cap, so the user gets polished output that is still unsafe to act on.
+- Timing: total 15827ms | llm 15140ms | tools 407ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games similar to [Hollow Knight](game:367520) that have fewer than 10,000 reviews:
+
+| Game | Review Percentage | Price |
+|------|-------------------|-------|
+| [Hollow Knight: Silksong](game:1030300) | 88% | $19.99 |
+| [Drake Hollow](game:739650) | 77% | $29.99 |
+| [Dead Cells](game:588650) | 97% | $12.49 |
+| [Hyper Light Drifter](game:257850) | 92% | $19.99 |
+| [Shovel Knight: Specter of Torment](game:589510) | 94% | $9.99 |
+| [Hollowed](game:669630) | 80% | Free |
+| [The Knight Witch](game:1872680) | 72% | $19.99 |
+| [Hollow Floor](game:2815150) | 94% | $2.99 |
+| [The Knightling](game:1471650) | 88% | $29.99 |
+| [Hollowdeep](game:3631260) | 90% | $2.67 |
+
+These games share similar themes or gameplay mechanics with Hollow Knight, such as being in the Metroidvania genre or having a strong indie presence.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hollow Knight",
+      "filters": {
+        "min_reviews": 0,
+        "max_reviews": 10000
+      },
+      "limit": 10
+    },
+    "executionMs": 407,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #170 What publishers are similar to Devolver Digital?
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: publisher_similarity
+- Primary persona: Publishing Strategy Lead
+- User score: 5.0/10
+- Verdict: Weak
+- Score breakdown: Directness 4/5 | Completeness 1/5 | Relevance 2/5 | Trustworthiness 4/5 | Decision value 1/5 | Grace 4/5
+- Usefulness summary: It avoids the old lexical junk, but it is still a graceful dead end instead of a peer answer.
+- Rationale: This is a trust improvement over the earlier nonsense results, but not a useful product answer. A strategist looking for peer publishers still gets no fallback set, no heuristic peer frame, and no portfolio context to act on.
+- Timing: total 6989ms | llm 4511ms | tools 2210ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+It appears that there are currently no strong comparable publishers to [Devolver Digital](https://store.steampowered.com/publisher/DevolverDigital) based on the available data. The comparable company set is limited, and no precise peers were found at this time. If you have any other specific publishers or developers in mind, feel free to ask!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "publisher",
+      "reference_name": "Devolver Digital",
+      "limit": 6
+    },
+    "executionMs": 2210,
+    "success": false,
+    "result_summary": "0 results"
+  }
+]
+```
+
+</details>
+
+#### #51 Steam Deck games like Hades II
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 5.0/10
+- Verdict: Weak
+- Score breakdown: Directness 4/5 | Completeness 2/5 | Relevance 2/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 4/5
+- Usefulness summary: A few real comps help, but lexical contamination and missing Steam Deck evidence keep this weak.
+- Rationale: The list is directionally better than the earlier failure mode, but it still contains obvious contamination like `Hades' Star` and never shows why each result fits or how Steam Deck compliance was validated. That is not enough for a studio lead doing comp work.
+- Timing: total 28592ms | llm 27687ms | tools 563ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some Steam Deck games similar to [Hades II](game:1145350):
+
+| Game | Review Score | Price |
+|------|--------------|-------|
+| [Hades](game:1145360) | 98% | $24.99 |
+| [Perseus: Titan Slayer](game:2003050) | 64% | $0.79 |
+| [Darksiders II Deathinitive Edition](game:388410) | 78% | $29.99 |
+| [Rogue Legacy 2](game:1253920) | 90% | $24.99 |
+| [Neon Abyss 2](game:2235200) | 67% | $15.99 |
+| [Darksiders III](game:606280) | 76% | $39.99 |
+| [Darksiders Genesis](game:710920) | 81% | $29.99 |
+| [Dark Deity 2](game:2446600) | 91% | $24.99 |
+| [Hadean Tactics](game:1260590) | 89% | $19.99 |
+| [Hades' Star](game:755800) | 72% | Free |
+
+These games share similar genres and gameplay elements, making them great alternatives for fans of Hades II.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hades II",
+      "filters": {
+        "steam_deck": [
+          "verified",
+          "playable"
+        ]
+      }
+    },
+    "executionMs": 563,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #49 Games like Hollow Knight but with pixel art
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: game_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 5.9/10
+- Verdict: Mixed
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 3/5 | Grace 3/5
+- Usefulness summary: The top of the list is directionally useful, but the answer still collapses into Hollow-title contamination and low-signal filler.
+- Rationale: The first few rows finally feel like plausible comps, which makes this materially better than the concept-search failures. The problem is that the answer still pads itself with `Hollow` lexical matches, N/A rows, and one visibly bad `8%` result, so it never becomes fully trustworthy.
+- Timing: total 24440ms | llm 23095ms | tools 1046ms | iterations 2
+- Tools: find_similar, search_by_concept
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games similar to **[Hollow Knight](game:367520)** that feature pixel art:
+
+### Recommended Games
+| Game | Review Score | Price |
+|------|--------------|-------|
+| [Dead Cells](game:588650) | 97% | $12.49 |
+| [Hyper Light Drifter](game:257850) | 92% | $19.99 |
+| [Shovel Knight: Specter of Torment](game:589510) | 94% | $9.99 |
+| [Hollowroot](game:3625820) | N/A | $4.99 |
+| [Hollow Floor](game:2815150) | 94% | $2.99 |
+| [Dark Blood](game:1080440) | 8% | $11.99 |
+| [Moonlighter](game:606150) | 82% | $2.99 |
+| [Grimm's Hollow](game:1170880) | 98% | Free |
+| [A Song in Elyel Nalore](game:3408600) | N/A | $4.99 |
+| [FINAL KNIGHT](game:2072980) | 78% | $13.99 |
+
+### Additional Pixel Art Games
+| Game | Review Score | Price |
+|------|--------------|-------|
+| [Hollow Ghost](game:1510780) | N/A | $3.99 |
+| [Hollow's Land](game:338840) | 66% | $0.49 |
+| [Hollow: Cook Off](game:2640380) | N/A | Free |
+| [Hollowed](game:669630) | 80% | Free |
+| [Hollowing](game:3757960) | 83% | Free |
+| [Hollow Witch](game:1486030) | 78% | $4.99 |
+| [Hollow Jump](game:3744900) | 93% | $6.99 |
+
+These games share similar gameplay elements or aesthetics with **Hollow Knight** while incorporating pixel art styles. Enjoy exploring these titles!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "game",
+      "reference_name": "Hollow Knight",
+      "filters": {
+        "tags": [
+          "Pixel Graphics"
+        ]
+      },
+      "limit": 10
+    },
+    "executionMs": 585,
+    "success": true,
+    "result_summary": "10 results"
+  },
+  {
+    "name": "search_by_concept",
+    "arguments": {
+      "description": "pixel art games similar to Hollow Knight"
+    },
+    "executionMs": 462,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #171 Show me developers similar to Supergiant Games
+
+- Section: 3. Similarity and Comp-Finding Answers
+- Family: developer_similarity
+- Primary persona: Developer Studio Lead or Product Lead
+- User score: 7.6/10
+- Verdict: Good
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 2/5
+- Usefulness summary: Credible peer set, flagship context, and fit reasons make this the one genuinely useful result in the run.
+- Rationale: This is the only answer that consistently gives the user what they need: a believable peer set, flagship title context, review volume, and a reason each match belongs. The remaining weakness is that the `Why It Matches` column is repetitive and some peers still feel broad, but the answer is broadly decision-usable.
+- Timing: total 27222ms | llm 25153ms | tools 1532ms | iterations 2
+- Tools: find_similar
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some developers similar to [Supergiant Games](/developers/2024):
+
+| Developer | Flagship Titles | Review Percentage | Why It Matches |
+|-----------|----------------|-------------------|----------------|
+| [Crate Entertainment](/developers/6464) | [Grim Dawn](game:219990) (93.7% - 104,359 reviews)<br>[Farthest Frontier](game:1044720) (86.6% - 23,513 reviews) | 92% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, overlapping portfolio tags. |
+| [Cellar Door Games](/developers/115196) | [Rogue Legacy](game:241600) (92.5% - 18,669 reviews)<br>[Rogue Legacy 2](game:1253920) (90.9% - 14,857 reviews) | 92% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, overlapping portfolio tags. |
+| [Veewo Games](/developers/300515) | [Neon Abyss](game:788100) (86.2% - 23,140 reviews)<br>[Super Phantom Cat](game:988100) (82.8% - 227 reviews) | 86% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, overlapping portfolio tags. |
+| [Gunfire Games](/developers/3078) | [REMNANT II](game:1282100) (82.6% - 65,711 reviews)<br>[Remnant: From the Ashes](game:617290) (84.5% - 55,540 reviews) | 82% | A top title has close game-neighbor matches in this portfolio, similar genre footprint, overlapping portfolio tags. |
+| [Dumativa](/developers/49516) | [Enigma of Fear](game:1507580) (96.6% - 10,041 reviews)<br>[Songs for a Hero - Definitive Edition](game:389170) (96.6% - 4,102 reviews) | 97% | The flagship title has close game-neighbor matches in this portfolio, similar genre footprint, overlapping portfolio tags. |
+| [Panic Art Studios Ltd](/developers/254308) | [Hero Siege](game:269210) (68.5% - 43,512 reviews) | 69% | The flagship title has close game-neighbor matches in this portfolio, similar genre footprint, overlapping portfolio tags. |
+
+These developers share similar genres and themes with [Supergiant Games](/developers/2024), making them noteworthy peers in the gaming industry.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "find_similar",
+    "arguments": {
+      "entity_type": "developer",
+      "reference_name": "Supergiant Games",
+      "limit": 6
+    },
+    "executionMs": 1532,
+    "success": true,
+    "result_summary": "46 results"
+  }
+]
+```
+
+</details>
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-20T20:16:22.850Z","generatedAt":"2026-03-20T20:16:22.850Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":23,"averageTotalMs":14393,"medianTotalMs":13108,"p95TotalMs":30065,"averageUserScore":7.4,"weakOrFailureCount":1,"artifactPath":"/tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T20-10-40-725Z","scope":"full_sections_1_2_round_2","baselineRunId":"2026-03-20T18:58:22.282Z"} -->
+## Run 2026-03-20T20:16:22.850Z
+
+- Generated: 2026-03-20T20:16:22.850Z
+- Scope: second full live round of the 23-prompt critique suite for sections `1` and `2`, scored after the targeted five-prompt rerun
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T20-10-40-725Z
+- Generic runner report: /tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T20-10-40-725Z/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T20-10-40-725Z/results.json
+- Draft run scaffold: /tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T20-10-40-725Z/ledger-run-draft.md
+- Prompt count: 23
+- Average user score: 7.4/10
+- Verdict mix: Strong 2 | Good 14 | Mixed 6 | Weak 1
+- Full prompt outputs and tool calls for all 23 prompts are preserved in the raw report and JSON artifacts above.
+
+### Round 1 vs Round 2 Assessment
+
+- Baseline compared: `2026-03-20T18:58:22.282Z` full 23-prompt suite.
+- Average user score improved from `6.6/10` to `7.4/10`.
+- Weak/failure prompts dropped from `7` to `1`.
+- Latency improved from `18106ms` to `14393ms` average, `16620ms` to `13108ms` median, and `35040ms` to `30065ms` p95.
+- Biggest user-facing gains were `#89`, `#140`, `#152`, `#219`, `#141`, and `#170`.
+- Remaining problem areas are `#138` still behaving like a sale dump, `#141` still stopping at the 1,000-review floor instead of doing the 100-review fallback, and `#170` still failing to provide a usable Devolver peer set.
+- Net assessment: round 2 is materially better on trust, usefulness, and latency. The system is no longer dominated by hard trust failures, but filtered-discovery curation and company-similarity recovery still need another pass.
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 14393ms | 13108ms | 30065ms | 3845ms | 32522ms |
+
+### Ranking
+
+| Rank | Critique ID | Prompt | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---:|---|---|---:|---|---:|---|
+| 1 | 138 | Games currently on sale | Publishing Strategy Lead | 5.1/10 | Weak | 30065 | It is still a bargain-bin sale dump rather than a useful professional shortlist. |
+| 2 | 141 | Highly rated games under $10 released in the past year | Publishing Strategy Lead | 5.8/10 | Mixed | 4155 | Trustworthy constraint handling, but it still ends as a dead end instead of a fallback shortlist. |
+| 3 | 21 | Show me all the DLC for Elden Ring | Developer Studio Lead or Product Lead | 6.2/10 | Mixed | 13108 | Honest about missing metadata, but app IDs alone are still a weak DLC answer. |
+| 4 | 127 | What publishers are releasing the most games this year? | Publishing Strategy Lead | 6.6/10 | Mixed | 17304 | More interpretable than before, but raw volume still surfaces too many low-signal publishers. |
+| 5 | 170 | What publishers are similar to Devolver Digital? | Publishing Strategy Lead | 6.6/10 | Mixed | 5393 | Honest limitation is much better than lexical junk, but it is still not a peer answer. |
+| 6 | 157 | Which publishers released the most games this year? | Publishing Strategy Lead | 6.7/10 | Mixed | 13553 | Same contextual improvement as #127, but still too close to a noisy volume leaderboard. |
+| 7 | 140 | Publishers with 5+ games averaging 85%+ reviews in the past 3 years | Investor / Portfolio Analyst | 6.8/10 | Mixed | 6845 | Honest supported-window limitation restores trust, but it still stops short of an answer. |
+| 8 | 175 | Publishers with releases in every year since 2020 | Investor / Portfolio Analyst | 7.1/10 | Good | 26199 | Continuity screen now works, but the year window still needs clearer framing. |
+| 9 | 89 | Which indie developers have multiple hit games? | Publishing Strategy Lead | 7.4/10 | Good | 16707 | Believable indie shortlist now, but the lower rows still dilute the “hit” standard. |
+| 10 | 151 | Developers with 3+ games, all above 90% reviews, with a release in the past year | Publishing Strategy Lead | 7.4/10 | Good | 13121 | Useful constrained screen again, but the low-volume tail still weakens trust. |
+| 11 | 152 | What tags exist for colony sim games? | Developer Studio Lead or Product Lead | 7.4/10 | Good | 3845 | Canonical plus adjacent tags finally makes this a real discovery answer. |
+| 12 | 2 | free metroidvania games | Developer Studio Lead or Product Lead | 7.5/10 | Good | 9225 | Sparse-set caveat helps, but the low-quality tail and missing review counts keep it from feeling curated. |
+| 13 | 130 | Publishers with the most games released in the past 6 months | Publishing Strategy Lead | 7.7/10 | Good | 14286 | Meaningful-release framing makes this materially useful, though the metric still needs one cleaner definition. |
+| 14 | 97 | Compare FromSoftware and Team Cherry by reviews | Investor / Portfolio Analyst | 7.8/10 | Good | 12991 | Strong first-pass review comparison with the missing volume context restored. |
+| 15 | 171 | Show me developers similar to Supergiant Games | Developer Studio Lead or Product Lead | 7.8/10 | Good | 12110 | Credible peer set with fit reasons, though some matches and explanations remain generic. |
+| 16 | 155 | Show me all games by FromSoftware | Developer Studio Lead or Product Lead | 7.9/10 | Good | 12666 | Real FromSoftware catalogue is restored, though newest low-signal archive rows clutter the top. |
+| 17 | 161 | games by FromSoftware | Developer Studio Lead or Product Lead | 7.9/10 | Good | 17319 | Useful developer portfolio answer, though the sort order still favors low-signal recency over flagship relevance. |
+| 18 | 156 | top games from FromSoftware | Developer Studio Lead or Product Lead | 8.2/10 | Good | 17464 | Strong flagship ranking with reviews, owners, and dates, with one small link-trust blemish. |
+| 19 | 242 | Premium games over $40 with great reviews | Publishing Strategy Lead | 8.2/10 | Good | 32522 | Real premium hits are back, though the quality bar still feels a bit loose at the tail. |
+| 20 | 178 | how many games has Krafton published? | Investor / Portfolio Analyst | 8.4/10 | Good | 11929 | Count plus quality context and representative titles makes this genuinely useful. |
+| 21 | 179 | How many games has Valve published? | Investor / Portfolio Analyst | 8.4/10 | Good | 10002 | Count plus portfolio scale gives a strong quick read on Valve. |
+| 22 | 10 | tell me about Hades II | Developer Studio Lead or Product Lead | 8.6/10 | Strong | 10644 | Decision-ready lookup with release state, price, review volume, and platform status. |
+| 23 | 219 | Games under $5 with overwhelmingly positive reviews | Publishing Strategy Lead | 8.7/10 | Strong | 19580 | Hard price constraint is finally respected and the returned titles are genuinely useful. |
 
 <!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-20T20:04:36.504Z","generatedAt":"2026-03-20T20:04:36.504Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":5,"averageTotalMs":11596,"medianTotalMs":5847,"p95TotalMs":34281,"averageUserScore":6.8,"weakOrFailureCount":0,"artifactPath":"/tmp/publisheriq-chat-evals/fix-under-5.yaJk8U/live-post-deploy","scope":"targeted_under_5_post_deploy_rerun","promptIds":[89,140,141,152,170]} -->
 ## Run 2026-03-20T20:04:36.504Z
