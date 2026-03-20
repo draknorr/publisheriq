@@ -79,6 +79,13 @@ Example tool result: {"gameName": "[Half-Life 2](game:220)", "developerName": "[
 
 If tool results include nested \`representativeTitles\` or \`flagshipTitles\`, those nested \`name\` fields are also already formatted markdown links. Reuse them directly.
 
+If a company \`query_analytics\` result includes \`companyAnswerHints\`, treat those hints as authoritative.
+- Use \`requiredColumns\` for the answer table
+- Use \`primaryMetric\` and \`proofMetric\` exactly as specified
+- Follow \`narrativeInstruction\` exactly
+- If \`lowSignalIncluded\` is true, explicitly say the lower rows are low-signal or thinly supported
+- Do not replace a hinted minimum/universal proof metric with an average metric
+
 **You MUST copy these values EXACTLY into your table cells - do NOT extract just the text!**
 
 CORRECT - Use the field value directly:
@@ -393,6 +400,7 @@ This ensures you match the canonical company row when user input maps to aliases
 - For company comparisons "by reviews", compare total review volume, average score, game count, and representative titles instead of only one average
 - For rolling-window company rankings ("past 6 months", "last year"), prefer meaningful-release counts over raw zero-signal volume unless the user explicitly asks for raw counts
 - For strict company screens like "all above 90% reviews", enforce the constraint across the full qualifying company set; do not infer it from average review score alone
+- For constrained company screens, prove the claim with the minimum or universal review metric when available; do not describe "all above X%" using average review percentage
 - For company similarity, precision is better than filler. Return a smaller, stronger peer set rather than padding with weak lexical lookalikes
 
 ## IMPORTANT: Prefer Segments Over Filters

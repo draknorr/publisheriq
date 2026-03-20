@@ -5,6 +5,7 @@ import { getServiceSupabase } from '@/lib/supabase-service';
 type Primitive = string | number | boolean;
 type CompanyEntityType = 'publisher' | 'developer';
 type CompanyWindowSegment = 'lastYear' | 'last6Months' | 'last3Months' | 'last30Days';
+type CompanyRankingMode = 'meaningful_first' | 'raw_count';
 
 interface QueryAnalyticsArgs {
   cube: string;
@@ -45,6 +46,28 @@ interface CompanyResultShape {
   [key: string]: unknown;
 }
 
+interface CompanyAnswerMetricHint {
+  label: string;
+  member: string;
+}
+
+interface CompanyAnswerHints {
+  family: Extract<CompanyIntentFamily, 'time_window_ranking' | 'constrained_company_screen'>;
+  rankingMode: CompanyRankingMode;
+  lowSignalIncluded: boolean;
+  lowSignalReason?: string;
+  primaryMetric: CompanyAnswerMetricHint;
+  proofMetric: CompanyAnswerMetricHint;
+  contextMetrics: CompanyAnswerMetricHint[];
+  requiredColumns: string[];
+  narrativeInstruction: string;
+}
+
+interface WindowPolicyResult {
+  rows: Record<string, unknown>[];
+  hints?: CompanyAnswerHints;
+}
+
 export type CompanyIntentFamily =
   | 'company_count_profile'
   | 'portfolio_top_titles'
@@ -69,6 +92,17 @@ const MULTI_SLICE_MARKERS = [
   /\bcompare\b/i,
   /\bversus\b/i,
   /\bvs\.?\b/i,
+];
+
+const RAW_COUNT_MARKERS = [
+  /\braw count\b/i,
+  /\bjust by count\b/i,
+  /\bstrictly by count\b/i,
+  /\bregardless of reviews?\b/i,
+  /\bignore quality\b/i,
+  /\bignore reviews?\b/i,
+  /\bignore review signal\b/i,
+  /\bliteral release count\b/i,
 ];
 
 const GENERIC_RELATIONSHIP_LOOKUPS = new Set([
@@ -276,9 +310,30 @@ function buildWindowMetricMember(cube: string, field: string, segment: CompanyWi
   return `${cube}.${field}${windowSuffix(segment)}`;
 }
 
+function buildWindowRowField(field: string, segment: CompanyWindowSegment): string {
+  return `${field}${windowSuffix(segment)}`;
+}
+
+function describeWindowSegment(segment: CompanyWindowSegment): string {
+  switch (segment) {
+    case 'last30Days':
+      return 'past 30 days';
+    case 'last3Months':
+      return 'past 3 months';
+    case 'last6Months':
+      return 'past 6 months';
+    default:
+      return 'past year';
+  }
+}
+
 function wantsMultipleHitGames(prompt: string): boolean {
   const text = normalizePrompt(prompt);
   return /\bmultiple hit games\b|\b2\+\s*hit games\b|\btwo hit games\b/.test(text);
+}
+
+function wantsRawCountRanking(prompt: string): boolean {
+  return RAW_COUNT_MARKERS.some((pattern) => pattern.test(prompt));
 }
 
 function rewriteRelationshipScreen(
@@ -379,7 +434,8 @@ function rewriteTimeWindowRanking(
   }
 
   const cube = entityType === 'publisher' ? 'PublisherChatWindowMetrics' : 'DeveloperChatWindowMetrics';
-  const gamesField = buildWindowMetricMember(cube, entityType === 'publisher' ? 'gamesReleased' : 'gamesReleased', timeWindow.segment);
+  const rawCountMode = wantsRawCountRanking(prompt);
+  const gamesField = buildWindowMetricMember(cube, 'gamesReleased', timeWindow.segment);
   const meaningfulField = buildWindowMetricMember(cube, 'meaningfulGamesReleased', timeWindow.segment);
   const totalReviewsField = buildWindowMetricMember(cube, 'totalReviews', timeWindow.segment);
   const avgField = buildWindowMetricMember(cube, 'avgReviewPercentage', timeWindow.segment);
@@ -396,15 +452,21 @@ function rewriteTimeWindowRanking(
       avgField,
       minField,
     ],
-    filters: [
-      { member: meaningfulField, operator: 'gte', values: [1] },
-    ],
-    order: {
-      [gamesField]: 'desc',
-      [meaningfulField]: 'desc',
-      [totalReviewsField]: 'desc',
-    },
-    limit: Math.min(args.limit ?? 10, 10),
+    filters: rawCountMode
+      ? []
+      : [{ member: meaningfulField, operator: 'gte', values: [1] }],
+    order: rawCountMode
+      ? {
+          [gamesField]: 'desc',
+          [totalReviewsField]: 'desc',
+          [meaningfulField]: 'desc',
+        }
+      : {
+          [meaningfulField]: 'desc',
+          [totalReviewsField]: 'desc',
+          [gamesField]: 'desc',
+        },
+    limit: 25,
     reasoning: normalizeReasoning('time_window_ranking', prompt),
   };
 }
@@ -449,10 +511,11 @@ function rewriteConstrainedCompanyScreen(
       { member: minField, operator: 'gte', values: [reviewPercentage] },
     ],
     order: {
-      [gamesField]: 'desc',
+      [meaningfulField]: 'desc',
       [totalReviewsField]: 'desc',
+      [gamesField]: 'desc',
     },
-    limit: Math.min(args.limit ?? 25, 25),
+    limit: 50,
     reasoning: normalizeReasoning('constrained_company_screen', prompt),
   };
 }
@@ -600,6 +663,234 @@ function lowerBoundForSegment(segment: CompanyWindowSegment | null): string | nu
     default:
       return null;
   }
+}
+
+function numberFromRow(row: Record<string, unknown>, key: string): number {
+  const value = Number(row[key] ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function compareRowsByNumericMembers(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+  members: string[]
+): number {
+  for (const member of members) {
+    const diff = numberFromRow(right, member) - numberFromRow(left, member);
+    if (diff !== 0) {
+      return diff;
+    }
+  }
+
+  return 0;
+}
+
+function buildWindowAnswerHints(
+  family: Extract<CompanyIntentFamily, 'time_window_ranking' | 'constrained_company_screen'>,
+  rankingMode: CompanyRankingMode,
+  lowSignalIncluded: boolean,
+  segment: CompanyWindowSegment,
+  options: {
+    gamesMember: string;
+    meaningfulMember: string;
+    totalReviewsMember: string;
+    avgReviewMember: string;
+    minReviewMember: string;
+    lowSignalReason?: string;
+  }
+): CompanyAnswerHints {
+  const segmentLabel = describeWindowSegment(segment);
+
+  if (family === 'constrained_company_screen') {
+    return {
+      family,
+      rankingMode,
+      lowSignalIncluded,
+      lowSignalReason: options.lowSignalReason,
+      primaryMetric: {
+        label: 'Games Released',
+        member: options.gamesMember,
+      },
+      proofMetric: {
+        label: 'Minimum Review %',
+        member: options.minReviewMember,
+      },
+      contextMetrics: [
+        { label: 'Meaningful Releases', member: options.meaningfulMember },
+        { label: 'Total Reviews', member: options.totalReviewsMember },
+      ],
+      requiredColumns: [
+        'Company',
+        'Games Released',
+        'Meaningful Releases',
+        'Minimum Review %',
+        'Total Reviews',
+        'Representative Titles',
+      ],
+      narrativeInstruction: lowSignalIncluded
+        ? `Describe these as companies whose qualifying releases in the ${segmentLabel} all meet the minimum review threshold, and explicitly note that lower rows are low-signal because review-backed evidence is thin.`
+        : `Describe these as companies whose qualifying releases in the ${segmentLabel} all meet the minimum review threshold. Do not phrase the proof as an average review score.`,
+    };
+  }
+
+  return {
+    family,
+    rankingMode,
+    lowSignalIncluded,
+    lowSignalReason: options.lowSignalReason,
+    primaryMetric: {
+      label: 'Games Released',
+      member: options.gamesMember,
+    },
+    proofMetric: {
+      label: 'Meaningful Releases',
+      member: options.meaningfulMember,
+    },
+    contextMetrics: [
+      { label: 'Total Reviews', member: options.totalReviewsMember },
+      { label: 'Average Review %', member: options.avgReviewMember },
+    ],
+    requiredColumns: [
+      'Company',
+      'Games Released',
+      'Meaningful Releases',
+      'Total Reviews',
+      'Average Review %',
+      'Representative Titles',
+    ],
+    narrativeInstruction:
+      rankingMode === 'raw_count'
+        ? 'Treat this as a literal raw release-count ranking because the prompt explicitly asked to ignore quality or reviews. Keep the context columns, but do not reinterpret the ranking as quality-first.'
+        : lowSignalIncluded
+          ? `Describe this as a recent release-volume ranking among companies with review-backed releases, and explicitly note that the lower rows are low-signal fillers because the stronger pool in the ${segmentLabel} is limited.`
+          : `Describe this as a recent release-volume ranking among companies with review-backed releases in the ${segmentLabel}.`,
+  };
+}
+
+function normalizeCompanyWindowRows(
+  family: CompanyIntentFamily,
+  userPrompt: string,
+  rows: Record<string, unknown>[]
+): WindowPolicyResult {
+  if (rows.length === 0) {
+    return { rows };
+  }
+
+  const timeWindow = detectTimeWindow(userPrompt);
+  if (timeWindow?.type !== 'segment') {
+    return { rows };
+  }
+
+  const segment = timeWindow.segment;
+  const gamesMember = buildWindowRowField('gamesReleased', segment);
+  const meaningfulMember = buildWindowRowField('meaningfulGamesReleased', segment);
+  const totalReviewsMember = buildWindowRowField('totalReviews', segment);
+  const avgReviewMember = buildWindowRowField('avgReviewPercentage', segment);
+  const minReviewMember = buildWindowRowField('minReviewPercentage', segment);
+
+  if (family === 'time_window_ranking') {
+    const rankingMode: CompanyRankingMode = wantsRawCountRanking(userPrompt) ? 'raw_count' : 'meaningful_first';
+    const orderedRows = rows.slice().sort((left, right) => {
+      if (rankingMode === 'raw_count') {
+        return compareRowsByNumericMembers(left, right, [
+          gamesMember,
+          totalReviewsMember,
+          meaningfulMember,
+        ]);
+      }
+
+      return compareRowsByNumericMembers(left, right, [
+        meaningfulMember,
+        totalReviewsMember,
+        gamesMember,
+      ]);
+    });
+
+    if (rankingMode === 'raw_count') {
+      return {
+        rows: orderedRows.slice(0, 10),
+        hints: buildWindowAnswerHints('time_window_ranking', rankingMode, false, segment, {
+          gamesMember,
+          meaningfulMember,
+          totalReviewsMember,
+          avgReviewMember,
+          minReviewMember,
+        }),
+      };
+    }
+
+    const strongRows: Record<string, unknown>[] = [];
+    const weakRows: Record<string, unknown>[] = [];
+
+    for (const row of orderedRows) {
+      const meaningfulCount = numberFromRow(row, meaningfulMember);
+      const totalReviews = numberFromRow(row, totalReviewsMember);
+      if (meaningfulCount >= 2 || totalReviews >= 1000) {
+        strongRows.push(row);
+      } else {
+        weakRows.push(row);
+      }
+    }
+
+    const finalRows = [...strongRows, ...weakRows].slice(0, 10);
+    const lowSignalIncluded = finalRows.some((row) => weakRows.includes(row));
+
+    return {
+      rows: finalRows,
+      hints: buildWindowAnswerHints('time_window_ranking', rankingMode, lowSignalIncluded, segment, {
+        gamesMember,
+        meaningfulMember,
+        totalReviewsMember,
+        avgReviewMember,
+        minReviewMember,
+        lowSignalReason: lowSignalIncluded
+          ? 'The ranking includes lower-signal filler rows after the strongest review-backed recent release candidates.'
+          : undefined,
+      }),
+    };
+  }
+
+  if (family === 'constrained_company_screen') {
+    const minGames = extractGameCountThreshold(userPrompt) ?? 0;
+    const orderedRows = rows.slice().sort((left, right) =>
+      compareRowsByNumericMembers(left, right, [
+        meaningfulMember,
+        totalReviewsMember,
+        gamesMember,
+      ]));
+
+    const strongRows: Record<string, unknown>[] = [];
+    const weakRows: Record<string, unknown>[] = [];
+
+    for (const row of orderedRows) {
+      const meaningfulCount = numberFromRow(row, meaningfulMember);
+      const totalReviews = numberFromRow(row, totalReviewsMember);
+      if (meaningfulCount >= minGames || totalReviews >= 1000) {
+        strongRows.push(row);
+      } else {
+        weakRows.push(row);
+      }
+    }
+
+    const finalRows = [...strongRows, ...weakRows].slice(0, 20);
+    const lowSignalIncluded = finalRows.some((row) => weakRows.includes(row));
+
+    return {
+      rows: finalRows,
+      hints: buildWindowAnswerHints('constrained_company_screen', 'meaningful_first', lowSignalIncluded, segment, {
+        gamesMember,
+        meaningfulMember,
+        totalReviewsMember,
+        avgReviewMember,
+        minReviewMember,
+        lowSignalReason: lowSignalIncluded
+          ? 'Some qualifying companies meet the literal constraint but have thin review-backed evidence compared with the leading rows.'
+          : undefined,
+      }),
+    };
+  }
+
+  return { rows };
 }
 
 async function fetchRepresentativeTitles(
@@ -843,10 +1134,27 @@ async function enrichSimilarityResultsWithTitles(
 
 function annotateSparseCompanyRows(
   family: CompanyIntentFamily,
-  rows: Record<string, unknown>[]
+  rows: Record<string, unknown>[],
+  hints?: CompanyAnswerHints
 ): ToolSufficiencyMetadata {
   if (rows.length === 0) {
     return {};
+  }
+
+  if (hints?.lowSignalIncluded) {
+    if (family === 'time_window_ranking') {
+      return {
+        sufficient_to_answer: true,
+        sufficiency_reason: 'Returned the strongest available recent company ranking. The leading rows are review-backed, but some lower rows are low-signal because the stronger recent-release pool is limited.',
+      };
+    }
+
+    if (family === 'constrained_company_screen') {
+      return {
+        sufficient_to_answer: true,
+        sufficiency_reason: 'Returned qualifying companies that meet the literal constraint, but some lower rows have thin supporting review volume. Respond directly and call out the low-signal tail.',
+      };
+    }
   }
 
   if (family === 'constrained_company_screen') {
@@ -908,13 +1216,15 @@ export async function applyCompanyToolResultPolicy<
     return result;
   }
 
-  const enrichedRows = await enrichCompanyRowsWithTitles(family, userPrompt, result.data);
-  const sufficiency = annotateSparseCompanyRows(family, enrichedRows);
+  const windowPolicy = normalizeCompanyWindowRows(family, userPrompt, result.data);
+  const enrichedRows = await enrichCompanyRowsWithTitles(family, userPrompt, windowPolicy.rows);
+  const sufficiency = annotateSparseCompanyRows(family, enrichedRows, windowPolicy.hints);
 
   return {
     ...result,
     data: enrichedRows,
     rowCount: enrichedRows.length,
+    ...(windowPolicy.hints ? { companyAnswerHints: windowPolicy.hints } : {}),
     ...sufficiency,
   };
 }
