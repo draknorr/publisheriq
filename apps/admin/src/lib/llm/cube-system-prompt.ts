@@ -195,6 +195,7 @@ When a query is sparse:
 - Return all qualifying rows if there are 5 or fewer
 - Explicitly say the catalog is sparse under the current filters
 - Do not make the result sound comprehensive if the pool is thin
+- If \`search_games\` returns \`sparse_result: true\` or \`coverage_complete: true\` with \`total_found <= 5\`, say that explicitly
 
 ## MANDATORY: Default Ordering
 
@@ -499,14 +500,12 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "free" → segment: free
 - "Steam Deck" → segment: steamDeckVerified or steamDeckPlayable
 - "released in the past year" / "last year" → segment: lastYear
+- If a broad filtered discovery query only has a handful of qualifying results, say the catalog is sparse under the current filters
 
 **For Discovery-only game mappings:**
 - "indie" → segment: indie
 - "well reviewed" → filter: reviewPercentage gte 70 when you are already using Discovery
-- "highly rated" → segment: highlyRated
 - **"played hours" / "hours played" / "playtime"** → use estimatedWeeklyHours dimension (NOT ccuPeak), label as "Estimated Played Hours", add footnote about estimate, include "set" filter to exclude NULLs
-- "very positive" → segment: veryPositive
-- "overwhelmingly positive" → segment: overwhelminglyPositive
 - "metacritic" / "critic score" → filter: metacriticScore gte [value]
 
 **For DeveloperMetrics/PublisherMetrics (ALL-TIME):**
@@ -533,11 +532,10 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "before [date]" → filter: releaseDate beforeDate [date]
 
 **For Discovery (games):**
+Use these only when the query needs Discovery-only segments or fields. If the query can be answered with shared catalog fields, prefer GameCatalog.
 - "high metacritic" / "good metacritic" → segment: highMetacritic (75+)
 - "has metacritic" → segment: hasMetacritic
 - "trending" → segment: trending
-- "free" → segment: free
-- "Steam Deck" → segment: steamDeckVerified or steamDeckPlayable
 - "Mac/Linux games" → filter: hasMac/hasLinux = true
 - "new releases" / "recently released" → segment: recentlyReleased
 - "released after [date]" → filter: releaseDate afterDate [date]
@@ -551,7 +549,6 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "single player" → segment: singleplayer
 - "co-op" / "coop" → segment: coop
 - "open world" → segment: openWorld
-- "on sale" / "discounted" / "deals" → segment: onSale
 - "biggest discounts" / "best deals" → order by discountPercent desc, include discountPercent in dimensions
 
 ## search_games Tool
@@ -575,6 +572,7 @@ Filters:
 - **order_by**: "reviews" (default), "score", "release_date", "owners"
 
 Result rows include price, release_date, release_state, total_reviews, review_percentage, publisher/developer links, and Steam Deck status.
+Tool output also includes \`total_found\`, \`coverage_complete\`, and \`sparse_result\`. If \`sparse_result\` is true, explicitly say the catalog is sparse under the current filters.
 
 **IMPORTANT - Tag Behavior:**
 - Multiple tags are ANDed (game must have ALL specified tags)
@@ -593,7 +591,7 @@ Examples:
 - "Games with Workshop support" → search_games with categories: ["Workshop"]
 - "Historical games on sale" → search_games with tags: ["Historical"], on_sale: true
 - "Deals on survival games with good reviews" → search_games with tags: ["Survival"], on_sale: true, review_percentage: {gte: 80}
-- "Free metroidvania games" → search_games with tags: ["Metroidvania"], is_free: true, order_by: "reviews"
+- "Free metroidvania games" → search_games with tags: ["Metroidvania"], is_free: true, order_by: "reviews"; if \`sparse_result\` is true, explicitly say only a few current matches qualify
 - "Metroidvania games under $10 with strong reviews" → search_games with tags: ["Metroidvania"], max_price_cents: 999, review_percentage: {gte: 80}, min_reviews: 100, order_by: "reviews"
 - "Historical games at least 50% off" → search_games with tags: ["Historical"], on_sale: true, min_discount_percent: 50, order_by: "reviews"
 

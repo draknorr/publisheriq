@@ -40,6 +40,61 @@ interface CubeFilter {
   values?: (string | number | boolean)[];
 }
 
+interface CanonicalizedQuery {
+  query: CubeQuery;
+  canonicalizedFromCube?: string;
+  canonicalizationReason?: string;
+}
+
+const DISCOVERY_TO_GAME_CATALOG_FIELDS = new Set([
+  'appid',
+  'name',
+  'isFree',
+  'priceCents',
+  'priceDollars',
+  'discountPercent',
+  'releaseDate',
+  'releaseYear',
+  'platforms',
+  'hasWindows',
+  'hasMac',
+  'hasLinux',
+  'controllerSupport',
+  'steamDeckCategory',
+  'isSteamDeckVerified',
+  'isSteamDeckPlayable',
+  'ownersMidpoint',
+  'ccuPeak',
+  'totalReviews',
+  'positivePercentage',
+  'reviewPercentage',
+]);
+
+const DISCOVERY_TO_GAME_CATALOG_MEASURES = new Set([
+  'count',
+  'avgPrice',
+  'avgReviewPercentage',
+  'sumOwners',
+  'sumCcu',
+]);
+
+const DISCOVERY_TO_GAME_CATALOG_SEGMENTS = new Set([
+  'released',
+  'free',
+  'paid',
+  'onSale',
+  'highlyRated',
+  'veryPositive',
+  'overwhelminglyPositive',
+  'popular',
+  'releasedThisYear',
+  'lastYear',
+  'last6Months',
+  'last3Months',
+  'steamDeckVerified',
+  'steamDeckPlayable',
+]);
+
 // Map SQL operators to Cube.dev operators
 const OPERATOR_MAP: Record<string, string> = {
   '>=': 'gte',
@@ -56,6 +111,88 @@ const VALID_OPERATORS = ['equals', 'notEquals', 'contains', 'notContains', 'gt',
 
 // Regex to extract SQL operators that might be combined with values (e.g., ">=90")
 const SQL_OP_WITH_VALUE = /^(>=|<=|!=|<>|>|<|={1,2})(.+)$/;
+
+function rewriteSharedDiscoveryMember(member: string): string | null {
+  if (!member.startsWith('Discovery.')) {
+    return null;
+  }
+
+  const field = member.slice('Discovery.'.length);
+  if (!DISCOVERY_TO_GAME_CATALOG_FIELDS.has(field)) {
+    return null;
+  }
+
+  return `GameCatalog.${field}`;
+}
+
+function rewriteSharedDiscoveryMeasure(measure: string): string | null {
+  if (!measure.startsWith('Discovery.')) {
+    return null;
+  }
+
+  const field = measure.slice('Discovery.'.length);
+  if (!DISCOVERY_TO_GAME_CATALOG_MEASURES.has(field)) {
+    return null;
+  }
+
+  return `GameCatalog.${field}`;
+}
+
+function rewriteSharedDiscoverySegment(segment: string): string | null {
+  if (!segment.startsWith('Discovery.')) {
+    return null;
+  }
+
+  const field = segment.slice('Discovery.'.length);
+  if (!DISCOVERY_TO_GAME_CATALOG_SEGMENTS.has(field)) {
+    return null;
+  }
+
+  return `GameCatalog.${field}`;
+}
+
+function canonicalizeDiscoveryQuery(query: CubeQuery): CanonicalizedQuery {
+  if (query.cube !== 'Discovery') {
+    return { query };
+  }
+
+  const rewrittenDimensions = (query.dimensions ?? []).map(rewriteSharedDiscoveryMember);
+  const rewrittenMeasures = (query.measures ?? []).map(rewriteSharedDiscoveryMeasure);
+  const rewrittenFilters = (query.filters ?? []).map((filter) => {
+    const rewrittenMember = rewriteSharedDiscoveryMember(filter.member);
+    return rewrittenMember ? { ...filter, member: rewrittenMember } : null;
+  });
+  const rewrittenSegments = (query.segments ?? []).map(rewriteSharedDiscoverySegment);
+  const rewrittenOrderEntries = Object.entries(query.order ?? {}).map(([member, direction]) => {
+    const rewrittenMember = rewriteSharedDiscoveryMember(member);
+    return rewrittenMember ? [rewrittenMember, direction] as const : null;
+  });
+
+  const hasUnsupportedDiscoveryField =
+    rewrittenDimensions.some((member) => member === null) ||
+    rewrittenMeasures.some((measure) => measure === null) ||
+    rewrittenFilters.some((filter) => filter === null) ||
+    rewrittenSegments.some((segment) => segment === null) ||
+    rewrittenOrderEntries.some((entry) => entry === null);
+
+  if (hasUnsupportedDiscoveryField) {
+    return { query };
+  }
+
+  return {
+    query: {
+      cube: 'GameCatalog',
+      dimensions: rewrittenDimensions as string[],
+      measures: rewrittenMeasures as string[],
+      filters: rewrittenFilters as CubeFilter[],
+      segments: rewrittenSegments as string[],
+      order: Object.fromEntries(rewrittenOrderEntries as Array<[string, 'asc' | 'desc']>),
+      limit: query.limit,
+    },
+    canonicalizedFromCube: 'Discovery',
+    canonicalizationReason: 'Shared Discovery query rewritten to GameCatalog for richer broad catalog discovery and stricter routing.',
+  };
+}
 
 /**
  * Check if an error is caused by SQL operator syntax errors
@@ -181,6 +318,8 @@ interface CubeResult {
     segments?: string[];
     order?: Record<string, string>;
     limit?: number;
+    canonicalizedFromCube?: string;
+    canonicalizationReason?: string;
   };
 }
 
@@ -213,6 +352,8 @@ async function executeCubeQueryInternal(
   config: RetryConfig = DEFAULT_RETRY_CONFIG
 ): Promise<CubeResult> {
   const apiUrl = process.env.CUBE_API_URL;
+  const canonicalized = canonicalizeDiscoveryQuery(query);
+  const effectiveQuery = canonicalized.query;
 
   if (!apiUrl) {
     throw new Error('CUBE_API_URL environment variable is not set');
@@ -222,11 +363,11 @@ async function executeCubeQueryInternal(
   const cubeQuery: Record<string, unknown> = {};
 
   // Start with requested dimensions
-  const dimensions = query.dimensions ? [...query.dimensions] : [];
+  const dimensions = effectiveQuery.dimensions ? [...effectiveQuery.dimensions] : [];
 
   // Auto-add order field to dimensions if not present (Cube.dev requires it)
-  if (query.order) {
-    for (const orderField of Object.keys(query.order)) {
+  if (effectiveQuery.order) {
+    for (const orderField of Object.keys(effectiveQuery.order)) {
       if (!dimensions.includes(orderField)) {
         dimensions.push(orderField);
       }
@@ -237,24 +378,24 @@ async function executeCubeQueryInternal(
     cubeQuery.dimensions = dimensions;
   }
 
-  if (query.measures && query.measures.length > 0) {
-    cubeQuery.measures = query.measures;
+  if (effectiveQuery.measures && effectiveQuery.measures.length > 0) {
+    cubeQuery.measures = effectiveQuery.measures;
   }
 
-  if (query.filters && query.filters.length > 0) {
-    cubeQuery.filters = normalizeFilters(query.filters);
+  if (effectiveQuery.filters && effectiveQuery.filters.length > 0) {
+    cubeQuery.filters = normalizeFilters(effectiveQuery.filters);
   }
 
-  if (query.segments && query.segments.length > 0) {
-    cubeQuery.segments = query.segments;
+  if (effectiveQuery.segments && effectiveQuery.segments.length > 0) {
+    cubeQuery.segments = effectiveQuery.segments;
   }
 
-  if (query.order) {
-    cubeQuery.order = query.order;
+  if (effectiveQuery.order) {
+    cubeQuery.order = effectiveQuery.order;
   }
 
-  if (query.limit) {
-    cubeQuery.limit = Math.min(query.limit, 100); // Cap at 100
+  if (effectiveQuery.limit) {
+    cubeQuery.limit = Math.min(effectiveQuery.limit, 100); // Cap at 100
   } else {
     cubeQuery.limit = 50; // Default limit
   }
@@ -322,8 +463,8 @@ async function executeCubeQueryInternal(
 
         // Apply sorting at application layer (Cube.dev doesn't always respect ORDER BY for time dimensions)
         let sortedData = simplifiedData;
-        if (query.order) {
-          const orderEntries = Object.entries(query.order);
+        if (effectiveQuery.order) {
+          const orderEntries = Object.entries(effectiveQuery.order);
           if (orderEntries.length > 0) {
             const [orderField, orderDir] = orderEntries[0];
             // Extract field name without cube prefix
@@ -370,6 +511,8 @@ async function executeCubeQueryInternal(
             segments: cubeQuery.segments as string[],
             order: cubeQuery.order as Record<string, string>,
             limit: cubeQuery.limit as number,
+            canonicalizedFromCube: canonicalized.canonicalizedFromCube,
+            canonicalizationReason: canonicalized.canonicalizationReason,
           },
         };
       } finally {
