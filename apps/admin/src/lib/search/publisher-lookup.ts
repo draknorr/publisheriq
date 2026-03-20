@@ -10,6 +10,21 @@ import {
   type CompanyResolutionCandidate,
   type ResolutionConfidence,
 } from '@/lib/search/company-resolution';
+import type { ToolSufficiencyMetadata } from '@/lib/llm/types';
+
+interface LookupCompanyCandidate {
+  id: number;
+  name: string;
+  matchKind: CompanyResolutionCandidate['matchKind'];
+  resolutionScore: number;
+}
+
+interface CanonicalCompanySummary {
+  gameCount?: number;
+  totalReviews?: number;
+  avgReviewScore?: number;
+  positiveReviews?: number;
+}
 
 /**
  * Arguments for lookup_publishers tool
@@ -23,15 +38,19 @@ export interface LookupPublishersArgs {
  * Result from lookup_publishers
  */
 export interface LookupPublishersResult {
+  result_shape?: ToolSufficiencyMetadata['result_shape'];
+  sufficient_to_answer?: boolean;
+  sufficiency_reason?: string;
   success: boolean;
   entityType: 'publisher';
   query: string;
-  results: CompanyResolutionCandidate[];
+  results: LookupCompanyCandidate[];
   canonicalResult?: {
     id: number;
     name: string;
     confidence: ResolutionConfidence;
   };
+  summary?: CanonicalCompanySummary;
   resolutionConfidence?: ResolutionConfidence;
   needsDisambiguation?: boolean;
   error?: string;
@@ -56,18 +75,44 @@ export interface LookupDevelopersArgs {
  * Result from lookup_developers
  */
 export interface LookupDevelopersResult {
+  result_shape?: ToolSufficiencyMetadata['result_shape'];
+  sufficient_to_answer?: boolean;
+  sufficiency_reason?: string;
   success: boolean;
   entityType: 'developer';
   query: string;
-  results: CompanyResolutionCandidate[];
+  results: LookupCompanyCandidate[];
   canonicalResult?: {
     id: number;
     name: string;
     confidence: ResolutionConfidence;
   };
+  summary?: CanonicalCompanySummary;
   resolutionConfidence?: ResolutionConfidence;
   needsDisambiguation?: boolean;
   error?: string;
+}
+
+function summarizeCandidate(candidate?: CompanyResolutionCandidate): CanonicalCompanySummary | undefined {
+  if (!candidate) {
+    return undefined;
+  }
+
+  return {
+    gameCount: candidate.gameCount,
+    totalReviews: candidate.totalReviews,
+    avgReviewScore: candidate.avgReviewScore,
+    positiveReviews: candidate.positiveReviews,
+  };
+}
+
+function stripCandidate(candidate: CompanyResolutionCandidate): LookupCompanyCandidate {
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    matchKind: candidate.matchKind,
+    resolutionScore: candidate.resolutionScore,
+  };
 }
 
 /**
@@ -85,6 +130,9 @@ async function lookupCompany(
 
   if (!query || query.trim().length === 0) {
     return {
+      result_shape: 'lookup',
+      sufficient_to_answer: true,
+      sufficiency_reason: 'The company lookup needs a non-empty query before any follow-up tool calls.',
       success: false,
       entityType,
       query,
@@ -95,19 +143,34 @@ async function lookupCompany(
 
   try {
     const resolution = await resolveCompanyReference(entityType, query, limit);
+    const canonicalCandidate = resolution.canonicalResult
+      ? resolution.results.find((candidate) => candidate.id === resolution.canonicalResult?.id)
+      : undefined;
+
     return {
+      result_shape: 'lookup',
       success: resolution.success,
       entityType,
       query,
-      results: resolution.results,
+      results: resolution.results.map(stripCandidate),
       canonicalResult: resolution.canonicalResult,
+      summary: summarizeCandidate(canonicalCandidate),
       resolutionConfidence: resolution.resolutionConfidence,
       needsDisambiguation: resolution.needsDisambiguation,
+      sufficient_to_answer: resolution.needsDisambiguation || !resolution.success ? true : false,
+      sufficiency_reason: resolution.needsDisambiguation
+        ? resolution.error ?? `The ${entityType} name "${query}" is ambiguous and needs clarification.`
+        : resolution.success
+          ? 'Identity resolved only. For company counts, rankings, comparisons, or top-title answers, run one analytics query before responding.'
+          : resolution.error,
       error: resolution.error,
     };
   } catch (error) {
     if (entityType === 'publisher') {
       return {
+        result_shape: 'lookup',
+        sufficient_to_answer: true,
+        sufficiency_reason: error instanceof Error ? error.message : 'Failed to lookup publishers',
         success: false,
         entityType,
         query,
@@ -117,6 +180,9 @@ async function lookupCompany(
     }
 
     return {
+      result_shape: 'lookup',
+      sufficient_to_answer: true,
+      sufficiency_reason: error instanceof Error ? error.message : 'Failed to lookup developers',
       success: false,
       entityType,
       query,

@@ -26,6 +26,13 @@ import {
   extractBroadDiscoveryState,
   type BroadDiscoveryState,
 } from '@/lib/chat/discovery-guardrails';
+import {
+  applyCompanyToolResultPolicy,
+  buildRedundantCompanySkipResult,
+  extractCompanyAnswerState,
+  normalizeCompanyToolCall,
+  type CompanyAnswerState,
+} from '@/lib/chat/company-answer-policy';
 import { logChatQuery } from '@/lib/chat-query-logger';
 import {
   compareChangeBeforeAfter,
@@ -256,6 +263,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         let totalToolsMs = 0;
         const executedToolNames: string[] = []; // Track only executed tools for logging + credits
         let lastBroadDiscoveryState: BroadDiscoveryState | null = null;
+        let lastCompanyState: CompanyAnswerState | null = null;
         const lastUserPrompt = body.messages.filter((message) => message.role === 'user').pop()?.content ?? '';
 
         // Debug stats - zero additional cost, just counters
@@ -326,61 +334,83 @@ export async function POST(request: NextRequest): Promise<Response> {
           // Execute all tool calls and collect results
           const toolResults: Array<{ toolCall: ToolCall; result: QueryResult | SimilarityResult | Record<string, unknown> }> = [];
           for (const toolCall of completedToolCalls) {
-            const redundantSkipResult = buildRedundantDiscoverySkipResult(
-              lastBroadDiscoveryState,
-              toolCall,
+            const effectiveToolCall = normalizeCompanyToolCall(toolCall, lastUserPrompt);
+            const redundantCompanySkipResult = buildRedundantCompanySkipResult(
+              lastCompanyState,
+              effectiveToolCall,
               lastUserPrompt
             );
+            const redundantSkipResult = buildRedundantDiscoverySkipResult(
+              lastBroadDiscoveryState,
+              effectiveToolCall,
+              lastUserPrompt
+            );
+            const skipResult = redundantCompanySkipResult ?? redundantSkipResult;
 
-            if (redundantSkipResult) {
+            if (skipResult) {
               const toolResultEvent: ToolResultEvent = {
                 type: 'tool_result',
-                toolCallId: toolCall.id,
-                name: toolCall.name,
-                arguments: toolCall.arguments,
-                result: redundantSkipResult,
+                toolCallId: effectiveToolCall.id,
+                name: effectiveToolCall.name,
+                arguments: effectiveToolCall.arguments,
+                result: skipResult,
                 timing: { executionMs: 0 },
               };
               controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
 
-              toolResults.push({ toolCall, result: redundantSkipResult });
+              toolResults.push({ toolCall: effectiveToolCall, result: skipResult });
               lastBroadDiscoveryState = extractBroadDiscoveryState(
-                toolCall.name,
-                toolCall.arguments,
-                redundantSkipResult
+                effectiveToolCall.name,
+                effectiveToolCall.arguments,
+                skipResult
               ) ?? lastBroadDiscoveryState;
+              lastCompanyState = extractCompanyAnswerState(
+                lastUserPrompt,
+                effectiveToolCall,
+                skipResult
+              ) ?? lastCompanyState;
               continue;
             }
 
             const toolStart = performance.now();
-            const result = await executeTool(toolCall);
+            const rawResult = await executeTool(effectiveToolCall);
             const toolExecutionMs = performance.now() - toolStart;
             totalToolsMs += toolExecutionMs;
-            executedToolNames.push(toolCall.name);
+            executedToolNames.push(effectiveToolCall.name);
+            const result = applyCompanyToolResultPolicy(
+              lastUserPrompt,
+              effectiveToolCall,
+              rawResult
+            );
 
             const toolResultEvent: ToolResultEvent = {
               type: 'tool_result',
-              toolCallId: toolCall.id,
-              name: toolCall.name,
-              arguments: toolCall.arguments,
+              toolCallId: effectiveToolCall.id,
+              name: effectiveToolCall.name,
+              arguments: effectiveToolCall.arguments,
               result,
               timing: { executionMs: Math.round(toolExecutionMs) },
             };
             controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
 
-            toolResults.push({ toolCall, result });
+            toolResults.push({ toolCall: effectiveToolCall, result });
             lastBroadDiscoveryState = extractBroadDiscoveryState(
-              toolCall.name,
-              toolCall.arguments,
+              effectiveToolCall.name,
+              effectiveToolCall.arguments,
               result
             ) ?? lastBroadDiscoveryState;
+            lastCompanyState = extractCompanyAnswerState(
+              lastUserPrompt,
+              effectiveToolCall,
+              result
+            ) ?? lastCompanyState;
           }
 
           // Add assistant message ONCE with ALL tool calls
           messages.push({
             role: 'assistant',
             content: accumulatedText,
-            toolCalls: completedToolCalls,
+            toolCalls: toolResults.map(({ toolCall }) => toolCall),
           });
 
           // Add each tool result to message history (pre-formatted with entity links)

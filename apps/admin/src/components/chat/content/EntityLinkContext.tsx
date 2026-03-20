@@ -27,7 +27,12 @@ export function extractEntityMappings(toolCalls?: ChatToolCall[]): EntityMapping
   if (!toolCalls) return { games, developers, publishers };
 
   for (const tc of toolCalls) {
-    const result = tc.result as { data?: Record<string, unknown>[]; results?: Record<string, unknown>[] } | undefined;
+    const result = tc.result as {
+      data?: Record<string, unknown>[];
+      results?: Record<string, unknown>[];
+      entityType?: 'publisher' | 'developer';
+      canonicalResult?: Record<string, unknown>;
+    } | undefined;
     if (!result) continue;
 
     // Handle query_analytics, search_games results (have 'data' array)
@@ -39,6 +44,10 @@ export function extractEntityMappings(toolCalls?: ChatToolCall[]): EntityMapping
         : [];
 
     for (const row of dataArray) {
+      const id = row.id as number | undefined;
+      const type = row.type as string | undefined;
+      const name = row.name as string | undefined;
+
       // Extract game mappings - check various field patterns
       const appid = row.appid as number | undefined;
       if (appid) {
@@ -55,10 +64,17 @@ export function extractEntityMappings(toolCalls?: ChatToolCall[]): EntityMapping
         }
       }
 
+      // Handle lookup results (publisher/developer candidates without a type field)
+      if (id && name && result.entityType && !type) {
+        const plainName = extractPlainName(name);
+        if (result.entityType === 'developer') {
+          developers.set(plainName.toLowerCase(), id);
+        } else if (result.entityType === 'publisher') {
+          publishers.set(plainName.toLowerCase(), id);
+        }
+      }
+
       // Handle find_similar results (have 'id' and 'type' fields)
-      const id = row.id as number | undefined;
-      const type = row.type as string | undefined;
-      const name = row.name as string | undefined;
       if (id && name && type) {
         const plainName = extractPlainName(name);
         if (type === 'game') {
@@ -82,6 +98,21 @@ export function extractEntityMappings(toolCalls?: ChatToolCall[]): EntityMapping
       if (publisherId && row.publisherName && typeof row.publisherName === 'string') {
         const plainName = extractPlainName(row.publisherName);
         publishers.set(plainName.toLowerCase(), publisherId);
+      }
+    }
+
+    // Handle canonical lookup results
+    if (result.canonicalResult && typeof result.canonicalResult === 'object') {
+      const canonicalId = result.canonicalResult.id as number | undefined;
+      const canonicalName = result.canonicalResult.name as string | undefined;
+
+      if (canonicalId && canonicalName && result.entityType) {
+        const plainName = extractPlainName(canonicalName);
+        if (result.entityType === 'developer') {
+          developers.set(plainName.toLowerCase(), canonicalId);
+        } else if (result.entityType === 'publisher') {
+          publishers.set(plainName.toLowerCase(), canonicalId);
+        }
       }
     }
   }

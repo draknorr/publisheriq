@@ -27,6 +27,13 @@ import {
   type BroadDiscoveryState,
 } from '@/lib/chat/discovery-guardrails';
 import {
+  applyCompanyToolResultPolicy,
+  buildRedundantCompanySkipResult,
+  extractCompanyAnswerState,
+  normalizeCompanyToolCall,
+  type CompanyAnswerState,
+} from '@/lib/chat/company-answer-policy';
+import {
   compareChangeBeforeAfter,
   findChangePatterns,
   getChangeActivityDetail,
@@ -94,6 +101,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
     let totalLlmMs = 0;
     let totalToolsMs = 0;
     let lastBroadDiscoveryState: BroadDiscoveryState | null = null;
+    let lastCompanyState: CompanyAnswerState | null = null;
 
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
@@ -108,26 +116,33 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
       }
 
       for (const toolCall of response.toolCalls) {
+        const effectiveToolCall = normalizeCompanyToolCall(toolCall, lastUserPrompt);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let result: { success: boolean; error?: string; [key: string]: any };
 
-        const redundantSkipResult = buildRedundantDiscoverySkipResult(
-          lastBroadDiscoveryState,
-          toolCall,
+        const redundantCompanySkipResult = buildRedundantCompanySkipResult(
+          lastCompanyState,
+          effectiveToolCall,
           lastUserPrompt
         );
+        const redundantSkipResult = buildRedundantDiscoverySkipResult(
+          lastBroadDiscoveryState,
+          effectiveToolCall,
+          lastUserPrompt
+        );
+        const skipResult = redundantCompanySkipResult ?? redundantSkipResult;
 
         let toolExecutionMs = 0;
-        if (redundantSkipResult) {
-          result = redundantSkipResult;
+        if (skipResult) {
+          result = skipResult;
         } else {
           const toolStart = performance.now();
 
-          if (toolCall.name === 'query_database') {
-            const args = toolCall.arguments as { sql: string; reasoning: string };
+          if (effectiveToolCall.name === 'query_database') {
+            const args = effectiveToolCall.arguments as { sql: string; reasoning: string };
             result = await executeQuery(args.sql);
-          } else if (toolCall.name === 'query_analytics') {
-            const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
+          } else if (effectiveToolCall.name === 'query_analytics') {
+            const args = effectiveToolCall.arguments as unknown as QueryAnalyticsArgs;
             result = await executeCubeQuery({
               cube: args.cube,
               dimensions: args.dimensions,
@@ -137,76 +152,86 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
               order: args.order,
               limit: args.limit,
             });
-          } else if (toolCall.name === 'find_similar') {
-            const args = toolCall.arguments as unknown as FindSimilarArgs;
+          } else if (effectiveToolCall.name === 'find_similar') {
+            const args = effectiveToolCall.arguments as unknown as FindSimilarArgs;
             result = await findSimilarWithTimeout(args);
-          } else if (toolCall.name === 'search_by_concept') {
-            const args = toolCall.arguments as unknown as SearchByConceptArgs;
+          } else if (effectiveToolCall.name === 'search_by_concept') {
+            const args = effectiveToolCall.arguments as unknown as SearchByConceptArgs;
             result = await searchByConceptWithTimeout(args);
-          } else if (toolCall.name === 'search_games') {
-            const args = toolCall.arguments as unknown as SearchGamesArgs;
+          } else if (effectiveToolCall.name === 'search_games') {
+            const args = effectiveToolCall.arguments as unknown as SearchGamesArgs;
             result = await searchGames(args);
-          } else if (toolCall.name === 'lookup_tags') {
-            const args = toolCall.arguments as unknown as LookupTagsArgs;
+          } else if (effectiveToolCall.name === 'lookup_tags') {
+            const args = effectiveToolCall.arguments as unknown as LookupTagsArgs;
             result = await lookupTags(args);
-          } else if (toolCall.name === 'lookup_publishers') {
-            const args = toolCall.arguments as unknown as LookupPublishersArgs;
+          } else if (effectiveToolCall.name === 'lookup_publishers') {
+            const args = effectiveToolCall.arguments as unknown as LookupPublishersArgs;
             result = await lookupPublishers(args);
-          } else if (toolCall.name === 'lookup_developers') {
-            const args = toolCall.arguments as unknown as LookupDevelopersArgs;
+          } else if (effectiveToolCall.name === 'lookup_developers') {
+            const args = effectiveToolCall.arguments as unknown as LookupDevelopersArgs;
             result = await lookupDevelopers(args);
-          } else if (toolCall.name === 'lookup_games') {
-            const args = toolCall.arguments as unknown as LookupGamesArgs;
+          } else if (effectiveToolCall.name === 'lookup_games') {
+            const args = effectiveToolCall.arguments as unknown as LookupGamesArgs;
             result = await lookupGames(args);
-          } else if (toolCall.name === 'discover_trending') {
-            const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
+          } else if (effectiveToolCall.name === 'discover_trending') {
+            const args = effectiveToolCall.arguments as unknown as DiscoverTrendingArgs;
             result = await discoverTrending(args);
-          } else if (toolCall.name === 'query_change_activity') {
-            const args = toolCall.arguments as unknown as QueryChangeActivityArgs;
+          } else if (effectiveToolCall.name === 'query_change_activity') {
+            const args = effectiveToolCall.arguments as unknown as QueryChangeActivityArgs;
             result = await queryChangeActivity(args);
-          } else if (toolCall.name === 'get_game_change_timeline') {
-            const args = toolCall.arguments as unknown as GetGameChangeTimelineArgs;
+          } else if (effectiveToolCall.name === 'get_game_change_timeline') {
+            const args = effectiveToolCall.arguments as unknown as GetGameChangeTimelineArgs;
             result = await getGameChangeTimeline(args);
-          } else if (toolCall.name === 'get_change_activity_detail') {
-            const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;
+          } else if (effectiveToolCall.name === 'get_change_activity_detail') {
+            const args = effectiveToolCall.arguments as unknown as GetChangeActivityDetailArgs;
             result = await getChangeActivityDetail(args);
-          } else if (toolCall.name === 'compare_change_before_after') {
-            const args = toolCall.arguments as unknown as CompareChangeBeforeAfterArgs;
+          } else if (effectiveToolCall.name === 'compare_change_before_after') {
+            const args = effectiveToolCall.arguments as unknown as CompareChangeBeforeAfterArgs;
             result = await compareChangeBeforeAfter(args);
-          } else if (toolCall.name === 'find_change_patterns') {
-            const args = toolCall.arguments as unknown as FindChangePatternsArgs;
+          } else if (effectiveToolCall.name === 'find_change_patterns') {
+            const args = effectiveToolCall.arguments as unknown as FindChangePatternsArgs;
             result = await findChangePatterns(args);
           } else {
-            result = { success: false, error: `Unknown tool: ${toolCall.name}` };
+            result = { success: false, error: `Unknown tool: ${effectiveToolCall.name}` };
           }
 
           toolExecutionMs = performance.now() - toolStart;
           totalToolsMs += toolExecutionMs;
+          result = applyCompanyToolResultPolicy(
+            lastUserPrompt,
+            effectiveToolCall,
+            result
+          );
         }
 
         executedToolCalls.push({
-          name: toolCall.name,
-          arguments: toolCall.arguments as Record<string, unknown>,
+          name: effectiveToolCall.name,
+          arguments: effectiveToolCall.arguments as Record<string, unknown>,
           result,
           timing: {
             executionMs: Math.round(toolExecutionMs),
           },
         });
         lastBroadDiscoveryState = extractBroadDiscoveryState(
-          toolCall.name,
-          toolCall.arguments as Record<string, unknown>,
+          effectiveToolCall.name,
+          effectiveToolCall.arguments as Record<string, unknown>,
           result
         ) ?? lastBroadDiscoveryState;
+        lastCompanyState = extractCompanyAnswerState(
+          lastUserPrompt,
+          effectiveToolCall,
+          result
+        ) ?? lastCompanyState;
 
         messages.push({
           role: 'assistant',
           content: response.content || '',
-          toolCalls: [toolCall],
+          toolCalls: [effectiveToolCall],
         });
 
         messages.push({
           role: 'tool',
-          toolCallId: toolCall.id,
+          toolCallId: effectiveToolCall.id,
           content: formatResultWithEntityLinks(result),
         });
       }

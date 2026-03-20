@@ -232,6 +232,224 @@ cube('GameCatalog', {
   },
 });
 
+cube('PublisherRelationshipMetrics', {
+  sql: `
+    SELECT
+      afd.publisher_id AS publisher_id,
+      afd.publisher_name AS publisher_name,
+      COUNT(DISTINCT a.appid) AS game_count,
+      COALESCE(SUM(ldm.total_reviews), 0) AS total_reviews,
+      ROUND(AVG(COALESCE(ldm.positive_percentage, a.pics_review_percentage))::numeric, 1) AS avg_review_percentage,
+      COUNT(DISTINCT CASE
+        WHEN COALESCE(ldm.total_reviews, 0) >= 1000 OR COALESCE(ldm.owners_midpoint, 0) >= 100000
+        THEN a.appid
+      END) AS hit_game_count,
+      COUNT(DISTINCT CASE
+        WHEN LOWER(TRIM(afd.publisher_name)) = LOWER(TRIM(afd.developer_name))
+        THEN a.appid
+      END) AS self_published_game_count,
+      COUNT(DISTINCT CASE
+        WHEN LOWER(TRIM(afd.publisher_name)) <> LOWER(TRIM(afd.developer_name))
+        THEN afd.developer_id
+      END) AS external_partner_count,
+      BOOL_AND(LOWER(TRIM(afd.publisher_name)) = LOWER(TRIM(afd.developer_name))) AS is_self_published,
+      (
+        COUNT(DISTINCT CASE
+          WHEN LOWER(TRIM(afd.publisher_name)) <> LOWER(TRIM(afd.developer_name))
+          THEN afd.developer_id
+        END) > 0
+      ) AS works_with_external_devs
+    FROM apps a
+    INNER JOIN app_filter_data afd ON afd.appid = a.appid
+    LEFT JOIN latest_daily_metrics ldm ON ldm.appid = a.appid
+    WHERE a.type = 'game'
+      AND a.is_delisted = false
+      AND a.is_released = true
+      AND afd.publisher_id IS NOT NULL
+      AND afd.publisher_name IS NOT NULL
+    GROUP BY afd.publisher_id, afd.publisher_name
+  `,
+
+  dimensions: {
+    publisherId: {
+      sql: `publisher_id`,
+      type: 'number',
+      primaryKey: true,
+    },
+    publisherName: {
+      sql: `publisher_name`,
+      type: 'string',
+    },
+    gameCount: {
+      sql: `game_count`,
+      type: 'number',
+    },
+    totalReviews: {
+      sql: `total_reviews`,
+      type: 'number',
+    },
+    avgReviewPercentage: {
+      sql: `avg_review_percentage`,
+      type: 'number',
+    },
+    hitGameCount: {
+      sql: `hit_game_count`,
+      type: 'number',
+    },
+    selfPublishedGameCount: {
+      sql: `self_published_game_count`,
+      type: 'number',
+    },
+    externalPartnerCount: {
+      sql: `external_partner_count`,
+      type: 'number',
+    },
+    isSelfPublished: {
+      sql: `is_self_published`,
+      type: 'boolean',
+    },
+    worksWithExternalDevs: {
+      sql: `works_with_external_devs`,
+      type: 'boolean',
+    },
+  },
+
+  measures: {
+    count: {
+      type: 'count',
+    },
+  },
+
+  preAggregations: {
+    relationshipList: {
+      dimensions: [
+        publisherId,
+        publisherName,
+        gameCount,
+        totalReviews,
+        avgReviewPercentage,
+        hitGameCount,
+        selfPublishedGameCount,
+        externalPartnerCount,
+        isSelfPublished,
+        worksWithExternalDevs,
+      ],
+      refreshKey: {
+        every: '6 hours',
+      },
+    },
+  },
+});
+
+cube('DeveloperRelationshipMetrics', {
+  sql: `
+    SELECT
+      afd.developer_id AS developer_id,
+      afd.developer_name AS developer_name,
+      COUNT(DISTINCT a.appid) AS game_count,
+      COALESCE(SUM(ldm.total_reviews), 0) AS total_reviews,
+      ROUND(AVG(COALESCE(ldm.positive_percentage, a.pics_review_percentage))::numeric, 1) AS avg_review_percentage,
+      COUNT(DISTINCT CASE
+        WHEN COALESCE(ldm.total_reviews, 0) >= 1000 OR COALESCE(ldm.owners_midpoint, 0) >= 100000
+        THEN a.appid
+      END) AS hit_game_count,
+      COUNT(DISTINCT CASE
+        WHEN LOWER(TRIM(afd.publisher_name)) = LOWER(TRIM(afd.developer_name))
+        THEN a.appid
+      END) AS self_published_game_count,
+      COUNT(DISTINCT CASE
+        WHEN LOWER(TRIM(afd.publisher_name)) <> LOWER(TRIM(afd.developer_name))
+        THEN afd.publisher_id
+      END) AS external_partner_count,
+      BOOL_AND(LOWER(TRIM(afd.publisher_name)) = LOWER(TRIM(afd.developer_name))) AS is_self_published,
+      (
+        COUNT(DISTINCT CASE
+          WHEN LOWER(TRIM(afd.publisher_name)) <> LOWER(TRIM(afd.developer_name))
+          THEN afd.publisher_id
+        END) > 0
+      ) AS works_with_external_publishers
+    FROM apps a
+    INNER JOIN app_filter_data afd ON afd.appid = a.appid
+    LEFT JOIN latest_daily_metrics ldm ON ldm.appid = a.appid
+    WHERE a.type = 'game'
+      AND a.is_delisted = false
+      AND a.is_released = true
+      AND afd.developer_id IS NOT NULL
+      AND afd.developer_name IS NOT NULL
+    GROUP BY afd.developer_id, afd.developer_name
+  `,
+
+  dimensions: {
+    developerId: {
+      sql: `developer_id`,
+      type: 'number',
+      primaryKey: true,
+    },
+    developerName: {
+      sql: `developer_name`,
+      type: 'string',
+    },
+    gameCount: {
+      sql: `game_count`,
+      type: 'number',
+    },
+    totalReviews: {
+      sql: `total_reviews`,
+      type: 'number',
+    },
+    avgReviewPercentage: {
+      sql: `avg_review_percentage`,
+      type: 'number',
+    },
+    hitGameCount: {
+      sql: `hit_game_count`,
+      type: 'number',
+    },
+    selfPublishedGameCount: {
+      sql: `self_published_game_count`,
+      type: 'number',
+    },
+    externalPartnerCount: {
+      sql: `external_partner_count`,
+      type: 'number',
+    },
+    isSelfPublished: {
+      sql: `is_self_published`,
+      type: 'boolean',
+    },
+    worksWithExternalPublishers: {
+      sql: `works_with_external_publishers`,
+      type: 'boolean',
+    },
+  },
+
+  measures: {
+    count: {
+      type: 'count',
+    },
+  },
+
+  preAggregations: {
+    relationshipList: {
+      dimensions: [
+        developerId,
+        developerName,
+        gameCount,
+        totalReviews,
+        avgReviewPercentage,
+        hitGameCount,
+        selfPublishedGameCount,
+        externalPartnerCount,
+        isSelfPublished,
+        worksWithExternalPublishers,
+      ],
+      refreshKey: {
+        every: '6 hours',
+      },
+    },
+  },
+});
+
 cube('DlcRelations', {
   sql: `
     SELECT

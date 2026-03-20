@@ -1,11 +1,36 @@
 'use client';
 
 import Link from 'next/link';
-import type { ComponentPropsWithoutRef } from 'react';
+import { Children, isValidElement, type ComponentPropsWithoutRef, type ReactNode } from 'react';
+import { useEntityMappings } from './EntityLinkContext';
 
 type AnchorProps = ComponentPropsWithoutRef<'a'>;
 
+function extractText(children: ReactNode): string {
+  let text = '';
+
+  Children.forEach(children, (child) => {
+    if (typeof child === 'string' || typeof child === 'number') {
+      text += String(child);
+      return;
+    }
+
+    if (Array.isArray(child)) {
+      text += extractText(child);
+      return;
+    }
+
+    if (isValidElement<{ children?: ReactNode }>(child)) {
+      text += extractText(child.props.children);
+    }
+  });
+
+  return text.trim();
+}
+
 export function EntityLinkRenderer({ href, children, ...props }: AnchorProps) {
+  const mappings = useEntityMappings();
+
   if (!href) {
     return <span {...props}>{children}</span>;
   }
@@ -56,6 +81,43 @@ export function EntityLinkRenderer({ href, children, ...props }: AnchorProps) {
         {children}
       </Link>
     );
+  }
+
+  const steamCompanyMatch = href.match(/^https?:\/\/store\.steampowered\.com\/(publisher|developer)\/[^/?#]+/i);
+  if (steamCompanyMatch) {
+    const label = extractText(children);
+    const normalizedLabel = label.toLowerCase();
+    const companyType = steamCompanyMatch[1].toLowerCase();
+    const publisherId = companyType === 'publisher' ? mappings?.publishers.get(normalizedLabel) : undefined;
+    const developerId = companyType === 'developer' ? mappings?.developers.get(normalizedLabel) : undefined;
+
+    if (publisherId) {
+      return (
+        <Link
+          href={`/publishers/${publisherId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+          data-entity-link
+        >
+          {children}
+        </Link>
+      );
+    }
+
+    if (developerId) {
+      return (
+        <Link
+          href={`/developers/${developerId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent-blue hover:text-accent-blue/80 hover:underline transition-colors"
+          data-entity-link
+        >
+          {children}
+        </Link>
+      );
+    }
   }
 
   // Regular external link

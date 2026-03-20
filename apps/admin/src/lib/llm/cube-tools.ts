@@ -27,9 +27,11 @@ CUBES:
 - PublisherMetrics: Publisher ALL-TIME aggregations
 - PublisherYearMetrics: Publisher stats by release year
 - PublisherGameMetrics: Games by publisher with rolling periods (lastYear, last6Months, etc.)
+- PublisherRelationshipMetrics: Publisher relationship and self-published signals
 - DeveloperMetrics: Developer ALL-TIME aggregations
 - DeveloperYearMetrics: Developer stats by release year
 - DeveloperGameMetrics: Games by developer with rolling periods (lastYear, last6Months, etc.)
+- DeveloperRelationshipMetrics: Developer relationship and self-published signals
 - DailyMetrics: Historical time-series data
 - LatestMetrics: Current snapshot of metrics
 - MonthlyGameMetrics: Monthly estimated played hours per game (use for "top games by playtime last month")
@@ -66,9 +68,11 @@ For publisher/developer/company queries, prefer filtering by publisherId/develop
             'PublisherMetrics',
             'PublisherYearMetrics',
             'PublisherGameMetrics',
+            'PublisherRelationshipMetrics',
             'DeveloperMetrics',
             'DeveloperYearMetrics',
             'DeveloperGameMetrics',
+            'DeveloperRelationshipMetrics',
             'DailyMetrics',
             'LatestMetrics',
             'MonthlyGameMetrics',
@@ -409,7 +413,9 @@ Use this tool BEFORE querying for games by publisher to find the exact name:
 - User says "Krafton" → lookup finds "Krafton Inc." → use exact name in query
 - User says "Devolver" → lookup finds "Devolver Digital" → use exact name in query
 
-Returns ranked publisher candidates, a canonicalResult when resolution is confident, and a needsDisambiguation flag when the name is ambiguous.`,
+Returns ranked publisher candidates, a canonicalResult when resolution is confident, a compact summary object, and a needsDisambiguation flag when the name is ambiguous.
+
+Use lookup for identity resolution first. For company counts, rankings, comparisons, and top-title questions, follow lookup with one query_analytics call instead of answering from lookup alone.`,
     parameters: {
       type: 'object',
       properties: {
@@ -437,7 +443,9 @@ Use this tool BEFORE querying for games by developer to find the exact name:
 - User says "FromSoftware" → lookup finds "FromSoftware, Inc." → use exact name in query
 - User says "Respawn" → lookup finds "Respawn Entertainment" → use exact name in query
 
-Returns ranked developer candidates, a canonicalResult when resolution is confident, and a needsDisambiguation flag when the name is ambiguous.`,
+Returns ranked developer candidates, a canonicalResult when resolution is confident, a compact summary object, and a needsDisambiguation flag when the name is ambiguous.
+
+Use lookup for identity resolution first. For company counts, rankings, comparisons, and top-title questions, follow lookup with one query_analytics call instead of answering from lookup alone.`,
     parameters: {
       type: 'object',
       properties: {

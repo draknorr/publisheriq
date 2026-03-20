@@ -398,11 +398,12 @@ async function executeCubeQueryInternal(
 
   // Start with requested dimensions
   const dimensions = effectiveQuery.dimensions ? [...effectiveQuery.dimensions] : [];
+  const measureSet = new Set(effectiveQuery.measures ?? []);
 
   // Auto-add order field to dimensions if not present (Cube.dev requires it)
   if (effectiveQuery.order) {
     for (const orderField of Object.keys(effectiveQuery.order)) {
-      if (!dimensions.includes(orderField)) {
+      if (!dimensions.includes(orderField) && !measureSet.has(orderField)) {
         dimensions.push(orderField);
       }
     }

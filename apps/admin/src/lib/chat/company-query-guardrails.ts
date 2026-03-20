@@ -45,6 +45,7 @@ interface CompanyCubeConfig {
   nameMember: string;
   defaultDimensions: string[];
   supportedDimensions?: string[];
+  supportedMeasures?: string[];
 }
 
 const PUBLISHER_GAME_METRIC_DIMENSIONS = [
@@ -77,6 +78,52 @@ const DEVELOPER_GAME_METRIC_DIMENSIONS = [
   'DeveloperGameMetrics.reviewPercentage',
   'DeveloperGameMetrics.reviewScore',
   'DeveloperGameMetrics.revenueEstimateCents',
+];
+
+const PUBLISHER_GAME_METRIC_MEASURES = [
+  'PublisherGameMetrics.gameCount',
+  'PublisherGameMetrics.sumOwners',
+  'PublisherGameMetrics.sumCcu',
+  'PublisherGameMetrics.sumReviews',
+  'PublisherGameMetrics.sumRevenue',
+  'PublisherGameMetrics.avgReviewScore',
+  'PublisherGameMetrics.publisherCount',
+];
+
+const DEVELOPER_GAME_METRIC_MEASURES = [
+  'DeveloperGameMetrics.gameCount',
+  'DeveloperGameMetrics.sumOwners',
+  'DeveloperGameMetrics.sumCcu',
+  'DeveloperGameMetrics.sumReviews',
+  'DeveloperGameMetrics.sumRevenue',
+  'DeveloperGameMetrics.avgReviewScore',
+  'DeveloperGameMetrics.developerCount',
+];
+
+const PUBLISHER_RELATIONSHIP_DIMENSIONS = [
+  'PublisherRelationshipMetrics.publisherId',
+  'PublisherRelationshipMetrics.publisherName',
+  'PublisherRelationshipMetrics.gameCount',
+  'PublisherRelationshipMetrics.totalReviews',
+  'PublisherRelationshipMetrics.avgReviewPercentage',
+  'PublisherRelationshipMetrics.hitGameCount',
+  'PublisherRelationshipMetrics.selfPublishedGameCount',
+  'PublisherRelationshipMetrics.externalPartnerCount',
+  'PublisherRelationshipMetrics.isSelfPublished',
+  'PublisherRelationshipMetrics.worksWithExternalDevs',
+];
+
+const DEVELOPER_RELATIONSHIP_DIMENSIONS = [
+  'DeveloperRelationshipMetrics.developerId',
+  'DeveloperRelationshipMetrics.developerName',
+  'DeveloperRelationshipMetrics.gameCount',
+  'DeveloperRelationshipMetrics.totalReviews',
+  'DeveloperRelationshipMetrics.avgReviewPercentage',
+  'DeveloperRelationshipMetrics.hitGameCount',
+  'DeveloperRelationshipMetrics.selfPublishedGameCount',
+  'DeveloperRelationshipMetrics.externalPartnerCount',
+  'DeveloperRelationshipMetrics.isSelfPublished',
+  'DeveloperRelationshipMetrics.worksWithExternalPublishers',
 ];
 
 const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
@@ -114,6 +161,20 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'PublisherGameMetrics.publisherName',
     ],
     supportedDimensions: PUBLISHER_GAME_METRIC_DIMENSIONS,
+    supportedMeasures: PUBLISHER_GAME_METRIC_MEASURES,
+  },
+  PublisherRelationshipMetrics: {
+    entityType: 'publisher',
+    idMember: 'PublisherRelationshipMetrics.publisherId',
+    nameMember: 'PublisherRelationshipMetrics.publisherName',
+    defaultDimensions: [
+      'PublisherRelationshipMetrics.publisherId',
+      'PublisherRelationshipMetrics.publisherName',
+      'PublisherRelationshipMetrics.gameCount',
+      'PublisherRelationshipMetrics.hitGameCount',
+      'PublisherRelationshipMetrics.totalReviews',
+    ],
+    supportedDimensions: PUBLISHER_RELATIONSHIP_DIMENSIONS,
   },
   DeveloperMetrics: {
     entityType: 'developer',
@@ -149,6 +210,20 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'DeveloperGameMetrics.developerName',
     ],
     supportedDimensions: DEVELOPER_GAME_METRIC_DIMENSIONS,
+    supportedMeasures: DEVELOPER_GAME_METRIC_MEASURES,
+  },
+  DeveloperRelationshipMetrics: {
+    entityType: 'developer',
+    idMember: 'DeveloperRelationshipMetrics.developerId',
+    nameMember: 'DeveloperRelationshipMetrics.developerName',
+    defaultDimensions: [
+      'DeveloperRelationshipMetrics.developerId',
+      'DeveloperRelationshipMetrics.developerName',
+      'DeveloperRelationshipMetrics.gameCount',
+      'DeveloperRelationshipMetrics.hitGameCount',
+      'DeveloperRelationshipMetrics.totalReviews',
+    ],
+    supportedDimensions: DEVELOPER_RELATIONSHIP_DIMENSIONS,
   },
 };
 
@@ -200,35 +275,92 @@ function sanitizeCompanyMembers(
 ): {
   query: CompanyQueryShape;
   removedDimensions: string[];
+  removedMeasures: string[];
   removedOrderMembers: string[];
 } {
-  if (!config.supportedDimensions?.length) {
+  if (!config.supportedDimensions?.length && !config.supportedMeasures?.length) {
     return {
       query,
       removedDimensions: [],
+      removedMeasures: [],
       removedOrderMembers: [],
     };
   }
 
-  const allowedMembers = new Set(config.supportedDimensions);
+  const allowedDimensions = new Set(config.supportedDimensions ?? []);
+  const allowedMeasures = new Set(config.supportedMeasures ?? []);
+  const allowedOrderMembers = new Set([...allowedDimensions, ...allowedMeasures]);
   const originalDimensions = query.dimensions ?? [];
-  const dimensions = originalDimensions.filter((member) => allowedMembers.has(member));
-  const removedDimensions = originalDimensions.filter((member) => !allowedMembers.has(member));
+  const originalMeasures = query.measures ?? [];
+  const dimensions = originalDimensions.filter((member) => allowedDimensions.has(member));
+  const removedDimensions = originalDimensions.filter((member) => !allowedDimensions.has(member));
+  const measures = originalMeasures.filter((member) => allowedMeasures.has(member));
+  const removedMeasures = originalMeasures.filter((member) => !allowedMeasures.has(member));
 
   const originalOrder = query.order ?? {};
   const order = Object.fromEntries(
-    Object.entries(originalOrder).filter(([member]) => allowedMembers.has(member))
+    Object.entries(originalOrder).filter(([member]) => allowedOrderMembers.has(member))
   ) as Record<string, 'asc' | 'desc'>;
-  const removedOrderMembers = Object.keys(originalOrder).filter((member) => !allowedMembers.has(member));
+  const removedOrderMembers = Object.keys(originalOrder).filter((member) => !allowedOrderMembers.has(member));
 
   return {
     query: {
       ...query,
       dimensions,
+      measures: measures.length > 0 ? measures : undefined,
       order: Object.keys(order).length > 0 ? order : undefined,
     },
     removedDimensions,
+    removedMeasures,
     removedOrderMembers,
+  };
+}
+
+function rewriteMisplacedCompanyMeasures(
+  query: CompanyQueryShape,
+  config: CompanyCubeConfig
+): {
+  query: CompanyQueryShape;
+  rewrittenMembers: string[];
+} {
+  if (!config.supportedMeasures?.length) {
+    return {
+      query,
+      rewrittenMembers: [],
+    };
+  }
+
+  const supportedMeasures = new Set(config.supportedMeasures);
+  const dimensions = [...(query.dimensions ?? [])];
+  const measures = [...(query.measures ?? [])];
+  const rewrittenMembers: string[] = [];
+
+  for (let index = dimensions.length - 1; index >= 0; index--) {
+    const member = dimensions[index];
+    if (!supportedMeasures.has(member)) {
+      continue;
+    }
+
+    dimensions.splice(index, 1);
+    measures.push(member);
+    rewrittenMembers.push(member);
+  }
+
+  for (const member of Object.keys(query.order ?? {})) {
+    if (!supportedMeasures.has(member)) {
+      continue;
+    }
+
+    measures.push(member);
+  }
+
+  return {
+    query: {
+      ...query,
+      dimensions,
+      measures: [...new Set(measures)],
+    },
+    rewrittenMembers: [...new Set(rewrittenMembers)],
   };
 }
 
@@ -297,11 +429,24 @@ export async function prepareCompanyQuery(
   const filters = [...(query.filters ?? [])];
   const notes: string[] = [];
 
+  const rewritten = rewriteMisplacedCompanyMeasures(query, config);
+  query = rewritten.query;
+  if (rewritten.rewrittenMembers.length > 0) {
+    notes.push(
+      `Rewrote misplaced ${query.cube} measure members from dimensions to measures: ${rewritten.rewrittenMembers.join(', ')}.`
+    );
+  }
+
   const sanitized = sanitizeCompanyMembers(query, config);
   query = sanitized.query;
   if (sanitized.removedDimensions.length > 0) {
     notes.push(
       `Removed unsupported ${query.cube} dimensions: ${sanitized.removedDimensions.join(', ')}.`
+    );
+  }
+  if (sanitized.removedMeasures.length > 0) {
+    notes.push(
+      `Removed unsupported ${query.cube} measures: ${sanitized.removedMeasures.join(', ')}.`
     );
   }
   if (sanitized.removedOrderMembers.length > 0) {

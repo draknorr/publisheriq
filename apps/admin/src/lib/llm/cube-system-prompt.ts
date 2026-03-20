@@ -55,6 +55,10 @@ Example for "games by Krafton":
 {"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewPercentage","PublisherGameMetrics.totalReviews"],"filters":[{"member":"PublisherGameMetrics.publisherId","operator":"equals","values":[1788]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
+**IMPORTANT: lookup_publishers / lookup_developers resolve identity only.**
+- Do NOT stop after lookup alone for company counts, rankings, comparisons, or top-title questions
+- After lookup, run one analytics query for representative titles or company context before answering
+
 **TABLE FORMATTING - EVERY ROW MUST HAVE LINKED GAME NAMES:**
 
 CORRECT (ALL game names are links):
@@ -381,9 +385,11 @@ This ensures you match the canonical company row when user input maps to aliases
 - Specific company profile / all-time portfolio stats → DeveloperMetrics or PublisherMetrics
 - Year-specific company release stats → DeveloperYearMetrics or PublisherYearMetrics
 - Rolling-window company release lists or company game lists → DeveloperGameMetrics or PublisherGameMetrics
+- Company relationship screens like "indie developers", "self-published publishers", or "multiple hit games" → DeveloperRelationshipMetrics or PublisherRelationshipMetrics
 - Company similarity → find_similar
 - For company rankings like "released the most this year", include the requested release-count metric plus review context and representative titles when available
 - For company comparisons "by reviews", compare total review volume, average score, game count, and representative titles instead of only one average
+- For rolling-window company rankings ("past 6 months", "last year"), group by company ID/name and use measures like \`gameCount\`, \`sumReviews\`, and \`avgReviewScore\`; do not include \`releaseYear\` unless the user explicitly asked for a year breakout
 
 ## IMPORTANT: Prefer Segments Over Filters
 
@@ -527,6 +533,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "indie developers/publishers" → use self-published + small catalog semantics, not owner count alone:
   - on games/app relationships, self-published means developer and publisher are the same company
   - for company answers, treat "indie" as self-published companies with fewer than 5 games
+- "multiple hit games" for company screens → prefer the relationship cubes and use a hit-game proxy such as strong review volume or owner scale, rather than owner-ranked all-time company tables
 - use owner thresholds only for size labels like "small", "mid-size", or "large"
 - "successful developers" → filter: totalOwners gte 500000
 - "prolific developers" → filter: gameCount gte 5
@@ -717,8 +724,13 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 15. **For company rankings or company comparisons, do not answer with a bare count or a bare average alone**:
    - rankings should include the requested metric plus \`totalReviews\`, \`avgReviewScore\`, and representative titles when available
    - comparisons by reviews should compare \`totalReviews\`, \`gameCount\`, \`avgReviewScore\`, and representative titles
-16. **If a specific company query returns no qualifying rows, say that directly and stay constrained to that company**
-17. **If find_similar returns \`mode: "heuristic_portfolio"\`, label the result as heuristic portfolio similarity instead of semantic similarity**
+16. **For "how many games has X published/developed?", do not answer from lookup alone**:
+   - resolve the company with lookup
+   - then add one analytics query or exemplar query so the answer includes the count, review context, and 2 to 3 representative titles
+17. **For company top-title lists, filter out low-signal tail rows when better-supported titles exist**
+18. **If company similarity results include match reasons, use them to explain why each peer belongs**
+19. **If a specific company query returns no qualifying rows, say that directly and stay constrained to that company**
+20. **If find_similar returns \`mode: "heuristic_portfolio"\`, label the result as heuristic portfolio similarity instead of semantic similarity**
 
 Example for "games published by Devolver":
 1. First: lookup_publishers("Devolver") → returns canonicalResult {id: 2132, name: "Devolver Digital"}
