@@ -82,7 +82,9 @@ const SMOKE_TESTS: SmokeTestGroup[] = [
   {
     tool: 'find_similar',
     queries: [
+      'Steam Deck games like Hades II',
       'Games similar to Hades but less popular',
+      'Games similar to Hollow Knight with better reviews',
       'Games similar to Hollow Knight with fewer than 10K reviews',
       'Find games in the same series as Dark Souls',
       'Publishers similar to Devolver Digital',

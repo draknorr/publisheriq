@@ -126,6 +126,27 @@ const GAME_TITLE_GENERIC_WORDS = new Set([
   'x',
 ]);
 
+const LOW_INFORMATION_GAME_ATTRIBUTES = new Set([
+  'action',
+  'adventure',
+  'indie',
+  'casual',
+  'rpg',
+  'singleplayer',
+  'family sharing',
+  'captions available',
+  'cloud gaming',
+  'commentary available',
+  'steam achievements',
+  'steam cloud',
+  'stats',
+  'early access',
+  'story rich',
+  'exploration',
+  'atmospheric',
+  'female protagonist',
+]);
+
 type ConceptFacetDefinition = {
   label: string;
   phrases: string[];
@@ -355,6 +376,8 @@ export interface FindSimilarResult {
   candidates?: CompanyResolutionCandidate[];
   total_found?: number;
   error?: string;
+  sufficient_to_answer?: boolean;
+  sufficiency_reason?: string;
   debug?: {
     searchParams?: Record<string, unknown>;
     vectorFilter?: Record<string, unknown>;
@@ -647,8 +670,74 @@ function payloadTextValues(payload: Record<string, unknown>): string[] {
   return [
     ...(asOptionalStringArray(payload.tags) ?? []),
     ...(asOptionalStringArray(payload.genres) ?? []),
-    ...(asOptionalStringArray(payload.categories) ?? []),
   ];
+}
+
+function filterInformativeGameAttributes(values: string[]): string[] {
+  return values.filter((value) => !LOW_INFORMATION_GAME_ATTRIBUTES.has(normalizeTextToken(value)));
+}
+
+function buildConceptSearchDescription(description: string): string {
+  const normalizedDescription = normalizeTextToken(description);
+  const expansions: string[] = [];
+
+  const hasTacticalDeckPrompt =
+    normalizedDescription.includes('tactical') &&
+    (normalizedDescription.includes('deck building') || normalizedDescription.includes('deckbuilder'));
+  if (hasTacticalDeckPrompt) {
+    expansions.push('turn-based tactics strategy deckbuilder card battler grid-based movement');
+  }
+
+  const hasTacticalRoguelikePrompt =
+    normalizedDescription.includes('tactical') &&
+    (normalizedDescription.includes('roguelike') || normalizedDescription.includes('roguelite'));
+  if (hasTacticalRoguelikePrompt) {
+    expansions.push('turn-based tactics grid-based movement strategy roguelike roguelite permadeath');
+  }
+
+  const hasBeautifulArtPrompt =
+    normalizedDescription.includes('beautiful art') ||
+    (descriptionIncludesAll(normalizedDescription, ['beautiful', 'puzzle']) &&
+      (normalizedDescription.includes('relaxing') || normalizedDescription.includes('cozy') || normalizedDescription.includes('calm')));
+  if (hasBeautifulArtPrompt) {
+    expansions.push('relaxing atmospheric puzzle with stylized hand-drawn colorful art cozy beautiful visuals');
+  }
+
+  const hasPixelActionPrompt =
+    normalizedDescription.includes('pixel') &&
+    normalizedDescription.includes('action');
+  if (hasPixelActionPrompt) {
+    expansions.push('fast-paced pixel graphics action arcade run-and-gun bullet hell platformer');
+  }
+
+  const hasInvestigationHorrorPrompt =
+    normalizedDescription.includes('horror') &&
+    (normalizedDescription.includes('investigation') ||
+      normalizedDescription.includes('detective') ||
+      normalizedDescription.includes('mystery'));
+  if (hasInvestigationHorrorPrompt) {
+    expansions.push('investigation detective mystery story-rich psychological horror puzzle');
+  }
+
+  return expansions.length > 0 ? `${description}. ${expansions.join('. ')}.` : description;
+}
+
+function shouldApplyConceptQualityFloor(normalizedDescription: string): boolean {
+  return (
+    (normalizedDescription.includes('tactical') &&
+      (normalizedDescription.includes('deck building') ||
+        normalizedDescription.includes('deckbuilder') ||
+        normalizedDescription.includes('roguelike') ||
+        normalizedDescription.includes('roguelite'))) ||
+    normalizedDescription.includes('beautiful art') ||
+    (descriptionIncludesAll(normalizedDescription, ['beautiful', 'puzzle']) &&
+      (normalizedDescription.includes('relaxing') || normalizedDescription.includes('cozy') || normalizedDescription.includes('calm'))) ||
+    (normalizedDescription.includes('pixel') && normalizedDescription.includes('action')) ||
+    (normalizedDescription.includes('horror') &&
+      (normalizedDescription.includes('investigation') ||
+        normalizedDescription.includes('detective') ||
+        normalizedDescription.includes('mystery')))
+  );
 }
 
 function payloadHasEvidenceTerm(payload: Record<string, unknown>, evidenceTerms: string[]): boolean {
@@ -661,6 +750,36 @@ function payloadHasEvidenceTerm(payload: Record<string, unknown>, evidenceTerms:
 function titleContainsEvidenceTerm(name: string, titleTerms: string[]): boolean {
   const normalized = normalizeTextToken(name);
   return normalized.length > 0 && titleTerms.some((term) => normalized.includes(term));
+}
+
+function nameContainsAnyTerm(name: string, terms: string[]): boolean {
+  const normalized = normalizeTextToken(name);
+  return normalized.length > 0 && terms.some((term) => normalized.includes(normalizeTextToken(term)));
+}
+
+function payloadOrTitleHasEvidenceTerm(
+  payload: Record<string, unknown>,
+  name: string,
+  terms: string[]
+): boolean {
+  return payloadHasEvidenceTerm(payload, terms) || nameContainsAnyTerm(name, terms);
+}
+
+function descriptionIncludesAll(normalizedDescription: string, phrases: string[]): boolean {
+  return phrases.every((phrase) => normalizedDescription.includes(normalizeTextToken(phrase)));
+}
+
+function formatCompactReviewCount(count: number): string {
+  if (count >= 1_000_000) {
+    return `${Math.round(count / 100_000) / 10}M`;
+  }
+
+  if (count >= 1_000) {
+    const compactThousands = Math.round(count / 100) / 10;
+    return Number.isInteger(compactThousands) ? `${compactThousands.toFixed(0)}K` : `${compactThousands}K`;
+  }
+
+  return `${count}`;
 }
 
 function reviewSupportBonus(totalReviews: number | null | undefined, reviewPercentage: number | null | undefined): number {
@@ -798,13 +917,43 @@ function normalizeSearchByConceptArgs(args: SearchByConceptArgs): SearchByConcep
   };
 }
 
+function applyImplicitConceptFilters(
+  description: string,
+  filters: SearchByConceptArgs['filters'] | undefined,
+  gameFilters: GameFilters
+): void {
+  const normalizedDescription = normalizeTextToken(description);
+  const explicitTags = filters?.tags ?? [];
+
+  if (explicitTags.length === 0) {
+    if (normalizedDescription.includes('pixel art') || normalizedDescription.includes('pixel graphics')) {
+      gameFilters.tags = ['Pixel Graphics'];
+    } else if (
+      normalizedDescription.includes('deck building') ||
+      normalizedDescription.includes('deckbuilder')
+    ) {
+      gameFilters.tags = ['Deckbuilding'];
+    }
+  }
+
+  if (gameFilters.min_reviews === undefined && shouldApplyConceptQualityFloor(normalizedDescription)) {
+    gameFilters.min_reviews = 100;
+  }
+
+  if (gameFilters.review_percentage === undefined && shouldApplyConceptQualityFloor(normalizedDescription)) {
+    gameFilters.review_percentage = { gte: 70 };
+  }
+}
+
 function buildSimilarityFilterEvidence(
   sourcePayload: SourcePayloadForBoost,
   candidatePayload: ResultPayloadForBoost,
   filters: FindSimilarArgs['filters'] | undefined
-): { bonus: number; reasons: string[] } {
+): { bonus: number; penalty: number; reasons: string[]; hardReject: boolean } {
   const reasons: string[] = [];
   let bonus = 0;
+  let penalty = 0;
+  let hardReject = false;
 
   const candidateTags = candidatePayload.tags ?? [];
   const candidateGenres = candidatePayload.genres ?? [];
@@ -821,12 +970,16 @@ function buildSimilarityFilterEvidence(
     bonus += 0.03;
   }
 
-  if (
-    (candidatePayload.steam_deck === 'verified' || candidatePayload.steam_deck === 'playable') &&
-    filters?.steam_deck?.includes(candidatePayload.steam_deck)
-  ) {
-    reasons.push(`Steam Deck ${candidatePayload.steam_deck}`);
-    bonus += 0.03;
+  if (filters?.steam_deck?.length) {
+    if (
+      (candidatePayload.steam_deck === 'verified' || candidatePayload.steam_deck === 'playable') &&
+      filters.steam_deck.includes(candidatePayload.steam_deck)
+    ) {
+      reasons.push(`Steam Deck ${candidatePayload.steam_deck}`);
+      bonus += 0.03;
+    } else {
+      hardReject = true;
+    }
   }
 
   const sourceReviewPercentage = asOptionalNullableNumber(sourcePayload.review_percentage);
@@ -841,6 +994,8 @@ function buildSimilarityFilterEvidence(
   ) {
     reasons.push('Higher review score');
     bonus += 0.035;
+  } else if (filters?.review_comparison && filters.review_comparison !== 'any') {
+    hardReject = true;
   }
 
   const sourceTotalReviews = asOptionalNullableNumber(sourcePayload.total_reviews);
@@ -855,18 +1010,82 @@ function buildSimilarityFilterEvidence(
   ) {
     reasons.push('Smaller review footprint');
     bonus += 0.025;
+  } else if (
+    filters?.popularity_comparison &&
+    filters.popularity_comparison !== 'any' &&
+    filters.popularity_comparison === 'less_popular'
+  ) {
+    hardReject = true;
+  }
+
+  if (filters?.max_reviews !== undefined) {
+    if (
+      candidateTotalReviews === null ||
+      candidateTotalReviews === undefined ||
+      candidateTotalReviews > filters.max_reviews
+    ) {
+      hardReject = true;
+    } else {
+      reasons.push(`Under ${formatCompactReviewCount(filters.max_reviews)} reviews`);
+      bonus += 0.02;
+    }
+  }
+
+  if (filters?.review_percentage) {
+    const minReviewPercentage = filters.review_percentage.gte;
+    const maxReviewPercentage = filters.review_percentage.lte;
+
+    if (candidateReviewPercentage === null || candidateReviewPercentage === undefined) {
+      hardReject = true;
+    } else if (
+      (minReviewPercentage !== undefined && candidateReviewPercentage < minReviewPercentage) ||
+      (maxReviewPercentage !== undefined && candidateReviewPercentage > maxReviewPercentage)
+    ) {
+      hardReject = true;
+    }
+  }
+
+  const hasReviewSensitiveConstraint =
+    (filters?.review_comparison !== undefined && filters.review_comparison !== 'any') ||
+    filters?.review_percentage !== undefined ||
+    filters?.max_reviews !== undefined ||
+    filters?.min_reviews !== undefined;
+
+  if (hasReviewSensitiveConstraint) {
+    if (candidateTotalReviews === null || candidateTotalReviews === undefined) {
+      penalty += 0.12;
+      if (filters?.review_comparison && filters.review_comparison !== 'any') {
+        hardReject = true;
+      }
+    } else if (candidateTotalReviews < 50) {
+      penalty += 0.16;
+      if (filters?.review_comparison && filters.review_comparison !== 'any') {
+        hardReject = true;
+      }
+    } else if (candidateTotalReviews < 100) {
+      penalty += 0.08;
+    }
   }
 
   return {
-    bonus: Math.min(bonus, 0.12),
+    bonus: Math.min(bonus, 0.14),
+    penalty,
     reasons,
+    hardReject,
   };
 }
 
 function buildConceptEvidence(
   description: string,
   payload: Record<string, unknown>
-): { bonus: number; penalty: number; reasons: string[] } {
+): {
+  bonus: number;
+  penalty: number;
+  reasons: string[];
+  matchedFacetCount: number;
+  facetCount: number;
+  hardReject: boolean;
+} {
   const normalizedDescription = normalizeTextToken(description);
   const matchedFacets = CONCEPT_FACETS.filter((facet) =>
     facet.phrases.some((phrase) => normalizedDescription.includes(phrase))
@@ -875,6 +1094,7 @@ function buildConceptEvidence(
   const matchedLabels: string[] = [];
   let bonus = 0;
   let penalty = 0;
+  let hardReject = false;
 
   for (const facet of matchedFacets) {
     if (payloadHasEvidenceTerm(payload, facet.evidenceTerms)) {
@@ -890,10 +1110,231 @@ function buildConceptEvidence(
 
   if (matchedFacets.length > 0 && matchedLabels.length === 0) {
     penalty += 0.1;
+  } else if (matchedFacets.length >= 2) {
+    const missingFacetCount = Math.max(0, matchedFacets.length - matchedLabels.length);
+    if (missingFacetCount > 0) {
+      penalty += missingFacetCount * 0.08;
+    } else {
+      bonus += 0.05;
+    }
   }
 
   if (matchedLabels.length >= 2) {
     bonus += 0.03;
+  }
+
+  const hasBeautifulArtPrompt =
+    normalizedDescription.includes('beautiful art') ||
+    (descriptionIncludesAll(normalizedDescription, ['beautiful', 'puzzle']) &&
+      (normalizedDescription.includes('relaxing') || normalizedDescription.includes('cozy') || normalizedDescription.includes('calm')));
+  if (hasBeautifulArtPrompt) {
+    const artEvidence = payloadHasEvidenceTerm(payload, [
+      'stylized',
+      'hand drawn',
+      'hand-drawn',
+      'atmospheric',
+      'colorful',
+      'painting',
+      'story rich',
+      'nature',
+    ]);
+    const relaxingEvidence = payloadHasEvidenceTerm(payload, ['relaxing', 'cozy', 'atmospheric', 'wholesome']);
+    const lowSignalPuzzle = payloadOrTitleHasEvidenceTerm(payload, candidateName, [
+      'jigsaw',
+      'coloring',
+      'sudoku',
+      'mahjong',
+      'solitaire',
+      'nonogram',
+    ]);
+    const lowSignalContent = payloadHasEvidenceTerm(payload, [
+      'hentai',
+      'sexual content',
+      'nsfw',
+      'clicker',
+      'hidden object',
+    ]);
+    const lowSignalAesthetic = nameContainsAnyTerm(candidateName, [
+      'pleasure',
+      'sexy',
+      'girls',
+      'portrait',
+      'anime',
+    ]);
+    if (lowSignalPuzzle) {
+      penalty += 0.28;
+      hardReject = true;
+    }
+    if (lowSignalContent) {
+      penalty += 0.28;
+      hardReject = true;
+    }
+    if (lowSignalAesthetic) {
+      penalty += 0.22;
+      hardReject = true;
+    }
+    if (!artEvidence) {
+      penalty += 0.18;
+      hardReject = true;
+    } else if (payloadHasEvidenceTerm(payload, ['puzzle', 'logic'])) {
+      bonus += 0.05;
+    }
+    if (!relaxingEvidence) {
+      penalty += 0.08;
+    }
+    if (nameContainsAnyTerm(candidateName, ['beauty', 'beautiful']) && !artEvidence) {
+      penalty += 0.12;
+    }
+  }
+
+  const hasTacticalDeckPrompt =
+    normalizedDescription.includes('tactical') &&
+    (normalizedDescription.includes('deck building') || normalizedDescription.includes('deckbuilder'));
+  if (hasTacticalDeckPrompt) {
+    const tacticalEvidence = payloadHasEvidenceTerm(payload, [
+      'tactical',
+      'strategy',
+      'turn based tactics',
+      'turn based',
+      'grid based movement',
+    ]);
+    const strongTacticalEvidence = payloadHasEvidenceTerm(payload, [
+      'turn based tactics',
+      'turn based strategy',
+      'grid based movement',
+      'strategy rpg',
+      'turn based combat',
+    ]);
+    const deckbuildingEvidence = payloadHasEvidenceTerm(payload, [
+      'deckbuilder',
+      'deck building',
+      'rogue like deckbuilder',
+    ]);
+    const genericCardOnly =
+      payloadHasEvidenceTerm(payload, ['card game', 'trading card', 'collectible card']) && !tacticalEvidence;
+
+    if (!tacticalEvidence) {
+      penalty += 0.12;
+    }
+    if (tacticalEvidence && !strongTacticalEvidence) {
+      penalty += 0.07;
+    }
+    if (!deckbuildingEvidence) {
+      penalty += 0.08;
+    }
+    if (genericCardOnly) {
+      penalty += 0.12;
+    }
+    if (tacticalEvidence && deckbuildingEvidence) {
+      bonus += 0.07;
+    }
+  }
+
+  const hasTacticalRoguelikePrompt =
+    normalizedDescription.includes('tactical') &&
+    (normalizedDescription.includes('roguelike') || normalizedDescription.includes('roguelite'));
+  if (hasTacticalRoguelikePrompt) {
+    const tacticalEvidence = payloadHasEvidenceTerm(payload, [
+      'tactical',
+      'strategy',
+      'turn based tactics',
+      'turn based',
+      'grid based movement',
+    ]);
+    const strongTacticalEvidence = payloadHasEvidenceTerm(payload, [
+      'turn based tactics',
+      'turn based strategy',
+      'grid based movement',
+      'strategy rpg',
+      'turn based combat',
+    ]);
+    const roguelikeEvidence = payloadHasEvidenceTerm(payload, [
+      'roguelike',
+      'roguelite',
+      'action roguelike',
+      'rogue like deckbuilder',
+    ]);
+
+    if (!tacticalEvidence) {
+      penalty += 0.12;
+      if (titleContainsEvidenceTerm(candidateName, ['rogue'])) {
+        penalty += 0.12;
+        hardReject = true;
+      }
+    }
+    if (tacticalEvidence && !strongTacticalEvidence) {
+      penalty += 0.1;
+      if (titleContainsEvidenceTerm(candidateName, ['rogue'])) {
+        penalty += 0.08;
+      }
+    }
+    if (!roguelikeEvidence) {
+      penalty += 0.06;
+    }
+    if (tacticalEvidence && roguelikeEvidence) {
+      bonus += 0.06;
+    }
+  }
+
+  const hasPixelActionPrompt =
+    normalizedDescription.includes('pixel') &&
+    normalizedDescription.includes('action');
+  if (hasPixelActionPrompt) {
+    const pixelEvidence = payloadHasEvidenceTerm(payload, ['pixel graphics', 'pixel']);
+    const actionEvidence = payloadHasEvidenceTerm(payload, [
+      'fast-paced',
+      'action',
+      'arcade',
+      'bullet hell',
+      'hack and slash',
+      'platformer',
+      'run and gun',
+      'shoot em up',
+      'shmup',
+    ]);
+
+    if (!pixelEvidence) {
+      penalty += 0.16;
+    }
+    if (!actionEvidence) {
+      penalty += 0.1;
+    }
+    if (nameContainsAnyTerm(candidateName, ['pixel']) && !pixelEvidence) {
+      penalty += 0.1;
+      hardReject = true;
+    }
+    if (pixelEvidence && actionEvidence) {
+      bonus += 0.06;
+    }
+  }
+
+  const hasInvestigationHorrorPrompt =
+    normalizedDescription.includes('horror') &&
+    normalizedDescription.includes('investigation');
+  if (hasInvestigationHorrorPrompt) {
+    const horrorEvidence = payloadHasEvidenceTerm(payload, [
+      'horror',
+      'psychological horror',
+      'survival horror',
+    ]);
+    const investigationEvidence = payloadHasEvidenceTerm(payload, [
+      'investigation',
+      'detective',
+      'mystery',
+      'story rich',
+      'hidden object',
+    ]);
+    const puzzleEvidence = payloadHasEvidenceTerm(payload, ['puzzle', 'logic']);
+
+    if (nameContainsAnyTerm(candidateName, ['investigation', 'detective']) && !horrorEvidence) {
+      penalty += 0.12;
+    }
+    if (horrorEvidence && investigationEvidence) {
+      bonus += 0.05;
+    }
+    if (normalizedDescription.includes('puzzle') && !puzzleEvidence) {
+      penalty += 0.06;
+    }
   }
 
   const totalReviews = asOptionalNullableNumber(payload.total_reviews);
@@ -919,7 +1360,14 @@ function buildConceptEvidence(
     reasons.push('Well-supported reviews');
   }
 
-  return { bonus, penalty, reasons };
+  return {
+    bonus,
+    penalty,
+    reasons,
+    matchedFacetCount: matchedLabels.length,
+    facetCount: matchedFacets.length,
+    hardReject,
+  };
 }
 
 async function fetchCompanyMetricsSnapshot(
@@ -1209,6 +1657,9 @@ async function findSimilarCompaniesFallback(
         score,
         gameEvidence,
         portfolioScore: support.portfolioScore,
+        scaleQualityScore: support.scaleQualityScore,
+        reviewCloseness: support.reviewCloseness,
+        catalogCloseness: support.catalogCloseness,
         matchReasons,
       };
     });
@@ -1223,6 +1674,9 @@ async function findSimilarCompaniesFallback(
             item.candidate.name,
             0,
             item.portfolioScore,
+            item.scaleQualityScore,
+            item.reviewCloseness,
+            item.catalogCloseness,
             false,
             item.gameEvidence
           )
@@ -1283,6 +1737,9 @@ async function findSimilarCompaniesFallback(
         matchReasons: matchReasons.length > 0 ? matchReasons : ['Comparable portfolio profile'],
       })),
       total_found: relaxedFallback.length,
+      sufficient_to_answer: true,
+      sufficiency_reason:
+        'Returned the smallest useful comparable company set. Respond directly and say the peer set is limited instead of broadening.',
       debug: {
         searchParams: {
           entity_type: entityType,
@@ -1313,6 +1770,9 @@ async function findSimilarCompaniesFallback(
       matchReasons: matchReasons.length > 0 ? matchReasons : ['Comparable portfolio profile'],
     })),
     total_found: rankedResults.length,
+    sufficient_to_answer: true,
+    sufficiency_reason:
+      'Returned comparable company peers that already answer the request. Respond directly instead of broadening to generic rankings.',
     debug: {
       searchParams: {
         entity_type: entityType,
@@ -1980,6 +2440,9 @@ function shouldRejectCompanyCandidate(
   candidateName: string,
   _similarityScore: number,
   portfolioScore: number,
+  scaleQualityScore: number,
+  reviewCloseness: number,
+  catalogCloseness: number,
   matchedBothVariants: boolean,
   gameEvidence: CompanyGameEvidence | undefined
 ): boolean {
@@ -2003,6 +2466,22 @@ function shouldRejectCompanyCandidate(
   }
 
   if (!hasStrongCompanyGameEvidence(gameEvidence, portfolioScore)) {
+    return true;
+  }
+
+  if (scaleQualityScore < 0.32 && gameEvidence.weightedGameEvidenceScore < 0.85) {
+    return true;
+  }
+
+  if (catalogCloseness < 0.25 && !matchedBothVariants && gameEvidence.weightedGameEvidenceScore < 0.92) {
+    return true;
+  }
+
+  if (
+    scaleQualityScore < 0.4 &&
+    (catalogCloseness < 0.4 || reviewCloseness < 0.35) &&
+    gameEvidence.weightedGameEvidenceScore < 0.9
+  ) {
     return true;
   }
 
@@ -2141,6 +2620,9 @@ async function findSimilarCompaniesSemantic(
           snapshot.name,
           semanticScore,
           support.portfolioScore,
+          support.scaleQualityScore,
+          support.reviewCloseness,
+          support.catalogCloseness,
           matchedBothVariants,
           gameEvidence
         )
@@ -2199,6 +2681,9 @@ async function findSimilarCompaniesSemantic(
       },
       results: finalResults.map(({ variantScores: _variantScores, portfolioScore: _portfolioScore, ...candidate }) => candidate),
       total_found: mergedCandidates.length,
+      sufficient_to_answer: true,
+      sufficiency_reason:
+        'Returned comparable company peers that already answer the request. Respond directly instead of broadening to generic rankings.',
       debug: {
         searchParams: {
           entity_type: entityType,
@@ -2243,6 +2728,7 @@ interface SourcePayloadForBoost {
   publisher_ids?: number[];
   genres?: string[];
   tags?: string[];
+  categories?: string[];
   franchise_names?: string[];
   review_percentage?: number | null;
   total_reviews?: number | null;
@@ -2286,6 +2772,7 @@ function applyScoreBoosts(
   return results
     .map((result) => {
       let boost = 0;
+      let penalty = 0;
       const reasons: string[] = [];
 
       // Franchise boost (+15%)
@@ -2329,30 +2816,87 @@ function applyScoreBoosts(
       const sourceGenres = sourcePayload.genres || [];
       const resultGenres = result.payload.genres || result.payload.top_genres || [];
       const sharedGenres = sharedNormalizedStrings(sourceGenres, resultGenres);
+      const sharedInformativeGenres = filterInformativeGameAttributes(sharedGenres);
       if (sourceGenres.length && resultGenres.length) {
         const genreBoostCount = Math.min(sharedGenres.length, SCORE_BOOSTS.MAX_GENRE_BOOSTS);
         boost += genreBoostCount * SCORE_BOOSTS.SHARED_GENRE;
-        // Add top shared genre to reasons
-        if (sharedGenres.length > 0) {
-          reasons.push(sharedGenres[0]);
-        }
       }
 
       // Tag boost (+1% each, max 5)
       const sourceTags = sourcePayload.tags || [];
       const resultTags = result.payload.tags || result.payload.top_tags || [];
       const sharedTags = sharedNormalizedStrings(sourceTags, resultTags);
+      const sharedInformativeTags = filterInformativeGameAttributes(sharedTags);
       if (sourceTags.length && resultTags.length) {
         const tagBoostCount = Math.min(sharedTags.length, SCORE_BOOSTS.MAX_TAG_BOOSTS);
         boost += tagBoostCount * SCORE_BOOSTS.SHARED_TAG;
-        // Add top shared tag to reasons (if not already covered by genre)
-        if (sharedTags.length > 0 && !reasons.includes(sharedTags[0])) {
-          reasons.push(sharedTags[0]);
+      }
+
+      const preferredSharedReasons = [
+        ...sharedInformativeTags,
+        ...sharedInformativeGenres,
+        ...sharedTags,
+        ...sharedGenres,
+      ];
+      for (const reason of preferredSharedReasons) {
+        if (!reasons.includes(reason)) {
+          reasons.push(reason);
         }
+        if (reasons.length >= 4) {
+          break;
+        }
+      }
+
+      const hasStructuralEntityMatch = reasons.some((reason) =>
+        reason === 'Same developer' || reason === 'Same publisher' || reason.endsWith('series')
+      );
+      const strongSimilarityEvidence =
+        hasStructuralEntityMatch ||
+        sharedInformativeTags.length >= 2 ||
+        (sharedInformativeGenres.length > 0 && sharedInformativeTags.length > 0) ||
+        sharedInformativeGenres.length >= 2;
+      const veryStrongSimilarityEvidence =
+        hasStructuralEntityMatch ||
+        sharedInformativeTags.length >= 2 ||
+        (sharedInformativeGenres.length > 0 && sharedInformativeTags.length > 0) ||
+        sharedInformativeGenres.length >= 2 ||
+        sharedInformativeTags.length >= 3;
+      const mediumSimilarityEvidence =
+        strongSimilarityEvidence ||
+        sharedInformativeTags.length >= 1 ||
+        sharedInformativeGenres.length >= 1 ||
+        sharedTags.length >= 2;
+
+      if (sharedInformativeTags.length >= 2) {
+        boost += 0.04;
+      } else if (sharedInformativeTags.length === 1 && sharedInformativeGenres.length >= 1) {
+        boost += 0.025;
+      }
+
+      if (strongSimilarityEvidence) {
+        boost += 0.05;
+      } else if (mediumSimilarityEvidence) {
+        boost += 0.02;
+      } else {
+        penalty += 0.09;
+      }
+
+      const hasHardConstraint = Boolean(
+        (filters?.steam_deck && filters.steam_deck.length > 0) ||
+        (filters?.review_comparison && filters.review_comparison !== 'any') ||
+        filters?.review_percentage ||
+        filters?.max_reviews !== undefined ||
+        filters?.min_reviews !== undefined ||
+        (filters?.tags && filters.tags.length > 0) ||
+        (filters?.genres && filters.genres.length > 0)
+      );
+      if (hasHardConstraint && !strongSimilarityEvidence) {
+        penalty += 0.08;
       }
 
       const filterEvidence = buildSimilarityFilterEvidence(sourcePayload, result.payload, filters);
       boost += filterEvidence.bonus;
+      penalty += filterEvidence.penalty;
       for (const reason of filterEvidence.reasons) {
         if (!reasons.includes(reason)) {
           reasons.push(reason);
@@ -2364,24 +2908,54 @@ function applyScoreBoosts(
         asOptionalNullableNumber(result.payload.review_percentage)
       );
 
-      const structuralEvidence =
-        reasons.some((reason) => reason === 'Same developer' || reason === 'Same publisher' || reason.endsWith('series')) ||
-        sharedGenres.length > 0 ||
-        sharedTags.length >= 2;
       const suspiciousTitlePenalty =
         result.payload.name &&
         hasSuspiciousGameTitleOverlap(referenceName, result.payload.name) &&
-        !structuralEvidence
+        !strongSimilarityEvidence
           ? 0.18
           : 0;
+      const candidateTotalReviews = asOptionalNullableNumber(result.payload.total_reviews);
       const lowSignal = lowSignalPenalty(
-        asOptionalNullableNumber(result.payload.total_reviews),
+        candidateTotalReviews,
         asOptionalNullableNumber(result.payload.review_percentage)
       );
 
       // Cap total boost
       boost = Math.min(boost, SCORE_BOOSTS.MAX_TOTAL_BOOST);
-      const adjustedScore = Math.max(0, Math.min(result.score + boost - suspiciousTitlePenalty - lowSignal, 1.0));
+      const adjustedScore = Math.max(
+        0,
+        Math.min(result.score + boost - penalty - suspiciousTitlePenalty - lowSignal, 1.0)
+      );
+      const hardReject =
+        filterEvidence.hardReject ||
+        (
+          Boolean(suspiciousTitlePenalty) &&
+          !veryStrongSimilarityEvidence
+        ) ||
+        (
+          filters?.review_comparison !== undefined &&
+          filters.review_comparison !== 'any' &&
+          !veryStrongSimilarityEvidence &&
+          sharedInformativeTags.length === 0 &&
+          sharedInformativeGenres.length === 0
+        ) ||
+        (
+          filters?.review_comparison !== undefined &&
+          filters.review_comparison !== 'any' &&
+          !hasStructuralEntityMatch &&
+          sharedInformativeTags.length === 0 &&
+          result.score < 0.78
+        ) ||
+        (
+          filters?.review_comparison !== undefined &&
+          filters.review_comparison !== 'any' &&
+          candidateTotalReviews !== null &&
+          candidateTotalReviews !== undefined &&
+          candidateTotalReviews < 100 &&
+          !hasStructuralEntityMatch &&
+          sharedInformativeTags.length < 2
+        ) ||
+        (!mediumSimilarityEvidence && adjustedScore < 0.68);
 
       return {
         id: result.id,
@@ -2389,8 +2963,10 @@ function applyScoreBoosts(
         rawScore: result.score,
         payload: result.payload,
         matchReasons: reasons.slice(0, 4),
+        hardReject,
       };
     })
+    .filter((item) => !item.hardReject)
     .sort((a, b) => b.score - a.score);
 }
 
@@ -2677,7 +3253,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
       ]
     : ['name', 'game_count', 'top_genres', 'top_tags', 'avg_review_percentage', 'is_major'];
   const searchLimit = entity_type === 'game'
-    ? Math.min(Math.max(actualLimit * 4, 24), MAX_RESULTS)
+    ? Math.min(Math.max(actualLimit * 5, 30), MAX_RESULTS)
     : actualLimit;
 
   let searchResult;
@@ -2752,6 +3328,13 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     },
     results,
     total_found: searchResult.length,
+    sufficient_to_answer: results.length > 0,
+    sufficiency_reason:
+      results.length > 0
+        ? entity_type === 'game'
+          ? 'Returned similarity rows that already answer the request. Respond directly instead of calling an adjacent discovery tool.'
+          : 'Returned comparable peers that already answer the request. Respond directly instead of broadening.'
+        : undefined,
     debug: {
       searchParams: {
         collection,
@@ -2801,6 +3384,8 @@ export interface SearchByConceptResult {
   results?: SimilarEntity[];
   total_found?: number;
   error?: string;
+  sufficient_to_answer?: boolean;
+  sufficiency_reason?: string;
 }
 
 /**
@@ -2819,6 +3404,7 @@ export async function searchByConcept(args: SearchByConceptArgs): Promise<Search
   const normalizedArgs = normalizeSearchByConceptArgs(args);
   const { description, filters, limit = DEFAULT_RESULTS } = normalizedArgs;
   const actualLimit = Math.min(limit, MAX_RESULTS);
+  const searchDescription = buildConceptSearchDescription(description);
 
   // Validate description
   if (!description || description.trim().length === 0) {
@@ -2831,7 +3417,7 @@ export async function searchByConcept(args: SearchByConceptArgs): Promise<Search
   // Generate embedding for the description
   let queryVector: number[];
   try {
-    queryVector = await generateQueryEmbedding(description);
+    queryVector = await generateQueryEmbedding(searchDescription);
   } catch (embeddingError) {
     console.error('Embedding generation error:', embeddingError);
     return {
@@ -2859,6 +3445,8 @@ export async function searchByConcept(args: SearchByConceptArgs): Promise<Search
     if (filters.release_year) gameFilters.release_year = filters.release_year;
     if (filters.review_percentage) gameFilters.review_percentage = filters.review_percentage;
   }
+
+  applyImplicitConceptFilters(description, filters, gameFilters);
 
   const qdrantFilter = buildGameFilter(gameFilters);
   const searchLimit = Math.min(Math.max(actualLimit * 5, 30), MAX_RESULTS);
@@ -2905,12 +3493,24 @@ export async function searchByConcept(args: SearchByConceptArgs): Promise<Search
         rawScore: point.score,
         payload,
         matchReasons: conceptEvidence.reasons,
+        matchedFacetCount: conceptEvidence.matchedFacetCount,
+        facetCount: conceptEvidence.facetCount,
+        hardReject: conceptEvidence.hardReject,
       };
     })
-    .sort((left, right) => right.score - left.score)
-    .slice(0, actualLimit);
+    .filter((item) => !item.hardReject)
+    .sort((left, right) => right.score - left.score);
 
-  const results: SimilarEntity[] = rerankedResults.map((item) => ({
+  const preferredResults = rerankedResults.filter((item) => {
+    const minimumFacetMatches = item.facetCount >= 2 ? 2 : item.facetCount >= 1 ? 1 : 0;
+    return item.matchedFacetCount >= minimumFacetMatches || item.score >= 0.78;
+  });
+  const finalResults =
+    preferredResults.length >= Math.min(actualLimit, 5)
+      ? preferredResults
+      : rerankedResults.filter((item) => item.score >= 0.45 || item.matchedFacetCount >= 1);
+
+  const results: SimilarEntity[] = finalResults.slice(0, actualLimit).map((item) => ({
     id: item.id,
     name: asOptionalString(item.payload.name) || 'Unknown',
     score: Math.round(item.score * 100),
@@ -2931,6 +3531,11 @@ export async function searchByConcept(args: SearchByConceptArgs): Promise<Search
     query_description: description,
     results,
     total_found: searchResult.length,
+    sufficient_to_answer: results.length > 0,
+    sufficiency_reason:
+      results.length > 0
+        ? 'Returned concept matches that already satisfy the request. Respond from these rows instead of broadening into a second discovery pass.'
+        : undefined,
   };
 }
 

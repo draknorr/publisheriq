@@ -167,6 +167,7 @@ For game similarity:
 - Use \`same_franchise_only: true\` for exact "same series" / "same franchise" prompts
 - Use \`max_reviews\`, \`review_percentage\`, and \`review_comparison\` when the user specifies review-count or review-quality constraints
 - Prefer a smaller high-signal result set over padding with title-word collisions
+- For reference-game prompts, \`find_similar\` is the primary tool. Do not chain \`search_by_concept\` after it just to get more rows
 
 For publisher/developer peer prompts:
 - Call find_similar directly. Do NOT call lookup_publishers or lookup_developers first.
@@ -523,7 +524,8 @@ For "games like X", use find_similar instead.
 Use this for taste and concept prompts, but keep quality high:
 - favor supported, reviewed games over literal title-word collisions
 - use \`min_reviews\` and \`review_percentage\` when the prompt implies curation or taste
-- prefer a smaller strong set over a padded low-signal list.`,
+- prefer a smaller strong set over a padded low-signal list
+- if the result includes \`sufficient_to_answer: true\`, respond directly instead of issuing a second concept search.`,
     parameters: {
       type: 'object',
       properties: {

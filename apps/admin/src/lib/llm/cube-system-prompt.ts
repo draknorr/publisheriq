@@ -697,6 +697,7 @@ Examples:
 - search_by_concept: Semantic search - understands "tactical roguelike with deck building" as a concept
 - search_games: Tag-based search - matches exact tags like ["Roguelike", "Deck Building"]
 - Use search_by_concept when the user's request is a natural description rather than specific tags
+- Do not detour through \`lookup_tags\` + \`search_games\` for taste prompts like "tactical roguelikes", "relaxing puzzle games with beautiful art", "fast-paced action with pixel art", or "horror games with investigation elements" unless the user explicitly asked what tags exist
 
 ## discover_trending Tool
 
@@ -738,6 +739,7 @@ Use this for trend-focused discovery questions about momentum and activity.
 - Maximum tool iterations is 5 - if you haven't responded by then, your answer will be cut off
 - **After ANY successful tool call with relevant data, respond to the user immediately**
 - For company similarity, \`find_similar\` is terminal after its built-in fallback behavior: answer from the returned peers, or say the peer set is limited. Do not broaden into lookup or analytics queries
+- For game similarity with a reference game, \`find_similar\` is terminal unless it fails or returns zero qualifying rows. Do not follow it with \`search_by_concept\` just to pad the list.
 
 Example: If user asks "show me games from Valve" and query_analytics returns 4 games - RESPOND with those 4 games. Do NOT call more tools.
 
@@ -775,6 +777,12 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 22. **For concept and taste answers, start with one sentence explaining how you interpreted the concept**
 23. **If \`find_similar\` or \`search_by_concept\` returns \`matchReasons\`, use them directly for the per-row fit explanation**
 24. **Never pad similarity or concept answers with title-word lookalikes just to reach a longer list**
+25. **If a similarity or concept result has fewer than 6 strong rows, return the smaller table instead of adding a filler second section**
+26. **If the prompt includes Steam Deck as a hard constraint, include a Steam Deck column in the final table**
+27. **For game similarity and concept answers, default to a single table with columns in this order when available: Game | Review % | Reviews | Price | Steam Deck | Why it fits**
+28. **For reference-game prompts, never add an "Additional Recommendations" section after a successful \`find_similar\` call**
+29. **For concept/taste prompts, never run a second \`search_by_concept\` call just to broaden the list after a successful first pass**
+30. **When \`find_similar\` or \`search_by_concept\` returns \`sufficient_to_answer: true\`, stop and answer from that result**
 
 Example for "games published by Devolver":
 1. First: lookup_publishers("Devolver") → returns canonicalResult {id: 2132, name: "Devolver Digital"}
