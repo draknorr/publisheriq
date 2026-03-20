@@ -13,6 +13,8 @@ interface ResultWithData {
   candidates?: Record<string, unknown>[];
   app?: Record<string, unknown>;
   detail?: Record<string, unknown>;
+  entityType?: 'publisher' | 'developer';
+  canonicalResult?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -92,6 +94,25 @@ function formatSimilarityResults(
   });
 }
 
+function formatEntityResults(
+  entityType: 'publisher' | 'developer',
+  results: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  return results.map((item) => {
+    const formatted = { ...item };
+    const id = item.id as number | undefined;
+    const name = item.name as string | undefined;
+
+    if (id && name) {
+      formatted.name = entityType === 'publisher'
+        ? `[${name}](/publishers/${id})`
+        : `[${name}](/developers/${id})`;
+    }
+
+    return formatted;
+  });
+}
+
 /**
  * Format tool result with entity links before sending to LLM
  *
@@ -107,10 +128,16 @@ export function formatResultWithEntityLinks(result: unknown): string {
   const typedResult = result as ResultWithData;
 
   if (Array.isArray(typedResult.candidates) && typedResult.candidates.length > 0) {
-    const formattedCandidates = typedResult.candidates.map((row) =>
-      formatRowWithLinks(row as Record<string, unknown>)
-    );
-    return JSON.stringify({ ...typedResult, candidates: formattedCandidates });
+    const formattedCandidates =
+      typedResult.entityType === 'publisher' || typedResult.entityType === 'developer'
+        ? formatEntityResults(typedResult.entityType, typedResult.candidates as Record<string, unknown>[])
+        : typedResult.candidates.map((row) => formatRowWithLinks(row as Record<string, unknown>));
+    const formattedCanonical =
+      typedResult.canonicalResult &&
+      (typedResult.entityType === 'publisher' || typedResult.entityType === 'developer')
+        ? formatEntityResults(typedResult.entityType, [typedResult.canonicalResult])[0]
+        : typedResult.canonicalResult;
+    return JSON.stringify({ ...typedResult, candidates: formattedCandidates, canonicalResult: formattedCanonical });
   }
 
   // Handle query_analytics and search_games results (have 'data' array)
@@ -136,10 +163,18 @@ export function formatResultWithEntityLinks(result: unknown): string {
   if (Array.isArray(typedResult.results) && typedResult.results.length > 0) {
     const results = typedResult.results as Record<string, unknown>[];
     const hasTypedSimilarityResults = results.some((item) => typeof item.type === 'string');
-    const formattedResults = hasTypedSimilarityResults
-      ? formatSimilarityResults(results)
-      : results.map((row) => formatRowWithLinks(row));
-    return JSON.stringify({ ...typedResult, results: formattedResults });
+    const formattedResults =
+      hasTypedSimilarityResults
+        ? formatSimilarityResults(results)
+        : typedResult.entityType === 'publisher' || typedResult.entityType === 'developer'
+          ? formatEntityResults(typedResult.entityType, results)
+          : results.map((row) => formatRowWithLinks(row));
+    const formattedCanonical =
+      typedResult.canonicalResult &&
+      (typedResult.entityType === 'publisher' || typedResult.entityType === 'developer')
+        ? formatEntityResults(typedResult.entityType, [typedResult.canonicalResult])[0]
+        : typedResult.canonicalResult;
+    return JSON.stringify({ ...typedResult, results: formattedResults, canonicalResult: formattedCanonical });
   }
 
   // Handle unsuccessful results - return as-is

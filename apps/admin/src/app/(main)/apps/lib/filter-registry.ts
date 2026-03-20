@@ -424,9 +424,9 @@ export const FILTER_REGISTRY: FilterDefinition[] = [
     category: 'relationship',
     type: 'select',
     options: [
-      { value: 'indie', label: 'Indie', description: '<10 games' },
-      { value: 'mid', label: 'Mid-size', description: '10-50 games' },
-      { value: 'major', label: 'Major', description: '50+ games' },
+      { value: 'indie', label: 'Indie', description: '<5 games' },
+      { value: 'mid', label: 'Mid-size', description: '5-20 games' },
+      { value: 'major', label: 'Major', description: '20+ games' },
     ],
     description: 'Publisher catalog size',
   },

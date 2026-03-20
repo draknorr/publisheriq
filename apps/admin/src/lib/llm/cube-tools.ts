@@ -51,7 +51,9 @@ Only use filters for custom thresholds not covered by segments.
 
 ALWAYS include appid and name dimensions for game lists (e.g., Discovery.appid + Discovery.name or GameCatalog.appid + GameCatalog.name).
 
-When the tool result includes sufficient_to_answer: true, respond from those rows instead of issuing another adjacent broad discovery query.`,
+When the tool result includes sufficient_to_answer: true, respond from those rows instead of issuing another adjacent broad discovery query.
+
+For publisher/developer/company queries, prefer filtering by publisherId/developerId from lookup results instead of filtering by name strings.`,
     parameters: {
       type: 'object',
       properties: {
@@ -92,7 +94,7 @@ When the tool result includes sufficient_to_answer: true, respond from those row
               member: { type: 'string', description: 'Dimension or measure to filter on' },
               operator: {
                 type: 'string',
-                enum: ['equals', 'notEquals', 'contains', 'notContains', 'gt', 'gte', 'lt', 'lte', 'set', 'notSet'],
+                enum: ['equals', 'notEquals', 'contains', 'notContains', 'gt', 'gte', 'lt', 'lte', 'set', 'notSet', 'notIn', 'inDateRange', 'beforeDate', 'afterDate'],
               },
               values: {
                 type: 'array',
@@ -141,7 +143,8 @@ Use this tool for questions like:
 - "Better reviewed alternatives to [game]"
 - "Cheaper games similar to [game]"
 
-Returns semantically similar entities based on genres, tags, features, and other characteristics.`,
+Returns semantically similar entities based on genres, tags, features, and other characteristics.
+For publishers/developers, the tool may fall back to heuristic portfolio similarity when semantic search is unavailable.`,
     parameters: {
       type: 'object',
       properties: {
@@ -406,7 +409,7 @@ Use this tool BEFORE querying for games by publisher to find the exact name:
 - User says "Krafton" → lookup finds "Krafton Inc." → use exact name in query
 - User says "Devolver" → lookup finds "Devolver Digital" → use exact name in query
 
-Returns matching publisher names with their IDs for use in filters.`,
+Returns ranked publisher candidates, a canonicalResult when resolution is confident, and a needsDisambiguation flag when the name is ambiguous.`,
     parameters: {
       type: 'object',
       properties: {
@@ -434,7 +437,7 @@ Use this tool BEFORE querying for games by developer to find the exact name:
 - User says "FromSoftware" → lookup finds "FromSoftware, Inc." → use exact name in query
 - User says "Respawn" → lookup finds "Respawn Entertainment" → use exact name in query
 
-Returns matching developer names with their IDs for use in filters.`,
+Returns ranked developer candidates, a canonicalResult when resolution is confident, and a needsDisambiguation flag when the name is ambiguous.`,
     parameters: {
       type: 'object',
       properties: {

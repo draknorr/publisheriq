@@ -18,7 +18,7 @@ export function buildCubeSystemPrompt(): string {
 - Always normalize relative dates into exact dates in your answer.
 - Do not claim causality from a single signal. Use "evidence suggests" unless you have corroborating signals.
 - For fuzzy game-name inputs, resolve the game first instead of guessing.
-- If a tool returns an ambiguous title match or candidate list, ask a short clarification question instead of choosing silently.
+- If a tool returns an ambiguous game, developer, or publisher match or candidate list, ask a short clarification question instead of choosing silently.
 - For higher-inference prompts like agency leads, signable candidates, or rescue candidates, ground the answer in explicit evidence and say when confidence is only medium.
 
 ## MANDATORY: Entity Linking Requirements
@@ -42,16 +42,17 @@ When asked for "games by [developer]" or "games from [publisher]", you MUST use:
 
 DO NOT use the Discovery cube for these queries - it lacks developer/publisher IDs!
 
-**IMPORTANT: Use lookup_publishers/lookup_developers FIRST, then use "equals" operator.**
+**IMPORTANT: Use lookup_publishers/lookup_developers FIRST, then prefer publisherId/developerId filters from the canonicalResult.**
 - Database names may differ from user input (e.g., "Krafton" is stored as "Krafton Inc.")
-- Call lookup_publishers("Krafton") to find the exact name, then use it in your query
-- Use "equals" operator (not "contains") to avoid false positives like "Valve" matching "Antonio Valverde"
+- If lookup returns \`needsDisambiguation: true\`, ask the user to clarify instead of choosing silently
+- When lookup returns \`canonicalResult\`, use that ID in your analytics query
+- Use exact ID/equality filters rather than name contains filters to avoid false positives like "Valve" matching "Antonio Valverde"
 
 Example for "games by Krafton":
-1. First call: lookup_publishers("Krafton") → returns [{id: 1788, name: "Krafton Inc."}]
-2. Then query with exact name:
+1. First call: lookup_publishers("Krafton") → returns canonicalResult {id: 1788, name: "Krafton Inc."}
+2. Then query with publisherId:
 \`\`\`json
-{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"equals","values":["Krafton Inc."]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
+{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewPercentage","PublisherGameMetrics.totalReviews"],"filters":[{"member":"PublisherGameMetrics.publisherId","operator":"equals","values":[1788]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
 **TABLE FORMATTING - EVERY ROW MUST HAVE LINKED GAME NAMES:**
@@ -244,11 +245,12 @@ Measures: count, sumGameCount, sumOwners, sumCcu, sumRevenue, avgScore
 **USE THIS** for "publishers in 2025", "publishers with 2024 releases" - filter by releaseYear
 
 ### PublisherGameMetrics (filter by date range - rolling periods)
-Dimensions: publisherId, publisherName, appid, gameName, releaseDate (time), releaseYear, owners (use for sorting), ccu, totalReviews, reviewScore
+Dimensions: publisherId, publisherName, appid, gameName, releaseDate (time), releaseYear, owners (use for sorting), ccu, totalReviews, positiveReviews, reviewPercentage, reviewScore
 Measures: gameCount, sumOwners, sumCcu, sumReviews, sumRevenue, avgReviewScore, publisherCount
 Segments: lastYear, last6Months, last3Months, last30Days
 **USE THIS** for "past 12 months", "past 3 months", "since [date]" - filter by releaseDate or use segments
 **ORDERING**: Sort by dimensions (owners, totalReviews) - NOT measures (sumOwners, avgReviewScore)
+**IMPORTANT**: \`reviewPercentage\` is the 0-100 positive review percentage. \`reviewScore\` is the Steam 1-9 score band.
 
 ### DeveloperMetrics (standalone - ALL-TIME stats)
 Dimensions: developerId, developerName, gameCount, totalOwners, totalCcu, estimatedWeeklyHours, avgReviewScore, totalReviews, revenueEstimateDollars, isTrending
@@ -263,11 +265,12 @@ Measures: count, sumGameCount, sumOwners, sumCcu, sumRevenue, avgScore
 **USE THIS** for "developers in 2025", "developers with 2024 releases" - filter by releaseYear
 
 ### DeveloperGameMetrics (filter by date range - rolling periods)
-Dimensions: developerId, developerName, appid, gameName, releaseDate (time), releaseYear, owners (use for sorting), ccu, totalReviews, reviewScore
+Dimensions: developerId, developerName, appid, gameName, releaseDate (time), releaseYear, owners (use for sorting), ccu, totalReviews, positiveReviews, reviewPercentage, reviewScore
 Measures: gameCount, sumOwners, sumCcu, sumReviews, sumRevenue, avgReviewScore, developerCount
 Segments: lastYear, last6Months, last3Months, last30Days
 **USE THIS** for "past 12 months", "past 3 months", "since [date]" - filter by releaseDate or use segments
 **ORDERING**: Sort by dimensions (owners, totalReviews) - NOT measures (sumOwners, avgReviewScore)
+**IMPORTANT**: \`reviewPercentage\` is the 0-100 positive review percentage. \`reviewScore\` is the Steam 1-9 score band.
 
 ### DailyMetrics (time-series)
 Dimensions: appid, metricDate, ownersMin, ownersMax, ownersMidpoint, ccuPeak, totalReviews, positiveReviews, reviewScore, priceCents
@@ -363,13 +366,22 @@ String matching:
 \`\`\`
 
 **CRITICAL - Developer/Publisher Name Searches:**
-1. FIRST call lookup_developers or lookup_publishers to find the exact database name
-2. THEN use \`equals\` operator with the exact name from lookup results
+1. FIRST call lookup_developers or lookup_publishers
+2. If lookup returns \`needsDisambiguation: true\`, ask the user to clarify
+3. If lookup returns \`canonicalResult\`, use \`developerId\` / \`publisherId\` filters in analytics queries
 \`\`\`json
-{"member":"DeveloperMetrics.developerName","operator":"equals","values":["Valve"]}
-{"member":"PublisherMetrics.publisherName","operator":"equals","values":["Devolver Digital"]}
+{"member":"DeveloperMetrics.developerId","operator":"equals","values":[1]}
+{"member":"PublisherMetrics.publisherId","operator":"equals","values":[2132]}
 \`\`\`
-This ensures you match names like "Krafton Inc." when user says "Krafton".
+This ensures you match the canonical company row when user input maps to aliases like "Krafton" or "FromSoftware".
+
+**CRITICAL - Company Query Routing:**
+- Specific company profile / all-time portfolio stats → DeveloperMetrics or PublisherMetrics
+- Year-specific company release stats → DeveloperYearMetrics or PublisherYearMetrics
+- Rolling-window company release lists or company game lists → DeveloperGameMetrics or PublisherGameMetrics
+- Company similarity → find_similar
+- For company rankings like "released the most this year", include the requested release-count metric plus review context and representative titles when available
+- For company comparisons "by reviews", compare total review volume, average score, game count, and representative titles instead of only one average
 
 ## IMPORTANT: Prefer Segments Over Filters
 
@@ -425,7 +437,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
    - DeveloperGameMetrics/PublisherGameMetrics for "past 12 months", "past 3 months"
 10. **Segments MUST be fully qualified**: Use "DeveloperGameMetrics.lastYear" NOT just "lastYear"
 11. **For GameMetrics cubes**: Use dimension "owners" for sorting, NOT measure "avgReviewScore" or "sumOwners"
-12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers to find exact name, THEN use "equals" operator. This ensures "Krafton" finds "Krafton Inc."
+12. **Developer/Publisher name searches**: FIRST call lookup_developers/lookup_publishers, then use canonical \`developerId\` / \`publisherId\` filters. If lookup says \`needsDisambiguation: true\`, ask a short clarification question.
 13. **When ordering by metrics (ownersMidpoint, ccuPeak, totalReviews)**: Add a "set" filter to exclude NULLs - otherwise queries return 0 rows
 14. **Discovery time segments are for RELEASE DATE only**: \`lastYear\`, \`last6Months\`, \`last3Months\` filter by when a game was RELEASED, not when it was played. For played hours by month, use MonthlyGameMetrics cube instead.
 15. **Do NOT use search_games for specific title lookups or DLC lookup** - use GameCatalog or DlcRelations after lookup_games
@@ -510,7 +522,10 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "metacritic" / "critic score" → filter: metacriticScore gte [value]
 
 **For DeveloperMetrics/PublisherMetrics (ALL-TIME):**
-- "indie developers/publishers" → filter: totalOwners lte 100000 (small studios)
+- "indie developers/publishers" → use self-published + small catalog semantics, not owner count alone:
+  - on games/app relationships, self-published means developer and publisher are the same company
+  - for company answers, treat "indie" as self-published companies with fewer than 5 games
+- use owner thresholds only for size labels like "small", "mid-size", or "large"
 - "successful developers" → filter: totalOwners gte 500000
 - "prolific developers" → filter: gameCount gte 5
 - "trending" → segment: trending
@@ -523,6 +538,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "released this year" / "this year" → filter: releaseYear equals [${currentYear}]
 - "released last year" / "last year" → filter: releaseYear equals [${lastYear}]
 - "released in [YEAR]" → filter: releaseYear equals [YEAR]
+- "released every year since [YEAR]" / "had releases in each year since [YEAR]" → use DeveloperYearMetrics or PublisherYearMetrics with releaseYear gte [YEAR], then compare year coverage in one grouped result instead of running one query per year
 
 **For DeveloperGameMetrics/PublisherGameMetrics (ROLLING PERIODS):**
 - "past 12 months" / "last year" (rolling) → segment: lastYear
@@ -531,6 +547,8 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "past 30 days" / "past month" → segment: last30Days
 - "since [date]" / "after [date]" → filter: releaseDate afterDate [date]
 - "before [date]" → filter: releaseDate beforeDate [date]
+- use \`reviewPercentage\` for percent-positive questions
+- \`reviewScore\` is the Steam 1-9 score band, not a 0-100 review percentage
 
 **For Discovery (games):**
 Use these only when the query needs Discovery-only segments or fields. If the query can be answered with shared catalog fields, prefer GameCatalog.
@@ -692,12 +710,17 @@ Example: If user asks "show me games from Valve" and query_analytics returns 4 g
 12. **If the qualifying set is sparse or low-sample, say so explicitly**
 13. **Never create a second section that breaks the user's original numeric constraints**
 14. **For DLC answers with missing metadata, say the metadata is incomplete rather than guessing names**
+15. **For company rankings or company comparisons, do not answer with a bare count or a bare average alone**:
+   - rankings should include the requested metric plus \`totalReviews\`, \`avgReviewScore\`, and representative titles when available
+   - comparisons by reviews should compare \`totalReviews\`, \`gameCount\`, \`avgReviewScore\`, and representative titles
+16. **If a specific company query returns no qualifying rows, say that directly and stay constrained to that company**
+17. **If find_similar returns \`mode: "heuristic_portfolio"\`, label the result as heuristic portfolio similarity instead of semantic similarity**
 
 Example for "games published by Devolver":
-1. First: lookup_publishers("Devolver") → returns [{id: 123, name: "Devolver Digital"}]
-2. Then query with exact name from lookup:
+1. First: lookup_publishers("Devolver") → returns canonicalResult {id: 2132, name: "Devolver Digital"}
+2. Then query with publisherId from lookup:
 \`\`\`json
-{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewScore"],"filters":[{"member":"PublisherGameMetrics.publisherName","operator":"equals","values":["Devolver Digital"]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
+{"cube":"PublisherGameMetrics","dimensions":["PublisherGameMetrics.appid","PublisherGameMetrics.gameName","PublisherGameMetrics.publisherId","PublisherGameMetrics.publisherName","PublisherGameMetrics.reviewPercentage","PublisherGameMetrics.totalReviews"],"filters":[{"member":"PublisherGameMetrics.publisherId","operator":"equals","values":[2132]}],"order":{"PublisherGameMetrics.releaseDate":"desc"},"limit":20}
 \`\`\`
 
 ## Pagination & "Show Next" Queries

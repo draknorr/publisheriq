@@ -21,6 +21,12 @@ import {
   type ReviewComparison,
 } from '@publisheriq/qdrant';
 import { getSupabase } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
+import {
+  resolveCompanyReference,
+  type CompanyEntityType,
+  type CompanyResolutionCandidate,
+} from '@/lib/search/company-resolution';
 
 // OpenAI client for concept search embeddings (lazy initialized)
 let openaiClient: OpenAI | null = null;
@@ -158,12 +164,15 @@ export interface SimilarEntity {
  */
 export interface FindSimilarResult {
   success: boolean;
+  mode?: 'semantic' | 'heuristic_portfolio';
+  entityType?: CompanyEntityType;
   reference?: {
     id: number;
     name: string;
     type: string;
   };
   results?: SimilarEntity[];
+  candidates?: CompanyResolutionCandidate[];
   total_found?: number;
   error?: string;
   debug?: {
@@ -225,50 +234,20 @@ async function lookupEntityByName(
       };
     }
   } else if (entityType === 'publisher') {
-    const { data } = await supabase
-      .from('publishers')
-      .select('id, name, game_count')
-      .ilike('name', name)
-      .limit(1)
-      .single();
-
-    if (data) {
-      return { id: data.id, name: data.name };
-    }
-
-    // Partial match
-    const { data: partial } = await supabase
-      .from('publishers')
-      .select('id, name')
-      .ilike('name', `%${name}%`)
-      .limit(1)
-      .single();
-
-    if (partial) {
-      return { id: partial.id, name: partial.name };
+    const resolution = await resolveCompanyReference('publisher', name, 5);
+    if (resolution.canonicalResult && !resolution.needsDisambiguation) {
+      return {
+        id: resolution.canonicalResult.id,
+        name: resolution.canonicalResult.name,
+      };
     }
   } else if (entityType === 'developer') {
-    const { data } = await supabase
-      .from('developers')
-      .select('id, name, game_count')
-      .ilike('name', name)
-      .limit(1)
-      .single();
-
-    if (data) {
-      return { id: data.id, name: data.name };
-    }
-
-    // Partial match
-    const { data: partial } = await supabase
-      .from('developers')
-      .select('id, name')
-      .ilike('name', `%${name}%`)
-      .limit(1)
-      .single();
-
-    if (partial) {
-      return { id: partial.id, name: partial.name };
+    const resolution = await resolveCompanyReference('developer', name, 5);
+    if (resolution.canonicalResult && !resolution.needsDisambiguation) {
+      return {
+        id: resolution.canonicalResult.id,
+        name: resolution.canonicalResult.name,
+      };
     }
   }
 
@@ -330,6 +309,266 @@ async function lookupEntityById(
   }
 
   return null;
+}
+
+interface CompanyMetricsSnapshot {
+  id: number;
+  name: string;
+  gameCount: number;
+  totalReviews: number;
+  avgReviewScore: number | null;
+  gamesReleasedLastYear: number;
+  genreIds: number[];
+  tagIds: number[];
+}
+
+function normalizeMetricArray(values: number[] | null | undefined): number[] {
+  return Array.isArray(values) ? values.filter((value) => Number.isFinite(value)) : [];
+}
+
+async function fetchCompanyMetricsSnapshot(
+  entityType: CompanyEntityType,
+  id: number
+): Promise<CompanyMetricsSnapshot | null> {
+  const supabase = getServiceSupabase();
+  const table = entityType === 'publisher' ? 'publisher_metrics' : 'developer_metrics';
+  const idColumn = entityType === 'publisher' ? 'publisher_id' : 'developer_id';
+  const nameColumn = entityType === 'publisher' ? 'publisher_name' : 'developer_name';
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (supabase.from(table as any) as any)
+    .select(`${idColumn}, ${nameColumn}, game_count, total_reviews, avg_review_score, games_released_last_year, genre_ids, tag_ids`)
+    .eq(idColumn, id)
+    .maybeSingle();
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: Number(data[idColumn] ?? id),
+    name: String(data[nameColumn] ?? ''),
+    gameCount: Number(data.game_count ?? 0),
+    totalReviews: Number(data.total_reviews ?? 0),
+    avgReviewScore: data.avg_review_score as number | null,
+    gamesReleasedLastYear: Number(data.games_released_last_year ?? 0),
+    genreIds: normalizeMetricArray(data.genre_ids as number[] | null | undefined),
+    tagIds: normalizeMetricArray(data.tag_ids as number[] | null | undefined),
+  };
+}
+
+function overlapScore(left: number[], right: number[]): number {
+  if (left.length === 0 || right.length === 0) {
+    return 0;
+  }
+
+  const rightSet = new Set(right);
+  const overlap = left.filter((value) => rightSet.has(value)).length;
+  const union = new Set([...left, ...right]).size;
+
+  return union > 0 ? overlap / union : 0;
+}
+
+function closenessScore(source: number, candidate: number): number {
+  if (!source || !candidate) {
+    return 0;
+  }
+
+  const sourceLog = Math.log10(source + 1);
+  const candidateLog = Math.log10(candidate + 1);
+  const distance = Math.abs(sourceLog - candidateLog);
+
+  return Math.max(0, 1 - distance / 3);
+}
+
+function buildPortfolioMatchReasons(
+  source: CompanyMetricsSnapshot,
+  candidate: CompanyMetricsSnapshot,
+  genreOverlap: number,
+  tagOverlap: number
+): string[] {
+  const reasons: string[] = [];
+
+  if (genreOverlap >= 0.15) {
+    reasons.push('Similar genre footprint');
+  }
+
+  if (tagOverlap >= 0.1) {
+    reasons.push('Overlapping portfolio tags');
+  }
+
+  if (closenessScore(source.totalReviews, candidate.totalReviews) >= 0.5) {
+    reasons.push('Comparable review footprint');
+  }
+
+  if (closenessScore(source.gameCount, candidate.gameCount) >= 0.6) {
+    reasons.push('Similar catalog size');
+  }
+
+  if (
+    source.avgReviewScore !== null &&
+    candidate.avgReviewScore !== null &&
+    Math.abs(source.avgReviewScore - candidate.avgReviewScore) <= 5
+  ) {
+    reasons.push('Similar average review quality');
+  }
+
+  if (
+    source.gamesReleasedLastYear > 0 &&
+    candidate.gamesReleasedLastYear > 0 &&
+    Math.abs(source.gamesReleasedLastYear - candidate.gamesReleasedLastYear) <= 2
+  ) {
+    reasons.push('Similar recent release cadence');
+  }
+
+  return reasons.slice(0, 3);
+}
+
+async function findSimilarCompaniesFallback(
+  entityType: CompanyEntityType,
+  reference: { id: number; name: string },
+  filters: FindSimilarArgs['filters'] | undefined,
+  limit: number
+): Promise<FindSimilarResult> {
+  const supabase = getServiceSupabase();
+  const table = entityType === 'publisher' ? 'publisher_metrics' : 'developer_metrics';
+  const idColumn = entityType === 'publisher' ? 'publisher_id' : 'developer_id';
+  const nameColumn = entityType === 'publisher' ? 'publisher_name' : 'developer_name';
+  const source = await fetchCompanyMetricsSnapshot(entityType, reference.id);
+
+  if (!source) {
+    return {
+      success: false,
+      error: `Could not load ${entityType} metrics for "${reference.name}".`,
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase.from(table as any) as any)
+    .select(`${idColumn}, ${nameColumn}, game_count, total_reviews, avg_review_score, games_released_last_year, genre_ids, tag_ids`)
+    .neq(idColumn, reference.id)
+    .order('total_reviews', { ascending: false, nullsFirst: false })
+    .limit(Math.max(limit * 8, 40));
+
+  if (source.gameCount > 0) {
+    query = query
+      .gte('game_count', Math.max(1, Math.floor(source.gameCount / 3)))
+      .lte('game_count', Math.max(10, source.gameCount * 3));
+  }
+
+  if (filters?.game_count?.gte !== undefined) {
+    query = query.gte('game_count', filters.game_count.gte);
+  }
+
+  if (filters?.game_count?.lte !== undefined) {
+    query = query.lte('game_count', filters.game_count.lte);
+  }
+
+  if (filters?.avg_review_percentage?.gte !== undefined) {
+    query = query.gte('avg_review_score', filters.avg_review_percentage.gte);
+  }
+
+  if (filters?.avg_review_percentage?.lte !== undefined) {
+    query = query.lte('avg_review_score', filters.avg_review_percentage.lte);
+  }
+
+  if (filters?.is_major === true) {
+    query = query.gte('game_count', 10);
+  }
+
+  if (filters?.is_major === false) {
+    query = query.lt('game_count', 10);
+  }
+
+  if (source.genreIds.length > 0) {
+    query = query.overlaps('genre_ids', source.genreIds.slice(0, 12));
+  } else if (source.tagIds.length > 0) {
+    query = query.overlaps('tag_ids', source.tagIds.slice(0, 20));
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (query as any);
+
+  if (error || !Array.isArray(data) || data.length === 0) {
+    return {
+      success: false,
+      error: `No comparable ${entityType} portfolios were found for "${reference.name}".`,
+    };
+  }
+
+  const rankedResults = data
+    .map((row: Record<string, unknown>) => {
+      const candidate: CompanyMetricsSnapshot = {
+        id: Number(row[idColumn] ?? 0),
+        name: String(row[nameColumn] ?? ''),
+        gameCount: Number(row.game_count ?? 0),
+        totalReviews: Number(row.total_reviews ?? 0),
+        avgReviewScore: row.avg_review_score as number | null,
+        gamesReleasedLastYear: Number(row.games_released_last_year ?? 0),
+        genreIds: normalizeMetricArray(row.genre_ids as number[] | null | undefined),
+        tagIds: normalizeMetricArray(row.tag_ids as number[] | null | undefined),
+      };
+      const genreOverlap = overlapScore(source.genreIds, candidate.genreIds);
+      const tagOverlap = overlapScore(source.tagIds, candidate.tagIds);
+      const reviewCloseness = closenessScore(source.totalReviews, candidate.totalReviews);
+      const catalogCloseness = closenessScore(source.gameCount, candidate.gameCount);
+      const qualityCloseness =
+        source.avgReviewScore !== null && candidate.avgReviewScore !== null
+          ? Math.max(0, 1 - Math.abs(source.avgReviewScore - candidate.avgReviewScore) / 20)
+          : 0;
+      const cadenceCloseness = closenessScore(source.gamesReleasedLastYear, candidate.gamesReleasedLastYear);
+
+      const score =
+        genreOverlap * 0.35 +
+        tagOverlap * 0.2 +
+        reviewCloseness * 0.2 +
+        catalogCloseness * 0.15 +
+        qualityCloseness * 0.07 +
+        cadenceCloseness * 0.03;
+
+      return {
+        candidate,
+        score,
+        matchReasons: buildPortfolioMatchReasons(source, candidate, genreOverlap, tagOverlap),
+      };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit);
+
+  if (rankedResults.length === 0) {
+    return {
+      success: false,
+      error: `No comparable ${entityType} portfolios were found for "${reference.name}".`,
+    };
+  }
+
+  return {
+    success: true,
+    mode: 'heuristic_portfolio',
+    reference: {
+      id: reference.id,
+      name: reference.name,
+      type: entityType,
+    },
+    results: rankedResults.map(({ candidate, score, matchReasons }) => ({
+      id: candidate.id,
+      name: candidate.name,
+      score: Math.round(score * 100),
+      type: entityType,
+      game_count: candidate.gameCount,
+      review_percentage: candidate.avgReviewScore,
+      matchReasons: matchReasons.length > 0 ? matchReasons : ['Comparable portfolio profile'],
+    })),
+    total_found: rankedResults.length,
+    debug: {
+      searchParams: {
+        entity_type: entityType,
+        reference_id: reference.id,
+        fallback: 'heuristic_portfolio',
+      },
+    },
+  };
 }
 
 /**
@@ -508,26 +747,10 @@ function applyScoreBoosts(
  * Execute similarity search
  */
 export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarResult> {
-  // Check if Qdrant is configured
-  if (!isQdrantConfigured()) {
-    return {
-      success: false,
-      error: 'Similarity search not configured. QDRANT_URL and QDRANT_API_KEY must be set.',
-    };
-  }
-
   const { entity_type, reference_id, reference_name, filters, limit = DEFAULT_RESULTS } = args;
   // Request one extra for publishers/developers since we filter client-side
   const extraForFilter = entity_type !== 'game' ? 1 : 0;
   const actualLimit = Math.min(limit + extraForFilter, MAX_RESULTS);
-
-  // Look up the reference entity
-  const entity =
-    typeof reference_id === 'number' && Number.isFinite(reference_id)
-      ? await lookupEntityById(entity_type, reference_id)
-      : reference_name && reference_name.trim().length > 0
-        ? await lookupEntityByName(entity_type, reference_name)
-        : null;
 
   if (reference_id === undefined && (!reference_name || reference_name.trim().length === 0)) {
     return {
@@ -535,6 +758,49 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
       error: 'reference_id or reference_name is required.',
     };
   }
+
+  let companyResolution:
+    | Awaited<ReturnType<typeof resolveCompanyReference>>
+    | null = null;
+
+  if (
+    entity_type !== 'game' &&
+    reference_id === undefined &&
+    reference_name &&
+    reference_name.trim().length > 0
+  ) {
+    companyResolution = await resolveCompanyReference(entity_type, reference_name, 5);
+
+    if (companyResolution.results.length === 0) {
+      return {
+        success: false,
+        error: `Could not find ${entity_type} named "${reference_name}". Try a different name or check spelling.`,
+      };
+    }
+
+    if (companyResolution.needsDisambiguation) {
+      return {
+        success: false,
+        entityType: entity_type,
+        candidates: companyResolution.results,
+        error: companyResolution.error ?? `The ${entity_type} name "${reference_name}" is ambiguous.`,
+      };
+    }
+  }
+
+  // Look up the reference entity
+  const entity =
+    typeof reference_id === 'number' && Number.isFinite(reference_id)
+      ? await lookupEntityById(entity_type, reference_id)
+      : entity_type !== 'game' && companyResolution?.canonicalResult
+        ? {
+            id: companyResolution.canonicalResult.id,
+            name: companyResolution.canonicalResult.name,
+            type: entity_type,
+          }
+        : reference_name && reference_name.trim().length > 0
+          ? await lookupEntityByName(entity_type, reference_name)
+          : null;
 
   if (!entity) {
     if (typeof reference_id === 'number' && Number.isFinite(reference_id)) {
@@ -550,14 +816,26 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     };
   }
 
+  // Check if Qdrant is configured
+  if (!isQdrantConfigured()) {
+    return entity_type === 'game'
+      ? {
+          success: false,
+          error: 'Similarity search not configured. QDRANT_URL and QDRANT_API_KEY must be set.',
+        }
+      : findSimilarCompaniesFallback(entity_type, entity, filters, limit);
+  }
+
   // Get vector and payload for the entity from Qdrant
   const qdrantData = await getEntityVectorAndPayload(entity_type, entity.id);
 
   if (!qdrantData) {
-    return {
-      success: false,
-      error: `${entity.name} hasn't been indexed for similarity search yet. Try another ${entity_type}.`,
-    };
+    return entity_type === 'game'
+      ? {
+          success: false,
+          error: `${entity.name} hasn't been indexed for similarity search yet. Try another ${entity_type}.`,
+        }
+      : findSimilarCompaniesFallback(entity_type, entity, filters, limit);
   }
 
   const { vector, payload: sourcePayload } = qdrantData;
@@ -610,9 +888,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     qdrantFilter = buildGameFilter(gameFilters, sourceMetrics);
   } else if (entity_type !== 'game') {
     // Build entity filters for publishers/developers
-    const entityFilters: EntityFilters = {
-      exclude_ids: [entity.id],
-    };
+    const entityFilters: EntityFilters = {};
 
     // Map filter args to EntityFilters
     if (filters?.game_count) entityFilters.game_count = filters.game_count;
@@ -646,10 +922,12 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
     });
   } catch (searchError) {
     console.error('Qdrant search error:', searchError);
-    return {
-      success: false,
-      error: `Search failed: ${searchError instanceof Error ? searchError.message : 'Unknown error'}`,
-    };
+    return entity_type === 'game'
+      ? {
+          success: false,
+          error: `Search failed: ${searchError instanceof Error ? searchError.message : 'Unknown error'}`,
+        }
+      : findSimilarCompaniesFallback(entity_type, entity, filters, limit);
   }
 
   // Filter out source entity first
@@ -694,6 +972,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
         id: point.id as number,
         name: (payload.name as string) || 'Unknown',
         score: Math.round(point.score * 100),
+        type: entity_type,
         game_count: payload.game_count as number | undefined,
         genres: (payload.top_genres as string[] | undefined)?.slice(0, 3),
         tags: (payload.top_tags as string[] | undefined)?.slice(0, 5),
@@ -705,6 +984,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
 
   return {
     success: true,
+    mode: 'semantic',
     reference: {
       id: entity.id,
       name: entity.name,

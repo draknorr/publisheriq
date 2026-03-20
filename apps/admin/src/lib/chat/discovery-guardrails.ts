@@ -1,4 +1,5 @@
 import type { ToolCall, ToolResultShape, ToolSufficiencyMetadata } from '@/lib/llm/types';
+import { hasSpecificCompanyFilter, isCompanyCube } from '@/lib/chat/company-query-guardrails';
 
 type Primitive = string | number | boolean;
 
@@ -199,6 +200,24 @@ export function buildQueryAnalyticsSufficiencyMetadata(
   rowCount: number
 ): ToolSufficiencyMetadata {
   const resultShape = classifyQueryAnalyticsResultShape(query);
+
+  if (isCompanyCube(query.cube)) {
+    if (rowCount === 0 && hasSpecificCompanyFilter(query)) {
+      return {
+        result_shape: resultShape,
+        sufficient_to_answer: true,
+        sufficiency_reason: 'No qualifying rows returned for the resolved company under the current constraints. Respond with that limitation and do not broaden to unrelated companies.',
+      };
+    }
+
+    if (rowCount > 0 && rowCount <= 3) {
+      return {
+        result_shape: resultShape,
+        sufficient_to_answer: true,
+        sufficiency_reason: 'Returned a sparse but answerable company result. Respond directly and say the qualifying set is small if helpful.',
+      };
+    }
+  }
 
   if (resultShape === 'broad_discovery' && isRuntimeBroadDiscoveryQuery(query)) {
     const reviewFloor = getReviewFloor(query.filters);

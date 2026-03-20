@@ -8,6 +8,7 @@
 import jwt from 'jsonwebtoken';
 import { buildQueryAnalyticsSufficiencyMetadata } from '@/lib/chat/discovery-guardrails';
 import type { ToolResultShape, ToolSufficiencyMetadata } from '@/lib/llm/types';
+import { prepareCompanyQuery } from '@/lib/chat/company-query-guardrails';
 
 // Retry configuration for transient errors
 interface RetryConfig {
@@ -109,7 +110,24 @@ const OPERATOR_MAP: Record<string, string> = {
   '<>': 'notEquals',
 };
 
-const VALID_OPERATORS = ['equals', 'notEquals', 'contains', 'notContains', 'gt', 'gte', 'lt', 'lte', 'set', 'notSet'];
+const VALID_OPERATORS = [
+  'equals',
+  'notEquals',
+  'contains',
+  'notContains',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'set',
+  'notSet',
+  'notIn',
+  'inDateRange',
+  'beforeDate',
+  'afterDate',
+];
+
+const NUMERIC_MEMBER_PATTERN = /(appid|id|year|reviews|price|score|owners|ccu|count|hours|revenue|momentum|growth|discount)/i;
 
 // Regex to extract SQL operators that might be combined with values (e.g., ">=90")
 const SQL_OP_WITH_VALUE = /^(>=|<=|!=|<>|>|<|={1,2})(.+)$/;
@@ -274,7 +292,7 @@ function normalizeFilters(filters: CubeFilter[]): CubeFilter[] {
 
     // Convert string values to numbers where appropriate (for numeric operators)
     const numericOperators = ['gt', 'gte', 'lt', 'lte'];
-    if (numericOperators.includes(normalizedOp) || filter.member?.includes('Year') || filter.member?.includes('Reviews') || filter.member?.includes('Price') || filter.member?.includes('Score')) {
+    if (numericOperators.includes(normalizedOp) || NUMERIC_MEMBER_PATTERN.test(filter.member ?? '')) {
       values = values.map(v => {
         if (typeof v === 'string') {
           const num = Number(v);
@@ -308,6 +326,9 @@ interface CubeResult extends ToolSufficiencyMetadata {
   success: boolean;
   data: Record<string, unknown>[];
   rowCount: number;
+  candidates?: Record<string, unknown>[];
+  entityType?: 'publisher' | 'developer';
+  needsDisambiguation?: boolean;
   cached?: boolean;
   error?: string;
   retryInfo?: {
@@ -322,6 +343,7 @@ interface CubeResult extends ToolSufficiencyMetadata {
     limit?: number;
     canonicalizedFromCube?: string;
     canonicalizationReason?: string;
+    companyCanonicalizationReason?: string;
     resultShape?: ToolResultShape;
     sufficientToAnswer?: boolean;
     sufficiencyReason?: string;
@@ -358,8 +380,14 @@ async function executeCubeQueryInternal(
   config: RetryConfig = DEFAULT_RETRY_CONFIG
 ): Promise<CubeResult> {
   const apiUrl = process.env.CUBE_API_URL;
-  const canonicalized = canonicalizeDiscoveryQuery(query);
-  const effectiveQuery = canonicalized.query;
+  const discoveryCanonicalized = canonicalizeDiscoveryQuery(query);
+  const companyPrepared = await prepareCompanyQuery(discoveryCanonicalized.query);
+
+  if (!('query' in companyPrepared)) {
+    return companyPrepared as CubeResult;
+  }
+
+  const effectiveQuery = companyPrepared.query;
 
   if (!apiUrl) {
     throw new Error('CUBE_API_URL environment variable is not set');
@@ -523,8 +551,9 @@ async function executeCubeQueryInternal(
             segments: cubeQuery.segments as string[],
             order: cubeQuery.order as Record<string, string>,
             limit: cubeQuery.limit as number,
-            canonicalizedFromCube: canonicalized.canonicalizedFromCube,
-            canonicalizationReason: canonicalized.canonicalizationReason,
+            canonicalizedFromCube: discoveryCanonicalized.canonicalizedFromCube,
+            canonicalizationReason: discoveryCanonicalized.canonicalizationReason,
+            companyCanonicalizationReason: companyPrepared.canonicalizationReason,
             resultShape: sufficiency.result_shape,
             sufficientToAnswer: sufficiency.sufficient_to_answer,
             sufficiencyReason: sufficiency.sufficiency_reason,

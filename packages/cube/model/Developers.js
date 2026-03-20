@@ -348,9 +348,19 @@ cube('DeveloperGameMetrics', {
       sql: `total_reviews`,
       type: 'number',
     },
+    positiveReviews: {
+      sql: `positive_reviews`,
+      type: 'number',
+    },
+    reviewPercentage: {
+      sql: `CASE WHEN ${CUBE}.total_reviews > 0 THEN ROUND((${CUBE}.positive_reviews::numeric / ${CUBE}.total_reviews::numeric) * 100, 1) ELSE NULL END`,
+      type: 'number',
+      description: 'Positive review percentage (0-100)',
+    },
     reviewScore: {
       sql: `review_score`,
       type: 'number',
+      description: 'Steam review score band (1-9), not positive review percentage',
     },
     revenueEstimateCents: {
       sql: `revenue_estimate_cents`,

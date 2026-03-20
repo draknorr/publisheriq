@@ -308,15 +308,6 @@ export function buildEntityFilter(filters: EntityFilters): QdrantFilter | undefi
     });
   }
 
-  if (filters.exclude_ids?.length) {
-    for (const id of filters.exclude_ids) {
-      must_not.push({
-        key: 'id',
-        match: { value: id },
-      });
-    }
-  }
-
   if (must.length === 0 && must_not.length === 0) {
     return undefined;
   }

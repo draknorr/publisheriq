@@ -4,6 +4,7 @@
 
 import type {
   CompanyType,
+  RelationshipFilterValue,
   SortField,
   SortOrder,
   QuickFilterId,
@@ -28,6 +29,7 @@ export interface Preset {
     maxOwners?: number;
     minRevenue?: number;
     minGrowth7d?: number;
+    relationship?: RelationshipFilterValue;
     status?: 'active' | 'dormant';
   };
   sort: SortField;
@@ -50,6 +52,7 @@ export interface QuickFilter {
     minRevenue?: number;
     minGrowth7d?: number;
     maxGrowth7d?: number;
+    relationship?: RelationshipFilterValue;
     status?: 'active' | 'dormant';
   };
 }
@@ -72,11 +75,12 @@ export const PRESETS: Preset[] = [
   {
     id: 'rising_indies',
     label: 'Rising Indies',
-    description: 'Small studios with 10%+ growth',
-    tooltip: 'Studios with ≤10 games and 10%+ weekly growth, ranked by growth rate',
+    description: 'Self-published studios with <5 games and 10%+ growth',
+    tooltip: 'Self-published studios with <5 games and 10%+ weekly growth, ranked by growth rate',
     filters: {
-      maxGames: 10,
+      maxGames: 4,
       minGrowth7d: 10, // 10%+ growth
+      relationship: 'self_published',
     },
     sort: 'ccu_growth_7d',
     order: 'desc',
@@ -259,6 +263,7 @@ export interface UnifiedFilter {
     minRevenue?: number;
     minGrowth7d?: number;
     maxGrowth7d?: number;
+    relationship?: RelationshipFilterValue;
     status?: 'active' | 'dormant';
   };
   // Only for presets - applies sorting
@@ -288,12 +293,13 @@ export const UNIFIED_FILTERS: UnifiedFilter[] = [
   {
     id: 'rising_indies',
     label: 'Rising Indies',
-    description: 'Small studios with 10%+ growth',
-    tooltip: 'Studios with ≤10 games and 10%+ weekly growth, ranked by growth rate',
+    description: 'Self-published studios with <5 games and 10%+ growth',
+    tooltip: 'Self-published studios with <5 games and 10%+ weekly growth, ranked by growth rate',
     type: 'preset',
     filters: {
-      maxGames: 10,
+      maxGames: 4,
       minGrowth7d: 10,
+      relationship: 'self_published',
     },
     sort: 'ccu_growth_7d',
     order: 'desc',

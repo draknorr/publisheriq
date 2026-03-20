@@ -59,6 +59,7 @@ export interface QuickFilterValues {
   minGrowth7d?: number;
   minScore?: number;
   isFree?: boolean;
+  selfPublished?: boolean;
   publisherSize?: PublisherSize;
   steamDeck?: string[];
   minMomentum?: number;
@@ -275,8 +276,9 @@ export const QUICK_FILTERS: AppsQuickFilter[] = [
   {
     id: 'indie',
     label: 'Indie',
-    description: 'Publisher with <10 games',
+    description: 'Self-published with <5 games',
     filters: {
+      selfPublished: true,
       publisherSize: 'indie',
     },
   },
@@ -412,6 +414,9 @@ export function buildQuickFilterParams(
     // Boolean filters (OR logic - if any filter wants true, result is true)
     if (filters.isFree) {
       params.isFree = true;
+    }
+    if (filters.selfPublished) {
+      params.selfPublished = true;
     }
     if (filters.hasWorkshop) {
       params.hasWorkshop = true;
@@ -573,8 +578,8 @@ export const UNIFIED_FILTERS: UnifiedFilter[] = [
     id: 'indie',
     type: 'quick',
     label: 'Indie',
-    tooltip: 'Publisher with <10 games',
-    filters: { publisherSize: 'indie' },
+    tooltip: 'Self-published with <5 games',
+    filters: { selfPublished: true, publisherSize: 'indie' },
   },
   {
     id: 'steam_deck',

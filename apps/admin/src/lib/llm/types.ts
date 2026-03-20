@@ -79,6 +79,7 @@ export interface DebugInfo {
   // For similarity search (find_similar)
   searchParams?: Record<string, unknown>;
   vectorFilter?: Record<string, unknown>;
+  companyCanonicalizationReason?: string;
   // For search_games
   searchSteps?: string[];
   searchCounts?: {
@@ -143,6 +144,8 @@ export interface ChatTiming {
 // Similarity search result
 export interface SimilarityResult {
   success: boolean;
+  mode?: 'semantic' | 'heuristic_portfolio';
+  entityType?: 'publisher' | 'developer';
   reference?: {
     id: number;
     name: string;
@@ -158,6 +161,13 @@ export interface SimilarityResult {
     review_percentage?: number | null;
     price_cents?: number | null;
     is_free?: boolean;
+    game_count?: number;
+    is_major?: boolean;
+    matchReasons?: string[];
+  }>;
+  candidates?: Array<{
+    id: number;
+    name: string;
   }>;
   total_found?: number;
   error?: string;

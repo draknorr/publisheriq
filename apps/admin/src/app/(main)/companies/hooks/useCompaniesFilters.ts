@@ -487,6 +487,7 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
         maxGrowth30d: null,
         period: null,
         status: null,
+        relationship: null,
       };
 
       // Apply preset filters (type already handled above)
@@ -497,6 +498,7 @@ export function useCompaniesFilters(): UseCompaniesFiltersReturn {
       if (preset.filters.minRevenue !== undefined) updates.minRevenue = String(preset.filters.minRevenue);
       if (preset.filters.minGrowth7d !== undefined) updates.minGrowth7d = String(preset.filters.minGrowth7d);
       if (preset.filters.status) updates.status = preset.filters.status;
+      if (preset.filters.relationship) updates.relationship = preset.filters.relationship;
 
       updateUrl(updates);
     },
