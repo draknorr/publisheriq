@@ -964,3 +964,56 @@ These games are highly rated and have a significant number of reviews, indicatin
   }
 ]
 ```
+
+## Run 4 Company Answers Regression Run
+
+### Metadata
+
+- Run 4 environment: `https://www.publisheriq.app`
+- Run 4 execution mode: authenticated production `POST /api/chat/stream`
+- Run 4 date: March 19, 2026
+- Run 4 deployed `origin/main`: `42f55a500e8ef48fc42998b75c1b3aee12fdda80`
+- Run 4 company-fix commits on live: `ab6bad1` and `42f55a5`
+- Run 4 source of truth for identity validation: read-only Postgres checks against `developers`, `developer_metrics`, and `developer_game_metrics`
+- Run 4 prompts rerun: `#89`, `#97`, `#127`, `#130`, `#140`, `#151`, `#155`, `#156`, `#157`, `#161`, `#170`, `#171`, `#175`, `#178`, `#179`
+- Run 1 baseline source: `docs/chat-prompt-evals.md`
+
+### Database Source Of Truth Check
+
+- Read-only database validation on March 19, 2026 confirmed the canonical metrics-backed FromSoftware developer row is `3005 | FromSoftware, Inc. | 12 games | 2,465,235 reviews`.
+- Read-only `developer_game_metrics` validation returned `11` rows for `developer_id = 3005` and `1` row for `developer_id = 332003`.
+- This confirms that live FromSoftware portfolio answers should resolve to `developer_id = 3005` and stay on the metrics-backed company row rather than a fuzzy name-only match.
+
+### Latency Summary
+
+- Run 1 company-suite latency across these 15 prompts: average `15.1s`, median `13.6s`, p95 `42.7s`.
+- Run 4 company-suite latency across the 14 successful prompts: average `13.4s`, median `11.4s`, p95 `27.1s`.
+- Overall latency improved, but `#89`, `#155`, `#156`, and `#161` are still slower than baseline because they now take extra resolution and analytics steps.
+- `#170` returned a live streaming failure with `error_message: terminated`, so it is excluded from Run 4 latency aggregates.
+
+### Before And After Summary
+
+| Prompt | Run 1 | Run 4 | Timing | Outcome |
+|---|---|---|---|---|
+| `#89` `Which indie developers have multiple hit games?` | Included non-indie rows such as Ubisoft Montreal and CD PROJEKT RED. | Still wrong, and now broader: includes Sledgehammer Games, Raven Software, Beenox, Ubisoft Montreal, and CD PROJEKT RED. | `13.6s -> 27.1s` | Still broken |
+| `#97` `Compare FromSoftware and Team Cherry by reviews` | Compared only average review score. | Now includes `gameCount`, `totalReviews`, and `positiveReviews`, but still omits representative titles. | `15.4s -> 7.3s` | Improved |
+| `#127` `What publishers are releasing the most games this year?` | Returned bare game counts only. | Now adds `totalReviews` and `avgReviewScore`, but publisher links are still malformed as `(publishers/...)`. | `19.1s -> 9.1s` | Improved |
+| `#130` `Publishers with the most games released in the past 6 months` | Returned one game and one release date per publisher instead of a volume answer. | Now returns counts and quality context, but the live rows match the all-year ranking too closely and likely are not honoring the rolling 6-month window. | `21.1s -> 10.9s` | Improved, still suspect |
+| `#140` `Publishers with 5+ games averaging 85%+ reviews in the past 3 years` | Returned a weaker count/score table with less context. | Now returns `gameCount`, `avgReviewScore`, and `totalReviews` from the right company surface. | `25.1s -> 15.8s` | Improved |
+| `#151` `Developers with 3+ games, all above 90% reviews, with a release in the past year` | Failed the constrained query and pivoted to an unrelated fallback leaderboard. | Now stays constrained and returns a clean no-match answer. | `42.7s -> 4.8s` | Fixed |
+| `#155` `Show me all games by FromSoftware` | False no-match answer pointing to a SteamDB developer page. | Now resolves to `/developers/3005` and returns the actual FromSoftware portfolio from live metrics. | `6.2s -> 19.0s` | Fixed |
+| `#156` `top games from FromSoftware` | False no-match answer. | Now returns real games, but the live run misroutes through publisher identity, uses a malformed `(publishers/2949)` link, and still does not clearly rank by “top”. | `6.4s -> 22.8s` | Improved |
+| `#157` `Which publishers released the most games this year?` | Returned bare game counts only. | Now adds `totalReviews` and `avgReviewScore`, but publisher links are still malformed as `(publishers/...)`. | `6.7s -> 12.0s` | Improved |
+| `#161` `games by FromSoftware` | False no-match answer pointing to a SteamDB developer page. | Now resolves to `/developers/3005` and returns the actual FromSoftware portfolio from live metrics. | `8.0s -> 23.6s` | Fixed |
+| `#170` `What publishers are similar to Devolver Digital?` | Fell back to lexical lookalikes like `Evolver Dynamics` and `Revolver Nine`. | Still wrong: noisy lexical neighbors remain, bad rows like `-` and `N/A` remain, and the current live response terminated mid-stream. | `13.3s -> error` | Still broken |
+| `#171` `Show me developers similar to Supergiant Games` | Returned lexical lookalikes with external Steam URLs. | Links are now internal, but the results are still lexical noise like `supergame`, `Supergonk`, and `Supernova Games`. | `16.9s -> 9.6s` | Still broken |
+| `#175` `Publishers with releases in every year since 2020` | Hit the max iteration limit and failed to answer. | Now answers from one grouped year-based query and returns continuity rows successfully. | `22.1s -> 21.3s` | Fixed |
+| `#178` `how many games has Krafton published?` | Returned a bare count only. | Still returns only a bare count, with no quality context or representative titles. | `5.1s -> 2.2s` | Still weak |
+| `#179` `How many games has Valve published?` | Returned a bare count only. | Still returns only a bare count, with no quality context or representative titles. | `5.5s -> 2.2s` | Still weak |
+
+### Live Notes
+
+- The long-term company-resolution fix is live and validated for the FromSoftware portfolio family. `#155` and `#161` now resolve to the canonical database-backed developer row and stop producing false no-match answers.
+- The constrained no-match behavior is also live. `#151` no longer broadens into an unrelated leaderboard after the requested company filter fails.
+- Similarity is still not production-ready. `#170` and `#171` continue to return lexical or low-signal neighbors rather than durable portfolio peers, and `#170` still failed during streaming on the fresh live run.
+- The company answer-shape improvements are live for several ranking queries, but they are incomplete. `#127`, `#157`, `#178`, and `#179` still need follow-through on link correctness and exemplar-title context.
