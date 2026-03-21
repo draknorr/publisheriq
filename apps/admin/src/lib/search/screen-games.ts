@@ -1,5 +1,6 @@
 import { getServiceSupabase } from '@/lib/supabase-service';
 import type { ToolSufficiencyMetadata } from '@/lib/llm/types';
+import { searchByConcept, type SearchByConceptArgs } from '@/lib/qdrant/search-service';
 
 const MAX_RESULTS = 20;
 const DEFAULT_RESULTS = 10;
@@ -8,8 +9,10 @@ const PREFETCH_MAX = 200;
 const SMALL_CATALOG_MAX = 10;
 const INDIE_TAG_TERM = 'Indie';
 const DEFAULT_MOMENTUM_MIN_REVIEWS_ADDED_7D = 3;
+const DEFAULT_REVIEW_ACTIVITY_MIN_REVIEWS_ADDED_7D = 10;
 const DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D = 5;
 const SATURATED_SENTIMENT_MIN_REVIEWS_ADDED_30D = 10;
+const SEMANTIC_CONTENT_VALIDATION_LIMIT = 20;
 
 type ServiceSupabase = ReturnType<typeof getServiceSupabase>;
 type IdLookupTable = 'steam_tags' | 'steam_genres' | 'steam_categories';
@@ -301,12 +304,14 @@ function getRecommendedColumns(sortBy: ScreenGamesArgs['sort_by']): string[] {
       return ['Game', 'Momentum Score', 'Reviews Added (7d)', 'CCU Peak', 'Review %'];
     case 'sentiment_delta':
       return ['Game', 'Sentiment Delta', 'Reviews Added (30d)', 'Review %', 'Reviews'];
+    case 'velocity_acceleration':
+      return ['Game', 'Review Velocity Acceleration', 'Reviews Added (7d)', 'Reviews', 'Review %'];
     case 'reviews_added_7d':
-      return ['Game', 'Reviews Added (7d)', 'Total Reviews', 'Review %'];
+      return ['Game', 'Reviews Added (7d)', 'Review Velocity (7d)', 'Reviews', 'Review %'];
     case 'reviews_added_30d':
       return ['Game', 'Reviews Added (30d)', 'Total Reviews', 'Review %'];
     case 'velocity_7d':
-      return ['Game', 'Review Velocity (7d)', 'Reviews Added (7d)', 'Review %'];
+      return ['Game', 'Review Velocity (7d)', 'Reviews Added (7d)', 'Reviews', 'Review %'];
     case 'ccu_peak':
       return ['Game', 'Peak CCU', 'Review %', 'Reviews', 'Price'];
     default:
@@ -320,6 +325,11 @@ function getResponseGuidance(sortBy: ScreenGamesArgs['sort_by']): string {
       return 'Name the ranking metric as Momentum Score, use the exact timeframe anchor, include Reviews Added (7d) and CCU Peak, and explain rows with numeric support rather than generic momentum prose.';
     case 'sentiment_delta':
       return 'Name the ranking metric as Sentiment Delta, use the exact timeframe anchor, include Reviews Added (30d), and do not paraphrase the deltas as generic 100% improvement or complete decline language.';
+    case 'velocity_7d':
+    case 'velocity_acceleration':
+    case 'reviews_added_7d':
+    case 'reviews_added_30d':
+      return 'Name the ranking metric exactly, use the exact timeframe anchor, include the recent review-activity columns, and describe the rows as review activity rather than vague momentum.';
     default:
       return 'Use the exact timeframe anchor and ranking metric from the tool result.';
   }
@@ -351,6 +361,59 @@ function formatSignedPercent(value: number | null): string | null {
 
   const rounded = Number(value.toFixed(2));
   return `${rounded > 0 ? '+' : ''}${rounded}%`;
+}
+
+function getContentValidationTerms(filters: ScreenGamesArgs['filters']): string[] {
+  const terms = [
+    ...(filters?.tags ?? []),
+    ...(filters?.genres ?? []),
+    ...(filters?.categories ?? []),
+  ].map((value) => value.trim()).filter((value) => value.length > 0);
+
+  return terms.filter((value, index) => terms.indexOf(value) === index);
+}
+
+function shouldApplySemanticContentValidation(args: ScreenGamesArgs): boolean {
+  const contentTerms = getContentValidationTerms(args.filters);
+
+  if (contentTerms.length === 0) {
+    return false;
+  }
+
+  return (
+    args.sort_by === 'momentum_score' ||
+    args.sort_by === 'sentiment_delta' ||
+    args.sort_by === 'velocity_7d' ||
+    args.sort_by === 'velocity_acceleration' ||
+    args.sort_by === 'reviews_added_7d' ||
+    args.sort_by === 'reviews_added_30d'
+  );
+}
+
+function buildSemanticContentValidationFilters(
+  filters: ScreenGamesArgs['filters']
+): SearchByConceptArgs['filters'] {
+  if (!filters) {
+    return undefined;
+  }
+
+  const reviewPercentage =
+    typeof filters.min_score === 'number' || typeof filters.max_score === 'number'
+      ? {
+          gte: filters.min_score,
+          lte: filters.max_score,
+        }
+      : undefined;
+
+  return {
+    is_free: filters.is_free,
+    platforms: filters.platforms,
+    steam_deck: filters.steam_deck,
+    min_reviews: filters.min_reviews,
+    max_reviews: filters.max_reviews,
+    release_year: filters.release_year,
+    review_percentage: reviewPercentage,
+  };
 }
 
 function buildTimeframeMetadata(
@@ -451,8 +514,33 @@ function compareSupportSignals(
 
       return (right.ccuPeak ?? Number.NEGATIVE_INFINITY) - (left.ccuPeak ?? Number.NEGATIVE_INFINITY);
     }
-    case 'reviews_added_7d':
-      return (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
+    case 'velocity_7d':
+    case 'velocity_acceleration': {
+      const reviewComparison = (right.reviewsAdded7d ?? Number.NEGATIVE_INFINITY) - (left.reviewsAdded7d ?? Number.NEGATIVE_INFINITY);
+      if (reviewComparison !== 0) {
+        return reviewComparison;
+      }
+
+      const totalReviewComparison = (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
+      if (totalReviewComparison !== 0) {
+        return totalReviewComparison;
+      }
+
+      return (right.ccuPeak ?? Number.NEGATIVE_INFINITY) - (left.ccuPeak ?? Number.NEGATIVE_INFINITY);
+    }
+    case 'reviews_added_7d': {
+      const velocityComparison = (right.velocity7d ?? Number.NEGATIVE_INFINITY) - (left.velocity7d ?? Number.NEGATIVE_INFINITY);
+      if (velocityComparison !== 0) {
+        return velocityComparison;
+      }
+
+      const totalReviewComparison = (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
+      if (totalReviewComparison !== 0) {
+        return totalReviewComparison;
+      }
+
+      return (right.ccuPeak ?? Number.NEGATIVE_INFINITY) - (left.ccuPeak ?? Number.NEGATIVE_INFINITY);
+    }
     case 'reviews_added_30d':
       return (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
     default:
@@ -566,6 +654,36 @@ function buildSupportMetadata(
 
     if (sentimentDelta) {
       reasons.push(`Sentiment delta ${sentimentDelta}`);
+    }
+  }
+
+  if (
+    sortBy === 'velocity_7d' ||
+    sortBy === 'velocity_acceleration' ||
+    sortBy === 'reviews_added_7d'
+  ) {
+    const reviewsAdded7d = result.reviewsAdded7d ?? 0;
+    if (reviewsAdded7d >= 25) {
+      score += 2;
+      reasons.push(`${reviewsAdded7d} reviews added in the last 7 days`);
+    } else if (reviewsAdded7d >= DEFAULT_REVIEW_ACTIVITY_MIN_REVIEWS_ADDED_7D) {
+      score += 1;
+      reasons.push(`${reviewsAdded7d} reviews added in the last 7 days`);
+    }
+
+    if (result.velocity7d !== null && result.velocity7d !== undefined) {
+      reasons.push(`Review velocity ${Number(result.velocity7d.toFixed(2))}/day over 7 days`);
+    }
+  }
+
+  if (sortBy === 'reviews_added_30d') {
+    const reviewsAdded30d = result.reviewsAdded30d ?? 0;
+    if (reviewsAdded30d >= 25) {
+      score += 2;
+      reasons.push(`${reviewsAdded30d} reviews added in the last 30 days`);
+    } else if (reviewsAdded30d >= DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D) {
+      score += 1;
+      reasons.push(`${reviewsAdded30d} reviews added in the last 30 days`);
     }
   }
 
@@ -813,6 +931,38 @@ async function fetchTagMembership(
   return membership;
 }
 
+async function fetchSemanticContentValidationAppids(
+  args: ScreenGamesArgs
+): Promise<{ description: string; appids: Set<number> } | null> {
+  if (!shouldApplySemanticContentValidation(args)) {
+    return null;
+  }
+
+  const contentTerms = getContentValidationTerms(args.filters);
+  if (contentTerms.length === 0) {
+    return null;
+  }
+
+  const description = `${contentTerms.join(' ')} game`;
+  const conceptResult = await searchByConcept({
+    description,
+    filters: buildSemanticContentValidationFilters(args.filters),
+    limit: SEMANTIC_CONTENT_VALIDATION_LIMIT,
+  });
+
+  if (!conceptResult.success || !conceptResult.results?.length) {
+    return null;
+  }
+
+  const appids = new Set(
+    conceptResult.results
+      .map((result) => result.id)
+      .filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+  );
+
+  return appids.size > 0 ? { description, appids } : null;
+}
+
 async function fetchScreenedApps(
   supabase: ServiceSupabase,
   args: ScreenGamesArgs,
@@ -976,7 +1126,7 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
   const supabase = getServiceSupabase();
   const timeframe = args.timeframe ?? '7d';
   const sortOrder = args.sort_order ?? 'desc';
-  const filtersApplied = formatFiltersApplied(args);
+  const baseFiltersApplied = formatFiltersApplied(args);
   const recommendedColumns = getRecommendedColumns(args.sort_by);
   const responseGuidance = getResponseGuidance(args.sort_by);
 
@@ -1013,7 +1163,7 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
         timeframe_label: timeframe === 'current' ? 'latest available metrics snapshot' : `${timeframe} rolling window`,
         recommended_columns: recommendedColumns,
         response_guidance: responseGuidance,
-        filters_applied: filtersApplied,
+        filters_applied: baseFiltersApplied,
         indie_definition: args.indie_heuristic
           ? getIndieDefinition()
           : undefined,
@@ -1062,7 +1212,7 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
     }
 
     const appids = appRows.map((row) => row.appid);
-    const [velocityRows, verifiedTagMembership, indieTagMembership] = await Promise.all([
+    const [velocityRows, verifiedTagMembership, indieTagMembership, semanticContentValidation] = await Promise.all([
       fetchVelocityRows(supabase, appids),
       resolvedVerifiedTagEntries?.length
         ? fetchTagMembership(supabase, appids, resolvedVerifiedTagEntries)
@@ -1070,6 +1220,7 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
       args.indie_heuristic && resolvedIndieTagEntries?.length
         ? fetchTagMembership(supabase, appids, resolvedIndieTagEntries)
         : Promise.resolve(new Map<number, string[]>()),
+      fetchSemanticContentValidationAppids(args),
     ]);
 
     const mappedResults = appRows.map((row) => {
@@ -1088,7 +1239,11 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
         ),
       };
     });
-    const supportedResults = applySupportFilters(mappedResults, args).map((result) => ({
+    const contentValidatedResults =
+      semanticContentValidation?.appids.size
+        ? mappedResults.filter((result) => semanticContentValidation.appids.has(result.appid))
+        : mappedResults;
+    const supportedResults = applySupportFilters(contentValidatedResults, args).map((result) => ({
       ...result,
       ...buildSupportMetadata(result, args.sort_by),
     }));
@@ -1097,6 +1252,9 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
       : sortResults(supportedResults, args.sort_by, sortOrder);
     const sortedResults = rankedResults.slice(0, clampLimit(args.limit));
     const timeframeMetadata = buildTimeframeMetadata(timeframe, sortedResults);
+    const filtersApplied = semanticContentValidation
+      ? [...baseFiltersApplied, `semantic content validation: ${semanticContentValidation.description}`]
+      : baseFiltersApplied;
 
     return {
       success: true,
@@ -1127,7 +1285,7 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
       timeframe_label: timeframe === 'current' ? 'latest available metrics snapshot' : `${timeframe} rolling window`,
       recommended_columns: recommendedColumns,
       response_guidance: responseGuidance,
-      filters_applied: filtersApplied,
+      filters_applied: baseFiltersApplied,
       indie_definition: args.indie_heuristic
         ? getIndieDefinition()
         : undefined,

@@ -1,13 +1,26 @@
 import type { ToolCall } from '@/lib/llm/types';
 
 const DEFAULT_MOMENTUM_MIN_REVIEWS_ADDED_7D = 3;
+const FILTERED_MOMENTUM_MIN_REVIEWS_ADDED_7D = 5;
+const DEFAULT_REVIEW_ACTIVITY_MIN_REVIEWS_ADDED_7D = 10;
+const LEADERBOARD_MOMENTUM_MIN_REVIEWS_ADDED_7D = 10;
+const LEADERBOARD_MOMENTUM_MIN_CCU = 25;
+const INDIE_BREAKOUT_MIN_REVIEWS_ADDED_7D = 10;
+const INDIE_BREAKOUT_MIN_CCU = 20;
 const DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D = 5;
-const POPULAR_TREND_MIN_REVIEWS = 1000;
-const POPULAR_TREND_MIN_REVIEWS_ADDED_7D = 10;
-const POPULAR_TREND_MIN_REVIEWS_ADDED_30D = 10;
+const POPULAR_TREND_MIN_REVIEWS = 10000;
+const POPULAR_TREND_MIN_CCU = 100;
+const POPULAR_TREND_MIN_REVIEWS_ADDED_7D = 25;
+const POPULAR_TREND_MIN_REVIEWS_ADDED_30D = 25;
 const STRICT_TAG_SORTS = new Set([
   'momentum_score',
   'sentiment_delta',
+  'velocity_7d',
+  'velocity_acceleration',
+  'reviews_added_7d',
+  'reviews_added_30d',
+]);
+const REVIEW_ACTIVITY_SORTS = new Set([
   'velocity_7d',
   'velocity_acceleration',
   'reviews_added_7d',
@@ -54,6 +67,18 @@ function buildScreenGamesToolCall(
   };
 }
 
+function isReviewTrendLeaderboardPrompt(normalizedPrompt: string): boolean {
+  if (!normalizedPrompt.includes('reviews')) {
+    return false;
+  }
+
+  return (
+    normalizedPrompt.includes('trending up') ||
+    normalizedPrompt.includes('reviews trending up') ||
+    normalizedPrompt.includes('up in reviews')
+  );
+}
+
 function applyScreenGamesSemantics(
   toolCall: ToolCall,
   normalizedPrompt: string
@@ -71,8 +96,19 @@ function applyScreenGamesSemantics(
   const sortBy = typeof argumentsShape.sort_by === 'string'
     ? argumentsShape.sort_by
     : undefined;
+  const timeframe = typeof argumentsShape.timeframe === 'string'
+    ? argumentsShape.timeframe
+    : undefined;
   const tagFilters = getStringArray(filters.tags);
   const verifiedTags = getStringArray(filters.verified_tags_any);
+  const genreFilters = getStringArray(filters.genres);
+  const categoryFilters = getStringArray(filters.categories);
+  const hasStrictContentFilters = Boolean(
+    tagFilters?.length ||
+    verifiedTags?.length ||
+    genreFilters?.length ||
+    categoryFilters?.length
+  );
 
   if (sortBy === 'momentum_score' && typeof filters.min_reviews_added_7d !== 'number') {
     filters.min_reviews_added_7d = DEFAULT_MOMENTUM_MIN_REVIEWS_ADDED_7D;
@@ -86,10 +122,43 @@ function applyScreenGamesSemantics(
     filters.verified_tags_any = mergeUniqueStrings(verifiedTags, tagFilters);
   }
 
-  if (normalizedPrompt.includes('popular') && (sortBy === 'momentum_score' || sortBy === 'sentiment_delta')) {
-    filters.min_reviews = ensureMinNumber(filters.min_reviews, POPULAR_TREND_MIN_REVIEWS);
+  if (sortBy && REVIEW_ACTIVITY_SORTS.has(sortBy) && timeframe === '7d') {
+    filters.min_reviews_added_7d = ensureMinNumber(
+      filters.min_reviews_added_7d,
+      DEFAULT_REVIEW_ACTIVITY_MIN_REVIEWS_ADDED_7D
+    );
+  }
 
-    if (sortBy === 'momentum_score') {
+  if (sortBy === 'momentum_score' && timeframe === '7d') {
+    if (argumentsShape.indie_heuristic === true) {
+      filters.min_reviews_added_7d = ensureMinNumber(
+        filters.min_reviews_added_7d,
+        INDIE_BREAKOUT_MIN_REVIEWS_ADDED_7D
+      );
+      filters.min_ccu = ensureMinNumber(filters.min_ccu, INDIE_BREAKOUT_MIN_CCU);
+    } else if (!hasStrictContentFilters) {
+      filters.min_reviews_added_7d = ensureMinNumber(
+        filters.min_reviews_added_7d,
+        LEADERBOARD_MOMENTUM_MIN_REVIEWS_ADDED_7D
+      );
+      filters.min_ccu = ensureMinNumber(filters.min_ccu, LEADERBOARD_MOMENTUM_MIN_CCU);
+    } else {
+      filters.min_reviews_added_7d = ensureMinNumber(
+        filters.min_reviews_added_7d,
+        FILTERED_MOMENTUM_MIN_REVIEWS_ADDED_7D
+      );
+    }
+  }
+
+  if (
+    normalizedPrompt.includes('popular') &&
+    sortBy &&
+    (sortBy === 'momentum_score' || sortBy === 'sentiment_delta' || REVIEW_ACTIVITY_SORTS.has(sortBy))
+  ) {
+    filters.min_reviews = ensureMinNumber(filters.min_reviews, POPULAR_TREND_MIN_REVIEWS);
+    filters.min_ccu = ensureMinNumber(filters.min_ccu, POPULAR_TREND_MIN_CCU);
+
+    if (sortBy === 'momentum_score' || REVIEW_ACTIVITY_SORTS.has(sortBy)) {
       filters.min_reviews_added_7d = ensureMinNumber(
         filters.min_reviews_added_7d,
         POPULAR_TREND_MIN_REVIEWS_ADDED_7D
@@ -144,6 +213,17 @@ export function normalizeTrendToolCall(
         min_reviews: 1000,
       },
       limit: 5,
+    }), normalized);
+  }
+
+  if (isReviewTrendLeaderboardPrompt(normalized)) {
+    return applyScreenGamesSemantics(buildScreenGamesToolCall(toolCall, {
+      sort_by: 'velocity_7d',
+      timeframe: '7d',
+      filters: {
+        min_reviews: 1000,
+      },
+      limit: 10,
     }), normalized);
   }
 

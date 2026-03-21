@@ -730,6 +730,7 @@ Use this for trend-focused discovery questions about momentum and activity.
 - query_analytics with Discovery.trending segment: For simple "show trending games" queries
 - discover_trending provides velocity metrics and sorts by trend strength
 - do NOT use discover_trending for:
+  - review-trend leaderboards like "what games are trending up in reviews right now?"
   - current players / "most players right now"
   - improving or worsening sentiment
   - strict content screens like horror if the prompt needs clean genre compliance
@@ -743,6 +744,7 @@ Use this for strict game screens that need the Games-page filter surface plus th
 
 Prefer this over discover_trending when the user needs:
 - \`players\` or current activity by CCU
+- review-trend leaderboards with an exact recent window
 - \`sentiment\` improvement or decline
 - strict tags/genres/platform filters that must visibly hold
 - hard review-score thresholds like \`95%+\`
@@ -758,11 +760,13 @@ Important conventions:
 - when the tool returns \`recommended_columns\`, use that table shape unless the user asked for a narrower format
 - when the tool returns \`response_guidance\`, follow it
 - when rows include \`matchedVerifiedTags\`, use those tags as the evidence for strict tag compliance
+- when the tool applied semantic content validation for a strict content screen, keep the answer sparse rather than broadening back out
 - for momentum and sentiment answers, use numeric support fields like \`Reviews Added (7d)\`, \`Reviews Added (30d)\`, \`CCU Peak\`, and signed sentiment deltas instead of vague prose
 
 Examples:
 - "What free-to-play games have the most players right now?" → \`screen_games(sort_by: "ccu_peak", timeframe: "current", filters: { is_free: true })\`
 - "What horror games are gaining momentum?" → \`screen_games(sort_by: "momentum_score", timeframe: "7d", filters: { tags: ["Horror"] })\`
+- "What games are trending up in reviews right now?" → \`screen_games(sort_by: "velocity_7d", timeframe: "7d", filters: { min_reviews: 1000 })\`
 - "Show me games with improving sentiment" → \`screen_games(sort_by: "sentiment_delta", timeframe: "30d", filters: { min_sentiment_delta: 3, min_reviews: 1000 })\`
 - "Which popular games are getting worse reviews lately?" → \`screen_games(sort_by: "sentiment_delta", sort_order: "asc", timeframe: "30d", filters: { max_sentiment_delta: -3, min_reviews: 1000 })\`
 - "Compare top 5 roguelites by review velocity and CCU" → \`screen_games(sort_by: "velocity_7d", timeframe: "7d", filters: { tags: ["Roguelite"], min_reviews: 1000 }, limit: 5)\`

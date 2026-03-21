@@ -693,12 +693,14 @@ export const SCREEN_GAMES_TOOL: Tool = {
 Use this when the user needs strict filtering plus the right ranking metric:
 - "What free-to-play games have the most players right now?"
 - "What horror games are gaining momentum?"
+- "What games are trending up in reviews right now?"
 - "Show me games with improving sentiment"
 - "Breaking out indie games this month"
 - "Compare top roguelites by review velocity and CCU"
 
 Use this instead of discover_trending when the prompt depends on:
 - current players / CCU (NOT owners)
+- review-trend leaderboards with an exact recent window
 - sentiment change
 - strict tags or genres like horror
 - strict hard filters like 95%+ reviews
