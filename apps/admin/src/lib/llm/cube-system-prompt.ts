@@ -108,6 +108,7 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 **find_similar** - Semantic similarity search ("games like X", recommendations with reference game)
 **search_by_concept** - Semantic search by description ("tactical roguelikes", "cozy farming games") - no reference game needed
 **search_games** - Find games by tags, genres, categories, platforms, PICS data (use for tag-based discovery)
+**screen_games** - Strict games-page style screening with ranking metrics like CCU, momentum, velocity, and sentiment
 **discover_trending** - Find games with trend momentum (accelerating reviews, breaking out, declining)
 **lookup_games** - Search game names (use FIRST when user asks about a specific game by name)
 **lookup_tags** - Search available tags, genres, or categories (use when unsure of tag names)
@@ -557,6 +558,7 @@ For exact date/time filtering on releaseDate or lastContentUpdate:
 - "well reviewed" → filter: reviewPercentage gte 70 when you are already using Discovery
 - **"played hours" / "hours played" / "playtime"** → use estimatedWeeklyHours dimension (NOT ccuPeak), label as "Estimated Played Hours", add footnote about estimate, include "set" filter to exclude NULLs
 - "metacritic" / "critic score" → filter: metacriticScore gte [value]
+- do NOT use Discovery owners or the Discovery.indie segment for section-5 style game trend answers about current players, sentiment, or indie breakouts
 
 **For DeveloperMetrics/PublisherMetrics (ALL-TIME):**
 - "indie developers/publishers" → use self-published + small catalog semantics, not owner count alone:
@@ -727,6 +729,39 @@ Use this for trend-focused discovery questions about momentum and activity.
 - discover_trending: For momentum/velocity focused questions ("what's gaining traction?", "breaking out games")
 - query_analytics with Discovery.trending segment: For simple "show trending games" queries
 - discover_trending provides velocity metrics and sorts by trend strength
+- do NOT use discover_trending for:
+  - current players / "most players right now"
+  - improving or worsening sentiment
+  - strict content screens like horror if the prompt needs clean genre compliance
+  - indie trend screens
+  - strict hard filters like 95%+
+  - same-population comparisons like "compare roguelites by review velocity and CCU"
+
+## screen_games Tool
+
+Use this for strict game screens that need the Games-page filter surface plus the right ranking metric.
+
+Prefer this over discover_trending when the user needs:
+- \`players\` or current activity by CCU
+- \`sentiment\` improvement or decline
+- strict tags/genres/platform filters that must visibly hold
+- hard review-score thresholds like \`95%+\`
+- indie heuristics
+- a comparison on one filtered set across multiple metrics
+
+Important conventions:
+- \`players\` means \`ccuPeak\`, not owners
+- \`sentiment\` means \`sentimentDelta\`, not review activity
+- for indie game screens, treat \`indie\` as a heuristic, not a legal ownership claim; prefer mostly self-published studios with small catalogs, use a small-catalog cap around 10 games, and treat the Steam Indie tag only as a supporting signal or tie-breaker
+- when the tool returns \`timeframe_label\`, \`window_start\`, or \`window_end\`, use those exact anchors in the answer
+
+Examples:
+- "What free-to-play games have the most players right now?" → \`screen_games(sort_by: "ccu_peak", timeframe: "current", filters: { is_free: true })\`
+- "What horror games are gaining momentum?" → \`screen_games(sort_by: "momentum_score", timeframe: "7d", filters: { tags: ["Horror"] })\`
+- "Show me games with improving sentiment" → \`screen_games(sort_by: "sentiment_delta", timeframe: "30d", filters: { min_sentiment_delta: 3, min_reviews: 1000 })\`
+- "Which popular games are getting worse reviews lately?" → \`screen_games(sort_by: "sentiment_delta", sort_order: "asc", timeframe: "30d", filters: { max_sentiment_delta: -3, min_reviews: 1000 })\`
+- "Compare top 5 roguelites by review velocity and CCU" → \`screen_games(sort_by: "velocity_7d", timeframe: "7d", filters: { tags: ["Roguelite"], min_reviews: 1000 }, limit: 5)\`
+- "Breaking out indie games this month" → \`screen_games(sort_by: "reviews_added_30d", timeframe: "30d", indie_heuristic: true, filters: { min_reviews: 100, max_reviews: 10000 })\`
 
 ## CRITICAL: When to Stop and Respond
 - **STOP calling tools once you have data that answers the user's question**

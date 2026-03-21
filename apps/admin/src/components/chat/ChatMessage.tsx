@@ -527,6 +527,43 @@ export function ChatMessage({
                       );
                     }
 
+                    if (tc.name === 'screen_games') {
+                      const args = tc.arguments as { sort_by?: string; timeframe?: string; indie_heuristic?: boolean };
+                      const result = tc.result as { success: boolean; total_found?: number; error?: string };
+                      const sortLabels: Record<string, string> = {
+                        ccu_peak: 'Peak CCU',
+                        momentum_score: 'Momentum score',
+                        velocity_7d: 'Review velocity (7d)',
+                        velocity_acceleration: 'Velocity acceleration',
+                        reviews_added_7d: 'Reviews added (7d)',
+                        reviews_added_30d: 'Reviews added (30d)',
+                        sentiment_delta: 'Sentiment delta',
+                        total_reviews: 'Total reviews',
+                        review_score: 'Review percentage',
+                      };
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-body-sm text-text-secondary italic">
+                            Screening games by {sortLabels[args.sort_by || ''] || args.sort_by || 'ranking metric'} ({args.timeframe || '7d'})
+                            {args.indie_heuristic ? ', indie heuristic' : ''}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-green/10 text-accent-green">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                                {result.total_found ?? 0} games found
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption bg-accent-red/10 text-accent-red">
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-red" />
+                                Error: {result.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     // Handle lookup_games results (v2.4)
                     if (tc.name === 'lookup_games') {
                       const args = tc.arguments as { query?: string };

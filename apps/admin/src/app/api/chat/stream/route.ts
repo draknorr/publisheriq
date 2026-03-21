@@ -20,6 +20,7 @@ import {
 } from '@/lib/search/publisher-lookup';
 import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
+import { screenGames, type ScreenGamesArgs } from '@/lib/search/screen-games';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import {
   buildRedundantDiscoverySkipResult,
@@ -37,6 +38,7 @@ import {
   normalizeCompanyToolCall,
   type CompanyAnswerState,
 } from '@/lib/chat/company-answer-policy';
+import { normalizeTrendToolCall } from '@/lib/chat/trend-tool-policy';
 import { sanitizeCompanyAssistantResponse } from '@/lib/chat/company-response-sanitizer';
 import { logChatQuery } from '@/lib/chat-query-logger';
 import {
@@ -123,6 +125,9 @@ async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; erro
   } else if (toolCall.name === 'discover_trending') {
     const args = toolCall.arguments as unknown as DiscoverTrendingArgs;
     return discoverTrending(args);
+  } else if (toolCall.name === 'screen_games') {
+    const args = toolCall.arguments as unknown as ScreenGamesArgs;
+    return screenGames(args);
   } else if (toolCall.name === 'query_change_activity') {
     const args = toolCall.arguments as unknown as QueryChangeActivityArgs;
     return queryChangeActivity(args);
@@ -361,8 +366,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           const toolResults: Array<{ toolCall: ToolCall; result: QueryResult | SimilarityResult | Record<string, unknown> }> = [];
           for (const toolCall of completedToolCalls) {
             const companyNormalizedToolCall = normalizeCompanyToolCall(toolCall, lastUserPrompt);
-            const effectiveToolCall = normalizeBroadDiscoveryToolCall(
+            const trendNormalizedToolCall = normalizeTrendToolCall(
               companyNormalizedToolCall,
+              lastUserPrompt
+            );
+            const effectiveToolCall = normalizeBroadDiscoveryToolCall(
+              trendNormalizedToolCall,
               lastUserPrompt,
               lastBroadDiscoveryState
             );

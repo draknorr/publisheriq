@@ -684,6 +684,147 @@ Trend types:
   },
 };
 
+export const SCREEN_GAMES_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'screen_games',
+    description: `Screen and rank games using the same filter surface as the Games page, plus trend and sentiment metrics.
+
+Use this when the user needs strict filtering plus the right ranking metric:
+- "What free-to-play games have the most players right now?"
+- "What horror games are gaining momentum?"
+- "Show me games with improving sentiment"
+- "Breaking out indie games this month"
+- "Compare top roguelites by review velocity and CCU"
+
+Use this instead of discover_trending when the prompt depends on:
+- current players / CCU (NOT owners)
+- sentiment change
+- strict tags or genres like horror
+- strict hard filters like 95%+ reviews
+- indie heuristics
+- same-population comparisons`,
+    parameters: {
+      type: 'object',
+      properties: {
+        sort_by: {
+          type: 'string',
+          enum: [
+            'ccu_peak',
+            'momentum_score',
+            'velocity_7d',
+            'velocity_acceleration',
+            'reviews_added_7d',
+            'reviews_added_30d',
+            'sentiment_delta',
+            'total_reviews',
+            'review_score',
+          ],
+          description: 'Primary ranking metric for the screen',
+        },
+        sort_order: {
+          type: 'string',
+          enum: ['asc', 'desc'],
+          description: 'Sort direction (default: desc)',
+        },
+        timeframe: {
+          type: 'string',
+          enum: ['current', '7d', '30d'],
+          description: 'Timeframe label to use for the answer (default: 7d)',
+        },
+        indie_heuristic: {
+          type: 'boolean',
+          description: 'Apply the indie heuristic: prefer mostly self-published studios with small catalogs, using the Steam Indie tag only as supporting evidence',
+        },
+        filters: {
+          type: 'object',
+          description: 'Optional filters to narrow the screen',
+          properties: {
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Tag-style content filters such as Roguelite or Horror',
+            },
+            genres: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Broad genre filters',
+            },
+            categories: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Steam feature categories',
+            },
+            platforms: {
+              type: 'array',
+              items: { type: 'string', enum: ['windows', 'macos', 'linux'] },
+              description: 'Required platform support',
+            },
+            steam_deck: {
+              type: 'array',
+              items: { type: 'string', enum: ['verified', 'playable'] },
+              description: 'Steam Deck compatibility requirement',
+            },
+            is_free: {
+              type: 'boolean',
+              description: 'Filter by free-to-play status',
+            },
+            min_reviews: {
+              type: 'number',
+              description: 'Minimum total Steam reviews',
+            },
+            max_reviews: {
+              type: 'number',
+              description: 'Maximum total Steam reviews',
+            },
+            min_score: {
+              type: 'number',
+              description: 'Minimum positive review percentage (0-100)',
+            },
+            max_score: {
+              type: 'number',
+              description: 'Maximum positive review percentage (0-100)',
+            },
+            release_year: {
+              type: 'object',
+              properties: {
+                gte: { type: 'number', description: 'Released in or after this year' },
+                lte: { type: 'number', description: 'Released in or before this year' },
+              },
+            },
+            self_published: {
+              type: 'boolean',
+              description: 'Require the developer to also be the publisher',
+            },
+            publisher_size: {
+              type: 'string',
+              enum: ['indie', 'mid', 'major'],
+              description: 'Publisher catalog size heuristic',
+            },
+            min_ccu: {
+              type: 'number',
+              description: 'Minimum peak CCU in the latest snapshot',
+            },
+            min_sentiment_delta: {
+              type: 'number',
+              description: 'Minimum sentiment delta',
+            },
+            max_sentiment_delta: {
+              type: 'number',
+              description: 'Maximum sentiment delta',
+            },
+          },
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results (1-20, default 10)',
+        },
+      },
+      required: ['sort_by'],
+    },
+  },
+};
+
 export const LOOKUP_GAMES_TOOL: Tool = {
   type: 'function',
   function: {
@@ -724,6 +865,7 @@ export const CUBE_TOOLS: Tool[] = [
   FIND_SIMILAR_TOOL,
   SEARCH_BY_CONCEPT_TOOL,
   SEARCH_GAMES_TOOL,
+  SCREEN_GAMES_TOOL,
   DISCOVER_TRENDING_TOOL,
   LOOKUP_TAGS_TOOL,
   LOOKUP_PUBLISHERS_TOOL,

@@ -39,8 +39,16 @@ export interface SearchGamesLikeArgs {
   order_by?: string;
 }
 
+export interface ScreenGamesLikeArgs {
+  sort_by?: string;
+  sort_order?: string;
+  timeframe?: string;
+  filters?: Record<string, unknown>;
+  limit?: number;
+}
+
 export interface BroadDiscoveryState extends ToolSufficiencyMetadata {
-  toolName: 'query_analytics' | 'search_games';
+  toolName: 'query_analytics' | 'search_games' | 'screen_games';
   signature?: string;
   dimensionFields?: string[];
 }
@@ -503,10 +511,24 @@ export function extractBroadDiscoveryState(
     };
   }
 
+  if (toolName === 'screen_games') {
+    return {
+      toolName: 'screen_games',
+      result_shape: 'broad_discovery',
+      sufficient_to_answer: sufficientToAnswer,
+      sufficiency_reason: typeof result.sufficiency_reason === 'string' ? result.sufficiency_reason : undefined,
+      allow_follow_up_relaxation: false,
+    };
+  }
+
   return null;
 }
 
 function isBroadDiscoveryToolCall(toolCall: ToolCall): boolean {
+  if (toolCall.name === 'screen_games') {
+    return true;
+  }
+
   if (toolCall.name === 'search_games') {
     return true;
   }

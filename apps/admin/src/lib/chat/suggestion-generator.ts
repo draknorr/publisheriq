@@ -103,6 +103,15 @@ function extractEntities(toolCalls: ChatToolCall[]): ExtractedEntities {
       }
     }
 
+    if (tc.name === 'screen_games' && tc.result.results) {
+      const results = tc.result.results as Array<{ name: string; appid: number }>;
+      for (const item of results.slice(0, 3)) {
+        if (item.name) {
+          entities.games.push({ name: item.name, appid: item.appid });
+        }
+      }
+    }
+
     // Extract from lookup results
     if (tc.name === 'lookup_games' && tc.result.results) {
       const results = tc.result.results as Array<{ name: string; appid: number }>;
@@ -238,6 +247,22 @@ function generateToolBasedSuggestions(
 
   // Based on discover_trending
   if (toolNames.has('discover_trending')) {
+    suggestions.push({
+      label: "What's breaking out?",
+      query: "what's breaking out right now?",
+      category: 'template',
+    });
+    const game = entities.games[0];
+    if (game) {
+      suggestions.push({
+        label: `Tell me about ${game.name}`,
+        query: `tell me about ${game.name}`,
+        category: 'game',
+      });
+    }
+  }
+
+  if (toolNames.has('screen_games')) {
     suggestions.push({
       label: "What's breaking out?",
       query: "what's breaking out right now?",

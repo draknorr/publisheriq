@@ -18,6 +18,7 @@ export const TOOL_COSTS: Record<string, number> = {
   search_by_concept: 12,
   find_similar: 12,
   discover_trending: 12,
+  screen_games: 12,
   find_change_patterns: 14,
 } as const;
 

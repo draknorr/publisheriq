@@ -26,7 +26,9 @@ import {
 } from '@/lib/search/publisher-lookup';
 import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
+import { screenGames, type ScreenGamesArgs } from '@/lib/search/screen-games';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
+import { normalizeTrendToolCall } from '@/lib/chat/trend-tool-policy';
 import {
   compareChangeBeforeAfter,
   findChangePatterns,
@@ -85,6 +87,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
 
     // Build messages with Cube.dev system prompt
     const messages: Message[] = [{ role: 'system', content: buildCubeSystemPrompt() }, ...body.messages];
+    const lastUserPrompt = body.messages.filter((message) => message.role === 'user').pop()?.content ?? '';
 
     // Track tool calls for response
     const executedToolCalls: ChatToolCall[] = [];
@@ -105,7 +108,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
       }
 
       // Process each tool call
-      for (const toolCall of response.toolCalls) {
+      for (const rawToolCall of response.toolCalls) {
+        const toolCall = normalizeTrendToolCall(rawToolCall, lastUserPrompt);
+
         if (toolCall.name === 'query_analytics') {
           const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
 
@@ -306,6 +311,27 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             role: 'tool',
             toolCallId: toolCall.id,
             content: formatResultWithEntityLinks(trendResult),
+          });
+        } else if (toolCall.name === 'screen_games') {
+          const args = toolCall.arguments as unknown as ScreenGamesArgs;
+          const screenResult = await screenGames(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: screenResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(screenResult),
           });
         } else if (toolCall.name === 'query_change_activity') {
           const args = toolCall.arguments as unknown as QueryChangeActivityArgs;

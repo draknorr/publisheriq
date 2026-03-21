@@ -20,6 +20,7 @@ import {
 } from '@/lib/search/publisher-lookup';
 import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
+import { screenGames, type ScreenGamesArgs } from '@/lib/search/screen-games';
 import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
 import {
   buildRedundantDiscoverySkipResult,
@@ -36,6 +37,7 @@ import {
   normalizeCompanyToolCall,
   type CompanyAnswerState,
 } from '@/lib/chat/company-answer-policy';
+import { normalizeTrendToolCall } from '@/lib/chat/trend-tool-policy';
 import { sanitizeCompanyAssistantResponse } from '@/lib/chat/company-response-sanitizer';
 import {
   compareChangeBeforeAfter,
@@ -121,8 +123,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
 
       for (const toolCall of response.toolCalls) {
         const companyNormalizedToolCall = normalizeCompanyToolCall(toolCall, lastUserPrompt);
-        const effectiveToolCall = normalizeBroadDiscoveryToolCall(
+        const trendNormalizedToolCall = normalizeTrendToolCall(
           companyNormalizedToolCall,
+          lastUserPrompt
+        );
+        const effectiveToolCall = normalizeBroadDiscoveryToolCall(
+          trendNormalizedToolCall,
           lastUserPrompt,
           lastBroadDiscoveryState
         );
@@ -197,6 +203,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
           } else if (effectiveToolCall.name === 'discover_trending') {
             const args = effectiveToolCall.arguments as unknown as DiscoverTrendingArgs;
             result = await discoverTrending(args);
+          } else if (effectiveToolCall.name === 'screen_games') {
+            const args = effectiveToolCall.arguments as unknown as ScreenGamesArgs;
+            result = await screenGames(args);
           } else if (effectiveToolCall.name === 'query_change_activity') {
             const args = effectiveToolCall.arguments as unknown as QueryChangeActivityArgs;
             result = await queryChangeActivity(args);
