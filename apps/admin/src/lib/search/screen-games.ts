@@ -18,6 +18,7 @@ type ServiceSupabase = ReturnType<typeof getServiceSupabase>;
 type IdLookupTable = 'steam_tags' | 'steam_genres' | 'steam_categories';
 type IdLookupColumn = 'tag_id' | 'genre_id' | 'category_id';
 type SupportLevel = 'low' | 'medium' | 'high';
+type TrendProfile = 'market_leaders' | 'breakout_watchlist';
 
 export interface ScreenGamesArgs {
   sort_by:
@@ -32,6 +33,7 @@ export interface ScreenGamesArgs {
     | 'review_score';
   sort_order?: 'asc' | 'desc';
   timeframe?: 'current' | '7d' | '30d';
+  trend_profile?: TrendProfile;
   indie_heuristic?: boolean;
   filters?: {
     tags?: string[];
@@ -236,6 +238,7 @@ function formatFiltersApplied(args: ScreenGamesArgs): string[] {
   const filters = args.filters ?? {};
   const applied: string[] = [];
 
+  if (args.trend_profile) applied.push(`trend_profile: ${args.trend_profile}`);
   if (filters.tags?.length) applied.push(`tags: ${filters.tags.join(', ')}`);
   if (filters.verified_tags_any?.length) applied.push(`verified_tags_any: ${filters.verified_tags_any.join(', ')}`);
   if (filters.genres?.length) applied.push(`genres: ${filters.genres.join(', ')}`);
@@ -298,9 +301,15 @@ function getIndieDefinition(): string {
   return `Indie here is a heuristic, not a legal ownership claim: prefer mostly self-published studios with small catalogs, use a small-catalog cap around ${SMALL_CATALOG_MAX} games, and treat the Steam Indie tag only as a supporting signal or tie-breaker.`;
 }
 
-function getRecommendedColumns(sortBy: ScreenGamesArgs['sort_by']): string[] {
+function getRecommendedColumns(
+  sortBy: ScreenGamesArgs['sort_by'],
+  trendProfile?: TrendProfile
+): string[] {
   switch (sortBy) {
     case 'momentum_score':
+      if (trendProfile === 'market_leaders') {
+        return ['Game', 'Momentum Score', 'Reviews Added (7d)', 'CCU Peak', 'Total Reviews', 'Review %'];
+      }
       return ['Game', 'Momentum Score', 'Reviews Added (7d)', 'CCU Peak', 'Review %'];
     case 'sentiment_delta':
       return ['Game', 'Sentiment Delta', 'Reviews Added (30d)', 'Review %', 'Reviews'];
@@ -319,9 +328,15 @@ function getRecommendedColumns(sortBy: ScreenGamesArgs['sort_by']): string[] {
   }
 }
 
-function getResponseGuidance(sortBy: ScreenGamesArgs['sort_by']): string {
+function getResponseGuidance(
+  sortBy: ScreenGamesArgs['sort_by'],
+  trendProfile?: TrendProfile
+): string {
   switch (sortBy) {
     case 'momentum_score':
+      if (trendProfile === 'market_leaders') {
+        return 'Name the ranking metric as Momentum Score, use the exact timeframe anchor, include Reviews Added (7d), CCU Peak, and Total Reviews, and explain rows as scaled market leaders rather than small breakout candidates.';
+      }
       return 'Name the ranking metric as Momentum Score, use the exact timeframe anchor, include Reviews Added (7d) and CCU Peak, and explain rows with numeric support rather than generic momentum prose.';
     case 'sentiment_delta':
       return 'Name the ranking metric as Sentiment Delta, use the exact timeframe anchor, include Reviews Added (30d), and do not paraphrase the deltas as generic 100% improvement or complete decline language.';
@@ -763,6 +778,17 @@ function applySupportFilters(
   });
 }
 
+function applyTrendProfileFilters(
+  results: ScreenedGameResult[],
+  args: ScreenGamesArgs
+): ScreenedGameResult[] {
+  if (args.trend_profile !== 'market_leaders') {
+    return results;
+  }
+
+  return results.filter((result) => result.supportLevel !== 'low');
+}
+
 function applyIndieHeuristic(
   results: ScreenedGameResult[],
   sortBy: ScreenGamesArgs['sort_by'],
@@ -1127,8 +1153,8 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
   const timeframe = args.timeframe ?? '7d';
   const sortOrder = args.sort_order ?? 'desc';
   const baseFiltersApplied = formatFiltersApplied(args);
-  const recommendedColumns = getRecommendedColumns(args.sort_by);
-  const responseGuidance = getResponseGuidance(args.sort_by);
+  const recommendedColumns = getRecommendedColumns(args.sort_by, args.trend_profile);
+  const responseGuidance = getResponseGuidance(args.sort_by, args.trend_profile);
 
   try {
     const [
@@ -1247,9 +1273,10 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
       ...result,
       ...buildSupportMetadata(result, args.sort_by),
     }));
+    const profileFilteredResults = applyTrendProfileFilters(supportedResults, args);
     const rankedResults = args.indie_heuristic
-      ? applyIndieHeuristic(supportedResults, args.sort_by, sortOrder)
-      : sortResults(supportedResults, args.sort_by, sortOrder);
+      ? applyIndieHeuristic(profileFilteredResults, args.sort_by, sortOrder)
+      : sortResults(profileFilteredResults, args.sort_by, sortOrder);
     const sortedResults = rankedResults.slice(0, clampLimit(args.limit));
     const timeframeMetadata = buildTimeframeMetadata(timeframe, sortedResults);
     const filtersApplied = semanticContentValidation

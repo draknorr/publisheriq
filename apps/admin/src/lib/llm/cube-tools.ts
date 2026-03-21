@@ -693,6 +693,7 @@ export const SCREEN_GAMES_TOOL: Tool = {
 Use this when the user needs strict filtering plus the right ranking metric:
 - "What free-to-play games have the most players right now?"
 - "What horror games are gaining momentum?"
+- "What games are trending right now?"
 - "What games are trending up in reviews right now?"
 - "Show me games with improving sentiment"
 - "Breaking out indie games this month"
@@ -733,6 +734,11 @@ Use this instead of discover_trending when the prompt depends on:
           type: 'string',
           enum: ['current', '7d', '30d'],
           description: 'Timeframe label to use for the answer (default: 7d)',
+        },
+        trend_profile: {
+          type: 'string',
+          enum: ['market_leaders', 'breakout_watchlist'],
+          description: 'Broad trend interpretation. Use "market_leaders" for prompts like "what games are trending right now?" when the answer should read like scaled current leaders rather than tiny breakout spikes.',
         },
         indie_heuristic: {
           type: 'boolean',

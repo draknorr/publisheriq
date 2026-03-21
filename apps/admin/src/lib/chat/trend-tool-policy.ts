@@ -5,12 +5,15 @@ const FILTERED_MOMENTUM_MIN_REVIEWS_ADDED_7D = 5;
 const DEFAULT_REVIEW_ACTIVITY_MIN_REVIEWS_ADDED_7D = 10;
 const LEADERBOARD_MOMENTUM_MIN_REVIEWS_ADDED_7D = 10;
 const LEADERBOARD_MOMENTUM_MIN_CCU = 25;
+const MARKET_LEADERS_MIN_REVIEWS = 10000;
+const MARKET_LEADERS_MIN_REVIEWS_ADDED_7D = 25;
+const MARKET_LEADERS_MIN_CCU = 100;
 const INDIE_BREAKOUT_MIN_REVIEWS_ADDED_7D = 10;
 const INDIE_BREAKOUT_MIN_CCU = 20;
 const DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D = 5;
-const POPULAR_TREND_MIN_REVIEWS = 10000;
-const POPULAR_TREND_MIN_CCU = 100;
-const POPULAR_TREND_MIN_REVIEWS_ADDED_7D = 25;
+const POPULAR_TREND_MIN_REVIEWS = MARKET_LEADERS_MIN_REVIEWS;
+const POPULAR_TREND_MIN_CCU = MARKET_LEADERS_MIN_CCU;
+const POPULAR_TREND_MIN_REVIEWS_ADDED_7D = MARKET_LEADERS_MIN_REVIEWS_ADDED_7D;
 const POPULAR_TREND_MIN_REVIEWS_ADDED_30D = 25;
 const STRICT_TAG_SORTS = new Set([
   'momentum_score',
@@ -99,6 +102,9 @@ function applyScreenGamesSemantics(
   const timeframe = typeof argumentsShape.timeframe === 'string'
     ? argumentsShape.timeframe
     : undefined;
+  const trendProfile = typeof argumentsShape.trend_profile === 'string'
+    ? argumentsShape.trend_profile
+    : undefined;
   const tagFilters = getStringArray(filters.tags);
   const verifiedTags = getStringArray(filters.verified_tags_any);
   const genreFilters = getStringArray(filters.genres);
@@ -130,7 +136,14 @@ function applyScreenGamesSemantics(
   }
 
   if (sortBy === 'momentum_score' && timeframe === '7d') {
-    if (argumentsShape.indie_heuristic === true) {
+    if (trendProfile === 'market_leaders') {
+      filters.min_reviews = ensureMinNumber(filters.min_reviews, MARKET_LEADERS_MIN_REVIEWS);
+      filters.min_reviews_added_7d = ensureMinNumber(
+        filters.min_reviews_added_7d,
+        MARKET_LEADERS_MIN_REVIEWS_ADDED_7D
+      );
+      filters.min_ccu = ensureMinNumber(filters.min_ccu, MARKET_LEADERS_MIN_CCU);
+    } else if (argumentsShape.indie_heuristic === true) {
       filters.min_reviews_added_7d = ensureMinNumber(
         filters.min_reviews_added_7d,
         INDIE_BREAKOUT_MIN_REVIEWS_ADDED_7D
@@ -250,6 +263,7 @@ export function normalizeTrendToolCall(
     return applyScreenGamesSemantics(buildScreenGamesToolCall(toolCall, {
       sort_by: 'momentum_score',
       timeframe: '7d',
+      trend_profile: 'market_leaders',
       filters: {
         min_reviews: 1000,
       },
