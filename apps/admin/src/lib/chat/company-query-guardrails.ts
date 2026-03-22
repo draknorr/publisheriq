@@ -46,7 +46,121 @@ interface CompanyCubeConfig {
   defaultDimensions: string[];
   supportedDimensions?: string[];
   supportedMeasures?: string[];
+  supportedSegments?: string[];
 }
+
+const PUBLISHER_METRIC_DIMENSIONS = [
+  'PublisherMetrics.publisherId',
+  'PublisherMetrics.publisherName',
+  'PublisherMetrics.gameCount',
+  'PublisherMetrics.totalOwners',
+  'PublisherMetrics.totalCcu',
+  'PublisherMetrics.avgReviewScore',
+  'PublisherMetrics.totalReviews',
+  'PublisherMetrics.positiveReviews',
+  'PublisherMetrics.revenueEstimateCents',
+  'PublisherMetrics.revenueEstimateDollars',
+  'PublisherMetrics.isTrending',
+  'PublisherMetrics.uniqueDevelopers',
+  'PublisherMetrics.estimatedWeeklyHours',
+];
+
+const PUBLISHER_METRIC_MEASURES = [
+  'PublisherMetrics.count',
+  'PublisherMetrics.sumOwners',
+  'PublisherMetrics.sumCcu',
+  'PublisherMetrics.sumRevenue',
+  'PublisherMetrics.avgScore',
+  'PublisherMetrics.trendingCount',
+];
+
+const PUBLISHER_METRIC_SEGMENTS = [
+  'PublisherMetrics.trending',
+  'PublisherMetrics.highRevenue',
+  'PublisherMetrics.highOwners',
+];
+
+const DEVELOPER_METRIC_DIMENSIONS = [
+  'DeveloperMetrics.developerId',
+  'DeveloperMetrics.developerName',
+  'DeveloperMetrics.gameCount',
+  'DeveloperMetrics.totalOwners',
+  'DeveloperMetrics.totalCcu',
+  'DeveloperMetrics.avgReviewScore',
+  'DeveloperMetrics.totalReviews',
+  'DeveloperMetrics.positiveReviews',
+  'DeveloperMetrics.revenueEstimateCents',
+  'DeveloperMetrics.revenueEstimateDollars',
+  'DeveloperMetrics.isTrending',
+  'DeveloperMetrics.estimatedWeeklyHours',
+];
+
+const DEVELOPER_METRIC_MEASURES = [
+  'DeveloperMetrics.count',
+  'DeveloperMetrics.sumOwners',
+  'DeveloperMetrics.sumCcu',
+  'DeveloperMetrics.sumRevenue',
+  'DeveloperMetrics.avgScore',
+  'DeveloperMetrics.trendingCount',
+];
+
+const DEVELOPER_METRIC_SEGMENTS = [
+  'DeveloperMetrics.trending',
+  'DeveloperMetrics.highRevenue',
+  'DeveloperMetrics.highOwners',
+];
+
+const PUBLISHER_YEAR_METRIC_DIMENSIONS = [
+  'PublisherYearMetrics.publisherId',
+  'PublisherYearMetrics.publisherName',
+  'PublisherYearMetrics.releaseYear',
+  'PublisherYearMetrics.gameCount',
+  'PublisherYearMetrics.totalOwners',
+  'PublisherYearMetrics.totalCcu',
+  'PublisherYearMetrics.avgReviewScore',
+  'PublisherYearMetrics.totalReviews',
+  'PublisherYearMetrics.revenueEstimateCents',
+  'PublisherYearMetrics.revenueEstimateDollars',
+];
+
+const PUBLISHER_YEAR_METRIC_MEASURES = [
+  'PublisherYearMetrics.count',
+  'PublisherYearMetrics.sumGameCount',
+  'PublisherYearMetrics.sumOwners',
+  'PublisherYearMetrics.sumCcu',
+  'PublisherYearMetrics.sumRevenue',
+  'PublisherYearMetrics.avgScore',
+];
+
+const PUBLISHER_YEAR_METRIC_SEGMENTS = [
+  'PublisherYearMetrics.recent',
+];
+
+const DEVELOPER_YEAR_METRIC_DIMENSIONS = [
+  'DeveloperYearMetrics.developerId',
+  'DeveloperYearMetrics.developerName',
+  'DeveloperYearMetrics.releaseYear',
+  'DeveloperYearMetrics.gameCount',
+  'DeveloperYearMetrics.totalOwners',
+  'DeveloperYearMetrics.totalCcu',
+  'DeveloperYearMetrics.avgReviewScore',
+  'DeveloperYearMetrics.totalReviews',
+  'DeveloperYearMetrics.revenueEstimateCents',
+  'DeveloperYearMetrics.revenueEstimateDollars',
+];
+
+const DEVELOPER_YEAR_METRIC_MEASURES = [
+  'DeveloperYearMetrics.count',
+  'DeveloperYearMetrics.sumGameCount',
+  'DeveloperYearMetrics.sumOwners',
+  'DeveloperYearMetrics.sumCcu',
+  'DeveloperYearMetrics.sumRevenue',
+  'DeveloperYearMetrics.avgScore',
+];
+
+const DEVELOPER_YEAR_METRIC_SEGMENTS = [
+  'DeveloperYearMetrics.recent',
+];
 
 const PUBLISHER_GAME_METRIC_DIMENSIONS = [
   'PublisherGameMetrics.publisherId',
@@ -90,6 +204,13 @@ const PUBLISHER_GAME_METRIC_MEASURES = [
   'PublisherGameMetrics.publisherCount',
 ];
 
+const PUBLISHER_GAME_METRIC_SEGMENTS = [
+  'PublisherGameMetrics.lastYear',
+  'PublisherGameMetrics.last6Months',
+  'PublisherGameMetrics.last3Months',
+  'PublisherGameMetrics.last30Days',
+];
+
 const DEVELOPER_GAME_METRIC_MEASURES = [
   'DeveloperGameMetrics.gameCount',
   'DeveloperGameMetrics.sumOwners',
@@ -98,6 +219,13 @@ const DEVELOPER_GAME_METRIC_MEASURES = [
   'DeveloperGameMetrics.sumRevenue',
   'DeveloperGameMetrics.avgReviewScore',
   'DeveloperGameMetrics.developerCount',
+];
+
+const DEVELOPER_GAME_METRIC_SEGMENTS = [
+  'DeveloperGameMetrics.lastYear',
+  'DeveloperGameMetrics.last6Months',
+  'DeveloperGameMetrics.last3Months',
+  'DeveloperGameMetrics.last30Days',
 ];
 
 const PUBLISHER_RELATIONSHIP_DIMENSIONS = [
@@ -113,6 +241,10 @@ const PUBLISHER_RELATIONSHIP_DIMENSIONS = [
   'PublisherRelationshipMetrics.worksWithExternalDevs',
 ];
 
+const PUBLISHER_RELATIONSHIP_MEASURES = [
+  'PublisherRelationshipMetrics.count',
+];
+
 const DEVELOPER_RELATIONSHIP_DIMENSIONS = [
   'DeveloperRelationshipMetrics.developerId',
   'DeveloperRelationshipMetrics.developerName',
@@ -124,6 +256,10 @@ const DEVELOPER_RELATIONSHIP_DIMENSIONS = [
   'DeveloperRelationshipMetrics.externalPartnerCount',
   'DeveloperRelationshipMetrics.isSelfPublished',
   'DeveloperRelationshipMetrics.worksWithExternalPublishers',
+];
+
+const DEVELOPER_RELATIONSHIP_MEASURES = [
+  'DeveloperRelationshipMetrics.count',
 ];
 
 const PUBLISHER_CHAT_SCREEN_DIMENSIONS = [
@@ -148,6 +284,10 @@ const PUBLISHER_CHAT_SCREEN_DIMENSIONS = [
   'PublisherChatScreenMetrics.worksWithExternalPartners',
 ];
 
+const PUBLISHER_CHAT_SCREEN_MEASURES = [
+  'PublisherChatScreenMetrics.count',
+];
+
 const DEVELOPER_CHAT_SCREEN_DIMENSIONS = [
   'DeveloperChatScreenMetrics.developerId',
   'DeveloperChatScreenMetrics.developerName',
@@ -168,6 +308,10 @@ const DEVELOPER_CHAT_SCREEN_DIMENSIONS = [
   'DeveloperChatScreenMetrics.indieConfidence',
   'DeveloperChatScreenMetrics.isIndieChat',
   'DeveloperChatScreenMetrics.worksWithExternalPartners',
+];
+
+const DEVELOPER_CHAT_SCREEN_MEASURES = [
+  'DeveloperChatScreenMetrics.count',
 ];
 
 const PUBLISHER_CHAT_WINDOW_DIMENSIONS = [
@@ -196,6 +340,10 @@ const PUBLISHER_CHAT_WINDOW_DIMENSIONS = [
   'PublisherChatWindowMetrics.minReviewPercentageLastYear',
 ];
 
+const PUBLISHER_CHAT_WINDOW_MEASURES = [
+  'PublisherChatWindowMetrics.count',
+];
+
 const DEVELOPER_CHAT_WINDOW_DIMENSIONS = [
   'DeveloperChatWindowMetrics.developerId',
   'DeveloperChatWindowMetrics.developerName',
@@ -222,6 +370,10 @@ const DEVELOPER_CHAT_WINDOW_DIMENSIONS = [
   'DeveloperChatWindowMetrics.minReviewPercentageLastYear',
 ];
 
+const DEVELOPER_CHAT_WINDOW_MEASURES = [
+  'DeveloperChatWindowMetrics.count',
+];
+
 const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
   PublisherMetrics: {
     entityType: 'publisher',
@@ -234,6 +386,9 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'PublisherMetrics.totalReviews',
       'PublisherMetrics.avgReviewScore',
     ],
+    supportedDimensions: PUBLISHER_METRIC_DIMENSIONS,
+    supportedMeasures: PUBLISHER_METRIC_MEASURES,
+    supportedSegments: PUBLISHER_METRIC_SEGMENTS,
   },
   PublisherYearMetrics: {
     entityType: 'publisher',
@@ -247,6 +402,9 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'PublisherYearMetrics.totalReviews',
       'PublisherYearMetrics.avgReviewScore',
     ],
+    supportedDimensions: PUBLISHER_YEAR_METRIC_DIMENSIONS,
+    supportedMeasures: PUBLISHER_YEAR_METRIC_MEASURES,
+    supportedSegments: PUBLISHER_YEAR_METRIC_SEGMENTS,
   },
   PublisherGameMetrics: {
     entityType: 'publisher',
@@ -258,6 +416,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
     ],
     supportedDimensions: PUBLISHER_GAME_METRIC_DIMENSIONS,
     supportedMeasures: PUBLISHER_GAME_METRIC_MEASURES,
+    supportedSegments: PUBLISHER_GAME_METRIC_SEGMENTS,
   },
   PublisherRelationshipMetrics: {
     entityType: 'publisher',
@@ -271,6 +430,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'PublisherRelationshipMetrics.totalReviews',
     ],
     supportedDimensions: PUBLISHER_RELATIONSHIP_DIMENSIONS,
+    supportedMeasures: PUBLISHER_RELATIONSHIP_MEASURES,
   },
   PublisherChatScreenMetrics: {
     entityType: 'publisher',
@@ -284,6 +444,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'PublisherChatScreenMetrics.totalReviews',
     ],
     supportedDimensions: PUBLISHER_CHAT_SCREEN_DIMENSIONS,
+    supportedMeasures: PUBLISHER_CHAT_SCREEN_MEASURES,
   },
   PublisherChatWindowMetrics: {
     entityType: 'publisher',
@@ -295,6 +456,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'PublisherChatWindowMetrics.exactGameCount',
     ],
     supportedDimensions: PUBLISHER_CHAT_WINDOW_DIMENSIONS,
+    supportedMeasures: PUBLISHER_CHAT_WINDOW_MEASURES,
   },
   DeveloperMetrics: {
     entityType: 'developer',
@@ -307,6 +469,9 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'DeveloperMetrics.totalReviews',
       'DeveloperMetrics.avgReviewScore',
     ],
+    supportedDimensions: DEVELOPER_METRIC_DIMENSIONS,
+    supportedMeasures: DEVELOPER_METRIC_MEASURES,
+    supportedSegments: DEVELOPER_METRIC_SEGMENTS,
   },
   DeveloperYearMetrics: {
     entityType: 'developer',
@@ -320,6 +485,9 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'DeveloperYearMetrics.totalReviews',
       'DeveloperYearMetrics.avgReviewScore',
     ],
+    supportedDimensions: DEVELOPER_YEAR_METRIC_DIMENSIONS,
+    supportedMeasures: DEVELOPER_YEAR_METRIC_MEASURES,
+    supportedSegments: DEVELOPER_YEAR_METRIC_SEGMENTS,
   },
   DeveloperGameMetrics: {
     entityType: 'developer',
@@ -331,6 +499,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
     ],
     supportedDimensions: DEVELOPER_GAME_METRIC_DIMENSIONS,
     supportedMeasures: DEVELOPER_GAME_METRIC_MEASURES,
+    supportedSegments: DEVELOPER_GAME_METRIC_SEGMENTS,
   },
   DeveloperRelationshipMetrics: {
     entityType: 'developer',
@@ -344,6 +513,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'DeveloperRelationshipMetrics.totalReviews',
     ],
     supportedDimensions: DEVELOPER_RELATIONSHIP_DIMENSIONS,
+    supportedMeasures: DEVELOPER_RELATIONSHIP_MEASURES,
   },
   DeveloperChatScreenMetrics: {
     entityType: 'developer',
@@ -357,6 +527,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'DeveloperChatScreenMetrics.totalReviews',
     ],
     supportedDimensions: DEVELOPER_CHAT_SCREEN_DIMENSIONS,
+    supportedMeasures: DEVELOPER_CHAT_SCREEN_MEASURES,
   },
   DeveloperChatWindowMetrics: {
     entityType: 'developer',
@@ -368,6 +539,7 @@ const COMPANY_CUBE_CONFIG: Partial<Record<string, CompanyCubeConfig>> = {
       'DeveloperChatWindowMetrics.exactGameCount',
     ],
     supportedDimensions: DEVELOPER_CHAT_WINDOW_DIMENSIONS,
+    supportedMeasures: DEVELOPER_CHAT_WINDOW_MEASURES,
   },
 };
 
@@ -379,8 +551,79 @@ function uniqueDimensions(dimensions: string[] = []): string[] {
   return [...new Set(dimensions)];
 }
 
+function uniqueMembers(members: string[] = []): string[] {
+  return [...new Set(members)];
+}
+
 function hasCompanyIdFilter(query: CompanyQueryShape, config: CompanyCubeConfig): boolean {
   return (query.filters ?? []).some((filter) => filter.member === config.idMember);
+}
+
+function canonicalizeCompanyQueryMembers(
+  query: CompanyQueryShape,
+  config: CompanyCubeConfig
+): {
+  query: CompanyQueryShape;
+  canonicalizedMembers: string[];
+  canonicalizedSegments: string[];
+} {
+  const supportedDimensions = config.supportedDimensions ?? [];
+  const supportedMeasures = config.supportedMeasures ?? [];
+  const supportedSegments = config.supportedSegments ?? [];
+  const supportedMembers = new Set([...supportedDimensions, ...supportedMeasures]);
+  const supportedSegmentMembers = new Set(supportedSegments);
+  const canonicalizedMembers: string[] = [];
+  const canonicalizedSegments: string[] = [];
+
+  const canonicalizeMember = (member: string): string => {
+    if (member.includes('.')) {
+      return member;
+    }
+
+    const canonicalMember = `${query.cube}.${member}`;
+    if (!supportedMembers.has(canonicalMember)) {
+      return member;
+    }
+
+    canonicalizedMembers.push(canonicalMember);
+    return canonicalMember;
+  };
+
+  const canonicalizeSegment = (segment: string): string => {
+    if (segment.includes('.')) {
+      return segment;
+    }
+
+    const canonicalSegment = `${query.cube}.${segment}`;
+    if (!supportedSegmentMembers.has(canonicalSegment)) {
+      return segment;
+    }
+
+    canonicalizedSegments.push(canonicalSegment);
+    return canonicalSegment;
+  };
+
+  const order = Object.fromEntries(
+    Object.entries(query.order ?? {}).map(([member, direction]) => [canonicalizeMember(member), direction])
+  ) as Record<string, 'asc' | 'desc'>;
+
+  return {
+    query: {
+      ...query,
+      dimensions: query.dimensions ? uniqueDimensions(query.dimensions.map(canonicalizeMember)) : undefined,
+      measures: query.measures ? uniqueMembers(query.measures.map(canonicalizeMember)) : undefined,
+      filters: query.filters
+        ? query.filters.map((filter) => ({
+            ...filter,
+            member: canonicalizeMember(filter.member),
+          }))
+        : undefined,
+      segments: query.segments ? uniqueMembers(query.segments.map(canonicalizeSegment)) : undefined,
+      order: Object.keys(order).length > 0 ? order : undefined,
+    },
+    canonicalizedMembers: uniqueMembers(canonicalizedMembers),
+    canonicalizedSegments: uniqueMembers(canonicalizedSegments),
+  };
 }
 
 function enrichCompanyDimensions(query: CompanyQueryShape, config: CompanyCubeConfig): CompanyQueryShape {
@@ -569,9 +812,21 @@ export async function prepareCompanyQuery(
     return { query: inputQuery };
   }
 
-  let query = enrichCompanyDimensions(inputQuery, config);
-  const filters = [...(query.filters ?? [])];
   const notes: string[] = [];
+  const canonicalized = canonicalizeCompanyQueryMembers(inputQuery, config);
+  let query = enrichCompanyDimensions(canonicalized.query, config);
+  const filters = [...(query.filters ?? [])];
+
+  if (canonicalized.canonicalizedMembers.length > 0) {
+    notes.push(
+      `Canonicalized bare ${query.cube} members: ${canonicalized.canonicalizedMembers.join(', ')}.`
+    );
+  }
+  if (canonicalized.canonicalizedSegments.length > 0) {
+    notes.push(
+      `Canonicalized bare ${query.cube} segments: ${canonicalized.canonicalizedSegments.join(', ')}.`
+    );
+  }
 
   const rewritten = rewriteMisplacedCompanyMeasures(query, config);
   query = rewritten.query;
