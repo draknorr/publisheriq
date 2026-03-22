@@ -142,6 +142,7 @@ export function createInitialState({
       reason: null,
     },
     promptResults: [],
+    baselineQueue: [],
     manualReview: [],
     discoveredPrompts: [],
     recentEvents: [],
@@ -257,8 +258,8 @@ export function renderStatusMarkdown(state) {
   lines.push(`- Current phase: \`${state.current.phase}\``);
   lines.push(`- Next action: ${state.current.nextAction || 'n/a'}`);
   lines.push(`- Golden progress: ${state.baseline.goldenAtGoal}/${state.baseline.totalGoldens} at or above ${state.campaignBudget.goldenGoal.toFixed(1)}`);
-  lines.push(`- Best score: ${formatMaybeNumber(state.best.score)}`);
-  lines.push(`- Latest score: ${formatMaybeNumber(state.latest.score)}`);
+  lines.push(`- Campaign score: ${formatMaybeNumber(state.best.score)}`);
+  lines.push(`- Latest prompt score: ${formatMaybeNumber(state.latest.score)}`);
   lines.push(`- Iterations: ${state.iterations.total} total, ${state.iterations.accepted} kept, ${state.iterations.discarded} discarded`);
   lines.push(`- Manual review queue: ${state.manualReview.length}`);
   lines.push('');
@@ -298,7 +299,7 @@ export function renderDashboard(state) {
   lines.push(`Next: ${state.current.nextAction || '-'}`);
   lines.push('');
   lines.push(`Golden >= ${state.campaignBudget.goldenGoal.toFixed(1)}: ${state.baseline.goldenAtGoal}/${state.baseline.totalGoldens}`);
-  lines.push(`Best score: ${formatMaybeNumber(state.best.score)} | Latest: ${formatMaybeNumber(state.latest.score)} | Manual review: ${state.manualReview.length}`);
+  lines.push(`Campaign score: ${formatMaybeNumber(state.best.score)} | Latest prompt score: ${formatMaybeNumber(state.latest.score)} | Manual review: ${state.manualReview.length}`);
   lines.push(`Iterations: kept ${state.iterations.accepted} | discarded ${state.iterations.discarded} | total ${state.iterations.total}`);
   lines.push('');
   lines.push('Token usage');
@@ -343,6 +344,7 @@ function normalizeLoadedState(state) {
     workspaceDir: state.workspaceDir || state.worktreeDir || ROOT,
     workspaceMode: state.workspaceMode || (state.worktreeDir ? 'legacy-worktree' : 'current-branch'),
     pushMode: state.pushMode || (state.remote ? 'legacy-remote' : 'local-only'),
+    baselineQueue: Array.isArray(state.baselineQueue) ? state.baselineQueue : [],
   };
 }
 

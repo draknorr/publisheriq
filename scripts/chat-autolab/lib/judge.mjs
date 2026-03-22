@@ -96,7 +96,7 @@ async function runAbsoluteJudge({ promptEntry, currentResult, hardChecks }) {
       '{"score": number, "subscores": {"directness": number, "completeness": number, "relevance": number, "trustworthiness": number, "decision_value": number, "grace_under_ambiguity": number}, "blockingFlags": string[], "rationale": string}',
     ].join('\n'),
   });
-  const parsed = safeParseJson(response.content) || {};
+  const parsed = parseJudgeJson(response, 'absolute');
 
   return {
     score: clampNumber(parsed.score, 0, 10),
@@ -128,7 +128,7 @@ async function runPairwiseJudge({ promptEntry, currentResult, baselineResult, ha
       '{"verdict": "better" | "same" | "worse", "reason": string}',
     ].join('\n'),
   });
-  const parsed = safeParseJson(response.content) || {};
+  const parsed = parseJudgeJson(response, 'pairwise');
 
   return {
     verdict: ['better', 'same', 'worse'].includes(parsed.verdict) ? parsed.verdict : 'same',
@@ -143,6 +143,18 @@ function mergeUsage(left, right) {
     outputTokens: Number(left?.outputTokens || 0) + Number(right?.outputTokens || 0),
     totalTokens: Number(left?.totalTokens || 0) + Number(right?.totalTokens || 0),
   };
+}
+
+function parseJudgeJson(response, mode) {
+  const parsed = safeParseJson(response?.text || response?.lastMessage || response?.content || '');
+  if (parsed) {
+    return parsed;
+  }
+
+  const raw = String(response?.text || response?.lastMessage || response?.content || '').trim();
+  throw new Error(
+    `chat-autolab ${mode} judge returned invalid JSON${raw ? `: ${truncate(raw, 240)}` : '.'}`
+  );
 }
 
 function emptyUsage() {
@@ -173,4 +185,9 @@ function clampNumber(value, min, max) {
   const num = Number(value);
   if (!Number.isFinite(num)) return min;
   return Math.max(min, Math.min(max, num));
+}
+
+function truncate(value, limit) {
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit - 1)}…`;
 }

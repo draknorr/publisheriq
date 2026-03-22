@@ -21,7 +21,7 @@ import {
 } from './git.mjs';
 import { buildPromptInventory, chooseNextPrompt, discoverPromptCandidates } from './inventory.mjs';
 import { judgePrompt } from './judge.mjs';
-import { ensureLocalServer } from './server.mjs';
+import { ensureLocalServer, stopServerProcess } from './server.mjs';
 import {
   appendEvent,
   applyUsageToState,
@@ -61,6 +61,14 @@ export async function runCampaign({
           goldenGoal,
           note,
         });
+  const managed = {
+    server: null,
+  };
+  const unregisterStopHandlers = installStopHandlers({
+    state,
+    onStateChange,
+    managed,
+  });
 
   try {
     await updateState(state, onStateChange);
@@ -96,6 +104,7 @@ export async function runCampaign({
       env,
       existingPid: state.server.pid,
     });
+    managed.server = server.child || null;
     state.evalOrigin = server.origin;
     state.evalSecret = server.evalSecret;
     state.server = {
@@ -110,22 +119,34 @@ export async function runCampaign({
 
     const auth = await authenticate(state.evalOrigin, env);
 
-    if (!state.promptResults.length) {
-      setCurrentPhase(state, 'baselining', 'Evaluate the initial seed inventory and build the backlog.');
-      await updateState(state, onStateChange);
-      const inventory = await buildPromptInventory();
-      const discoveredPrompts = await discoverPromptCandidates({
-        databaseUrl: env.DATABASE_URL,
-      });
-      state.discoveredPrompts = discoveredPrompts;
+    const baselineQueueState = await ensureBaselineQueue({
+      state,
+      databaseUrl: env.DATABASE_URL,
+    });
+    if (baselineQueueState.initialized) {
       await appendEvent(state, {
         type: 'inventory_loaded',
-        message: `Loaded ${inventory.length} seed prompts and ${discoveredPrompts.length} discovered prompts.`,
+        message: `Loaded ${baselineQueueState.seedCount} seed prompts and ${baselineQueueState.discoveredCount} discovered prompts.`,
       });
       await updateState(state, onStateChange);
+    }
 
-      const initialPrompts = dedupePromptEntries([...inventory, ...discoveredPrompts]);
-      for (const promptEntry of initialPrompts) {
+    const pendingBaselines = getPendingBaselinePrompts(state);
+    if (pendingBaselines.length > 0) {
+      setCurrentPhase(state, 'baselining', 'Evaluate the initial seed inventory and build the backlog.');
+      await updateState(state, onStateChange);
+
+      for (const promptEntry of pendingBaselines) {
+        state.current.promptId = promptEntry.id;
+        state.current.prompt = promptEntry.prompt;
+        state.current.area = promptEntry.area;
+        state.current.family = promptEntry.family;
+        state.current.persona = promptEntry.persona;
+        state.current.hypothesis = null;
+        state.current.touchedFiles = [];
+        state.current.nextAction = `Baseline "${promptEntry.prompt}".`;
+        await updateState(state, onStateChange);
+
         const result = await evaluateAndJudgePrompt({
           origin: state.evalOrigin,
           evalSecret: state.evalSecret,
@@ -133,10 +154,17 @@ export async function runCampaign({
           promptEntry,
           baselineResult: null,
         });
+        applyUsageToState(state, 'answer', result.answerUsage);
+        applyUsageToState(state, 'judge', result.judgeUsage);
         upsertPromptResult(state, result);
         state.baseline = buildBaselineSummary(state);
         state.best.score = computeCampaignScore(state);
         state.baseline.score = state.best.score;
+        state.latest = {
+          score: result.score,
+          verdict: 'baseline',
+          reason: `Baselined ${promptEntry.prompt}.`,
+        };
         await appendEvent(state, {
           type: 'prompt_baselined',
           message: `Baselined ${promptEntry.prompt} at ${result.score.toFixed(1)}.`,
@@ -149,197 +177,197 @@ export async function runCampaign({
     await updateState(state, onStateChange);
 
     while (state.iterations.total < state.campaignBudget.maxIterations) {
-    state.baseline = buildBaselineSummary(state);
-    const nextPrompt = chooseNextPrompt(state);
-    if (!nextPrompt) {
-      break;
-    }
+      state.baseline = buildBaselineSummary(state);
+      const nextPrompt = chooseNextPrompt(state);
+      if (!nextPrompt) {
+        break;
+      }
 
-    if (nextPrompt.isGolden && nextPrompt.score >= state.campaignBudget.goldenGoal) {
-      break;
-    }
+      if (nextPrompt.isGolden && nextPrompt.score >= state.campaignBudget.goldenGoal) {
+        break;
+      }
 
-    state.current.promptId = nextPrompt.id;
-    state.current.prompt = nextPrompt.prompt;
-    state.current.area = nextPrompt.area;
-    state.current.family = nextPrompt.family;
-    state.current.persona = nextPrompt.persona;
-    state.current.touchedFiles = [];
-    state.current.hypothesis = nextPrompt.rationale || 'Target the narrowest code path that fixes the current lead prompt.';
-    setCurrentPhase(state, 'editing', `Run one Codex iteration for "${nextPrompt.prompt}".`);
-    await appendEvent(state, {
-      type: 'prompt_selected',
-      message: `Selected lead prompt: ${nextPrompt.prompt}`,
-    });
-    await updateState(state, onStateChange);
+      state.current.promptId = nextPrompt.id;
+      state.current.prompt = nextPrompt.prompt;
+      state.current.area = nextPrompt.area;
+      state.current.family = nextPrompt.family;
+      state.current.persona = nextPrompt.persona;
+      state.current.touchedFiles = [];
+      state.current.hypothesis = nextPrompt.rationale || 'Target the narrowest code path that fixes the current lead prompt.';
+      setCurrentPhase(state, 'editing', `Run one Codex iteration for "${nextPrompt.prompt}".`);
+      await appendEvent(state, {
+        type: 'prompt_selected',
+        message: `Selected lead prompt: ${nextPrompt.prompt}`,
+      });
+      await updateState(state, onStateChange);
 
-    const codexPrompt = buildCodexPrompt(nextPrompt, state);
-    const agentResult = await runCodexIteration({
-      cwd: state.workspaceDir,
-      prompt: codexPrompt,
-      lastMessagePath: paths.lastMessagePath,
-      onEvent: async (message) => {
+      const codexPrompt = buildCodexPrompt(nextPrompt, state);
+      const agentResult = await runCodexIteration({
+        cwd: state.workspaceDir,
+        prompt: codexPrompt,
+        lastMessagePath: paths.lastMessagePath,
+        onEvent: async (message) => {
+          await appendEvent(state, {
+            type: 'agent_note',
+            message: truncate(message, 180),
+          });
+          await updateState(state, onStateChange);
+        },
+      });
+      applyUsageToState(state, 'agent', agentResult.usage);
+      state.current.hypothesis = agentResult.lastMessage || state.current.hypothesis;
+      const candidateSnapshot = await getWorkingTreeSnapshot(state.workspaceDir);
+      state.current.touchedFiles = candidateSnapshot.allFiles;
+      await updateState(state, onStateChange);
+
+      if (!candidateSnapshot.hasChanges) {
+        state.iterations.total += 1;
+        state.iterations.discarded += 1;
+        nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
         await appendEvent(state, {
-          type: 'agent_note',
-          message: truncate(message, 180),
+          type: 'discard',
+          message: `Discarded ${nextPrompt.prompt} because Codex did not change the worktree.`,
         });
+        markManualReviewIfNeeded(state, nextPrompt);
+        state.latest = {
+          score: nextPrompt.score,
+          verdict: 'discard',
+          reason: 'No worktree changes were produced.',
+        };
         await updateState(state, onStateChange);
-      },
-    });
-    applyUsageToState(state, 'agent', agentResult.usage);
-    state.current.hypothesis = agentResult.lastMessage || state.current.hypothesis;
-    const candidateSnapshot = await getWorkingTreeSnapshot(state.workspaceDir);
-    state.current.touchedFiles = candidateSnapshot.allFiles;
-    await updateState(state, onStateChange);
+        continue;
+      }
 
-    if (!candidateSnapshot.hasChanges) {
-      state.iterations.total += 1;
-      state.iterations.discarded += 1;
-      nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
-      await appendEvent(state, {
-        type: 'discard',
-        message: `Discarded ${nextPrompt.prompt} because Codex did not change the worktree.`,
-      });
-      markManualReviewIfNeeded(state, nextPrompt);
-      state.latest = {
-        score: nextPrompt.score,
-        verdict: 'discard',
-        reason: 'No worktree changes were produced.',
-      };
+      setCurrentPhase(state, 'targeted_verify', `Run code guard and targeted prompt verification for "${nextPrompt.prompt}".`);
       await updateState(state, onStateChange);
-      continue;
-    }
-
-    setCurrentPhase(state, 'targeted_verify', `Run code guard and targeted prompt verification for "${nextPrompt.prompt}".`);
-    await updateState(state, onStateChange);
-    const codeGuard = await runCodeGuard(state.workspaceDir, state.current.touchedFiles);
-    state.lastGuard.code = codeGuard.success;
-    if (!codeGuard.success) {
-      await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
-      state.iterations.total += 1;
-      state.iterations.discarded += 1;
-      nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
-      await appendEvent(state, {
-        type: 'discard',
-        message: `Discarded ${nextPrompt.prompt} because the code guard failed.`,
-      });
-      markManualReviewIfNeeded(state, nextPrompt);
-      state.latest = {
-        score: nextPrompt.score,
-        verdict: 'discard',
-        reason: 'Code guard failed.',
-      };
-      await updateState(state, onStateChange);
-      continue;
-    }
-
-    const leadBaseline = getPromptResult(state, nextPrompt.id);
-    const leadResult = await evaluateAndJudgePrompt({
-      origin: state.evalOrigin,
-      evalSecret: state.evalSecret,
-      auth,
-      promptEntry: nextPrompt,
-      baselineResult: leadBaseline,
-    });
-    applyUsageToState(state, 'answer', leadResult.answerUsage);
-    applyUsageToState(state, 'judge', leadResult.judgeUsage);
-
-    const goldenResults = await evaluateGoldenPack({
-      origin: state.evalOrigin,
-      evalSecret: state.evalSecret,
-      auth,
-      state,
-    });
-
-    const hasGoldenRegression = goldenResults.some(
-      (result) =>
-        result.pairwiseVerdict === 'worse' ||
-        (result.blockingFlags?.length || 0) > 0
-    );
-    const leadImproved =
-      leadResult.score > Number(leadBaseline?.score || 0) ||
-      (leadBaseline?.blockingFlags?.length || 0) > (leadResult.blockingFlags?.length || 0);
-
-    if (!leadImproved || hasGoldenRegression) {
-      await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
-      state.iterations.total += 1;
-      state.iterations.discarded += 1;
-      nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
-      await appendEvent(state, {
-        type: 'discard',
-        message: `Discarded ${nextPrompt.prompt} because it failed the targeted or golden gate.`,
-      });
-      markManualReviewIfNeeded(state, nextPrompt);
-      state.latest = {
-        score: leadResult.score,
-        verdict: 'discard',
-        reason: hasGoldenRegression ? 'Golden regression detected.' : 'Lead prompt did not improve.',
-      };
-      await updateState(state, onStateChange);
-      continue;
-    }
-
-    if (shouldRunFullVerify(state.current.touchedFiles, state.iterations.accepted)) {
-      setCurrentPhase(state, 'full_verify', 'Run the broader sections 1-5 verification pass.');
-      await updateState(state, onStateChange);
-      const fullResults = await evaluateFrontier({
-        origin: state.evalOrigin,
-        evalSecret: state.evalSecret,
-        auth,
-        state,
-      });
-      state.lastGuard.full = !fullResults.some((result) => result.pairwiseVerdict === 'worse');
-      if (!state.lastGuard.full) {
+      const codeGuard = await runCodeGuard(state.workspaceDir, state.current.touchedFiles);
+      state.lastGuard.code = codeGuard.success;
+      if (!codeGuard.success) {
         await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
         state.iterations.total += 1;
         state.iterations.discarded += 1;
         nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
         await appendEvent(state, {
           type: 'discard',
-          message: `Discarded ${nextPrompt.prompt} because the full verification pass regressed.`,
+          message: `Discarded ${nextPrompt.prompt} because the code guard failed.`,
+        });
+        markManualReviewIfNeeded(state, nextPrompt);
+        state.latest = {
+          score: nextPrompt.score,
+          verdict: 'discard',
+          reason: 'Code guard failed.',
+        };
+        await updateState(state, onStateChange);
+        continue;
+      }
+
+      const leadBaseline = getPromptResult(state, nextPrompt.id);
+      const leadResult = await evaluateAndJudgePrompt({
+        origin: state.evalOrigin,
+        evalSecret: state.evalSecret,
+        auth,
+        promptEntry: nextPrompt,
+        baselineResult: leadBaseline,
+      });
+      applyUsageToState(state, 'answer', leadResult.answerUsage);
+      applyUsageToState(state, 'judge', leadResult.judgeUsage);
+
+      const goldenResults = await evaluateGoldenPack({
+        origin: state.evalOrigin,
+        evalSecret: state.evalSecret,
+        auth,
+        state,
+      });
+
+      const hasGoldenRegression = goldenResults.some(
+        (result) =>
+          result.pairwiseVerdict === 'worse' ||
+          (result.blockingFlags?.length || 0) > 0
+      );
+      const leadImproved =
+        leadResult.score > Number(leadBaseline?.score || 0) ||
+        (leadBaseline?.blockingFlags?.length || 0) > (leadResult.blockingFlags?.length || 0);
+
+      if (!leadImproved || hasGoldenRegression) {
+        await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
+        state.iterations.total += 1;
+        state.iterations.discarded += 1;
+        nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
+        await appendEvent(state, {
+          type: 'discard',
+          message: `Discarded ${nextPrompt.prompt} because it failed the targeted or golden gate.`,
         });
         markManualReviewIfNeeded(state, nextPrompt);
         state.latest = {
           score: leadResult.score,
           verdict: 'discard',
-          reason: 'Full verification regressed.',
+          reason: hasGoldenRegression ? 'Golden regression detected.' : 'Lead prompt did not improve.',
         };
         await updateState(state, onStateChange);
         continue;
       }
-      for (const result of fullResults) {
+
+      if (shouldRunFullVerify(state.current.touchedFiles, state.iterations.accepted)) {
+        setCurrentPhase(state, 'full_verify', 'Run the broader sections 1-5 verification pass.');
+        await updateState(state, onStateChange);
+        const fullResults = await evaluateFrontier({
+          origin: state.evalOrigin,
+          evalSecret: state.evalSecret,
+          auth,
+          state,
+        });
+        state.lastGuard.full = !fullResults.some((result) => result.pairwiseVerdict === 'worse');
+        if (!state.lastGuard.full) {
+          await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
+          state.iterations.total += 1;
+          state.iterations.discarded += 1;
+          nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
+          await appendEvent(state, {
+            type: 'discard',
+            message: `Discarded ${nextPrompt.prompt} because the full verification pass regressed.`,
+          });
+          markManualReviewIfNeeded(state, nextPrompt);
+          state.latest = {
+            score: leadResult.score,
+            verdict: 'discard',
+            reason: 'Full verification regressed.',
+          };
+          await updateState(state, onStateChange);
+          continue;
+        }
+        for (const result of fullResults) {
+          upsertPromptResult(state, result);
+        }
+      }
+
+      upsertPromptResult(state, leadResult);
+      for (const result of goldenResults) {
         upsertPromptResult(state, result);
       }
+
+      const ownedSnapshot = await ensureOwnedCandidateSnapshot(state, candidateSnapshot, onStateChange);
+      state.current.touchedFiles = ownedSnapshot.allFiles;
+      const commitSha = await commitAll({
+        cwd: state.workspaceDir,
+        message: `chat-autolab: improve ${nextPrompt.area} for ${nextPrompt.id}`,
+      });
+
+      state.iterations.total += 1;
+      state.iterations.accepted += 1;
+      state.best.score = computeCampaignScore(state);
+      state.best.sha = commitSha;
+      state.best.acceptedAt = new Date().toISOString();
+      state.latest = {
+        score: leadResult.score,
+        verdict: 'keep',
+        reason: `Accepted ${nextPrompt.prompt} after passing the golden gate.`,
+      };
+      await appendEvent(state, {
+        type: 'keep',
+        message: `Kept ${nextPrompt.prompt} at ${leadResult.score.toFixed(1)} and committed ${commitSha.slice(0, 7)} locally.`,
+      });
+      await updateState(state, onStateChange);
     }
-
-    upsertPromptResult(state, leadResult);
-    for (const result of goldenResults) {
-      upsertPromptResult(state, result);
-    }
-
-    const ownedSnapshot = await ensureOwnedCandidateSnapshot(state, candidateSnapshot, onStateChange);
-    state.current.touchedFiles = ownedSnapshot.allFiles;
-    const commitSha = await commitAll({
-      cwd: state.workspaceDir,
-      message: `chat-autolab: improve ${nextPrompt.area} for ${nextPrompt.id}`,
-    });
-
-    state.iterations.total += 1;
-    state.iterations.accepted += 1;
-    state.best.score = computeCampaignScore(state);
-    state.best.sha = commitSha;
-    state.best.acceptedAt = new Date().toISOString();
-    state.latest = {
-      score: leadResult.score,
-      verdict: 'keep',
-      reason: `Accepted ${nextPrompt.prompt} after passing the golden gate.`,
-    };
-    await appendEvent(state, {
-      type: 'keep',
-      message: `Kept ${nextPrompt.prompt} at ${leadResult.score.toFixed(1)} and committed ${commitSha.slice(0, 7)} locally.`,
-    });
-    await updateState(state, onStateChange);
-  }
 
     state.baseline = buildBaselineSummary(state);
     if (state.baseline.goldenAtGoal === state.baseline.totalGoldens && state.manualReview.length === 0) {
@@ -368,11 +396,72 @@ export async function runCampaign({
     await updateState(state, onStateChange);
     await clearCurrentRun(state.runId);
     throw error;
+  } finally {
+    unregisterStopHandlers();
+    await stopServerProcess(managed.server);
   }
 }
 
 function buildRunId() {
   return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function installStopHandlers({ state, onStateChange, managed }) {
+  let shuttingDown = false;
+  const signals = ['SIGINT', 'SIGTERM'];
+  const handlers = new Map();
+
+  for (const signal of signals) {
+    const handler = () => {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+      void handleStopSignal({ signal, state, onStateChange, managed }).finally(() => {
+        process.exit(signal === 'SIGTERM' ? 143 : 130);
+      });
+    };
+    handlers.set(signal, handler);
+    process.on(signal, handler);
+  }
+
+  return () => {
+    for (const [signal, handler] of handlers) {
+      process.off(signal, handler);
+    }
+  };
+}
+
+async function handleStopSignal({ signal, state, onStateChange, managed }) {
+  try {
+    if (['editing', 'targeted_verify', 'full_verify'].includes(state.current.phase)) {
+      const snapshot = await getWorkingTreeSnapshot(state.workspaceDir);
+      if (snapshot.hasChanges) {
+        await discardWorkingTreeChanges(snapshot, state.workspaceDir);
+      }
+    }
+  } catch {
+    // Best-effort cleanup for interrupt handling.
+  }
+
+  try {
+    await stopServerProcess(managed.server);
+  } catch {
+    // Best-effort cleanup for interrupt handling.
+  }
+
+  managed.server = null;
+  state.server = {
+    pid: null,
+    startedByAutolab: false,
+  };
+  state.current.touchedFiles = [];
+  setCurrentPhase(state, 'stopped', 'Run pnpm chat-autolab:resume to continue this campaign.');
+  await appendEvent(state, {
+    type: 'campaign_stopped',
+    message: `Campaign stopped by ${signal}. Run pnpm chat-autolab:resume to continue.`,
+  });
+  await updateState(state, onStateChange);
 }
 
 async function updateState(state, onStateChange) {
@@ -389,6 +478,41 @@ function dedupePromptEntries(entries) {
     seen.add(entry.id);
     return true;
   });
+}
+
+async function ensureBaselineQueue({ state, databaseUrl }) {
+  if (state.baselineQueue.length > 0) {
+    return {
+      initialized: false,
+      seedCount: countPromptsBySource(state.baselineQueue, 'seed'),
+      discoveredCount: countPromptsBySource(state.baselineQueue, 'chat_query_logs'),
+    };
+  }
+
+  const inventory = await buildPromptInventory();
+  let discoveredPrompts = Array.isArray(state.discoveredPrompts) ? state.discoveredPrompts : [];
+
+  if (discoveredPrompts.length === 0 && state.promptResults.length === 0) {
+    discoveredPrompts = await discoverPromptCandidates({
+      databaseUrl,
+    });
+  }
+
+  state.discoveredPrompts = discoveredPrompts;
+  state.baselineQueue = dedupePromptEntries([...inventory, ...discoveredPrompts]);
+  return {
+    initialized: true,
+    seedCount: inventory.length,
+    discoveredCount: discoveredPrompts.length,
+  };
+}
+
+function getPendingBaselinePrompts(state) {
+  return state.baselineQueue.filter((entry) => !getPromptResult(state, entry.id));
+}
+
+function countPromptsBySource(entries, source) {
+  return entries.filter((entry) => entry.source === source).length;
 }
 
 async function evaluateAndJudgePrompt({

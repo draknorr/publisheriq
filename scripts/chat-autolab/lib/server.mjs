@@ -35,22 +35,44 @@ export async function ensureLocalServer({
         CHAT_EVAL_SECRET: evalSecret,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
     }
   );
 
   child.stdout?.pipe(logHandle.createWriteStream());
   child.stderr?.pipe(logHandle.createWriteStream());
-  child.unref();
+  child.once('exit', () => {
+    void logHandle.close();
+  });
 
-  await waitForHealthy(origin);
+  try {
+    await waitForHealthy(origin);
+  } catch (error) {
+    await stopServerProcess(child);
+    throw error;
+  }
 
   return {
     origin,
     pid: child.pid,
     evalSecret,
     startedByAutolab: true,
+    child,
   };
+}
+
+export async function stopServerProcess(child) {
+  if (!child || child.exitCode !== null || child.killed) {
+    return;
+  }
+
+  child.kill('SIGTERM');
+  const stopped = await waitForExit(child, 5000);
+  if (stopped) {
+    return;
+  }
+
+  child.kill('SIGKILL');
+  await waitForExit(child, 1000);
 }
 
 async function isServerHealthy(origin) {
@@ -73,4 +95,31 @@ async function waitForHealthy(origin, timeoutMs = 120000) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   throw new Error(`Timed out waiting for local admin server at ${origin}`);
+}
+
+async function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null) {
+    return true;
+  }
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+
+    const onExit = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.off('exit', onExit);
+      child.off('error', onExit);
+    };
+
+    child.once('exit', onExit);
+    child.once('error', onExit);
+  });
 }

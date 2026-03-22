@@ -17,7 +17,7 @@ async function main() {
     }
     process.stdout.write(renderDashboard(state));
 
-    if (!runId || ['success', 'needs_manual_review', 'needs_context', 'failed'].includes(state.status)) {
+    if (!runId || ['success', 'needs_manual_review', 'needs_context', 'failed', 'stopped'].includes(state.status)) {
       return;
     }
 

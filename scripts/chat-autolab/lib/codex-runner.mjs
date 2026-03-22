@@ -88,9 +88,12 @@ export async function runCodexPrompt({
         return;
       }
       const lastMessage = await safeRead(lastMessagePath);
+      const text = lastMessage.trim();
       resolve({
         usage,
-        lastMessage: lastMessage.trim(),
+        text,
+        content: text,
+        lastMessage: text,
       });
     });
   });
