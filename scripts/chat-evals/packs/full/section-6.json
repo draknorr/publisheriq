@@ -1,0 +1,194 @@
+{
+  "packKey": "full.section-6",
+  "label": "Section 6 Full Critique Pack",
+  "packType": "full",
+  "area": "change",
+  "active": false,
+  "blocking": false,
+  "sectionRefs": ["6"],
+  "scopeDescription": "`docs/chat-output-user-critique.md` section `6`",
+  "defaultOutDirPrefix": "critique-section-6",
+  "draftTitle": "Critique Section 6 Draft Run",
+  "entries": [
+    {
+      "critiqueId": null,
+      "suiteKey": "rescue-candidates",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Which games look like rescue candidates: heavy discounting, weak retention, but still decent sentiment?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 87,
+      "suiteKey": "upcoming-games-release-timing-changes",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_cross_game",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "upcoming games with recent release timing changes",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 88,
+      "suiteKey": "biggest-steam-page-refreshes-lately",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_cross_game",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What are the biggest Steam page refreshes lately?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 139,
+      "suiteKey": "recent-steam-changes-hades-ii",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_single_game",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Show me the recent Steam changes for Hades II",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 20,
+      "suiteKey": "sustained-response-after-recent-steam-changes",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Which games showed a sustained response after recent Steam changes?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 221,
+      "suiteKey": "biggest-store-page-changes-hades-ii-90d",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_single_game",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Show me the biggest Steam store-page changes for `Hades II` in the last 90 days.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "before-after-hades-ii-last-big-update",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_before_after",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What changed on Hades II before and after its last big update?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "before-after-no-rest-for-the-wicked-last-major-update",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_before_after",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What changed on the Steam page for `No Rest for the Wicked` before and after its last major update?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 222,
+      "suiteKey": "changed-tags-or-genres-materially",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_cross_game",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Find games that changed tags or genres materially in the last 6 months and summarize what likely shifted.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "asset-refresh-without-announcement",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_cross_game",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Which games added new screenshots, trailers, or capsule art in the last 14 days but did not post an announcement?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "major-announcement-weak-response",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_cross_game",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Which titles had a major Steam announcement recently, but weak downstream CCU or review response?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 46,
+      "suiteKey": "under-marketed-agency-prospects",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Agency / Business Development Prospector",
+      "prompt": "Which live-service or frequently updated games look under-marketed and could be good agency prospects?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": 48,
+      "suiteKey": "likely-relaunch-pattern-21d",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Agency / Business Development Prospector",
+      "prompt": "Show me games that used a likely relaunch pattern: new trailer, store-copy rewrite, and discount within 21 days.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "marketing-push-last-30-days",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Agency / Business Development Prospector",
+      "prompt": "Find games that look like they started a new marketing push in the last 30 days.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "dormant-games-waking-up",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Agency / Business Development Prospector",
+      "prompt": "Show me dormant games that appear to be waking up again and may need launch or relaunch marketing support.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "marketing-agency-leads-ranked",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Agency / Business Development Prospector",
+      "prompt": "Rank possible marketing-agency leads by need, timing, and evidence quality.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "updates-shipping-weak-communication",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Agency / Business Development Prospector",
+      "prompt": "Find games where updates are shipping, but public communication and eventization are weak.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "signable-indie-gtm-gap",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Find signable indie games where product quality looks stronger than go-to-market execution.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "preparing-for-1-0-console-platform-beat",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Show me games that may be preparing for a 1.0 launch, console push, or platform-expansion beat.",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "strategic-pivot-audience-monetization-genre",
+      "section": "6. Change Intelligence and Strategic / Prospecting Answers",
+      "family": "change_pattern",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "Which studios or games show evidence of a strategic pivot in audience, monetization, or genre positioning?",
+      "packTags": ["tier:full", "area:change", "scope:section-6"]
+    }
+  ]
+}

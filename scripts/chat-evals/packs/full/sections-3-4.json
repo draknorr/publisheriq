@@ -1,0 +1,131 @@
+{
+  "packKey": "full.sections-3-4",
+  "label": "Sections 3-4 Full Critique Pack",
+  "packType": "full",
+  "area": "similarity",
+  "active": true,
+  "blocking": true,
+  "sectionRefs": ["3", "4"],
+  "scopeDescription": "`docs/chat-output-user-critique.md` sections `3` and `4`",
+  "defaultOutDirPrefix": "critique-sections-3-4",
+  "draftTitle": "Critique Sections 3+4 Draft Run",
+  "entries": [
+    {
+      "critiqueId": 51,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "game_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Steam Deck games like Hades II",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 49,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "game_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Games like Hollow Knight but with pixel art",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4"]
+    },
+    {
+      "critiqueId": 132,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "game_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Games similar to Hollow Knight with better reviews",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4", "tier:golden"]
+    },
+    {
+      "critiqueId": 134,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "game_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Games like Hollow Knight but with fewer than 10K reviews",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4"]
+    },
+    {
+      "critiqueId": 170,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "publisher_similarity",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "What publishers are similar to Devolver Digital?",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4"]
+    },
+    {
+      "critiqueId": 171,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "developer_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Show me developers similar to Supergiant Games",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 190,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "franchise_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Find games in the same series as Dark Souls",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 18,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "horror games with investigation elements",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 195,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Horror games with investigation and puzzle elements",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4"]
+    },
+    {
+      "critiqueId": 19,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Tactical games with deck building",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4"]
+    },
+    {
+      "critiqueId": 186,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Tactical roguelikes",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4"]
+    },
+    {
+      "critiqueId": 42,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Relaxing puzzle games with beautiful art",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 229,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Fast-paced action games with pixel art",
+      "packTags": ["tier:full", "area:similarity", "scope:sections-3-4"]
+    }
+  ]
+}

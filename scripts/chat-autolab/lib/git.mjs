@@ -1,26 +1,61 @@
+import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { ROOT } from './constants.mjs';
 
 const execFileAsync = promisify(execFile);
+const PROTECTED_BRANCHES = new Set(['main', 'master']);
 
-export async function ensureSafeRemote(remote) {
-  const remotes = await listRemotes();
-  const remoteUrl = remotes.get(remote);
-  if (!remoteUrl) {
-    throw new Error(`Missing git remote "${remote}". Create a dedicated automation fork remote before running chat-autolab.`);
+export async function ensureCampaignStart(cwd = ROOT) {
+  await ensureNoGitOperationInProgress(cwd);
+  const branch = await getCurrentBranch(cwd);
+  if (!branch) {
+    throw new Error('chat-autolab cannot start from a detached HEAD. Checkout a branch first.');
   }
-  const normalized = remoteUrl.toLowerCase();
-  if (remote === 'origin' || normalized.includes('/main') || normalized.includes(':main')) {
-    throw new Error(`Unsafe automation remote "${remote}" -> ${remoteUrl}`);
+  if (PROTECTED_BRANCHES.has(branch)) {
+    throw new Error(`chat-autolab refuses to run on "${branch}". Checkout a non-main branch first.`);
   }
-  return remoteUrl;
+
+  const snapshot = await getWorkingTreeSnapshot(cwd);
+  if (snapshot.hasChanges) {
+    throw new Error('chat-autolab requires a clean working tree. Commit, stash, or discard your changes before starting.');
+  }
+
+  return {
+    branch,
+    headSha: await getHeadSha(cwd),
+    workspaceDir: cwd,
+  };
 }
 
-export async function createWorktree({ runId, branch, baseBranch, worktreeDir }) {
-  await execGit(['worktree', 'add', '-B', branch, worktreeDir, baseBranch]);
-  return worktreeDir;
+export async function ensureCampaignResume({ cwd = ROOT, branch, anchorSha }) {
+  await ensureNoGitOperationInProgress(cwd);
+
+  const currentBranch = await getCurrentBranch(cwd);
+  if (!currentBranch) {
+    throw new Error('chat-autolab cannot resume from a detached HEAD. Checkout the campaign branch first.');
+  }
+  if (currentBranch !== branch) {
+    throw new Error(`chat-autolab run belongs to "${branch}", but the current branch is "${currentBranch}".`);
+  }
+
+  const snapshot = await getWorkingTreeSnapshot(cwd);
+  if (snapshot.hasChanges) {
+    throw new Error('chat-autolab resume requires a clean working tree.');
+  }
+
+  if (anchorSha) {
+    const isDescendant = await isAncestor(anchorSha, await getHeadSha(cwd), cwd);
+    if (!isDescendant) {
+      throw new Error('Current HEAD is outside the campaign history. Refusing to resume automatically.');
+    }
+  }
+}
+
+export async function getCurrentBranch(cwd = ROOT) {
+  const { stdout } = await execGit(['branch', '--show-current'], { cwd });
+  return stdout.trim() || null;
 }
 
 export async function getHeadSha(cwd = ROOT) {
@@ -28,22 +63,47 @@ export async function getHeadSha(cwd = ROOT) {
   return stdout.trim();
 }
 
-export async function getChangedFiles(cwd = ROOT) {
-  const { stdout } = await execGit(['diff', '--name-only'], { cwd });
-  return stdout
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+export async function getWorkingTreeSnapshot(cwd = ROOT) {
+  const { stdout } = await execGit(['status', '--porcelain=v1', '-uall'], { cwd });
+  const trackedFiles = new Set();
+  const untrackedFiles = new Set();
+
+  for (const line of stdout.split('\n')) {
+    if (!line) continue;
+    const status = line.slice(0, 2);
+    const rawPath = line.slice(3).trim();
+    if (!rawPath) continue;
+
+    if (status === '??') {
+      untrackedFiles.add(rawPath);
+      continue;
+    }
+
+    for (const pathPart of rawPath.split(' -> ')) {
+      trackedFiles.add(pathPart.trim());
+    }
+  }
+
+  const tracked = [...trackedFiles];
+  const untracked = [...untrackedFiles];
+  return {
+    trackedFiles: tracked,
+    untrackedFiles: untracked,
+    allFiles: [...new Set([...tracked, ...untracked])],
+    hasChanges: tracked.length > 0 || untracked.length > 0,
+  };
 }
 
-export async function hasWorkingTreeChanges(cwd = ROOT) {
-  const { stdout } = await execGit(['status', '--porcelain'], { cwd });
-  return stdout.trim().length > 0;
-}
+export async function discardWorkingTreeChanges(snapshot, cwd = ROOT) {
+  if (!snapshot?.hasChanges) return;
 
-export async function discardWorkingTree(cwd = ROOT) {
-  await execGit(['reset', '--hard', 'HEAD'], { cwd });
-  await execGit(['clean', '-fd'], { cwd });
+  if (snapshot.trackedFiles?.length) {
+    await execGit(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...snapshot.trackedFiles], { cwd });
+  }
+
+  if (snapshot.untrackedFiles?.length) {
+    await execGit(['clean', '-fd', '--', ...snapshot.untrackedFiles], { cwd });
+  }
 }
 
 export async function commitAll({ cwd = ROOT, message }) {
@@ -52,23 +112,37 @@ export async function commitAll({ cwd = ROOT, message }) {
   return getHeadSha(cwd);
 }
 
-export async function pushBranch({ cwd = ROOT, remote, branch }) {
-  await execGit(['push', remote, `${branch}:${branch}`], { cwd });
-}
-
-export async function removeWorktree(worktreeDir) {
-  await execGit(['worktree', 'remove', '--force', worktreeDir]);
-}
-
-async function listRemotes() {
-  const { stdout } = await execGit(['remote', '-v']);
-  const map = new Map();
-  for (const line of stdout.split('\n')) {
-    const [name, url] = line.trim().split(/\s+/);
-    if (!name || !url || map.has(name)) continue;
-    map.set(name, url);
+async function ensureNoGitOperationInProgress(cwd) {
+  const markers = ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply'];
+  for (const marker of markers) {
+    const markerPath = await resolveGitPath(marker, cwd);
+    if (await pathExists(markerPath)) {
+      throw new Error(`chat-autolab cannot run while git state "${marker}" exists. Finish or abort the in-progress git operation first.`);
+    }
   }
-  return map;
+}
+
+async function resolveGitPath(relativePath, cwd) {
+  const { stdout } = await execGit(['rev-parse', '--git-path', relativePath], { cwd });
+  return stdout.trim();
+}
+
+async function isAncestor(ancestorSha, descendantSha, cwd) {
+  try {
+    await execGit(['merge-base', '--is-ancestor', ancestorSha, descendantSha], { cwd });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pathExists(targetPath) {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function execGit(args, { cwd = ROOT } = {}) {

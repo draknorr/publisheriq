@@ -1,0 +1,59 @@
+{
+  "packKey": "mini.similarity",
+  "label": "Similarity Mini Iteration Pack",
+  "packType": "mini",
+  "area": "similarity",
+  "active": true,
+  "blocking": false,
+  "sectionRefs": ["3", "4"],
+  "scopeDescription": "Cheap default dev loop for similarity, comp, and concept changes",
+  "defaultOutDirPrefix": "mini-similarity",
+  "draftTitle": "Similarity Mini Pack Draft Run",
+  "entries": [
+    {
+      "critiqueId": 51,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "game_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Steam Deck games like Hades II",
+      "packTags": ["tier:mini", "area:similarity"]
+    },
+    {
+      "critiqueId": 171,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "developer_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Show me developers similar to Supergiant Games",
+      "packTags": ["tier:mini", "area:similarity"]
+    },
+    {
+      "critiqueId": 190,
+      "suiteKey": null,
+      "section": "3. Similarity and Comp-Finding Answers",
+      "family": "franchise_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Find games in the same series as Dark Souls",
+      "packTags": ["tier:mini", "area:similarity"]
+    },
+    {
+      "critiqueId": 18,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "horror games with investigation elements",
+      "packTags": ["tier:mini", "area:similarity"]
+    },
+    {
+      "critiqueId": 42,
+      "suiteKey": null,
+      "section": "4. Concept and Taste-Based Discovery",
+      "family": "concept_search",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Relaxing puzzle games with beautiful art",
+      "packTags": ["tier:mini", "area:similarity"]
+    }
+  ]
+}

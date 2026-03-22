@@ -2,19 +2,27 @@
 
 Critique-suite ledger for targeted live prompt runs drawn from `docs/chat-output-user-critique.md`.
 
+For the current full second-round live ledger, see [docs/chat-prompt-evals-round-2.md](/Users/ryanbohmann/Desktop/publisheriq/docs/chat-prompt-evals-round-2.md).
+
 ## Suite
 
 - Scope: section-specific live runs from `docs/chat-output-user-critique.md`; compare only runs with matching prompt scope
-- Prompt count per run: `23` for the full section `1`/`2` suite, `13` for the full section `3`/`4` suite; targeted reruns may use smaller subsets
-- Runbook: `docs/chat-prompt-evals-runbook.md` documents the checked-in section `1`/`2` and `3`/`4` wrappers
+- Prompt count per run: `23` for the full section `1`/`2` suite, `13` for the full section `3`/`4` suite, `16` for the recovered section `5` suite; targeted reruns may use smaller subsets
+- Runbook: `docs/chat-prompt-evals-runbook.md` documents the checked-in section `1`/`2`, `3`/`4`, and `5` wrappers
 - Primary scoring mode: curated user-centric review from one primary persona per prompt
 - Rubric: `Directness 15%`, `Completeness 15%`, `Relevance 15%`, `Trustworthiness 20%`, `Decision value/usefulness 25%`, `Grace under ambiguity 10%`
 - Verdict bands: `Strong 8.5-10`, `Good 7.0-8.4`, `Mixed 5.5-6.9`, `Weak 4.0-5.4`, `Failure <4.0`
+- Section `5` uses stable `suiteKey` refs where the original critique numbering is not fully recoverable from checked-in sources.
 
 ## Run Index
 
 | Run | Date | Scope | Prompts | Avg Time | Median | P95 | Avg User Score | Weak+Failure | Artifacts |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
+| `2026-03-21T07:53:13.866Z` | 2026-03-21T07:53:13.866Z | `Section 5 single-prompt follow-up for broad trending board` | 1 | 34791ms | 34791ms | 34791ms | 6.6/10 | 0 | `/tmp/publisheriq-chat-evals/single-trending-right-now-2026-03-21/run` |
+| `2026-03-21T07:32:31.169Z` | 2026-03-21T07:32:31.169Z | `Section 5 rerun after review routing and support-floor hardening` | 16 | 11635ms | 11421ms | 23425ms | 6.8/10 | 1 | `/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T07-27-26-172Z` |
+| `2026-03-21T07:05:32.000Z` | 2026-03-21T07:05:32.000Z | `Section 5 rerun after shared trend evidence hardening` | 16 | 18065ms | 18176ms | 28267ms | 6.3/10 | 5 | `/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-58-02-813Z` |
+| `2026-03-21T06:21:16.439Z` | 2026-03-21T06:21:16.439Z | `Section 5 post-screen_games live rerun` | 16 | 14669ms | 12019ms | 30584ms | 6.3/10 | 5 | `/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-17-14-541Z` |
+| `2026-03-21T05:34:04.009Z` | 2026-03-21T05:34:04.009Z | `Section 5 trending/time-relative baseline live run` | 16 | 17986ms | 13409ms | 48919ms | 4.0/10 | 11 | `/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T05-29-05-948Z` |
 | `2026-03-21T00:08:57.725Z` | 2026-03-21T00:08:57.725Z | `Sections 3-4 quality pass round 2` | 13 | 14409ms | 14316ms | 24502ms | 6.7/10 | 2 | `/tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-21-r5` |
 | `2026-03-21T00:03:14.910Z` | 2026-03-21T00:03:14.910Z | `Sections 1-2 regression gate after section 3-4 pass` | 23 | 18490ms | 16904ms | 39743ms | 7.4/10 | 1 | `/tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-21-r3` |
 | `2026-03-20T22:06:10.675Z` | 2026-03-20T22:06:10.675Z | `Sections 3-4 post-fix live pass` | 13 | 13338ms | 12346ms | 27633ms | 6.1/10 | 4 | `/tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-20T22-03-08-096Z` |
@@ -22,6 +30,4308 @@ Critique-suite ledger for targeted live prompt runs drawn from `docs/chat-output
 | `2026-03-20T20:16:22.850Z` | 2026-03-20T20:16:22.850Z | `Sections 1-2 full round 2` | 23 | 14393ms | 13108ms | 30065ms | 7.4/10 | 1 | `/tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T20-10-40-725Z` |
 | `2026-03-20T20:04:36.504Z` | 2026-03-20T20:04:36.504Z | `Sections 1-2 targeted rerun` | 5 | 11596ms | 5847ms | 34281ms | 6.8/10 | 0 | `/tmp/publisheriq-chat-evals/fix-under-5.yaJk8U/live-post-deploy` |
 | `2026-03-20T18:58:22.282Z` | 2026-03-20T18:58:22.282Z | `Sections 1-2 baseline full run` | 23 | 18106ms | 16620ms | 35040ms | 6.6/10 | 7 | `/tmp/publisheriq-chat-evals/critique-sections-1-2-2026-03-20T18-51-04Z` |
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-21T07:53:13.866Z","generatedAt":"2026-03-21T07:53:13.866Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":1,"averageTotalMs":34791,"medianTotalMs":34791,"p95TotalMs":34791,"averageUserScore":6.6,"weakOrFailureCount":0,"artifactPath":"/tmp/publisheriq-chat-evals/single-trending-right-now-2026-03-21/run","scope":"section_5_single_prompt_follow_up_broad_trending_board","baselineRunId":"2026-03-21T07:32:31.169Z","promptRefs":["games-trending-right-now"] } -->
+## Run 2026-03-21T07:53:13.866Z
+
+- Generated: 2026-03-21T07:53:13.866Z
+- Scope: single-prompt follow-up spot check for `what games are trending right now?` after the broad market-leader `trend_profile` pass
+- Prompt refs: `games-trending-right-now`
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/single-trending-right-now-2026-03-21/run
+- Generic runner report: /tmp/publisheriq-chat-evals/single-trending-right-now-2026-03-21/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/single-trending-right-now-2026-03-21/run/results.json
+- Prompt count: 1
+- Average user score: 6.6/10
+- Verdict mix: Mixed 1
+- Delta vs prompt score in `2026-03-21T07:32:31.169Z`: improved from `5.4` to `6.6` after routing the broad query through `trend_profile: "market_leaders"` and surfacing `Total Reviews` in the board.
+- This is a targeted follow-up note for the broad trending board only, not a new full section `5` rerun.
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 34791ms | 34791ms | 34791ms | 34791ms | 34791ms |
+
+### Ranking
+
+| Rank | Critique Ref | Prompt | Family | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---|---|---|---|---:|---|---:|---|
+| 1 | `games-trending-right-now` | what games are trending right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 6.6/10 | Mixed | 34791 | More defensible as a market-momentum board, but several rows still feel like mid-market movers rather than the games most users mean by “trending right now.” |
+
+### Detailed Result
+
+#### games-trending-right-now what games are trending right now?
+
+- Suite key: games-trending-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.6/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: More defensible as a market-momentum board, but several rows still feel like mid-market movers rather than the games most users mean by “trending right now.”
+- Rationale: This is materially better than the earlier weak version. The answer now has a clear 7-day anchor, uses the right market-leader profile, and includes `Total Reviews`, which makes the list easier to defend. It is still not fully strong for the market-intel persona because several returned games have modest current scale, the table has no per-row reasoning, and the final sentence over-claims “market leaders” without distinguishing broad hits from sharper mid-market movers.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 3/5 | Trustworthiness 4/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 34791ms | llm 30334ms | tools 4129ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the current trending games based on their momentum score over the last 7 days, ending March 20, 2026. This ranking reflects a combination of recent CCU growth and review velocity acceleration.
+
+| Game | Momentum Score | Reviews Added (7d) | CCU Peak | Total Reviews | Review % |
+|------|----------------|---------------------|----------|---------------|----------|
+| [Pro Soccer Online](game:1583320) | 153.9 | 27 | 690 | 26,741 | 82.1% |
+| [Thronefall](game:2239150) | 133.62 | 52 | 807 | 20,544 | 96.6% |
+| [RUNNING WITH RIFLES](game:270150) | 129.7 | 30 | 165 | 16,127 | 88.0% |
+| [Road 96](game:1466640) | 113.88 | 47 | 144 | 21,418 | 91.8% |
+| [Going Medieval](game:1029780) | 106.18 | 133 | 713 | 18,506 | 89.9% |
+| [Need for Speed Payback](game:1262580) | 100.56 | 101 | 204 | 29,054 | 85.6% |
+| [Call of Duty: Modern Warfare](game:2000950) | 92.01 | 320 | 32,892 | 20,988 | 79.1% |
+| [Remnant: From the Ashes](game:617290) | 89.46 | 98 | 429 | 52,842 | 84.7% |
+| [Big Ambitions](game:1331550) | 86.92 | 72 | 460 | 10,712 | 92.9% |
+| [TEKKEN 8](game:1778820) | 86.3 | 383 | 5,415 | 61,068 | 54.1% |
+
+These games have shown significant activity and engagement, making them the current market leaders.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "trend_profile": "market_leaders",
+      "filters": {
+        "min_reviews": 10000,
+        "min_reviews_added_7d": 25,
+        "min_ccu": 100
+      },
+      "limit": 10
+    },
+    "executionMs": 4129,
+    "success": true,
+    "result_summary": "61 results"
+  }
+]
+```
+
+</details>
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-21T07:32:31.169Z","generatedAt":"2026-03-21T07:32:31.169Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":16,"averageTotalMs":11635,"medianTotalMs":11421,"p95TotalMs":23425,"averageUserScore":6.8,"weakOrFailureCount":1,"artifactPath":"/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T07-27-26-172Z","scope":"section_5_rerun_after_review_routing_and_support_floor_hardening","baselineRunId":"2026-03-21T07:05:32.000Z","promptRefs":["#102","#158","games-trending-up-in-reviews-right-now","games-trending-right-now","#181","breaking-out-right-now","show-breaking-out-right-now","breaking-out-indie-this-month","breaking-out-indie-right-now","breaking-out-overwhelmingly-positive","accelerating-review-velocity","most-active-games-by-reviews","most-reviews-added-this-week","show-games-improving-sentiment","games-improving-sentiment-past-30-days","popular-games-worse-reviews-lately"] } -->
+## Run 2026-03-21T07:32:31.169Z
+
+- Generated: 2026-03-21T07:32:31.169Z
+- Scope: post-GitHub-deploy live rerun of the recovered 16-prompt section `5` suite after the shared trend-screening pass that moved review-trend leaderboards onto `screen_games` and tightened support floors for broad trend, indie, and popularity-sensitive screens
+- Prompt refs: explicit critique IDs `#102`, `#158`, and `#181`, plus 13 stable `suiteKey` refs for unrecovered section `5` numbering
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T07-27-26-172Z
+- Curated curation JSON: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T07-27-26-172Z/curation-template.json
+- Generic runner report: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T07-27-26-172Z/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T07-27-26-172Z/results.json
+- Prompt count: 16
+- Average user score: 6.8/10
+- Verdict mix: Strong 1 | Good 6 | Mixed 8 | Weak 1 | Failure 0
+- Delta vs `2026-03-21T07:05:32.000Z`: average user score improved from `6.3` to `6.8`, `Weak+Failure` dropped from `5` to `1`, and `games-trending-up-in-reviews-right-now` recovered from a user-visible stream failure into a strong review-velocity leaderboard.
+- Full prompt outputs for all 16 prompts are preserved below and in the raw report and JSON artifacts above.
+
+### Assessment
+
+- The rerun is materially better at the user level. The review-trend leaderboard path is now fixed, the horror screen prefers an honest empty result over false positives, and the negative-sentiment screen finally returns games that are actually popular enough to matter.
+- The suite is not uniformly strong because the broad `trending right now` prompt still over-indexes on long-tail momentum spikes, while the two sentiment-improvement prompts still allow several low-support rows into the tail of the board.
+- The main regression in this run is `#102`: the stricter roguelite screen is more trustworthy, but the answer omitted the requested CCU column and only surfaced one qualifying title, so usefulness dropped even though filter integrity improved.
+- Tool mix improved slightly for this scope: `13` prompts used `screen_games` and `3` used `discover_trending`. The remaining weaker prompts are mostly cases where `discover_trending` still behaves like an exploratory feed rather than a high-confidence leaderboard.
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 11635ms | 11421ms | 23425ms | 3258ms | 23425ms |
+
+### Ranking
+
+| Rank | Critique Ref | Prompt | Family | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---|---|---|---|---:|---|---:|---|
+| 1 | `games-trending-right-now` | what games are trending right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 5.4/10 | Weak | 9844 | The momentum table is clearer than before, but it still feels too long-tail to answer “trending right now.” |
+| 2 | `#102` | Compare top 5 roguelites by review velocity and CCU | trend_comparison | Competitive / Market Intelligence Analyst | 5.6/10 | Mixed | 14407 | Trustworthy sparse screen, but it misses CCU and only returns one qualifying roguelite. |
+| 3 | `show-breaking-out-right-now` | Show me breaking out games right now | trend_breakout | Competitive / Market Intelligence Analyst | 5.7/10 | Mixed | 9318 | Similar breakout scan value as the sibling prompt, but still under-supported for decisive use. |
+| 4 | `breaking-out-right-now` | What’s breaking out right now? | trend_breakout | Competitive / Market Intelligence Analyst | 5.8/10 | Mixed | 11211 | Reasonable breakout watchlist, but still noisy and uneven for high-confidence market decisions. |
+| 5 | `show-games-improving-sentiment` | Show me games with improving sentiment | trend_sentiment | Competitive / Market Intelligence Analyst | 5.8/10 | Mixed | 12695 | Signed deltas make this interpretable, but the tail still leans on very small recent-review samples. |
+| 6 | `games-improving-sentiment-past-30-days` | Games with improving sentiment in the past 30 days | trend_sentiment | Competitive / Market Intelligence Analyst | 5.9/10 | Mixed | 11421 | A clearer 30-day sentiment screen, though several rows still have too little support to trust fully. |
+| 7 | `accelerating-review-velocity` | Which games have accelerating review velocity? | trend_velocity | Competitive / Market Intelligence Analyst | 6.0/10 | Mixed | 23425 | Decent high-activity watchlist, but it still does not really prove acceleration. |
+| 8 | `breaking-out-indie-right-now` | Breaking out indie games right now | trend_breakout | Investor / Portfolio Analyst | 6.1/10 | Mixed | 17572 | Better support floors help, but the “right now” indie list still leans too small for investor use. |
+| 9 | `breaking-out-indie-this-month` | Breaking out indie games this month | trend_breakout | Investor / Portfolio Analyst | 6.9/10 | Mixed | 11970 | A workable monthly indie discovery list, though several rows are still too small for portfolio-quality conviction. |
+| 10 | `popular-games-worse-reviews-lately` | Which popular games are getting worse reviews lately? | trend_sentiment | Competitive / Market Intelligence Analyst | 7.1/10 | Good | 13017 | Now a genuinely useful negative-sentiment screen because the returned games are actually popular enough to matter. |
+| 11 | `#181` | What horror games are gaining momentum? | trend_filtered | Competitive / Market Intelligence Analyst | 7.2/10 | Good | 5046 | A strict empty result is more useful than a contaminated horror list for a genre trend scan. |
+| 12 | `most-active-games-by-reviews` | Most active games by reviews | trend_velocity | Competitive / Market Intelligence Analyst | 7.9/10 | Good | 12604 | Strong review-activity leaderboard with the correct metric and a clear 7-day window. |
+| 13 | `most-reviews-added-this-week` | Which games have the most reviews added this week? | trend_velocity | Competitive / Market Intelligence Analyst | 8.0/10 | Good | 10293 | Clear weekly review-volume leaderboard with exact window anchoring and good practical value. |
+| 14 | `games-trending-up-in-reviews-right-now` | What games are trending up in reviews right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 8.1/10 | Good | 11601 | Strong review-trend leaderboard with the right metric, explicit 7-day framing, and plausible top rows. |
+| 15 | `#158` | What free-to-play games have the most players right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 8.2/10 | Good | 8475 | Actionable free-to-play player leaderboard using CCU with a clear freshness anchor. |
+| 16 | `breaking-out-overwhelmingly-positive` | Games breaking out with overwhelmingly positive reviews | trend_breakout | Competitive / Market Intelligence Analyst | 8.5/10 | Strong | 3258 | High-value empty result because it preserves the 95%+ hard filter instead of inventing near-misses. |
+
+### Detailed Results
+
+#### #102 Compare top 5 roguelites by review velocity and CCU
+
+- Suite key: roguelites-review-velocity-vs-ccu
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_comparison
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.6/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Trustworthy sparse screen, but it misses CCU and only returns one qualifying roguelite.
+- Rationale: This is directionally correct and honest about the sparse set, but it does not actually compare five roguelites and it drops the requested CCU column entirely. For an analyst, that turns a formerly strong comparison into a partial answer.
+- Score breakdown: Directness 3/5 | Completeness 2/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 2/5 | Grace 5/5
+- Timing: total 14407ms | llm 7400ms | tools 6711ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the top roguelite games ranked by review velocity over the 7-day window ending on March 20, 2026. The ranking metric is based on the average number of new reviews per day during this period.
+
+| Game | Review Velocity (7d) | Reviews Added (7d) | Reviews | Review % |
+|------|-----------------------|---------------------|---------|----------|
+| [Rogue: Genesia](game:2067920) | 12.95 | 43 | 8,309 | 90.9% |
+
+### Summary
+- **Game**: [Rogue: Genesia](game:2067920)
+- **Review Velocity**: 12.95 reviews per day
+- **Reviews Added**: 43 new reviews in the last 7 days
+- **Total Reviews**: 8,309
+- **Review Percentage**: 90.9%
+
+The qualifying set is limited, with only one game meeting the criteria for this ranking.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "velocity_7d",
+      "timeframe": "7d",
+      "filters": {
+        "tags": [
+          "Roguelite"
+        ],
+        "min_reviews": 1000,
+        "verified_tags_any": [
+          "Roguelite"
+        ],
+        "min_reviews_added_7d": 10
+      },
+      "limit": 5
+    },
+    "executionMs": 6711,
+    "success": true,
+    "result_summary": "1 results"
+  }
+]
+```
+
+</details>
+
+#### #158 What free-to-play games have the most players right now?
+
+- Suite key: free-to-play-most-players-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.2/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Actionable free-to-play player leaderboard using CCU with a clear freshness anchor.
+- Rationale: This uses the right metric, labels it correctly, and anchors the snapshot date. The only notable blemish is that one or two rows look odd from a market-quality standpoint, but the user still gets a dependable players leaderboard.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 5/5 | Grace 4/5
+- Timing: total 8475ms | llm 7711ms | tools 391ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the free-to-play games with the most players right now, based on peak concurrent users:
+
+| Game | Peak CCU | Review % | Reviews | Price |
+|------|----------|----------|---------|-------|
+| [Counter-Strike: Global Offensive](game:730) | 1,013,936 | 86.7% | 8,815,087 | Free |
+| [Dota 2](game:570) | 332,243 | 81.1% | 2,681,187 | Free |
+| [Overwatch®](game:2357570) | 76,609 | 45.7% | 129 | Free |
+| [Warframe](game:230410) | 50,610 | 87.1% | 626,503 | Free |
+| [War Thunder](game:236390) | 50,478 | 64.0% | 757,086 | Free |
+| [Team Fortress 2](game:440) | 50,168 | 89.9% | 1,161,472 | Free |
+| [Path of Exile](game:238960) | 45,795 | 89.3% | 235,091 | Free |
+| [The Sims™ 4](game:1222670) | 25,276 | 87.3% | 170,727 | Free |
+| [Destiny 2](game:1085660) | 24,619 | 79.6% | 625,616 | Free |
+| [Lost Ark](game:1599340) | 17,355 | 71.0% | 202,021 | Free |
+
+This data reflects the latest metrics snapshot as of March 21, 2026.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "ccu_peak",
+      "timeframe": "current",
+      "filters": {
+        "is_free": true,
+        "min_ccu": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 391,
+    "success": true,
+    "result_summary": "33 results"
+  }
+]
+```
+
+</details>
+
+#### games-trending-up-in-reviews-right-now What games are trending up in reviews right now?
+
+- Suite key: games-trending-up-in-reviews-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.1/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Strong review-trend leaderboard with the right metric, explicit 7-day framing, and plausible top rows.
+- Rationale: This is the key recovery in the run. It now routes through screen_games, finishes cleanly, and presents an analyst-usable review-velocity board instead of a broken stream.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 11601ms | llm 9573ms | tools 1786ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games that are trending up in reviews over the last 7 days, based on the average new reviews per day:
+
+| Game | Review Velocity (7d) | Reviews Added (7d) | Reviews | Review % |
+|------|-----------------------|---------------------|---------|----------|
+| [Counter-Strike: Global Offensive](game:730) | 4296.66 | 6973 | 8,815,087 | 86.7% |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 3410.75 | 2975 | 4,346 | 96% |
+| [Geometry Dash](game:322170) | 816.22 | 1330 | 429,921 | 93.3% |
+| [ARC Raiders](game:1808500) | 728.62 | 1185 | 367,011 | 86.3% |
+| [Dota 2](game:570) | 667.05 | 1082 | 2,681,187 | 81.1% |
+| [War Thunder](game:236390) | 582.50 | 942 | 757,086 | 64% |
+| [HELLDIVERS™ 2](game:553850) | 509.92 | 826 | 1,017,635 | 76.2% |
+| [Poppy Playtime](game:1721470) | 480.60 | 785 | 98,914 | 85% |
+| [Grand Theft Auto V Enhanced](game:3240220) | 465.95 | 756 | 55,881 | 69.1% |
+| [Rust](game:252490) | 441.42 | 712 | 1,227,784 | 87.2% |
+
+### Summary
+- **Review Velocity (7d)** indicates the average number of new reviews per day over the last week.
+- **Reviews Added (7d)** shows how many new reviews were submitted in that timeframe.
+- The **Review %** reflects the percentage of positive reviews for each game.
+
+These games are experiencing significant review activity, indicating growing player engagement or interest.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "velocity_7d",
+      "timeframe": "7d",
+      "filters": {
+        "min_reviews": 1000,
+        "min_reviews_added_7d": 10
+      },
+      "limit": 10
+    },
+    "executionMs": 1786,
+    "success": true,
+    "result_summary": "80 results"
+  }
+]
+```
+
+</details>
+
+#### games-trending-right-now what games are trending right now?
+
+- Suite key: games-trending-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.4/10
+- Verdict: Weak
+- Usefulness verdict: Partially useful
+- Usefulness summary: The momentum table is clearer than before, but it still feels too long-tail to answer “trending right now.”
+- Rationale: The ranking metric and window are now explicit, but the board still elevates tiny titles with thin support. For a market-intel persona, that makes it more of an exploratory curiosity list than a trustworthy view of what is broadly trending.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 9844ms | llm 8269ms | tools 1332ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the trending games right now, based on their momentum score over the last 7 days (ending March 20, 2026):
+
+| Game | Momentum Score | Reviews Added (7d) | CCU Peak | Review % |
+|------|----------------|---------------------|----------|----------|
+| [Death and Taxes](game:1166290) | 754.15 | 16 | 30 | 86.9% |
+| [Dwarves: Glory, Death and Loot](game:2205850) | 545.96 | 21 | 92 | 81.6% |
+| [Feign](game:1436990) | 449.16 | 11 | 62 | 90.8% |
+| [Blazing Sails](game:1158940) | 418.79 | 10 | 219 | 87.1% |
+| [SimRail - The Railway Simulator](game:1422130) | 390.77 | 14 | 154 | 84.2% |
+| [UBERMOSH](game:357070) | 283.22 | 51 | 979 | 89.1% |
+| [月に寄りそう乙女の作法](game:1776970) | 219.94 | 21 | 58 | 97.5% |
+| [The Last Faith](game:1274600) | 218.93 | 60 | 56 | 82.0% |
+| [Eldegarde](game:2344320) | 204.14 | 37 | 913 | 65.7% |
+| [Threefold Recital](game:3084280) | 191.04 | 25 | 47 | 98.9% |
+
+### Explanation of Metrics:
+- **Momentum Score**: A combined trajectory score using recent CCU growth and review-velocity acceleration. Higher scores indicate stronger current market momentum.
+- **Reviews Added (7d)**: The number of new reviews added in the last week.
+- **CCU Peak**: The peak concurrent users for the game during the week.
+- **Review %**: The percentage of positive reviews for the game.
+
+These games have shown significant activity and growth, making them noteworthy in the current gaming landscape.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "min_reviews": 1000,
+        "min_reviews_added_7d": 10,
+        "min_ccu": 25
+      },
+      "limit": 10
+    },
+    "executionMs": 1332,
+    "success": true,
+    "result_summary": "58 results"
+  }
+]
+```
+
+</details>
+
+#### #181 What horror games are gaining momentum?
+
+- Suite key: horror-games-gaining-momentum
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_filtered
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 7.2/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: A strict empty result is more useful than a contaminated horror list for a genre trend scan.
+- Rationale: This no longer leaks obvious non-horror games, which is the core trust win. It would be better with a visible time-window anchor or a hint about alternative thresholds, but the hard-filter integrity now makes it a defensible answer.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 5/5 | Trustworthiness 5/5 | Decision value 3/5 | Grace 5/5
+- Timing: total 5046ms | llm 2624ms | tools 2190ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+There are currently no horror games gaining momentum that meet the specified criteria of having at least 100 reviews and showing significant recent activity. The catalog is sparse under the current filters. If you have different criteria or would like to explore other genres, please let me know!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "tags": [
+          "Horror"
+        ],
+        "min_reviews": 100,
+        "min_reviews_added_7d": 5,
+        "verified_tags_any": [
+          "Horror"
+        ]
+      },
+      "limit": 10
+    },
+    "executionMs": 2190,
+    "success": true,
+    "result_summary": "0 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-right-now What’s breaking out right now?
+
+- Suite key: breaking-out-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.8/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Reasonable breakout watchlist, but still noisy and uneven for high-confidence market decisions.
+- Rationale: The list is readable and some rows are plausible, but discover_trending still mixes in fragile low-base candidates and does not explain breakout quality consistently. An analyst can browse it, but should not treat it as a clean leaderboard.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 11211ms | llm 9069ms | tools 1882ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently breaking out, showing significant review activity and gaining attention:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 61.3% | 612 | Gained 127 reviews in the last week, indicating rising interest. |
+| [Funi Raccoon Game](game:3599690) | 99.3% | 914 | High review percentage with 1139 new reviews added recently. |
+| [AETHUS](game:2541530) | 95.4% | 897 | Strong review activity with 103 new reviews this week. |
+| [The Quinfall](game:2294660) | 47.8% | 6190 | 103 new reviews added, showing consistent engagement. |
+| [Timber Rush](game:4298880) | 82.1% | 235 | 326 reviews added in the last week, indicating growing popularity. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.7% | 8183 | 110 new reviews this week, maintaining strong interest. |
+| [UBERMOSH](game:357070) | 89.1% | 2840 | 51 new reviews added, showing continued player engagement. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4346 | Exceptional review activity with 2975 new reviews in the last week. |
+| [Lucid Blocks](game:3495730) | 94.7% | 2020 | 2116 new reviews added, indicating a surge in player interest. |
+| [WWE 2K26](game:3717070) | 48.1% | 1480 | 166 new reviews this week, showing a steady flow of player feedback. |
+
+These games have shown a significant increase in reviews recently, making them noteworthy in the current gaming landscape.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 1882,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### show-breaking-out-right-now Show me breaking out games right now
+
+- Suite key: show-breaking-out-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.7/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Similar breakout scan value as the sibling prompt, but still under-supported for decisive use.
+- Rationale: This is functionally the same answer family as the previous breakout prompt and lands in the same place: readable, somewhat useful, but still too noisy to function as a high-trust market view.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 9318ms | llm 8593ms | tools 470ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently breaking out, showing significant momentum in reviews over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 61.3% | 612 | Gaining traction with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.3% | 914 | High engagement with 1,139 new reviews recently. |
+| [AETHUS](game:2541530) | 95.4% | 897 | Strong performance with 103 new reviews this week. |
+| [The Quinfall](game:2294660) | 47.8% | 6190 | Notable activity with 103 new reviews added. |
+| [Timber Rush](game:4298880) | 82.1% | 235 | Solid growth with 326 new reviews in the past week. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.7% | 8183 | Consistent interest with 110 new reviews recently. |
+| [UBERMOSH](game:357070) | 89.1% | 2840 | Active engagement with 51 new reviews this week. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4346 | Exceptional momentum with 2,975 new reviews added. |
+| [Lucid Blocks](game:3495730) | 94.7% | 2020 | Strong performance with 2,116 new reviews recently. |
+| [WWE 2K26](game:3717070) | 48.1% | 1480 | Gaining attention with 166 new reviews in the last week. |
+
+These games have shown a significant increase in review activity, indicating they are gaining popularity among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 470,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-this-month Breaking out indie games this month
+
+- Suite key: breaking-out-indie-this-month
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 6.9/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: A workable monthly indie discovery list, though several rows are still too small for portfolio-quality conviction.
+- Rationale: The monthly window and indie heuristic make this much more interpretable than the old owner-count shortcut. The remaining issue is evidence quality: a few rows are still tiny enough that an investor would treat this as sourcing input, not a decision-ready breakout board.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 11970ms | llm 8876ms | tools 2684ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some breaking out indie games from the 30-day window ending on March 20, 2026, ranked by the total new reviews added during this period:
+
+| Game | Reviews Added (30d) | Total Reviews | Review % |
+|------|----------------------|---------------|----------|
+| [Captain of Industry](game:1594320) | 555 | 7,154 | 94.2% |
+| [Nubby's Number Factory](game:3191030) | 392 | 9,433 | 97.6% |
+| [Cirno! Lifts a Boulder](game:4173110) | 379 | 470 | 98.9% |
+| [Timber Rush](game:4298880) | 326 | 235 | 82.1% |
+| [Project: Gorgon](game:342940) | 251 | 2,456 | 85.9% |
+| [The Roottrees are Dead](game:2754380) | 215 | 2,522 | 97.5% |
+| [Car Dealer Simulator](game:2404880) | 210 | 591 | 78.7% |
+| [Granny](game:962400) | 205 | 5,481 | 93.2% |
+| [Aviassembly](game:2660460) | 198 | 4,112 | 97.1% |
+| [Kingdom Rush 5: Alliance TD](game:2849080) | 187 | 8,855 | 87.7% |
+
+These games have shown significant review activity recently, indicating they are gaining traction among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "reviews_added_30d",
+      "timeframe": "30d",
+      "indie_heuristic": true,
+      "filters": {
+        "min_reviews": 100,
+        "max_reviews": 10000
+      },
+      "limit": 10
+    },
+    "executionMs": 2684,
+    "success": true,
+    "result_summary": "110 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-right-now Breaking out indie games right now
+
+- Suite key: breaking-out-indie-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 6.1/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Better support floors help, but the “right now” indie list still leans too small for investor use.
+- Rationale: This is improved because the generic support floors remove the weakest tail, but many rows still have very low CCU and thin review velocity. For a portfolio persona, it is a scouting list rather than a confident breakout signal.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 17572ms | llm 14548ms | tools 2552ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some breaking out indie games right now, based on a 7-day momentum score. These games have shown significant growth in player engagement and review activity:
+
+| Game | Momentum Score | Reviews Added (7d) | CCU Peak | Review % |
+|------|----------------|---------------------|----------|----------|
+| [Death and Taxes](game:1166290) | 754.15 | 16 | 30 | 86.9% |
+| [Pumping Simulator 2](game:2499470) | 155.64 | 15 | 131 | 91.9% |
+| [One Hour One Life](game:595690) | 122.54 | 52 | 65 | 80.6% |
+| [Ghost Exile](game:1807080) | 92.67 | 15 | 42 | 87.8% |
+| [Book of Yog Idle RPG](game:1097430) | 85.74 | 47 | 647 | 64.1% |
+| [Heroes of Science and Fiction](game:2147380) | 77.92 | 24 | 28 | 93.1% |
+| [Kingdom Rush Frontiers - Tower Defense](game:458710) | 68.22 | 31 | 185 | 96.8% |
+| [Epic Battle Fantasy 5](game:432350) | 61.31 | 14 | 69 | 98.7% |
+| [Monster Prom 2: Monster Camp](game:1140270) | 59.94 | 11 | 36 | 96.4% |
+| [Beltmatic](game:2674590) | 55.76 | 16 | 70 | 94.4% |
+
+### Key Insights:
+- **Death and Taxes** has the highest momentum score, with a significant increase in player engagement and a solid review percentage.
+- **Pumping Simulator 2** and **One Hour One Life** also show strong growth, indicating rising interest among players.
+- Most of these games have added a notable number of reviews in the past week, reflecting active player engagement.
+
+This data reflects the 7-day window ending on March 20, 2026.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "indie_heuristic": true,
+      "filters": {
+        "min_reviews": 100,
+        "max_reviews": 10000,
+        "min_reviews_added_7d": 10,
+        "min_ccu": 20
+      },
+      "limit": 10
+    },
+    "executionMs": 2552,
+    "success": true,
+    "result_summary": "46 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-overwhelmingly-positive Games breaking out with overwhelmingly positive reviews
+
+- Suite key: breaking-out-overwhelmingly-positive
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.5/10
+- Verdict: Strong
+- Usefulness verdict: Useful
+- Usefulness summary: High-value empty result because it preserves the 95%+ hard filter instead of inventing near-misses.
+- Rationale: This is exactly the right tradeoff for a hard-filter prompt. The system now prefers honesty over coverage, which is what preserves trust for this analyst persona.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 5/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 3258ms | llm 2876ms | tools 151ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+There are currently no games breaking out with overwhelmingly positive reviews (95% or higher) that meet the criteria of having at least 100 reviews and a recent review activity of at least 10 new reviews in the last 7 days. The catalog is sparse under these specific filters. If you would like to adjust the criteria or explore different types of games, please let me know!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "min_score": 95,
+        "min_reviews": 100,
+        "max_reviews": 10000,
+        "min_reviews_added_7d": 10,
+        "min_ccu": 25
+      },
+      "limit": 10
+    },
+    "executionMs": 151,
+    "success": true,
+    "result_summary": "0 results"
+  }
+]
+```
+
+</details>
+
+#### accelerating-review-velocity Which games have accelerating review velocity?
+
+- Suite key: accelerating-review-velocity
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.0/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Decent high-activity watchlist, but it still does not really prove acceleration.
+- Rationale: The rows are plausible and the answer is readable, but discover_trending still uses review activity as a stand-in for true acceleration. That keeps it useful for monitoring, not for precise analytical claims.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 23425ms | llm 8797ms | tools 14343ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games with accelerating review velocity over the past 7 days:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Grand Theft Auto V Enhanced](game:3240220) | 69.1% | 55,881 | High review velocity with 756 new reviews in the last week. |
+| [Battlefield 1](game:1238840) | 86.5% | 192,821 | Strong review activity with 609 new reviews recently. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4,346 | Exceptional velocity at 3,975 new reviews this week. |
+| [Ready or Not](game:1144200) | 89.2% | 236,196 | Consistent review growth with 558 new reviews. |
+| [Dead by Daylight](game:381210) | 79.1% | 797,216 | Steady activity with 540 new reviews added. |
+| [Schedule I](game:3164500) | 98.4% | 204,041 | High engagement with 534 new reviews. |
+| [Teardown](game:1167630) | 95.6% | 109,462 | Strong performance with 495 new reviews. |
+| [ELDEN RING](game:1245620) | 92.9% | 1,056,677 | High activity with 405 new reviews in the last week. |
+| [Slay the Spire](game:646570) | 97.8% | 182,277 | Consistent growth with 400 new reviews. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.1% | 20,988 | Active engagement with 320 new reviews. |
+
+These games are experiencing a notable increase in review activity, indicating growing player interest or engagement.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 14343,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### most-active-games-by-reviews Most active games by reviews
+
+- Suite key: most-active-games-by-reviews
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 7.9/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Strong review-activity leaderboard with the correct metric and a clear 7-day window.
+- Rationale: This is a solid analyst-facing answer: explicit timeframe, correct ranking metric, and a plausible top set of games. It is straightforward, but it does the job well.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 12604ms | llm 9673ms | tools 2685ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the most active games based on review activity over the 7-day window ending on March 20, 2026. The ranking is determined by the average number of new reviews added per day during this period.
+
+| Game | Review Velocity (7d) | Reviews Added (7d) | Total Reviews | Review % |
+|------|-----------------------|---------------------|---------------|----------|
+| [Counter-Strike: Global Offensive](game:730) | 4296.66 | 6973 | 8,815,087 | 86.7% |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 3410.75 | 2975 | 4,346 | 96.0% |
+| [Geometry Dash](game:322170) | 816.22 | 1330 | 429,921 | 93.3% |
+| [ARC Raiders](game:1808500) | 728.62 | 1185 | 367,011 | 86.3% |
+| [Dota 2](game:570) | 667.05 | 1082 | 2,681,187 | 81.1% |
+| [War Thunder](game:236390) | 582.50 | 942 | 757,086 | 64.0% |
+| [HELLDIVERS™ 2](game:553850) | 509.92 | 826 | 1,017,635 | 76.2% |
+| [Poppy Playtime](game:1721470) | 480.60 | 785 | 98,914 | 85.0% |
+| [Grand Theft Auto V Enhanced](game:3240220) | 465.95 | 756 | 55,881 | 69.1% |
+| [Rust](game:252490) | 441.42 | 712 | 1,227,784 | 87.2% |
+
+These games have shown significant review activity, indicating ongoing player engagement and interest.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "velocity_7d",
+      "timeframe": "7d",
+      "filters": {
+        "min_reviews": 1000,
+        "min_reviews_added_7d": 10
+      },
+      "limit": 10
+    },
+    "executionMs": 2685,
+    "success": true,
+    "result_summary": "80 results"
+  }
+]
+```
+
+</details>
+
+#### most-reviews-added-this-week Which games have the most reviews added this week?
+
+- Suite key: most-reviews-added-this-week
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.0/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Clear weekly review-volume leaderboard with exact window anchoring and good practical value.
+- Rationale: This answers the prompt directly with the right count metric and an explicit week window. The list is immediately usable for analyst monitoring without needing interpretation.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 10293ms | llm 9205ms | tools 845ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games that had the most reviews added in the 7-day window ending on March 20, 2026:
+
+| Game | Reviews Added (7d) | Review Velocity (7d) | Reviews | Review % |
+|------|---------------------|----------------------|---------|----------|
+| [Counter-Strike: Global Offensive](game:730) | 6,973 | 4,296.66 | 8,815,087 | 86.7% |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 2,975 | 3,410.75 | 4,346 | 96.0% |
+| [Lucid Blocks](game:3495730) | 2,116 | 161.35 | 2,020 | 94.7% |
+| [Geometry Dash](game:322170) | 1,330 | 816.22 | 429,921 | 93.3% |
+| [ARC Raiders](game:1808500) | 1,185 | 728.62 | 367,011 | 86.3% |
+| [Dota 2](game:570) | 1,082 | 667.05 | 2,681,187 | 81.1% |
+| [War Thunder](game:236390) | 942 | 582.50 | 757,086 | 64.0% |
+| [HELLDIVERS™ 2](game:553850) | 826 | 509.92 | 1,017,635 | 76.2% |
+| [Poppy Playtime](game:1721470) | 785 | 480.60 | 98,914 | 85.0% |
+| [Grand Theft Auto V Enhanced](game:3240220) | 756 | 465.95 | 55,881 | 69.1% |
+
+These games have shown significant review activity over the past week, indicating ongoing player engagement and feedback.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "reviews_added_7d",
+      "timeframe": "7d",
+      "limit": 10,
+      "filters": {
+        "min_reviews_added_7d": 10
+      }
+    },
+    "executionMs": 845,
+    "success": true,
+    "result_summary": "80 results"
+  }
+]
+```
+
+</details>
+
+#### show-games-improving-sentiment Show me games with improving sentiment
+
+- Suite key: show-games-improving-sentiment
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.8/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Signed deltas make this interpretable, but the tail still leans on very small recent-review samples.
+- Rationale: The answer is materially better because it now shows numeric sentiment deltas and recent-review counts. It still overstates confidence by keeping several 5 to 10 review rows near the bottom of the board.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 12695ms | llm 9350ms | tools 3087ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games with improving sentiment over the last 30 days, showing a positive change in their review percentages:
+
+| Game | Sentiment Delta | Reviews Added (30d) | Review % | Reviews |
+|------|------------------|---------------------|----------|---------|
+| [逆袭重启](game:4164580) | +96.93% | 2036 | 96.6% | 2026 |
+| [Poker Night at the Inventory](game:3897800) | +95.06% | 2629 | 95.1% | 6016 |
+| [PARANORMASIGHT: The Mermaid's Curse](game:2701440) | +94.37% | 575 | 95.2% | 1682 |
+| [Eador. Masters of the Broken World](game:232050) | +80.00% | 6 | 68.2% | 2743 |
+| [DYNASTY WARRIORS 8 Empires](game:322520) | +76.92% | 6 | 66.6% | 1573 |
+| [永远消失的幻想乡 ～ The Disappearing of Gensokyo](game:776490) | +69.23% | 9 | 84.2% | 3527 |
+| [Devil's Hunt](game:887720) | +66.67% | 13 | 40.3% | 1037 |
+| [Godfall Ultimate Edition](game:928960) | +62.50% | 19 | 63.9% | 2378 |
+| [Beauties! They're All After Me](game:2873760) | +62.50% | 5 | 87.4% | 1195 |
+| [Red Faction: Armageddon](game:55110) | +61.54% | 10 | 72.9% | 4851 |
+
+These games have shown significant improvements in their sentiment, indicating a positive shift in player feedback.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "timeframe": "30d",
+      "filters": {
+        "min_sentiment_delta": 3,
+        "min_reviews": 1000,
+        "min_reviews_added_30d": 5
+      },
+      "limit": 10
+    },
+    "executionMs": 3087,
+    "success": true,
+    "result_summary": "23 results"
+  }
+]
+```
+
+</details>
+
+#### games-improving-sentiment-past-30-days Games with improving sentiment in the past 30 days
+
+- Suite key: games-improving-sentiment-past-30-days
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.9/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: A clearer 30-day sentiment screen, though several rows still have too little support to trust fully.
+- Rationale: The explicit 30-day framing helps, and the metric labeling is much better than the baseline run. The remaining weakness is still sample support, which keeps this in mixed territory for a competitive analyst.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 11421ms | llm 10480ms | tools 720ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games with improving sentiment over the past 30 days, based on the sentiment delta metric:
+
+| Game | Sentiment Delta | Reviews Added (30d) | Review % | Reviews |
+|------|------------------|----------------------|----------|---------|
+| [逆袭重启](game:4164580) | +96.93% | 2036 | 96.6% | 2026 |
+| [Poker Night at the Inventory](game:3897800) | +95.06% | 2629 | 95.1% | 6016 |
+| [PARANORMASIGHT: The Mermaid's Curse](game:2701440) | +94.37% | 575 | 95.2% | 1682 |
+| [Eador. Masters of the Broken World](game:232050) | +80.00% | 6 | 68.2% | 2743 |
+| [DYNASTY WARRIORS 8 Empires](game:322520) | +76.92% | 6 | 66.6% | 1573 |
+| [永远消失的幻想乡 ～ The Disappearing of Gensokyo](game:776490) | +69.23% | 9 | 84.2% | 3527 |
+| [Devil's Hunt](game:887720) | +66.67% | 13 | 40.3% | 1037 |
+| [Godfall Ultimate Edition](game:928960) | +62.50% | 19 | 63.9% | 2378 |
+| [Beauties! They're All After Me](game:2873760) | +62.50% | 5 | 87.4% | 1195 |
+| [Red Faction: Armageddon](game:55110) | +61.54% | 10 | 72.9% | 4851 |
+
+### Summary
+- The **Sentiment Delta** indicates the percentage increase in positive reviews compared to the previous period.
+- The **Reviews Added (30d)** shows how many new reviews were added in the last 30 days.
+- The **Review %** reflects the current percentage of positive reviews for each game.
+
+These games have shown significant improvements in player sentiment recently, making them noteworthy for potential players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "timeframe": "30d",
+      "filters": {
+        "min_sentiment_delta": 3,
+        "min_reviews": 1000,
+        "min_reviews_added_30d": 5
+      },
+      "limit": 10
+    },
+    "executionMs": 720,
+    "success": true,
+    "result_summary": "23 results"
+  }
+]
+```
+
+</details>
+
+#### popular-games-worse-reviews-lately Which popular games are getting worse reviews lately?
+
+- Suite key: popular-games-worse-reviews-lately
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 7.1/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Now a genuinely useful negative-sentiment screen because the returned games are actually popular enough to matter.
+- Rationale: This is a clear improvement over the prior rerun. The popularity floor now keeps the list in a much more believable range, so an analyst can use it as a watchlist for meaningful sentiment deterioration.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 13017ms | llm 12010ms | tools 766ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some popular games that have been experiencing worse reviews lately, based on the sentiment delta over the last 30 days (ending March 20, 2026):
+
+| Game | Sentiment Delta | Reviews Added (30d) | Review % | Reviews |
+|------|------------------|---------------------|----------|---------|
+| [TEKKEN 8](game:1778820) | -40.08 | 656 | 54.1% | 61,068 |
+| [HELLDIVERS™ 2](game:553850) | -33.29 | 3,660 | 76.2% | 1,017,635 |
+| [河洛群俠傳 (Ho Tu Lo Shu ： The Books of Dragon)](game:952860) | -25.71 | 30 | 81.9% | 10,632 |
+| [Supermarket Simulator](game:2670630) | -23.80 | 559 | 93.8% | 68,341 |
+| [Naval Action](game:311310) | -21.90 | 66 | 54.9% | 13,538 |
+| [GoreBox](game:2027330) | -21.25 | 569 | 90.6% | 14,504 |
+| [S.T.A.L.K.E.R.: Clear Sky](game:20510) | -19.36 | 29 | 85.3% | 22,254 |
+| [Foxhole](game:505460) | -18.45 | 299 | 83.6% | 44,068 |
+| [Night of the Dead](game:1377380) | -18.18 | 29 | 77.9% | 11,395 |
+| [The Texas Chain Saw Massacre](game:1433140) | -17.36 | 48 | 67.0% | 21,540 |
+
+### Summary
+- **Sentiment Delta** indicates the change in positive review percentage, with negative values showing a decline in sentiment.
+- **Reviews Added (30d)** shows how many new reviews were added in the last month, providing context for the sentiment change.
+- The **Review %** and **Total Reviews** columns give insight into the overall reception of each game.
+
+These games have seen significant drops in their review sentiment, indicating that players may be less satisfied with them recently.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "sort_order": "asc",
+      "timeframe": "30d",
+      "filters": {
+        "max_sentiment_delta": -3,
+        "min_reviews": 10000,
+        "min_reviews_added_30d": 25,
+        "min_ccu": 100
+      },
+      "limit": 10
+    },
+    "executionMs": 766,
+    "success": true,
+    "result_summary": "72 results"
+  }
+]
+```
+
+</details>
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-21T07:05:32.000Z","generatedAt":"2026-03-21T07:05:32.000Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":16,"averageTotalMs":18065,"medianTotalMs":18176,"p95TotalMs":28267,"averageUserScore":6.3,"weakOrFailureCount":5,"artifactPath":"/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-58-02-813Z","scope":"section_5_rerun_after_shared_trend_evidence_hardening","baselineRunId":"2026-03-21T06:21:16.439Z","promptRefs":["#102","#158","games-trending-up-in-reviews-right-now","games-trending-right-now","#181","breaking-out-right-now","show-breaking-out-right-now","breaking-out-indie-this-month","breaking-out-indie-right-now","breaking-out-overwhelmingly-positive","accelerating-review-velocity","most-active-games-by-reviews","most-reviews-added-this-week","show-games-improving-sentiment","games-improving-sentiment-past-30-days","popular-games-worse-reviews-lately"] } -->
+## Run 2026-03-21T07:05:32.000Z
+
+- Generated: 2026-03-21T07:05:32.000Z
+- Scope: post-GitHub-deploy live rerun of the recovered 16-prompt section `5` suite after the shared trend evidence hardening pass in `screen_games`, prompt normalization, and response-contract guidance
+- Prompt refs: explicit critique IDs `#102`, `#158`, and `#181`, plus 13 stable `suiteKey` refs for unrecovered section `5` numbering
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-58-02-813Z
+- Curated curation JSON: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-58-02-813Z/curation-template.json
+- Generic runner report: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-58-02-813Z/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-58-02-813Z/results.json
+- Prompt count: 16
+- Average user score: 6.3/10
+- Verdict mix: Strong 2 | Good 4 | Mixed 5 | Weak 4 | Failure 1
+- Delta vs `2026-03-21T06:21:16.439Z`: average user score stayed flat at `6.3`, `Weak+Failure` stayed at `5`, sentiment tables became more numerically trustworthy, but `games-trending-up-in-reviews-right-now` regressed into a terminated stream failure.
+- Full prompt outputs for all 16 prompts are preserved below and in the raw report and JSON artifacts above.
+
+### Assessment
+
+- The shared evidence hardening did improve the quality of the sentiment answers. The `screen_games` outputs now surface signed deltas and recent-review counts instead of vague `100%` prose, which makes those prompts materially more interpretable for the analyst persona.
+- The run did not improve at the suite level because one `discover_trending` prompt regressed into a user-visible stream termination. From a ledger standpoint that wipes out part of the sentiment gain and keeps the section at `6.3/10` with `5` weak-or-failure prompts.
+- The biggest unresolved trust gaps are still semantic, not transport: `trending right now` is too long-tail, `horror` still leaks non-horror rows, `popular` is still under-enforced in the negative-sentiment screen, and the indie `right now` breakout list is still too low-signal for portfolio use.
+- Tool mix remained the same as the prior rerun: `12` prompts used `screen_games`, `4` used `discover_trending`. The difference is that `screen_games` now behaves more defensibly, while the remaining weak spots are concentrated in ranking quality and the surviving `discover_trending` paths.
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 18065ms | 18176ms | 28267ms | 6694ms | 28267ms |
+
+### Ranking
+
+| Rank | Critique Ref | Prompt | Family | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---|---|---|---|---:|---|---:|---|
+| 1 | `games-trending-up-in-reviews-right-now` | What games are trending up in reviews right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 1.8/10 | Failure | - | The response terminated mid-table, so the user cannot rely on it. |
+| 2 | `#181` | What horror games are gaining momentum? | trend_filtered | Competitive / Market Intelligence Analyst | 4.3/10 | Weak | 28267 | Strict horror compliance still breaks, so the list is not dependable for a genre-specific trend scan. |
+| 3 | `games-trending-right-now` | what games are trending right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 5.0/10 | Weak | 22820 | A momentum watchlist exists, but the rows are too long-tail and weakly supported to feel like true market trend leaders. |
+| 4 | `popular-games-worse-reviews-lately` | Which popular games are getting worse reviews lately? | trend_sentiment | Competitive / Market Intelligence Analyst | 5.0/10 | Weak | 8509 | Metric handling is fixed, but the returned titles still do not satisfy a reasonable reading of “popular.” |
+| 5 | `breaking-out-indie-right-now` | Breaking out indie games right now | trend_breakout | Investor / Portfolio Analyst | 5.3/10 | Weak | 14342 | It surfaces indie movers, but the current-window momentum list is still dominated by tiny bases and low CCU. |
+| 6 | `show-breaking-out-right-now` | Show me breaking out games right now | trend_breakout | Competitive / Market Intelligence Analyst | 5.8/10 | Mixed | 19122 | Readable breakout scan, but still too noisy and under-supported for a high-confidence market call. |
+| 7 | `breaking-out-right-now` | What’s breaking out right now? | trend_breakout | Competitive / Market Intelligence Analyst | 6.1/10 | Mixed | 27208 | Useful as a loose breakout watchlist, but too many low-base rows keep it from being decision-ready. |
+| 8 | `accelerating-review-velocity` | Which games have accelerating review velocity? | trend_velocity | Competitive / Market Intelligence Analyst | 6.4/10 | Mixed | 15916 | Decent watchlist of high review activity, but it still does not prove acceleration as cleanly as the prompt asks. |
+| 9 | `games-improving-sentiment-past-30-days` | Games with improving sentiment in the past 30 days | trend_sentiment | Competitive / Market Intelligence Analyst | 6.8/10 | Mixed | 19175 | A decent 30-day sentiment-change screen, but not yet strong enough to be a trusted leaderboard. |
+| 10 | `show-games-improving-sentiment` | Show me games with improving sentiment | trend_sentiment | Competitive / Market Intelligence Analyst | 6.8/10 | Mixed | 17607 | Numeric deltas make this far more usable, though the tail still includes low-support sentiment moves. |
+| 11 | `breaking-out-indie-this-month` | Breaking out indie games this month | trend_breakout | Investor / Portfolio Analyst | 7.0/10 | Good | 18176 | A workable monthly indie discovery list with explicit 30-day review activity and the indie heuristic in place. |
+| 12 | `most-reviews-added-this-week` | Which games have the most reviews added this week? | trend_velocity | Competitive / Market Intelligence Analyst | 7.7/10 | Good | 13772 | Clear weekly review-volume leaderboard with exact window anchoring and good practical value. |
+| 13 | `most-active-games-by-reviews` | Most active games by reviews | trend_velocity | Competitive / Market Intelligence Analyst | 7.8/10 | Good | 14884 | Strong review-activity leaderboard with the right metric and an explicit 7-day window. |
+| 14 | `#102` | Compare top 5 roguelites by review velocity and CCU | trend_comparison | Competitive / Market Intelligence Analyst | 8.1/10 | Good | 23891 | Clean filtered comparison with both velocity and CCU on the same roguelite set. |
+| 15 | `#158` | What free-to-play games have the most players right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 8.5/10 | Strong | 20595 | Actionable free-to-play player leaderboard using the right CCU metric and an explicit freshness anchor. |
+| 16 | `breaking-out-overwhelmingly-positive` | Games breaking out with overwhelmingly positive reviews | trend_breakout | Competitive / Market Intelligence Analyst | 8.6/10 | Strong | 6694 | High-value empty result because it keeps the 95%+ filter intact instead of inventing near-misses. |
+
+### Detailed Results
+
+#### #102 Compare top 5 roguelites by review velocity and CCU
+
+- Suite key: roguelites-review-velocity-vs-ccu
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_comparison
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.1/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Clean filtered comparison with both velocity and CCU on the same roguelite set.
+- Rationale: This now answers the actual comparison question with explicit review-velocity and CCU columns on one roguelite-only set. It is analytically useful, with only minor freshness/context polish still missing.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 23891ms | llm 22455ms | tools 1188ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the top 5 roguelites ranked by review velocity over the last 7 days, along with their peak concurrent users (CCU) and review statistics:
+
+| Game | Review Velocity (7d) | Reviews Added (7d) | Review % | Peak CCU |
+|------|-----------------------|---------------------|----------|----------|
+| [Slay the Spire](game:646570) | 246.21 | 400 | 97.8% | 27,904 |
+| [The Binding of Isaac: Rebirth](game:250900) | 139.59 | 228 | 97.3% | 15,633 |
+| [Megabonk](game:3405340) | 114.26 | 186 | 94.8% | 6,124 |
+| [ELDEN RING NIGHTREIGN](game:2622380) | 111.18 | 180 | 74.5% | 163,599 |
+| [Buckshot Roulette](game:2835570) | 99.82 | 162 | 96.0% | 793 |
+
+### Summary
+- **Review Velocity (7d)** indicates the average number of new reviews per day over the last week.
+- **Peak CCU** shows the highest number of concurrent users for each game during this period.
+
+This set of games demonstrates strong engagement and positive reception among players, particularly with high review percentages.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "velocity_7d",
+      "timeframe": "7d",
+      "filters": {
+        "tags": [
+          "Roguelite"
+        ],
+        "min_reviews": 1000,
+        "verified_tags_any": [
+          "Roguelite"
+        ]
+      },
+      "limit": 5
+    },
+    "executionMs": 1188,
+    "success": true,
+    "result_summary": "50 results"
+  }
+]
+```
+
+</details>
+
+#### #158 What free-to-play games have the most players right now?
+
+- Suite key: free-to-play-most-players-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.5/10
+- Verdict: Strong
+- Usefulness verdict: Useful
+- Usefulness summary: Actionable free-to-play player leaderboard using the right CCU metric and an explicit freshness anchor.
+- Rationale: The core bug is fixed: this is now a CCU-based answer with a date anchor. The Overwatch row looks odd because of tiny review history, but for a players question the leaderboard is still highly usable.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 5/5 | Grace 4/5
+- Timing: total 20595ms | llm 20061ms | tools 283ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the free-to-play games with the most players right now, based on peak concurrent users:
+
+| Game | Peak CCU | Review % | Reviews | Price |
+|------|----------|----------|---------|-------|
+| [Counter-Strike: Global Offensive](game:730) | 1,013,936 | 86.7% | 8,815,087 | Free |
+| [Dota 2](game:570) | 332,243 | 81.1% | 2,681,187 | Free |
+| [Overwatch®](game:2357570) | 76,609 | 45.7% | 129 | Free |
+| [Warframe](game:230410) | 50,610 | 87.1% | 626,503 | Free |
+| [War Thunder](game:236390) | 50,478 | 64.0% | 757,086 | Free |
+| [Team Fortress 2](game:440) | 50,168 | 89.9% | 1,161,472 | Free |
+| [Path of Exile](game:238960) | 45,795 | 89.3% | 235,091 | Free |
+| [The Sims™ 4](game:1222670) | 25,276 | 87.3% | 170,727 | Free |
+| [Destiny 2](game:1085660) | 24,619 | 79.6% | 625,616 | Free |
+| [Lost Ark](game:1599340) | 17,355 | 71.0% | 202,021 | Free |
+
+This data reflects the latest metrics snapshot as of March 21, 2026.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "ccu_peak",
+      "timeframe": "current",
+      "filters": {
+        "is_free": true,
+        "min_ccu": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 283,
+    "success": true,
+    "result_summary": "33 results"
+  }
+]
+```
+
+</details>
+
+#### games-trending-up-in-reviews-right-now What games are trending up in reviews right now?
+
+- Suite key: games-trending-up-in-reviews-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 1.8/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: The response terminated mid-table, so the user cannot rely on it.
+- Rationale: The underlying tool returned plausible data, but the user-visible answer streamed a partial table and then terminated. From a persona standpoint that is a hard failure regardless of the candidate list quality.
+- Score breakdown: Directness 1/5 | Completeness 1/5 | Relevance 2/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 1/5
+- Timing: total -ms | llm -ms | tools -ms | iterations -
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games that are currently trending up in reviews, showing significant acceleration in review activity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4,346 | High review velocity with 2,975 new reviews added in the last week. |
+| [Schedule I](game:3164500) | 98.4% | 204,041 | Strong positive reception with 534 new reviews added recently. |
+| [Teardown](game:1167630) | 95.6% | 109,462 | Consistent positive feedback with 495 new reviews this week. |
+| [Grand Theft Auto V Enhanced](game:3240220) | 69.1% | 55,881 | Notable increase in reviews, adding 756 in the last week. |
+| [Battlefield 1](game:1238840) | 86.5% | 192,821 | Solid review growth with 609 new reviews recently. |
+| [Ready or Not](game:1144200)
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 7159,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### games-trending-right-now what games are trending right now?
+
+- Suite key: games-trending-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.0/10
+- Verdict: Weak
+- Usefulness verdict: Partially useful
+- Usefulness summary: A momentum watchlist exists, but the rows are too long-tail and weakly supported to feel like true market trend leaders.
+- Rationale: The table is explicit about Momentum Score and the 7-day window, but it still treats tiny games with single-digit reviews and low CCU as “trending right now.” That makes it exploratory rather than decision-ready.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 3/5
+- Timing: total 22820ms | llm 21621ms | tools 926ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the trending games right now, based on their momentum score over the past 7 days (ending March 20, 2026). The momentum score reflects a combination of recent CCU growth and review velocity acceleration.
+
+| Game | Momentum Score | Reviews Added (7d) | CCU Peak | Review % |
+|------|----------------|---------------------|----------|----------|
+| [Barro 2020](game:1168660) | 1272.53 | 7 | 6 | 85.7% |
+| [Death and Taxes](game:1166290) | 754.15 | 16 | 30 | 86.9% |
+| [Dwarves: Glory, Death and Loot](game:2205850) | 545.96 | 21 | 92 | 81.6% |
+| [SPRAWL](game:1549690) | 509.64 | 9 | 8 | 87.7% |
+| [Feign](game:1436990) | 449.16 | 11 | 62 | 90.8% |
+| [Blazing Sails](game:1158940) | 418.79 | 10 | 219 | 87.1% |
+| [SimRail - The Railway Simulator](game:1422130) | 390.77 | 14 | 154 | 84.2% |
+| [Goodbye Volcano High](game:1310330) | 323.58 | 8 | 1 | 88.9% |
+| [Sanfu](game:1880330) | 295.21 | 8 | 16 | 82.7% |
+| [Russian Life Simulator](game:1070330) | 285.84 | 9 | 143 | 88.8% |
+
+These games have shown significant growth in player engagement and review activity recently.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "min_reviews": 1000,
+        "min_reviews_added_7d": 3
+      },
+      "limit": 10
+    },
+    "executionMs": 926,
+    "success": true,
+    "result_summary": "37 results"
+  }
+]
+```
+
+</details>
+
+#### #181 What horror games are gaining momentum?
+
+- Suite key: horror-games-gaining-momentum
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_filtered
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 4.3/10
+- Verdict: Weak
+- Usefulness verdict: Not useful
+- Usefulness summary: Strict horror compliance still breaks, so the list is not dependable for a genre-specific trend scan.
+- Rationale: Filter trust is still the blocker. Obviously questionable rows like FlatOut 3, Chinese Parents, and Getting Over It should not survive a horror momentum screen for this persona.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 2/5 | Trustworthiness 1/5 | Decision value 2/5 | Grace 3/5
+- Timing: total 28267ms | llm 26841ms | tools 1157ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some horror games that are currently gaining momentum, based on their recent activity over the last 7 days:
+
+| Game | Momentum Score | Reviews Added (7d) | CCU Peak | Review % |
+|------|----------------|---------------------|----------|----------|
+| [FlatOut 3: Chaos & Destruction](game:201510) | 240.91 | 19 | 1 | 18% |
+| [Unfortunate Spacemen](game:408900) | 198.63 | 4 | 10 | 86.2% |
+| [Receiver 2](game:1129310) | 131.10 | 6 | 74 | 91.1% |
+| [Chinese Parents](game:736190) | 115.91 | 13 | 365 | 91.5% |
+| [Conan the mighty pig](game:487700) | 107.27 | 9 | 2 | 91.2% |
+| [Garten of Banban 3](game:2311190) | 97.51 | 5 | 8 | 73% |
+| [Granny Remake](game:2110820) | 96.63 | 14 | 9 | 82.5% |
+| [BIOHAZARD VILLAGE Z Version](game:1196600) | 92.62 | 8 | 37 | 82.4% |
+| [SUCCUBUS](game:985830) | 68.36 | 15 | 6 | 77.1% |
+| [Getting Over It with Bennett Foddy](game:240720) | 62.04 | 147 | 192 | 82.4% |
+
+### Insights:
+- **Momentum Score** reflects the combined trajectory score using recent CCU growth and review-velocity acceleration. Higher scores indicate stronger current market momentum.
+- **Reviews Added (7d)** shows how many new reviews were submitted in the last week, indicating player engagement.
+- **CCU Peak** represents the highest number of concurrent users in the last week, which can signal interest and activity in the game.
+
+These games have shown significant growth in player engagement and reviews, making them noteworthy in the horror genre right now.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "tags": [
+          "Horror"
+        ],
+        "min_reviews": 100,
+        "min_reviews_added_7d": 3,
+        "verified_tags_any": [
+          "Horror"
+        ]
+      },
+      "limit": 10
+    },
+    "executionMs": 1157,
+    "success": true,
+    "result_summary": "37 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-right-now What’s breaking out right now?
+
+- Suite key: breaking-out-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.1/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Useful as a loose breakout watchlist, but too many low-base rows keep it from being decision-ready.
+- Rationale: This is readable and directionally useful, but the candidate set still mixes plausible movers with fragile low-review rows. An analyst could browse it, but would not present it as a trusted breakout board.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 27208ms | llm 20012ms | tools 6720ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently breaking out, showing significant momentum in reviews over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 61.3% | 612 | Gaining traction with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.3% | 914 | High engagement with 1,139 new reviews recently. |
+| [AETHUS](game:2541530) | 95.4% | 897 | Strong performance with 103 new reviews this week. |
+| [The Quinfall](game:2294660) | 47.8% | 6,190 | 103 new reviews added, maintaining visibility. |
+| [Timber Rush](game:4298880) | 82.1% | 235 | 326 new reviews indicate rising interest. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.7% | 8,183 | 110 new reviews, appealing to nostalgia. |
+| [UBERMOSH](game:357070) | 89.1% | 2,840 | 51 new reviews, consistent player engagement. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4,346 | Massive 2,975 new reviews, indicating a strong launch. |
+| [Lucid Blocks](game:3495730) | 94.7% | 2,020 | 2,116 new reviews, showing high player interest. |
+| [WWE 2K26](game:3717070) | 48.1% | 1,480 | 166 new reviews, maintaining a steady player base. |
+
+These games have shown a notable increase in review activity, indicating they are gaining popularity among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 6720,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### show-breaking-out-right-now Show me breaking out games right now
+
+- Suite key: show-breaking-out-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.8/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Readable breakout scan, but still too noisy and under-supported for a high-confidence market call.
+- Rationale: The framing is understandable, but discover_trending still contributes a weak tail and several low-context rows. It is okay for browsing ideas, not for high-confidence prioritization.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 3/5
+- Timing: total 19122ms | llm 11141ms | tools 7701ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some breaking out games that are gaining traction right now:
+
+| Game | Review % | Reviews | Price | Why it fits |
+|------|----------|---------|-------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 61.3% | 612 | N/A | High review activity with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.3% | 914 | N/A | Exceptional review percentage with 1139 new reviews in the last week. |
+| [AETHUS](game:2541530) | 95.4% | 897 | N/A | Strong review activity with 103 new reviews in the last week. |
+| [The Quinfall](game:2294660) | 47.8% | 6190 | N/A | High total reviews with 103 new reviews in the last week. |
+| [Timber Rush](game:4298880) | 82.1% | 235 | N/A | Good review percentage with 326 new reviews in the last week. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.7% | 8183 | N/A | Popular remaster with 110 new reviews in the last week. |
+| [UBERMOSH](game:357070) | 89.1% | 2840 | N/A | Consistent review activity with 51 new reviews in the last week. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4346 | N/A | Massive review activity with 2975 new reviews in the last week. |
+| [Lucid Blocks](game:3495730) | 94.7% | 2020 | N/A | High engagement with 2116 new reviews in the last week. |
+| [WWE 2K26](game:3717070) | 48.1% | 1480 | N/A | Notable activity with 166 new reviews in the last week. |
+
+These games are currently experiencing a surge in reviews, indicating growing interest and engagement from players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 7701,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-this-month Breaking out indie games this month
+
+- Suite key: breaking-out-indie-this-month
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 7.0/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: A workable monthly indie discovery list with explicit 30-day review activity and the indie heuristic in place.
+- Rationale: For the investor persona this is materially improved: the monthly window is clear and the output no longer leans on owner-based indie logic. Some rows are still small, but the ranking is understandable and actionable.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 18176ms | llm 12834ms | tools 4876ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some indie games that have been breaking out this month, based on the total new reviews added over the last 30 days (ending March 20, 2026):
+
+| Game | Reviews Added (30d) | Total Reviews | Review % |
+|------|----------------------|---------------|----------|
+| [Captain of Industry](game:1594320) | 555 | 7,154 | 94.2% |
+| [Nubby's Number Factory](game:3191030) | 392 | 9,433 | 97.6% |
+| [Cirno! Lifts a Boulder](game:4173110) | 379 | 470 | 98.9% |
+| [Timber Rush](game:4298880) | 326 | 235 | 82.1% |
+| [Project: Gorgon](game:342940) | 251 | 2,456 | 85.9% |
+| [The Roottrees are Dead](game:2754380) | 215 | 2,522 | 97.5% |
+| [Car Dealer Simulator](game:2404880) | 210 | 591 | 78.7% |
+| [Granny](game:962400) | 205 | 5,481 | 93.2% |
+| [Aviassembly](game:2660460) | 198 | 4,112 | 97.1% |
+| [Kingdom Rush 5: Alliance TD](game:2849080) | 187 | 8,855 | 87.7% |
+
+These games have shown significant activity and engagement, making them noteworthy in the indie gaming scene this month.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "reviews_added_30d",
+      "timeframe": "30d",
+      "indie_heuristic": true,
+      "filters": {
+        "min_reviews": 100,
+        "max_reviews": 10000
+      },
+      "limit": 10
+    },
+    "executionMs": 4876,
+    "success": true,
+    "result_summary": "110 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-right-now Breaking out indie games right now
+
+- Suite key: breaking-out-indie-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 5.3/10
+- Verdict: Weak
+- Usefulness verdict: Partially useful
+- Usefulness summary: It surfaces indie movers, but the current-window momentum list is still dominated by tiny bases and low CCU.
+- Rationale: The indie heuristic is no longer the main problem; evidence quality is. For a portfolio analyst, many of these rows are still too small and too fragile to count as convincing “breaking out right now.”
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 3/5
+- Timing: total 14342ms | llm 13119ms | tools 985ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some indie games that are currently breaking out, based on their momentum score over the last 7 days (ending March 20, 2026). The momentum score reflects a combination of recent CCU growth and review-velocity acceleration.
+
+| Game | Momentum Score | Reviews Added (7d) | CCU Peak | Review % |
+|------|----------------|---------------------|----------|----------|
+| [Death and Taxes](game:1166290) | 754.15 | 16 | 30 | 86.9% |
+| [Home Sheep Home: Farmageddon Party Edition](game:259810) | 588.62 | 9 | 20 | 95.8% |
+| [Lemon Cake](game:1338330) | 198.44 | 10 | 5 | 85.7% |
+| [Panelka](game:3376760) | 196.73 | 6 | 3 | 87% |
+| [Pumping Simulator 2](game:2499470) | 155.64 | 15 | 131 | 91.9% |
+| [Charlie Murder](game:405290) | 149.88 | 8 | 37 | 95.6% |
+| [LASERS](game:2675290) | 132.19 | 5 | 3 | 67.4% |
+| [Solargene](game:1638300) | 337.35 | 10 | 28 | 77.7% |
+| [Goodbye Volcano High](game:1310330) | 323.58 | 8 | 1 | 88.9% |
+| [Eldegarde](game:2344320) | 204.14 | 37 | 913 | 65.7% |
+
+### Key Insights:
+- **Death and Taxes** has shown significant growth with a peak CCU of 30 and a strong review percentage of 86.9%.
+- **Home Sheep Home: Farmageddon Party Edition** boasts an impressive review percentage of 95.8% and a peak CCU of 20.
+- **Eldegarde** has the highest peak CCU at 913, although its review percentage is lower at 65.7%.
+
+These games are gaining traction and could be worth checking out!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "indie_heuristic": true,
+      "filters": {
+        "min_reviews": 100,
+        "max_reviews": 10000,
+        "min_reviews_added_7d": 3
+      },
+      "limit": 10
+    },
+    "executionMs": 985,
+    "success": true,
+    "result_summary": "20 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-overwhelmingly-positive Games breaking out with overwhelmingly positive reviews
+
+- Suite key: breaking-out-overwhelmingly-positive
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.6/10
+- Verdict: Strong
+- Usefulness verdict: Useful
+- Usefulness summary: High-value empty result because it keeps the 95%+ filter intact instead of inventing near-misses.
+- Rationale: This is exactly the behavior a hard-filter prompt should get. The answer preserves trust by saying the qualifying set is sparse instead of leaking weaker titles into the result.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 5/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 6694ms | llm 6108ms | tools 347ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+There are currently no games breaking out with overwhelmingly positive reviews (95%+) that meet the criteria of having at least 100 reviews and showing recent momentum. The catalog is sparse under the current filters. If you have other criteria or are interested in different types of games, please let me know!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "min_score": 95,
+        "min_reviews": 100,
+        "max_reviews": 10000,
+        "min_reviews_added_7d": 3
+      },
+      "limit": 10
+    },
+    "executionMs": 347,
+    "success": true,
+    "result_summary": "0 results"
+  }
+]
+```
+
+</details>
+
+#### accelerating-review-velocity Which games have accelerating review velocity?
+
+- Suite key: accelerating-review-velocity
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.4/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Decent watchlist of high review activity, but it still does not prove acceleration as cleanly as the prompt asks.
+- Rationale: The rows are plausible and the output is usable as a review-activity watchlist, but the answer labels raw last-7-day velocity as acceleration. That keeps it analytically imprecise for this persona.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 15916ms | llm 14048ms | tools 1455ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games with accelerating review velocity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4,346 | High review velocity of 3,410.75 reviews added in the last 7 days. |
+| [Grand Theft Auto V Enhanced](game:3240220) | 69.1% | 55,881 | 465.95 reviews added in the last 7 days. |
+| [Battlefield 1](game:1238840) | 86.5% | 192,821 | 376.43 reviews added in the last 7 days. |
+| [Ready or Not](game:1144200) | 89.2% | 236,196 | 341.27 reviews added in the last 7 days. |
+| [Dead by Daylight](game:381210) | 79.1% | 797,216 | 335.23 reviews added in the last 7 days. |
+| [Schedule I](game:3164500) | 98.4% | 204,041 | 327.00 reviews added in the last 7 days. |
+| [Teardown](game:1167630) | 95.6% | 109,462 | 305.61 reviews added in the last 7 days. |
+| [ELDEN RING](game:1245620) | 92.9% | 1,056,677 | 249.14 reviews added in the last 7 days. |
+| [Slay the Spire](game:646570) | 97.8% | 182,277 | 246.21 reviews added in the last 7 days. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.1% | 20,988 | 241.05 reviews added in the last 7 days. |
+
+These games have shown a significant increase in review activity, indicating growing player engagement.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 1455,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### most-active-games-by-reviews Most active games by reviews
+
+- Suite key: most-active-games-by-reviews
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 7.8/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Strong review-activity leaderboard with the right metric and an explicit 7-day window.
+- Rationale: This is a solid analyst-facing answer: right metric family, explicit timeframe, and plausible top rows. It is not fancy, but it does the job well.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 14884ms | llm 13800ms | tools 634ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the most active games based on review velocity over the last 7 days, ending on March 20, 2026:
+
+| Game | Review Velocity (7d) | Reviews Added (7d) | Review % |
+|------|----------------------|---------------------|----------|
+| [Counter-Strike: Global Offensive](game:730) | 4296.66 | 6973 | 86.7% |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 3410.75 | 2975 | 96% |
+| [Geometry Dash](game:322170) | 816.22 | 1330 | 93.3% |
+| [ARC Raiders](game:1808500) | 728.62 | 1185 | 86.3% |
+| [Dota 2](game:570) | 667.05 | 1082 | 81.1% |
+| [War Thunder](game:236390) | 582.50 | 942 | 64% |
+| [HELLDIVERS™ 2](game:553850) | 509.92 | 826 | 76.2% |
+| [Poppy Playtime](game:1721470) | 480.60 | 785 | 85% |
+| [Grand Theft Auto V Enhanced](game:3240220) | 465.95 | 756 | 69.1% |
+| [Rust](game:252490) | 441.42 | 712 | 87.2% |
+
+These games have shown significant activity in terms of new reviews added recently, indicating strong player engagement.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "velocity_7d",
+      "timeframe": "7d",
+      "filters": {
+        "min_reviews": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 634,
+    "success": true,
+    "result_summary": "80 results"
+  }
+]
+```
+
+</details>
+
+#### most-reviews-added-this-week Which games have the most reviews added this week?
+
+- Suite key: most-reviews-added-this-week
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 7.7/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Clear weekly review-volume leaderboard with exact window anchoring and good practical value.
+- Rationale: This now answers the question directly with the correct count metric and a visible 7-day window ending date. A few oddities remain, but it is comfortably useful.
+- Score breakdown: Directness 5/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 13772ms | llm 12507ms | tools 1004ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games with the most reviews added in the 7-day window ending March 20, 2026:
+
+| Game | Reviews Added (7d) | Total Reviews | Review % |
+|------|---------------------|---------------|----------|
+| [Counter-Strike: Global Offensive](game:730) | 6,973 | 8,815,087 | 86.7% |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 2,975 | 4,346 | 96.0% |
+| [Lucid Blocks](game:3495730) | 2,116 | 2,020 | 94.7% |
+| [Geometry Dash](game:322170) | 1,330 | 429,921 | 93.3% |
+| [ARC Raiders](game:1808500) | 1,185 | 367,011 | 86.3% |
+| [Dota 2](game:570) | 1,082 | 2,681,187 | 81.1% |
+| [War Thunder](game:236390) | 942 | 757,086 | 64.0% |
+| [HELLDIVERS™ 2](game:553850) | 826 | 1,017,635 | 76.2% |
+| [Poppy Playtime](game:1721470) | 785 | 98,914 | 85.0% |
+| [Grand Theft Auto V Enhanced](game:3240220) | 756 | 55,881 | 69.1% |
+
+These games have shown significant activity in terms of new reviews over the past week.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "reviews_added_7d",
+      "timeframe": "7d",
+      "limit": 10,
+      "filters": {}
+    },
+    "executionMs": 1004,
+    "success": true,
+    "result_summary": "80 results"
+  }
+]
+```
+
+</details>
+
+#### show-games-improving-sentiment Show me games with improving sentiment
+
+- Suite key: show-games-improving-sentiment
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.8/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Numeric deltas make this far more usable, though the tail still includes low-support sentiment moves.
+- Rationale: This is clearly improved because it uses signed deltas and recent-review counts instead of vague “100% improved” prose. The remaining issue is that several tail rows still rest on very few recent reviews.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 17607ms | llm 15171ms | tools 2165ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games with improving sentiment over the last 30 days, based on the sentiment delta metric:
+
+| Game | Sentiment Delta | Reviews Added (30d) | Review % | Reviews |
+|------|------------------|---------------------|----------|---------|
+| [逆袭重启](game:4164580) | +96.93% | 2036 | 96.6% | 2026 |
+| [Poker Night at the Inventory](game:3897800) | +95.06% | 2629 | 95.1% | 6016 |
+| [PARANORMASIGHT: The Mermaid's Curse](game:2701440) | +94.37% | 575 | 95.2% | 1682 |
+| [Eador. Masters of the Broken World](game:232050) | +80.00% | 6 | 68.2% | 2743 |
+| [DYNASTY WARRIORS 8 Empires](game:322520) | +76.92% | 6 | 66.6% | 1573 |
+| [永远消失的幻想乡 ～ The Disappearing of Gensokyo](game:776490) | +69.23% | 9 | 84.2% | 3527 |
+| [Devil's Hunt](game:887720) | +66.67% | 13 | 40.3% | 1037 |
+| [Godfall Ultimate Edition](game:928960) | +62.50% | 19 | 63.9% | 2378 |
+| [Beauties! They're All After Me](game:2873760) | +62.50% | 5 | 87.4% | 1195 |
+| [Red Faction: Armageddon](game:55110) | +61.54% | 10 | 72.9% | 4851 |
+
+### Summary
+- The **Sentiment Delta** indicates the percentage increase in positive reviews over the last 30 days.
+- The **Reviews Added (30d)** column shows how many new reviews were added during this period.
+- The **Review %** reflects the overall positive review percentage for each game.
+
+These games have shown significant improvements in player sentiment recently, making them worth checking out!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "timeframe": "30d",
+      "filters": {
+        "min_sentiment_delta": 3,
+        "min_reviews": 1000,
+        "min_reviews_added_30d": 5
+      },
+      "limit": 10
+    },
+    "executionMs": 2165,
+    "success": true,
+    "result_summary": "23 results"
+  }
+]
+```
+
+</details>
+
+#### games-improving-sentiment-past-30-days Games with improving sentiment in the past 30 days
+
+- Suite key: games-improving-sentiment-past-30-days
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.8/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: A decent 30-day sentiment-change screen, but not yet strong enough to be a trusted leaderboard.
+- Rationale: The 30-day framing and signed deltas fix the worst earlier trust issue. Low-support tail rows still keep this in mixed territory for a competitive analyst.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 19175ms | llm 18248ms | tools 641ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games with improving sentiment over the past 30 days, based on the sentiment delta metric:
+
+| Game | Sentiment Delta | Reviews Added (30d) | Review % | Reviews |
+|------|------------------|----------------------|----------|---------|
+| [逆袭重启](game:4164580) | +96.93% | 2036 | 96.6% | 2026 |
+| [Poker Night at the Inventory](game:3897800) | +95.06% | 2629 | 95.1% | 6016 |
+| [PARANORMASIGHT: The Mermaid's Curse](game:2701440) | +94.37% | 575 | 95.2% | 1682 |
+| [Eador. Masters of the Broken World](game:232050) | +80.00% | 6 | 68.2% | 2743 |
+| [DYNASTY WARRIORS 8 Empires](game:322520) | +76.92% | 6 | 66.6% | 1573 |
+| [永远消失的幻想乡 ～ The Disappearing of Gensokyo](game:776490) | +69.23% | 9 | 84.2% | 3527 |
+| [Devil's Hunt](game:887720) | +66.67% | 13 | 40.3% | 1037 |
+| [Godfall Ultimate Edition](game:928960) | +62.50% | 19 | 63.9% | 2378 |
+| [Beauties! They're All After Me](game:2873760) | +62.50% | 5 | 87.4% | 1195 |
+| [Red Faction: Armageddon](game:55110) | +61.54% | 10 | 72.9% | 4851 |
+
+### Summary
+- The **Sentiment Delta** indicates the percentage increase in positive reviews compared to the previous baseline.
+- The **Reviews Added (30d)** shows how many new reviews were submitted in the last 30 days.
+- The **Review %** reflects the overall percentage of positive reviews for each game.
+
+This data highlights games that have seen a significant improvement in player sentiment recently.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "timeframe": "30d",
+      "filters": {
+        "min_sentiment_delta": 3,
+        "min_reviews": 1000,
+        "min_reviews_added_30d": 5
+      },
+      "limit": 10
+    },
+    "executionMs": 641,
+    "success": true,
+    "result_summary": "23 results"
+  }
+]
+```
+
+</details>
+
+#### popular-games-worse-reviews-lately Which popular games are getting worse reviews lately?
+
+- Suite key: popular-games-worse-reviews-lately
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.0/10
+- Verdict: Weak
+- Usefulness verdict: Not useful
+- Usefulness summary: Metric handling is fixed, but the returned titles still do not satisfy a reasonable reading of “popular.”
+- Rationale: The answer is now numerically honest and the new support floor helped, but two small catalog titles with roughly 1k to 3k lifetime reviews are not what this persona means by popular games. Better formed, still not actually useful for the asked job.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 8509ms | llm 7545ms | tools 693ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some popular games that have been getting worse reviews lately, based on the sentiment delta over the last 30 days:
+
+| Game | Sentiment Delta | Reviews Added (30d) | Review % | Reviews |
+|------|-----------------|----------------------|----------|---------|
+| [KnightShift](game:254060) | -100% | 13 | 68.4% | 1,302 |
+| [HARDCORE MECHA](game:746580) | -100% | 12 | 83% | 2,613 |
+
+### Summary
+- **Sentiment Delta** indicates a significant decline in positive reviews for both games.
+- The qualifying set is limited, with only two titles showing this trend.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "sort_order": "asc",
+      "timeframe": "30d",
+      "filters": {
+        "max_sentiment_delta": -3,
+        "min_reviews": 1000,
+        "min_reviews_added_30d": 10
+      },
+      "limit": 10
+    },
+    "executionMs": 693,
+    "success": true,
+    "result_summary": "2 results"
+  }
+]
+```
+
+</details>
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-21T06:21:16.439Z","generatedAt":"2026-03-21T06:21:16.439Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":16,"averageTotalMs":14669,"medianTotalMs":12019,"p95TotalMs":30584,"averageUserScore":6.3,"weakOrFailureCount":5,"artifactPath":"/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-17-14-541Z","scope":"section_5_trending_time_relative_post_screen_games_live_rerun","baselineRunId":"2026-03-21T05:34:04.009Z","promptRefs":["#102","#158","games-trending-up-in-reviews-right-now","games-trending-right-now","#181","breaking-out-right-now","show-breaking-out-right-now","breaking-out-indie-this-month","breaking-out-indie-right-now","breaking-out-overwhelmingly-positive","accelerating-review-velocity","most-active-games-by-reviews","most-reviews-added-this-week","show-games-improving-sentiment","games-improving-sentiment-past-30-days","popular-games-worse-reviews-lately"] } -->
+## Run 2026-03-21T06:21:16.439Z
+
+- Generated: 2026-03-21T06:21:16.439Z
+- Scope: post-deploy live rerun of the recovered 16-prompt critique suite for section `5` (`Trending and Time-Relative Answers`) after adding the new `screen_games` path and the earlier indie heuristic to the section `5` prompt family
+- Prompt refs: explicit critique IDs `#102`, `#158`, and `#181`, plus 13 stable `suiteKey` refs for unrecovered section `5` numbering
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-17-14-541Z
+- Curated curation JSON: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-17-14-541Z/curation-template.json
+- Generic runner report: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-17-14-541Z/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T06-17-14-541Z/results.json
+- Prompt count: 16
+- Average user score: 6.3/10
+- Verdict mix: Good 4 | Mixed 7 | Weak 4 | Failure 1
+- Delta vs `2026-03-21T05:34:04.009Z`: `+2.3` average user-score points, `Weak+Failure` count improved from `11` to `5`
+- Full prompt outputs for all 16 prompts are preserved below and in the raw report and JSON artifacts above.
+
+### Assessment
+
+- This rerun materially improves section `5`. The biggest fixes are real metric-shape repairs: `#158` now ranks free-to-play games by CCU instead of owners, `#102` now stays on one roguelite set, and the `95%+` breakout prompt now fails honestly instead of leaking bad rows.
+- The run is still not clean enough to call solved. The remaining weak cluster is concentrated in three places: broad `trending right now` ranking quality, horror filter trust, and the sentiment prompts, which still hide actual deltas behind generic `100%` and `complete decline` phrasing.
+- `screen_games` is clearly the better recovery path. Twelve prompts now route through it, and most of the major baseline failures moved into mixed-or-better territory once the tool stopped overloading owner counts and review totals.
+- Latency improved along with quality. Average total time dropped from `17986ms` to `14669ms`, and p95 fell from `48919ms` to `30584ms` versus the section `5` baseline run.
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 14669ms | 12019ms | 30584ms | 3090ms | 30584ms |
+
+### Ranking
+
+| Rank | Critique Ref | Prompt | Family | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---|---|---|---|---:|---|---:|---|
+| 1 | `popular-games-worse-reviews-lately` | Which popular games are getting worse reviews lately? | trend_sentiment | Competitive / Market Intelligence Analyst | 3.9/10 | Failure | 13156 | The right metric family is finally in play, but the list does not look popular enough to trust for competitive monitoring. |
+| 2 | `#181` | What horror games are gaining momentum? | trend_filtered | Competitive / Market Intelligence Analyst | 4.5/10 | Weak | 9483 | Genre integrity still looks shaky, so an analyst cannot confidently act on this horror trend screen. |
+| 3 | `show-games-improving-sentiment` | Show me games with improving sentiment | trend_sentiment | Competitive / Market Intelligence Analyst | 5.1/10 | Weak | 12019 | The candidate set may be directionally right, but the generic `+100%` explanations make it hard to trust or act on. |
+| 4 | `games-improving-sentiment-past-30-days` | Games with improving sentiment in the past 30 days | trend_sentiment | Competitive / Market Intelligence Analyst | 5.4/10 | Weak | 14795 | The 30-day framing is explicit, but the answer still hides the real deltas behind implausible `100%` claims. |
+| 5 | `games-trending-right-now` | what games are trending right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 5.4/10 | Weak | 11153 | It is a possible momentum watchlist, but the obscure picks and vague ranking logic make it hard to defend. |
+| 6 | `show-breaking-out-right-now` | Show me breaking out games right now | trend_breakout | Competitive / Market Intelligence Analyst | 5.6/10 | Mixed | 14814 | Useful as a loose breakout scan, though the list still contains weak tail picks and low-information rationale. |
+| 7 | `breaking-out-indie-right-now` | Breaking out indie games right now | trend_breakout | Investor / Portfolio Analyst | 6.0/10 | Mixed | 11791 | The indie heuristic is finally visible, but the breakout evidence is still too thin for portfolio triage. |
+| 8 | `breaking-out-right-now` | What’s breaking out right now? | trend_breakout | Competitive / Market Intelligence Analyst | 6.0/10 | Mixed | 16669 | A rough breakout watchlist, but still too generic for confident competitive use. |
+| 9 | `breaking-out-indie-this-month` | Breaking out indie games this month | trend_breakout | Investor / Portfolio Analyst | 6.6/10 | Mixed | 10011 | A workable monthly indie discovery list, but it needs visible 30-day breakout metrics to be investment-ready. |
+| 10 | `games-trending-up-in-reviews-right-now` | What games are trending up in reviews right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 6.8/10 | Mixed | 22791 | Usable as a weekly review-activity watchlist, though it still does not fully nail the `right now` framing. |
+| 11 | `accelerating-review-velocity` | Which games have accelerating review velocity? | trend_velocity | Competitive / Market Intelligence Analyst | 6.8/10 | Mixed | 14512 | Reasonably useful for spotting review spikes, but it still does not prove acceleration cleanly. |
+| 12 | `most-reviews-added-this-week` | Which games have the most reviews added this week? | trend_velocity | Competitive / Market Intelligence Analyst | 6.9/10 | Mixed | 9893 | The date range and metric are right, but the ordering error dents trust. |
+| 13 | `#102` | Compare top 5 roguelites by review velocity and CCU | trend_comparison | Competitive / Market Intelligence Analyst | 7.5/10 | Good | 29438 | Useful cross-check of roguelite activity, but it should expose numeric review velocity alongside CCU. |
+| 14 | `most-active-games-by-reviews` | Most active games by reviews | trend_velocity | Competitive / Market Intelligence Analyst | 7.5/10 | Good | 10503 | A solid review-activity leaderboard that mostly answers the analyst’s question. |
+| 15 | `#158` | What free-to-play games have the most players right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 8.1/10 | Good | 30584 | The core metric is corrected and the table is actionable, though `right now` still needs a visible freshness anchor. |
+| 16 | `breaking-out-overwhelmingly-positive` | Games breaking out with overwhelmingly positive reviews | trend_breakout | Competitive / Market Intelligence Analyst | 8.4/10 | Good | 3090 | The empty result is still useful because it respects the hard filter instead of inventing weak matches. |
+
+### Detailed Results
+
+#### #102 Compare top 5 roguelites by review velocity and CCU
+
+- Suite key: roguelites-review-velocity-vs-ccu
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_comparison
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 7.5/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: Useful cross-check of roguelite activity, but it should expose numeric review velocity alongside CCU.
+- Rationale: This is the first section 5 answer that actually keeps the roguelite set together and surfaces both review activity and CCU. It still hides the review-velocity numbers in prose and never stamps the freshness window, so it is useful but not fully analyst-grade.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 29438ms | llm 23723ms | tools 5434ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the top 5 roguelites ranked by review velocity and peak concurrent users (CCU) over the last 7 days:
+
+| Game | Review % | Reviews | Price | CCU Peak | Why it fits |
+|------|----------|---------|-------|----------|-------------|
+| [Slay the Spire](game:646570) | 97.8% | 182,277 | $6.24 | 26,896 | High review velocity with 246 new reviews/day. |
+| [The Binding of Isaac: Rebirth](game:250900) | 97.3% | 343,420 | $8.99 | 15,633 | Strong review activity with 139 new reviews/day. |
+| [Megabonk](game:3405340) | 94.8% | 98,589 | $9.99 | 6,124 | Solid velocity at 114 new reviews/day. |
+| [ELDEN RING NIGHTREIGN](game:2622380) | 74.5% | 65,672 | $29.99 | 163,599 | Good review velocity with 111 new reviews/day. |
+| [Buckshot Roulette](game:2835570) | 96% | 95,541 | $1.79 | 793 | Consistent activity with 99 new reviews/day. |
+
+#### #158 What free-to-play games have the most players right now?
+
+- Suite key: free-to-play-most-players-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.1/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: The core metric is corrected and the table is actionable, though `right now` still needs a visible freshness anchor.
+- Rationale: This fixes the core baseline error by ranking free-to-play games on peak CCU rather than owner estimates. It would be stronger with an explicit metric timestamp or freshness window, but the table is now directionally trustworthy and actionable.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 5/5 | Trustworthiness 4/5 | Decision value 4/5 | Grace 3/5
+- Timing: total 30584ms | llm 29954ms | tools 363ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the free-to-play games with the most players right now, based on peak concurrent users:
+
+| Game | Peak CCU | Review % | Reviews | Price | Publisher | Developer |
+|------|----------|----------|---------|-------|-----------|-----------|
+| [Counter-Strike: Global Offensive](game:730) | 1,013,936 | 86.7% | 8,815,087 | Free | [Valve](/publishers/1527) | [Valve](/developers/1530) |
+| [Dota 2](game:570) | 317,966 | 81.1% | 2,681,187 | Free | [Valve](/publishers/1527) | [Valve](/developers/1530) |
+| [Overwatch®](game:2357570) | 76,609 | 45.7% | 129 | Free | [Blizzard Entertainment, Inc.](/publishers/12319) | [Blizzard Entertainment, Inc.](/developers/12880) |
+| [Warframe](game:230410) | 50,610 | 87.1% | 626,503 | Free | [Digital Extremes](/publishers/2153) | [Digital Extremes](/developers/1861) |
+| [War Thunder](game:236390) | 50,478 | 64.0% | 757,086 | Free | [Gaijin Network Ltd](/publishers/3028) | [Gaijin Entertainment](/developers/11364) |
+| [Team Fortress 2](game:440) | 50,168 | 89.9% | 1,161,472 | Free | [Valve](/publishers/1527) | [Valve](/developers/1530) |
+| [Path of Exile](game:238960) | 45,795 | 89.3% | 235,091 | Free | [Grinding Gear Games](/publishers/20608) | [Grinding Gear Games](/developers/21526) |
+| [The Sims™ 4](game:1222670) | 25,276 | 87.3% | 170,727 | Free | [Electronic Arts](/publishers/1577) | [MAXIS](/developers/12471) |
+| [Destiny 2](game:1085660) | 24,619 | 79.6% | 625,616 | Free | [Bungie](/publishers/6582) | [Bungie](/developers/5899) |
+| [Lost Ark](game:1599340) | 17,355 | 71.0% | 202,021 | Free | [Amazon Game Studios](/publishers/10865) | [Smilegate RPG](/developers/11360) |
+
+These games are currently attracting a significant number of players, showcasing their popularity in the free-to-play market.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "ccu_peak",
+      "timeframe": "current",
+      "filters": {
+        "is_free": true,
+        "min_ccu": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 363,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### games-trending-up-in-reviews-right-now What games are trending up in reviews right now?
+
+- Suite key: games-trending-up-in-reviews-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.8/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Usable as a weekly review-activity watchlist, though it still does not fully nail the `right now` framing.
+- Rationale: The answer now behaves like a weekly review-activity watchlist and the rows are broadly plausible. It still translates `right now` into an implied past-week window without stating the exact dates, so trust remains partial.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 22791ms | llm 16463ms | tools 6075ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently trending up in reviews, showing significant increases in review activity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Grand Theft Auto V Enhanced](game:3240220) | 69.1% | 55,881 | High review velocity with 756 new reviews in the last week. |
+| [Battlefield 1](game:1238840) | 86.5% | 192,821 | Strong review activity with 609 new reviews recently. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4,346 | Exceptional increase with 2,975 new reviews this week. |
+| [Ready or Not](game:1144200) | 89.2% | 236,196 | 558 new reviews added in the last week, indicating rising interest. |
+| [Dead by Daylight](game:381210) | 79.1% | 797,216 | Consistent activity with 540 new reviews recently. |
+| [Schedule I](game:3164500) | 98.4% | 204,041 | High engagement with 534 new reviews this week. |
+| [Teardown](game:1167630) | 95.6% | 109,462 | 495 new reviews added, showing a strong upward trend. |
+| [ELDEN RING](game:1245620) | 92.9% | 1,056,677 | 405 new reviews in the last week, maintaining high interest. |
+| [Slay the Spire](game:646570) | 97.8% | 182,277 | 400 new reviews added, reflecting a positive trend. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.1% | 20,988 | 320 new reviews recently, indicating renewed player interest. |
+
+These games have shown a notable increase in review activity, suggesting they are gaining traction among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 6075,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### games-trending-right-now what games are trending right now?
+
+- Suite key: games-trending-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.4/10
+- Verdict: Weak
+- Usefulness verdict: Partially useful
+- Usefulness summary: It is a possible momentum watchlist, but the obscure picks and vague ranking logic make it hard to defend.
+- Rationale: The output at least claims a recent-momentum basis, but the ranking is dominated by odd discounted long-tail titles and never shows the momentum metric. For a market analyst, that makes the list hard to defend as a real `trending right now` snapshot.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 3/5
+- Timing: total 11153ms | llm 9101ms | tools 1548ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the trending games right now based on recent momentum:
+
+| Game | Review % | Reviews | Price | Steam Deck | Why it fits |
+|------|----------|---------|-------|------------|-------------|
+| [Crystals of Time](game:306410) | 65.7% | 1,070 | $6.99 | No | Moderate reviews with a recent increase in activity. |
+| [Hacker Evolution](game:70100) | 67.8% | 1,047 | $2.99 | No | Self-published with steady review activity. |
+| [Endorlight](game:428430) | 62.7% | 1,473 | $0.49 | No | Recently discounted, showing some momentum. |
+| [Barro 2020](game:1168660) | 85.7% | 1,812 | $0.49 | No | High review percentage with significant discount. |
+| [Death and Taxes](game:1166290) | 86.9% | 7,028 | $1.68 | No | Strong reviews and recent review velocity increase. |
+| [Ben and Ed - Blood Party](game:500260) | 88.1% | 2,531 | $2.99 | No | High review percentage with a significant discount. |
+| [KarmaZoo](game:1661630) | 88.6% | 1,286 | $9.99 | No | Good reviews with steady activity. |
+| [Dwarves: Glory, Death and Loot](game:2205850) | 81.6% | 1,654 | $9.74 | No | Recent release with good reviews and momentum. |
+| [SPRAWL](game:1549690) | 87.7% | 2,059 | $4.49 | No | High review percentage with recent activity. |
+| [Retail Royale](game:1557990) | 76.8% | 5,460 | $4.99 | No | Moderate reviews with steady activity. |
+
+These games have shown significant activity and engagement over the past week, making them noteworthy in the current gaming landscape.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "min_reviews": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 1548,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### #181 What horror games are gaining momentum?
+
+- Suite key: horror-games-gaining-momentum
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_filtered
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 4.5/10
+- Verdict: Weak
+- Usefulness verdict: Not useful
+- Usefulness summary: Genre integrity still looks shaky, so an analyst cannot confidently act on this horror trend screen.
+- Rationale: The tool routing is improved, but the visible result set still undermines genre trust because several rows do not read as clear horror titles and the reasons talk about price and reviews more than momentum. That keeps this below the bar for a filtered trend screen.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 3/5
+- Timing: total 9483ms | llm 8663ms | tools 532ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some horror games that are currently gaining momentum based on recent activity:
+
+| Game | Review % | Reviews | Price | Steam Deck | Why it fits |
+|------|----------|---------|-------|------------|-------------|
+| [Fear the Spotlight](game:1959390) | 97.6% | 663 | $19.99 | No | High review percentage and strong publisher backing. |
+| [KUNKUN Defender](game:2902540) | 97.3% | 826 | $2.99 | No | Excellent reviews and a low price point. |
+| [FlatOut 3: Chaos & Destruction](game:201510) | 18% | 3,988 | $7.99 | No | Gaining traction despite mixed reviews, with significant discounts. |
+| [THRESHOLD](game:2580020) | 88.7% | 808 | $5.99 | No | Strong reviews and a good discount. |
+| [Unfortunate Spacemen](game:408900) | 86.2% | 7,494 | Free | No | Free-to-play with a solid player base. |
+| [Cat in the Box](game:1257410) | 94.2% | 1,373 | $2.79 | No | High review percentage and a significant discount. |
+| [Backroom Company](game:3010460) | 83.6% | 159 | $7.19 | No | New release with positive reviews. |
+| [The Chant](game:1577250) | 78.4% | 996 | $24.99 | No | Good reviews and a recent release. |
+| [Backrooms Society](game:2304620) | 77.6% | 531 | $4.89 | No | Positive sentiment and a recent release. |
+| [2Dark](game:435100) | 77.4% | 797 | $2.49 | No | Significant discount and decent reviews. |
+
+These games have shown strong recent activity and positive reception, making them noteworthy in the horror genre.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "tags": [
+          "Horror"
+        ],
+        "min_reviews": 100
+      },
+      "limit": 10
+    },
+    "executionMs": 532,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-right-now What’s breaking out right now?
+
+- Suite key: breaking-out-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.0/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: A rough breakout watchlist, but still too generic for confident competitive use.
+- Rationale: This is a serviceable loose breakout watchlist because the rows do show elevated recent review activity. The downside is the same as baseline: the ranking rule is opaque and the tail mixes in questionable picks, so it is better for monitoring than for decision-making.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 16669ms | llm 9150ms | tools 7257ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently breaking out, showing significant review activity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 61.3% | 612 | Gaining traction with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.3% | 914 | High engagement with 1,139 new reviews recently. |
+| [AETHUS](game:2541530) | 95.4% | 897 | Strong performance with 103 new reviews this week. |
+| [The Quinfall](game:2294660) | 47.8% | 6,190 | 103 new reviews added, showing consistent interest. |
+| [Timber Rush](game:4298880) | 82.1% | 235 | 326 new reviews indicate rising popularity. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.7% | 8,183 | 110 new reviews, maintaining strong interest. |
+| [UBERMOSH](game:357070) | 89.1% | 2,840 | 51 new reviews, showing steady engagement. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4,346 | Exceptional activity with 2,975 new reviews this week. |
+| [Lucid Blocks](game:3495730) | 94.7% | 2,020 | 2,116 new reviews, indicating a breakout trend. |
+| [WWE 2K26](game:3717070) | 48.1% | 1,480 | 166 new reviews, reflecting growing interest. |
+
+These games have shown a notable increase in reviews, indicating they are gaining attention and popularity among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 7257,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### show-breaking-out-right-now Show me breaking out games right now
+
+- Suite key: show-breaking-out-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.6/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Useful as a loose breakout scan, though the list still contains weak tail picks and low-information rationale.
+- Rationale: Usable as a rough scan of recent review spikes, but it is almost the same answer as the neighboring breakout prompt and still leans on generic prose. The missing prices and weak tail make it a little less decision-ready than the adjacent variant.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 14814ms | llm 7832ms | tools 6733ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some breaking out games that are gaining traction right now:
+
+| Game | Review % | Reviews | Price | Why it fits |
+|------|----------|---------|-------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 61.3% | 612 | N/A | High review activity with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.3% | 914 | N/A | Exceptional review percentage with 1139 new reviews in the last week. |
+| [AETHUS](game:2541530) | 95.4% | 897 | N/A | Strong review momentum with 103 new reviews this week. |
+| [The Quinfall](game:2294660) | 47.8% | 6190 | N/A | High total reviews with 103 new reviews recently. |
+| [Timber Rush](game:4298880) | 82.1% | 235 | N/A | Good review percentage with consistent new reviews. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.7% | 8183 | N/A | Popular remaster with 110 new reviews this week. |
+| [UBERMOSH](game:357070) | 89.1% | 2840 | N/A | Solid review activity with 51 new reviews recently. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4346 | N/A | Massive review activity with 2975 new reviews in the last week. |
+| [Lucid Blocks](game:3495730) | 94.7% | 2020 | N/A | High engagement with 2116 new reviews recently. |
+| [WWE 2K26](game:3717070) | 48.1% | 1480 | N/A | Notable activity with 166 new reviews this week. |
+
+These games are currently experiencing a surge in reviews and interest, indicating they are breaking out in popularity.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 6733,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-this-month Breaking out indie games this month
+
+- Suite key: breaking-out-indie-this-month
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 6.6/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: A workable monthly indie discovery list, but it needs visible 30-day breakout metrics to be investment-ready.
+- Rationale: The earlier indie heuristic now visibly shapes the candidate set, which is a real improvement from the baseline owner-count proxy. For an investor or portfolio analyst, though, the answer still needs explicit 30-day breakout metrics rather than generic `strong review activity` language.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 3/5
+- Timing: total 10011ms | llm 8296ms | tools 1451ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some breaking out indie games from the past month, showcasing strong review activity:
+
+| Game | Review % | Reviews | Price | Steam Deck | Why it fits |
+|------|----------|---------|-------|------------|-------------|
+| [Captain of Industry](game:1594320) | 94.2% | 7,154 | $24.49 (30% off) | Yes | Self-published, strong reviews, indie tag |
+| [Nubby's Number Factory](game:3191030) | 97.6% | 9,433 | $2.49 (50% off) | Yes | Self-published, strong reviews, indie tag |
+| [Cirno! Lifts a Boulder](game:4173110) | 98.9% | 470 | N/A (10% off) | Yes | Self-published, strong reviews, indie tag |
+| [Timber Rush](game:4298880) | 82.1% | 235 | N/A (20% off) | Yes | Self-published, strong reviews, indie tag |
+| [Project: Gorgon](game:342940) | 85.9% | 2,456 | $18.74 (25% off) | Yes | Self-published, strong reviews, indie tag |
+| [The Roottrees are Dead](game:2754380) | 97.5% | 2,522 | $15.99 (20% off) | Yes | Self-published, strong reviews, indie tag |
+| [Car Dealer Simulator](game:2404880) | 78.7% | 591 | $19.99 | Yes | Self-published, indie tag |
+| [Granny](game:962400) | 93.2% | 5,481 | $7.99 | Yes | Self-published, strong reviews, indie tag |
+| [Aviassembly](game:2660460) | 97.1% | 4,112 | $9.99 | Yes | Self-published, strong reviews, indie tag |
+| [Kingdom Rush 5: Alliance TD](game:2849080) | 87.7% | 8,855 | $19.99 | Yes | Self-published, strong reviews, indie tag |
+
+These games have shown significant review activity and are primarily self-published, fitting the indie profile.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "reviews_added_30d",
+      "timeframe": "30d",
+      "indie_heuristic": true,
+      "filters": {
+        "min_reviews": 100,
+        "max_reviews": 10000
+      },
+      "limit": 10
+    },
+    "executionMs": 1451,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-right-now Breaking out indie games right now
+
+- Suite key: breaking-out-indie-right-now
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 6.0/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: The indie heuristic is finally visible, but the breakout evidence is still too thin for portfolio triage.
+- Rationale: This is directionally better because the answer now calls out self-published, small-catalog logic instead of a fake owner-based indie shortcut. The list still skews toward thin long-tail titles and does not expose the momentum numbers that would make the screen actionable.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 3/5 | Trustworthiness 3/5 | Decision value 2/5 | Grace 4/5
+- Timing: total 11791ms | llm 10423ms | tools 1114ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some indie games that are currently breaking out, showing strong momentum based on recent activity:
+
+| Game | Review % | Reviews | Price | Steam Deck | Why it fits |
+|------|----------|---------|-------|------------|-------------|
+| [Endorlight](game:428430) | 62.7% | 1,473 | $0.49 | No | Self-published, indie tag, small catalog |
+| [Volley Court](game:2175250) | 88% | 200 | $4.01 | No | Self-published, indie tag, small catalog |
+| [Death and Taxes](game:1166290) | 86.9% | 7,028 | $1.68 | No | Self-published, indie tag, small catalog |
+| [Ben and Ed - Blood Party](game:500260) | 88.1% | 2,531 | $2.99 | No | Self-published, indie tag, small catalog |
+| [Home Sheep Home: Farmageddon Party Edition](game:259810) | 95.8% | 757 | $1.99 | No | Self-published, indie tag, small catalog |
+| [ReignMaker](game:286200) | 63.4% | 410 | $14.99 | No | Self-published, indie tag, small catalog |
+| [Trackline Express](game:2343920) | 88.3% | 128 | $5.99 | No | Self-published, indie tag, small catalog |
+| [Tomorrow's Love Puzzle](game:2726890) | 70.3% | 1,107 | $9.99 | No | Self-published, indie tag, small catalog |
+| [Soldat](game:638490) | 94.6% | 1,734 | Free | No | Self-published, indie tag, small catalog |
+| [万象群侠传](game:3039500) | 87.5% | 120 | $7.19 | No | Self-published, indie tag, small catalog |
+
+These games have been identified based on their recent review activity and overall momentum, making them noteworthy in the indie game scene right now.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "indie_heuristic": true,
+      "filters": {
+        "min_reviews": 100,
+        "max_reviews": 10000
+      },
+      "limit": 10
+    },
+    "executionMs": 1114,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-overwhelmingly-positive Games breaking out with overwhelmingly positive reviews
+
+- Suite key: breaking-out-overwhelmingly-positive
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 8.4/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: The empty result is still useful because it respects the hard filter instead of inventing weak matches.
+- Rationale: This is the right failure mode. Instead of leaking sub-95% titles, the system now honestly says the filtered catalog is empty, which is more valuable to the analyst than a longer but wrong list.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 5/5 | Decision value 4/5 | Grace 4/5
+- Timing: total 3090ms | llm 2693ms | tools 154ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+It appears that there are currently no games breaking out with overwhelmingly positive reviews (95% or higher) that also meet the criteria of having between 100 and 10,000 reviews. The catalog is sparse under these specific filters. If you're interested in a broader range or different criteria, please let me know!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "momentum_score",
+      "timeframe": "7d",
+      "filters": {
+        "min_score": 95,
+        "min_reviews": 100,
+        "max_reviews": 10000
+      },
+      "limit": 10
+    },
+    "executionMs": 154,
+    "success": true,
+    "result_summary": "0 results"
+  }
+]
+```
+
+</details>
+
+#### accelerating-review-velocity Which games have accelerating review velocity?
+
+- Suite key: accelerating-review-velocity
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.8/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Reasonably useful for spotting review spikes, but it still does not prove acceleration cleanly.
+- Rationale: Still one of the better answers because the candidate set looks plausible and the reasons stay close to review activity. It still does not prove acceleration versus a prior baseline, so the label is stronger than the evidence shown.
+- Score breakdown: Directness 4/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 14512ms | llm 8552ms | tools 5707ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games with accelerating review velocity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.0% | 4,346 | High review velocity with 2,975 reviews added in the last week. |
+| [Grand Theft Auto V Enhanced](game:3240220) | 69.1% | 55,881 | 756 reviews added in the last week, showing strong engagement. |
+| [Battlefield 1](game:1238840) | 86.5% | 192,821 | 609 reviews added recently, indicating renewed interest. |
+| [Ready or Not](game:1144200) | 89.2% | 236,196 | 558 reviews added in the last week, maintaining high activity. |
+| [Dead by Daylight](game:381210) | 79.1% | 797,216 | 540 reviews added recently, reflecting ongoing player engagement. |
+| [Schedule I](game:3164500) | 98.4% | 204,041 | 534 reviews added in the last week, showcasing strong player feedback. |
+| [Teardown](game:1167630) | 95.6% | 109,462 | 495 reviews added recently, indicating a positive trend. |
+| [ELDEN RING](game:1245620) | 92.9% | 1,056,677 | 405 reviews added in the last week, maintaining high popularity. |
+| [Slay the Spire](game:646570) | 97.8% | 182,277 | 400 reviews added recently, showing consistent player interest. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.1% | 20,988 | 320 reviews added in the last week, indicating renewed activity. |
+
+These games are experiencing a significant increase in review activity, suggesting a growing interest among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 5707,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### most-active-games-by-reviews Most active games by reviews
+
+- Suite key: most-active-games-by-reviews
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 7.5/10
+- Verdict: Good
+- Usefulness verdict: Useful
+- Usefulness summary: A solid review-activity leaderboard that mostly answers the analyst’s question.
+- Rationale: This now answers the right question with the right metric family and mostly plausible ordering. It would be stronger if the table showed the actual per-day or 7-day review counts instead of only explaining them in prose.
+- Score breakdown: Directness 4/5 | Completeness 4/5 | Relevance 4/5 | Trustworthiness 4/5 | Decision value 3/5 | Grace 4/5
+- Timing: total 10503ms | llm 9678ms | tools 548ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the most active games based on review activity over the last 7 days, measured by the average number of new reviews per day:
+
+| Game | Review % | Reviews | Price | Steam Deck | Why it fits |
+|------|----------|---------|-------|------------|-------------|
+| [Counter-Strike: Global Offensive](game:730) | 86.7% | 8,815,087 | Free | Yes | High review velocity with consistent player engagement. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96% | 4,346 | $69.99 | No | Strong recent review activity following its release. |
+| [Geometry Dash](game:322170) | 93.3% | 429,921 | $4.99 | No | Consistent player reviews and engagement. |
+| [ARC Raiders](game:1808500) | 86.3% | 367,011 | $39.99 | No | Active player base with significant recent reviews. |
+| [Dota 2](game:570) | 81.1% | 2,681,187 | Free | Yes | Ongoing engagement with a large player base. |
+| [War Thunder](game:236390) | 64% | 757,086 | Free | Yes | Steady review activity from a dedicated community. |
+| [HELLDIVERS™ 2](game:553850) | 76.2% | 1,017,635 | $29.99 | No | Recent reviews indicate strong player interest. |
+| [Poppy Playtime](game:1721470) | 85% | 98,914 | Free | Yes | Active engagement with a growing player base. |
+| [Grand Theft Auto V Enhanced](game:3240220) | 69.1% | 55,881 | $14.99 | No | Recent reviews show continued interest in the game. |
+| [Rust](game:252490) | 87.2% | 1,227,784 | $19.99 | Yes | High review activity and player engagement. |
+
+These games have shown significant review activity, indicating a vibrant player community and ongoing interest.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "velocity_7d",
+      "timeframe": "7d",
+      "filters": {
+        "min_reviews": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 548,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### most-reviews-added-this-week Which games have the most reviews added this week?
+
+- Suite key: most-reviews-added-this-week
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.9/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: The date range and metric are right, but the ordering error dents trust.
+- Rationale: The exact March 14 to March 20, 2026 window is a major trust improvement, and the metric now matches the prompt. The remaining issue is simple but important: the table is not sorted correctly, which chips away at confidence.
+- Score breakdown: Directness 5/5 | Completeness 3/5 | Relevance 4/5 | Trustworthiness 3/5 | Decision value 3/5 | Grace 3/5
+- Timing: total 9893ms | llm 8663ms | tools 979ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games that have had the most reviews added in the past week (from March 14 to March 20, 2026):
+
+| Game | Reviews Added (7d) | Total Reviews | Review % | Price |
+|------|---------------------|---------------|----------|-------|
+| [Counter-Strike: Global Offensive](game:730) | 6,973 | 8,815,087 | 86.7% | Free |
+| [ARC Raiders](game:1808500) | 1,185 | 367,011 | 86.3% | $39.99 |
+| [Geometry Dash](game:322170) | 1,330 | 429,921 | 93.3% | $4.99 |
+| [Poppy Playtime](game:1721470) | 785 | 98,914 | 85.0% | Free |
+| [Dota 2](game:570) | 1,082 | 2,681,187 | 81.1% | Free |
+| [Rust](game:252490) | 712 | 1,227,784 | 87.2% | $19.99 |
+| [War Thunder](game:236390) | 942 | 757,086 | 64.0% | Free |
+| [HELLDIVERS™ 2](game:553850) | 826 | 1,017,635 | 76.2% | $29.99 |
+| [Terraria](game:105600) | 648 | 1,409,473 | 97.5% | $4.99 |
+| [Tom Clancy's Rainbow Six Siege](game:359550) | 616 | 1,398,584 | 83.9% | $19.99 |
+
+These games have seen significant activity in terms of new reviews, indicating ongoing player engagement.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "reviews_added_30d",
+      "timeframe": "7d",
+      "limit": 10
+    },
+    "executionMs": 979,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### show-games-improving-sentiment Show me games with improving sentiment
+
+- Suite key: show-games-improving-sentiment
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.1/10
+- Verdict: Weak
+- Usefulness verdict: Partially useful
+- Usefulness summary: The candidate set may be directionally right, but the generic `+100%` explanations make it hard to trust or act on.
+- Rationale: The routing is now correct, but the presentation is still weak because every row is explained with the same suspicious `Sentiment increased by 100%` line and the actual deltas are hidden. That makes it hard to judge magnitude or trust the ranking.
+- Score breakdown: Directness 4/5 | Completeness 2/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 3/5
+- Timing: total 12019ms | llm 10633ms | tools 908ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games with improving sentiment over the last 30 days, showing a significant increase in positive reviews:
+
+| Game | Review % | Reviews | Price | Steam Deck | Why it fits |
+|------|----------|---------|-------|------------|-------------|
+| [Primal Carnage](game:215470) | 76.5% | 5,833 | $4.99 | No | Sentiment increased by 100% |
+| [8BitMMO](game:250420) | 59.9% | 4,329 | Free | No | Sentiment increased by 100% |
+| [Neon Echo](game:2321210) | 55.9% | 4,099 | $14.99 | No | Sentiment increased by 100% |
+| [Mortal Online](game:287920) | 52.3% | 2,955 | Free | No | Sentiment increased by 100% |
+| [FORCED: Slightly Better Edition](game:249990) | 74.1% | 2,779 | $2.24 | No | Sentiment increased by 100% |
+| [Raw Data](game:436320) | 76.8% | 2,468 | $5.99 | No | Sentiment increased by 100% |
+| [Revolution Ace](game:274560) | 72.4% | 1,922 | $1.24 | No | Sentiment increased by 100% |
+| [CRYPTARK](game:344740) | 82.4% | 1,822 | $14.99 | No | Sentiment increased by 100% |
+| [INK](game:385710) | 81.3% | 1,576 | $4.99 | No | Sentiment increased by 100% |
+| [Bardbarian](game:269490) | 88.6% | 1,495 | $7.99 | No | Sentiment increased by 100% |
+
+These games have shown a notable improvement in their sentiment, indicating a positive shift in player feedback.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "timeframe": "30d",
+      "filters": {
+        "min_sentiment_delta": 3,
+        "min_reviews": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 908,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### games-improving-sentiment-past-30-days Games with improving sentiment in the past 30 days
+
+- Suite key: games-improving-sentiment-past-30-days
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.4/10
+- Verdict: Weak
+- Usefulness verdict: Partially useful
+- Usefulness summary: The 30-day framing is explicit, but the answer still hides the real deltas behind implausible `100%` claims.
+- Rationale: This is slightly better than the shorter sentiment prompt because the 30-day framing matches the ask. It still needs visible delta values and more believable explanations than a uniform `100%` improvement claim.
+- Score breakdown: Directness 5/5 | Completeness 2/5 | Relevance 3/5 | Trustworthiness 2/5 | Decision value 2/5 | Grace 3/5
+- Timing: total 14795ms | llm 13870ms | tools 667ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games with improving sentiment over the past 30 days, showing a significant increase in positive reviews:
+
+| Game | Review % | Reviews | Price | Why it fits |
+|------|----------|---------|-------|-------------|
+| [Primal Carnage](game:215470) | 76.5% | 5,833 | $4.99 | Sentiment improved by 100% |
+| [8BitMMO](game:250420) | 59.9% | 4,329 | Free | Sentiment improved by 100% |
+| [Neon Echo](game:2321210) | 55.9% | 4,099 | $14.99 | Sentiment improved by 100% |
+| [Mortal Online](game:287920) | 52.3% | 2,955 | Free | Sentiment improved by 100% |
+| [FORCED: Slightly Better Edition](game:249990) | 74.1% | 2,779 | $2.24 | Sentiment improved by 100% |
+| [Raw Data](game:436320) | 76.8% | 2,468 | $5.99 | Sentiment improved by 100% |
+| [Revolution Ace](game:274560) | 72.4% | 1,922 | $1.24 | Sentiment improved by 100% |
+| [CRYPTARK](game:344740) | 82.4% | 1,822 | $14.99 | Sentiment improved by 100% |
+| [INK](game:385710) | 81.3% | 1,576 | $4.99 | Sentiment improved by 100% |
+| [Bardbarian](game:269490) | 88.6% | 1,495 | $7.99 | Sentiment improved by 100% |
+
+These games have shown a notable increase in positive sentiment, indicating that players are responding more favorably to them recently.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "timeframe": "30d",
+      "filters": {
+        "min_sentiment_delta": 3,
+        "min_reviews": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 667,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### popular-games-worse-reviews-lately Which popular games are getting worse reviews lately?
+
+- Suite key: popular-games-worse-reviews-lately
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 3.9/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: The right metric family is finally in play, but the list does not look popular enough to trust for competitive monitoring.
+- Rationale: The system finally uses the sentiment-delta path, but the answer still fails the user intent because the games do not read as clearly `popular` and the repeated `complete sentiment decline` phrasing looks unreliable. A competitive analyst could not safely act on this list.
+- Score breakdown: Directness 4/5 | Completeness 2/5 | Relevance 2/5 | Trustworthiness 1/5 | Decision value 1/5 | Grace 3/5
+- Timing: total 13156ms | llm 12074ms | tools 664ms | iterations 2
+- Tools: screen_games
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some popular games that have been experiencing a decline in reviews lately, with significant negative sentiment changes over the past 30 days:
+
+| Game | Review % | Reviews | Price | Why it fits |
+|------|----------|---------|-------|-------------|
+| [Bit Blaster XL](game:433950) | 96.4% | 6,148 | $0.99 | Sentiment dropped significantly, indicating worsening reviews. |
+| [Lethal League](game:261180) | 94.2% | 6,067 | $13.99 | Experienced a complete sentiment decline, suggesting negative feedback. |
+| [Medal of Honor: Airborne](game:24840) | 81.0% | 4,965 | Free | Sentiment dropped to the lowest, reflecting poor recent reviews. |
+| [Intralism](game:513510) | 86.6% | 4,904 | $2.99 | Notable sentiment decline, indicating a shift in player feedback. |
+| [Medal of Honor](game:47830) | 70.7% | 4,785 | $9.99 | Significant drop in sentiment, showing negative player reception. |
+| [klocki](game:499440) | 96.8% | 4,645 | $2.99 | Complete sentiment decline, suggesting recent dissatisfaction. |
+| [Another Adventure](game:604450) | 91.5% | 4,333 | $1.99 | Sentiment dropped significantly, indicating worsening reviews. |
+| [Blackthorn Arena](game:1194930) | 68.8% | 3,777 | $24.99 | Notable sentiment decline, reflecting negative player feedback. |
+| [GOAT OF DUTY](game:555000) | 86.6% | 3,520 | $5.99 | Experienced a complete sentiment decline, suggesting negative feedback. |
+| [Go! Go! Nippon! ~My First Trip to Japan~](game:251870) | 86.4% | 3,120 | $9.99 | Significant drop in sentiment, indicating a shift in player feedback. |
+
+These games have shown a sentiment delta of -100, indicating a drastic decline in positive reviews compared to previous periods.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "screen_games",
+    "arguments": {
+      "sort_by": "sentiment_delta",
+      "sort_order": "asc",
+      "timeframe": "30d",
+      "filters": {
+        "max_sentiment_delta": -3,
+        "min_reviews": 1000
+      },
+      "limit": 10
+    },
+    "executionMs": 664,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+<!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-21T05:34:04.009Z","generatedAt":"2026-03-21T05:34:04.009Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":16,"averageTotalMs":17986,"medianTotalMs":13409,"p95TotalMs":48919,"averageUserScore":4.0,"weakOrFailureCount":11,"artifactPath":"/tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T05-29-05-948Z","scope":"section_5_trending_time_relative_baseline_live_run","promptRefs":["#102","#158","games-trending-up-in-reviews-right-now","games-trending-right-now","#181","breaking-out-right-now","show-breaking-out-right-now","breaking-out-indie-this-month","breaking-out-indie-right-now","breaking-out-overwhelmingly-positive","accelerating-review-velocity","most-active-games-by-reviews","most-reviews-added-this-week","show-games-improving-sentiment","games-improving-sentiment-past-30-days","popular-games-worse-reviews-lately"]} -->
+## Run 2026-03-21T05:34:04.009Z
+
+- Generated: 2026-03-21T05:34:04.009Z
+- Scope: first live baseline run of the recovered 16-prompt critique suite for section `5` (`Trending and Time-Relative Answers`)
+- Prompt refs: explicit critique IDs `#102`, `#158`, and `#181`, plus 13 stable `suiteKey` refs for unrecovered section `5` numbering
+- Environment: https://www.publisheriq.app
+- Auth account: ryanbohmann@gmail.com
+- Raw artifacts: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T05-29-05-948Z
+- Generic runner report: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T05-29-05-948Z/report.md
+- Raw JSON results: /tmp/publisheriq-chat-evals/critique-section-5-2026-03-21T05-29-05-948Z/results.json
+- Prompt count: 16
+- Average user score: 4.0/10
+- Verdict mix: Mixed 5 | Weak 1 | Failure 10
+- All 16 prompts returned successful HTTP responses; the failures here are answer-quality failures, not transport failures.
+- Full prompt outputs for all 16 prompts are preserved below and in the raw report and JSON artifacts above.
+
+### Assessment
+
+- This is the weakest critique-suite run in the ledger so far. The live system stayed up, but most answers still fail the user-trust bar for section `5`.
+- The dominant issue is metric-shape collapse: prompts about `current players`, `review velocity`, `sentiment improvement`, or `worse reviews lately` are repeatedly answered with owner estimates, lifetime review totals, or generic recent-review-activity tables.
+- `discover_trending` handled most of the prompts, but the answer layer often failed to explain which trend mode it actually used. Several prompts reused nearly the same prose even when the user asked for different metrics.
+- Hard filters are still unreliable in exactly the places the critique flagged. `#181` still breaks the horror filter, the two `indie` breakout prompts still surface obvious non-indie titles, and the `overwhelmingly positive` prompt still includes rows far below `95%`.
+- The only answers that felt even partially defensible for the primary persona were `Which games have accelerating review velocity?`, `What games are trending up in reviews right now?`, and, with caveats, `Which games have the most reviews added this week?`
+
+### Latency Summary
+
+| Average | Median | P95 | Fastest | Slowest |
+|---:|---:|---:|---:|---:|
+| 17986ms | 13409ms | 48919ms | 8226ms | 48919ms |
+
+### Ranking
+
+| Rank | Critique Ref | Prompt | Family | Primary Persona | User Score | Verdict | Total Time | Usefulness Summary |
+|---:|---|---|---|---|---:|---|---:|---|
+| 1 | `#158` | What free-to-play games have the most players right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 1.8/10 | Failure | 28901 | It labels owner estimates as current players and never anchors `right now`, which makes the table unusable. |
+| 2 | `#181` | What horror games are gaining momentum? | trend_filtered | Competitive / Market Intelligence Analyst | 1.9/10 | Failure | 12045 | The horror filter is visibly broken, so the answer cannot support any real market read. |
+| 3 | `#102` | Compare top 5 roguelites by review velocity and CCU | trend_comparison | Competitive / Market Intelligence Analyst | 2.6/10 | Failure | 48919 | It never compares the requested roguelites on review velocity and CCU, so the answer is not decision-ready. |
+| 4 | `breaking-out-overwhelmingly-positive` | Games breaking out with overwhelmingly positive reviews | trend_breakout | Competitive / Market Intelligence Analyst | 2.7/10 | Failure | 14051 | It breaks the `95%+` constraint inside the body, so the whole list stops being trustworthy. |
+| 5 | `show-games-improving-sentiment` | Show me games with improving sentiment | trend_sentiment | Competitive / Market Intelligence Analyst | 2.8/10 | Failure | 11114 | It answers accelerating review activity, not improving sentiment. |
+| 6 | `games-improving-sentiment-past-30-days` | Games with improving sentiment in the past 30 days | trend_sentiment | Competitive / Market Intelligence Analyst | 3.0/10 | Failure | 27383 | The 30-day window is present, but the output still measures review activity instead of sentiment improvement. |
+| 7 | `breaking-out-indie-right-now` | Breaking out indie games right now | trend_breakout | Investor / Portfolio Analyst | 3.1/10 | Failure | 21170 | The indie screen is still not trustworthy, and the answer degrades further with `Not specified` price fields. |
+| 8 | `breaking-out-indie-this-month` | Breaking out indie games this month | trend_breakout | Investor / Portfolio Analyst | 3.3/10 | Failure | 11693 | The month window is explicit, but the indie label is unreliable and the price column collapses to `TBD`. |
+| 9 | `popular-games-worse-reviews-lately` | Which popular games are getting worse reviews lately? | trend_sentiment | Competitive / Market Intelligence Analyst | 3.6/10 | Failure | 14611 | It maps `worse reviews lately` to declining review activity, which is not the asked signal. |
+| 10 | `most-active-games-by-reviews` | Most active games by reviews | trend_velocity | Competitive / Market Intelligence Analyst | 3.8/10 | Failure | 8226 | It answers all-time review totals, not current activity. |
+| 11 | `games-trending-right-now` | what games are trending right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 5.3/10 | Weak | 13409 | It gives a plausible trending segment, but the ranking logic and time basis are too vague to defend. |
+| 12 | `show-breaking-out-right-now` | Show me breaking out games right now | trend_breakout | Competitive / Market Intelligence Analyst | 5.6/10 | Mixed | 11343 | Nearly the same breakout scan as the adjacent prompt, with the same generic reasoning and weak tail. |
+| 13 | `breaking-out-right-now` | What’s breaking out right now? | trend_breakout | Competitive / Market Intelligence Analyst | 5.7/10 | Mixed | 12951 | It is a workable loose watchlist, but it still mixes credible breakouts with junk and never explains the ranking rule. |
+| 14 | `most-reviews-added-this-week` | Which games have the most reviews added this week? | trend_velocity | Competitive / Market Intelligence Analyst | 5.9/10 | Mixed | 9138 | The metric is right, but the table is not sorted correctly, which dents trust. |
+| 15 | `games-trending-up-in-reviews-right-now` | What games are trending up in reviews right now? | trend_leaderboard | Competitive / Market Intelligence Analyst | 6.1/10 | Mixed | 28243 | The weekly review-addition framing is usable as a watchlist, but it still never grounds `right now` with an exact window. |
+| 16 | `accelerating-review-velocity` | Which games have accelerating review velocity? | trend_velocity | Competitive / Market Intelligence Analyst | 6.8/10 | Mixed | 14577 | The best trend answer in the run; it mostly matches the asked metric, even though it still lacks baseline context and exact date anchoring. |
+
+### Detailed Results
+
+#### #102 Compare top 5 roguelites by review velocity and CCU
+
+- Suite key: `roguelites-review-velocity-vs-ccu`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_comparison
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 2.6/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: It never compares the requested roguelites on review velocity and CCU, so the answer is not decision-ready.
+- Rationale: The prompt asks for a same-population comparison on two metrics. The answer switches to top roguelites by review score, then runs a separate analytics query that returns zero rows and gives up. For a market analyst, that is a nearby answer wrapped around the wrong comparison.
+- Timing: total 48919ms | llm 30404ms | tools 18204ms | iterations 2
+- Tools: search_games, query_analytics
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the top 5 roguelite games based on review scores:
+
+| Game | Review % | Reviews | Price | Publisher | Developer |
+|------|----------|---------|-------|-----------|-----------|
+| [Vampire Survivors](game:1794680) | 98.4% | 260,503 | $3.74 | [poncle](/publishers/8279) | [poncle](/developers/8666) |
+| [Hades](game:1145360) | 98.2% | 279,741 | $6.24 | [Supergiant Games](/publishers/2013) | [Supergiant Games](/developers/2024) |
+| [The Binding of Isaac: Rebirth](game:250900) | 97.2% | 384,768 | $8.99 | [Nicalis, Inc.](/publishers/2235) | [Edmund McMillen](/developers/1735) |
+| [Slay the Spire](game:646570) | 97.6% | 209,233 | $6.24 | [Mega Crit](/publishers/4905) | [Mega Crit](/developers/5097) |
+| [Risk of Rain 2](game:632360) | 93.5% | 313,577 | $8.24 | [Gearbox Publishing](/publishers/4887) | [Hopoo Games](/developers/5077) |
+
+Unfortunately, there were no qualifying results for the review velocity and CCU (concurrent users) data for these games. This could be due to a lack of available data for the specific metrics requested. If you have any other queries or need further assistance, feel free to ask!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "search_games",
+    "arguments": {
+      "tags": [
+        "Roguelite"
+      ],
+      "order_by": "reviews",
+      "limit": 5
+    },
+    "executionMs": 12544,
+    "success": true,
+    "result_summary": "6136 results"
+  },
+  {
+    "name": "query_analytics",
+    "arguments": {
+      "cube": "Discovery",
+      "dimensions": [
+        "Discovery.appid",
+        "Discovery.name",
+        "Discovery.ccuPeak",
+        "Discovery.velocity7d"
+      ],
+      "filters": [
+        {
+          "member": "Discovery.ccuPeak",
+          "operator": "set"
+        }
+      ],
+      "order": {
+        "Discovery.ccuPeak": "desc"
+      },
+      "limit": 5
+    },
+    "executionMs": 5660,
+    "success": true,
+    "result_summary": "0 rows"
+  }
+]
+```
+
+</details>
+
+#### #158 What free-to-play games have the most players right now?
+
+- Suite key: `free-to-play-most-players-right-now`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 1.8/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: It labels owner estimates as current players and never anchors `right now`, which makes the table unusable.
+- Rationale: This is the exact critique failure still present. The tool query sorts `Discovery.ownersMidpoint`, but the answer renders that as `Players`. Once the core metric label is wrong, the rest of the table cannot be trusted.
+- Timing: total 28901ms | llm 22835ms | tools 5547ms | iterations 2
+- Tools: query_analytics
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the free-to-play games with the most players right now:
+
+| Game | Players |
+|------|---------|
+| [Dota 2](game:570) | 150,000,000 |
+| [Counter-Strike: Global Offensive](game:730) | 150,000,000 |
+| [Team Fortress 2](game:440) | 75,000,000 |
+| [Unturned](game:304930) | 75,000,000 |
+| [Lost Ark](game:1599340) | 75,000,000 |
+| [Warframe](game:230410) | 35,000,000 |
+| [War Thunder](game:236390) | 35,000,000 |
+| [Path of Exile](game:238960) | 35,000,000 |
+| [Brawlhalla](game:291550) | 35,000,000 |
+| [World of Warships](game:552990) | 35,000,000 |
+
+These games are currently among the most popular free-to-play titles on Steam.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "query_analytics",
+    "arguments": {
+      "cube": "Discovery",
+      "dimensions": [
+        "Discovery.appid",
+        "Discovery.name",
+        "Discovery.ownersMidpoint"
+      ],
+      "filters": [
+        {
+          "member": "Discovery.isFree",
+          "operator": "equals",
+          "values": [
+            true
+          ]
+        },
+        {
+          "member": "Discovery.ownersMidpoint",
+          "operator": "set"
+        }
+      ],
+      "order": {
+        "Discovery.ownersMidpoint": "desc"
+      },
+      "limit": 10
+    },
+    "executionMs": 5547,
+    "success": true,
+    "result_summary": "10 rows"
+  }
+]
+```
+
+</details>
+
+#### games-trending-up-in-reviews-right-now What games are trending up in reviews right now?
+
+- Suite key: `games-trending-up-in-reviews-right-now`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.1/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: The weekly review-addition framing is usable as a watchlist, but it still never grounds `right now` with an exact window.
+- Rationale: This is one of the better trend answers because the rows at least look like live review-velocity candidates and each row explains the recent review activity. The trust gap is time grounding and metric definition: it behaves like `reviews added in the last 7 days`, not a clearly labeled `right now` trend screen.
+- Timing: total 28243ms | llm 25207ms | tools 2776ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently trending up in reviews, showing significant increases in review activity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Grand Theft Auto V Enhanced](game:3240220) | 81.1% | 164,250 | High review velocity with 756 new reviews in the last week. |
+| [Battlefield 1](game:1238840) | 86.4% | 212,597 | Strong review activity with 609 new reviews recently. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | Exceptional increase with 2,975 new reviews this week. |
+| [Ready or Not](game:1144200) | 77.1% | 317,410 | 558 new reviews added in the last week. |
+| [Dead by Daylight](game:381210) | 78.6% | 885,341 | 540 new reviews in the past week. |
+| [Schedule I](game:3164500) | 97.9% | 284,837 | 534 new reviews recently, indicating strong interest. |
+| [Teardown](game:1167630) | 95.8% | 125,185 | 495 new reviews added this week. |
+| [ELDEN RING](game:1245620) | 93.0% | 1,120,363 | 405 new reviews in the last week. |
+| [Slay the Spire](game:646570) | 97.6% | 209,233 | 400 new reviews recently, showing renewed interest. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.0% | 25,450 | 320 new reviews added this week. |
+
+These games have shown a notable increase in review activity, indicating a growing interest among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 2776,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### games-trending-right-now what games are trending right now?
+
+- Suite key: `games-trending-right-now`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_leaderboard
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.3/10
+- Verdict: Weak
+- Usefulness verdict: Partially useful
+- Usefulness summary: It gives a plausible trending segment, but the ranking logic and time basis are too vague to defend.
+- Rationale: The answer likely comes from the `Discovery.trending` segment, but it only shows total reviews and review percentage. A market analyst still cannot tell whether this is momentum, recent review volume, acceleration, or just large popular games inside a trending bucket.
+- Timing: total 13409ms | llm 8487ms | tools 4656ms | iterations 2
+- Tools: query_analytics
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the currently trending games based on review activity:
+
+| Game | Review % | Reviews |
+|------|----------|---------|
+| [War Thunder](game:236390) | 72.8% | 727,217 |
+| [PAYDAY 2](game:218620) | 89.6% | 663,082 |
+| [Fallout 4](game:377160) | 83.1% | 392,287 |
+| [Raft](game:648800) | 93.1% | 367,575 |
+| [The Elder Scrolls V: Skyrim](game:72850) | 94.8% | 317,279 |
+| [Monster Hunter Wilds](game:2246340) | 47.9% | 314,108 |
+| [Risk of Rain 2](game:632360) | 93.5% | 313,577 |
+| [Hunt: Showdown 1896](game:594650) | 73.9% | 268,229 |
+| [Tomb Raider Game of the Year](game:203160) | 96.1% | 262,452 |
+| [Battlefield V](game:1238810) | 70.7% | 262,385 |
+
+These games are currently gaining traction among players!
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "query_analytics",
+    "arguments": {
+      "cube": "Discovery",
+      "dimensions": [
+        "Discovery.appid",
+        "Discovery.name",
+        "Discovery.reviewPercentage",
+        "Discovery.totalReviews"
+      ],
+      "segments": [
+        "Discovery.trending"
+      ],
+      "order": {
+        "Discovery.totalReviews": "desc"
+      },
+      "limit": 10,
+      "reasoning": "To find the currently trending games based on review activity."
+    },
+    "executionMs": 4656,
+    "success": true,
+    "result_summary": "10 rows"
+  }
+]
+```
+
+</details>
+
+#### #181 What horror games are gaining momentum?
+
+- Suite key: `horror-games-gaining-momentum`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_filtered
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 1.9/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: The horror filter is visibly broken, so the answer cannot support any real market read.
+- Rationale: This is still a category-integrity failure. The table includes non-horror titles like `DEATH STRANDING 2`, `ELDEN RING`, `Slay the Spire`, `Grand Theft Auto V Enhanced`, `Battlefield 1`, and `Call of Duty: Modern Warfare`. Once the filter is that loose, the trend claims stop mattering.
+- Timing: total 12045ms | llm 10478ms | tools 1304ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some horror games that are currently gaining momentum based on recent review activity:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | High review activity with a significant increase in reviews recently. |
+| [Schedule I](game:3164500) | 97.9% | 284,837 | Strong positive reviews and a notable uptick in player engagement. |
+| [Teardown](game:1167630) | 95.8% | 125,185 | Consistently high reviews with increasing player interest. |
+| [ELDEN RING](game:1245620) | 93.0% | 1,120,363 | Continues to attract players with strong reviews and engagement. |
+| [Slay the Spire](game:646570) | 97.6% | 209,233 | High review percentage and growing player base. |
+| [Ready or Not](game:1144200) | 77.1% | 317,410 | Increasing review activity indicates rising interest. |
+| [Dead by Daylight](game:381210) | 78.6% | 885,341 | Ongoing popularity with a steady influx of new reviews. |
+| [Grand Theft Auto V Enhanced](game:3240220) | 81.1% | 164,250 | High review activity, though not strictly horror, it has horror elements. |
+| [Battlefield 1](game:1238840) | 86.4% | 212,597 | While primarily a shooter, it has horror themes in certain modes. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.0% | 25,450 | Features horror elements in its campaign and modes. |
+
+These games are experiencing a surge in reviews and player engagement, indicating a growing interest in the horror genre.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating",
+      "filters": {
+        "genres": [
+          "Horror"
+        ]
+      },
+      "limit": 10
+    },
+    "executionMs": 1304,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-right-now What’s breaking out right now?
+
+- Suite key: `breaking-out-right-now`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.7/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: It is a workable loose watchlist, but it still mixes credible breakouts with junk and never explains the ranking rule.
+- Rationale: The answer is directionally closer than the failures because most rows sit in the intended review-count band and the prompt at least maps to `breaking_out`. The problem is curation: `WWE 2K26` and low-quality tail rows weaken trust, and the answer never states why the list is ranked the way it is.
+- Timing: total 12951ms | llm 9567ms | tools 3103ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently breaking out, showing significant momentum in reviews over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 73.5% | 1,485 | Gaining traction with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.4% | 897 | High engagement with 1,139 new reviews recently. |
+| [AETHUS](game:2541530) | 95.2% | 880 | Strong performance with 103 new reviews this week. |
+| [Timber Rush](game:4298880) | 82.6% | 218 | Notable increase with 326 new reviews in the last week. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.8% | 8,180 | Consistent interest with 110 new reviews recently. |
+| [UBERMOSH](game:357070) | 90.5% | 6,046 | Solid engagement with 51 new reviews this week. |
+| [MIMESIS](game:2827200) | 84.8% | 8,510 | Active with 58 new reviews in the last week. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | Exceptional momentum with 2,975 new reviews recently. |
+| [Lucid Blocks](game:3495730) | 94.7% | 1,993 | High activity with 2,116 new reviews this week. |
+| [WWE 2K26](game:3717070) | 48.1% | 1,465 | Increased interest with 166 new reviews recently. |
+
+These games have shown a significant increase in review activity, indicating they are gaining popularity among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 3103,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### show-breaking-out-right-now Show me breaking out games right now
+
+- Suite key: `show-breaking-out-right-now`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.6/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: Nearly the same breakout scan as the adjacent prompt, with the same generic reasoning and weak tail.
+- Rationale: This is basically the same answer shape as `What’s breaking out right now?`, which is itself part of the critique. It is still usable as a first-pass watchlist, but not as a defended breakout view.
+- Timing: total 11343ms | llm 9567ms | tools 1302ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently breaking out, showing significant review activity and gaining traction:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 73.5% | 1,485 | High review activity with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.4% | 897 | Exceptional review percentage with 1,139 new reviews in the last week. |
+| [AETHUS](game:2541530) | 95.2% | 880 | Strong review momentum with 103 new reviews recently. |
+| [Timber Rush](game:4298880) | 82.6% | 218 | Gained 326 reviews in the last week, indicating rising interest. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.8% | 8,180 | Continues to attract attention with 110 new reviews recently. |
+| [UBERMOSH](game:357070) | 90.5% | 6,046 | Consistent activity with 51 new reviews in the last week. |
+| [MIMESIS](game:2827200) | 84.8% | 8,510 | Solid performance with 58 new reviews recently. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | Massive review activity with 2,975 new reviews in the last week. |
+| [Lucid Blocks](game:3495730) | 94.7% | 1,993 | High engagement with 2,116 new reviews recently. |
+| [WWE 2K26](game:3717070) | 48.1% | 1,465 | Notable activity with 166 new reviews in the last week. |
+
+These games are experiencing a surge in reviews, indicating growing popularity and interest among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out"
+    },
+    "executionMs": 1302,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-this-month Breaking out indie games this month
+
+- Suite key: `breaking-out-indie-this-month`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 3.3/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: The month window is explicit, but the indie label is unreliable and the price column collapses to `TBD`.
+- Rationale: The tool call only applies `is_free: false`; it does not prove `indie`. The result then includes obvious non-indie contamination like `Tomb Raider I-III Remastered`, `DEATH STRANDING 2`, and `WWE 2K26`, while the rendered `Price` column never resolves.
+- Timing: total 11693ms | llm 8639ms | tools 2570ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some breaking out indie games from the past month that are gaining traction:
+
+| Game | Review % | Reviews | Price | Why it fits |
+|------|----------|---------|-------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 73.5% | 1,485 | TBD | High review activity with 280 new reviews in the last 30 days. |
+| [Funi Raccoon Game](game:3599690) | 99.4% | 897 | TBD | Exceptional review percentage with 1,385 new reviews recently. |
+| [AETHUS](game:2541530) | 95.2% | 880 | TBD | Strong engagement with 815 new reviews in the last month. |
+| [Timber Rush](game:4298880) | 82.6% | 218 | TBD | Consistent activity with 326 new reviews recently. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.8% | 8,180 | TBD | Popular remaster with significant review activity. |
+| [UBERMOSH](game:357070) | 90.5% | 6,046 | TBD | High engagement with 202 new reviews in the last month. |
+| [MIMESIS](game:2827200) | 84.8% | 8,510 | TBD | Solid review activity with 256 new reviews recently. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | TBD | Massive review momentum with 2,975 new reviews. |
+| [Lucid Blocks](game:3495730) | 94.7% | 1,993 | TBD | High engagement with 2,860 new reviews recently. |
+| [WWE 2K26](game:3717070) | 48.1% | 1,465 | TBD | Notable activity with 677 new reviews in the last month. |
+
+These games have shown significant increases in review activity, indicating they are gaining popularity among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out",
+      "timeframe": "30d",
+      "filters": {
+        "is_free": false
+      },
+      "limit": 10
+    },
+    "executionMs": 2570,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-indie-right-now Breaking out indie games right now
+
+- Suite key: `breaking-out-indie-right-now`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Investor / Portfolio Analyst
+- User score: 3.1/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: The indie screen is still not trustworthy, and the answer degrades further with `Not specified` price fields.
+- Rationale: This has the same core issue as the monthly version, but with even weaker presentation. For an investor or portfolio analyst, a supposedly `indie` breakout list that includes major-publisher titles is worse than no list.
+- Timing: total 21170ms | llm 10913ms | tools 10014ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some indie games that are currently breaking out and gaining traction:
+
+| Game | Review % | Reviews | Price | Why it fits |
+|------|----------|---------|-------|-------------|
+| [Dragonkin: The Banished](game:1863430) | 73.5% | 1,485 | Not specified | High review activity with 127 new reviews in the last week. |
+| [Funi Raccoon Game](game:3599690) | 99.4% | 897 | Not specified | Exceptional review percentage with 1,139 new reviews in the last week. |
+| [AETHUS](game:2541530) | 95.2% | 880 | Not specified | Strong engagement with 103 new reviews in the last week. |
+| [Timber Rush](game:4298880) | 82.6% | 218 | Not specified | Gaining popularity with 326 new reviews in the last week. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.8% | 8,180 | Not specified | High volume of reviews with 110 new reviews in the last week. |
+| [UBERMOSH](game:357070) | 90.5% | 6,046 | Not specified | Consistent interest with 51 new reviews in the last week. |
+| [MIMESIS](game:2827200) | 84.8% | 8,510 | Not specified | Steady engagement with 58 new reviews in the last week. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | Not specified | Massive review activity with 2,975 new reviews in the last week. |
+| [Lucid Blocks](game:3495730) | 94.7% | 1,993 | Not specified | High engagement with 2,116 new reviews in the last week. |
+| [WWE 2K26](game:3717070) | 48.1% | 1,465 | Not specified | Notable activity with 166 new reviews in the last week. |
+
+These games have shown significant increases in review activity recently, indicating a growing interest among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out",
+      "filters": {
+        "is_free": false
+      },
+      "limit": 10
+    },
+    "executionMs": 10014,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### breaking-out-overwhelmingly-positive Games breaking out with overwhelmingly positive reviews
+
+- Suite key: `breaking-out-overwhelmingly-positive`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_breakout
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 2.7/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: It breaks the `95%+` constraint inside the body, so the whole list stops being trustworthy.
+- Rationale: The tool call asks for `review_percentage >= 95`, but the answer happily keeps rows at `73.5%`, `82.6%`, `84.8%`, `90.5%`, and `48.1%`. That is a hard-filter trust failure, not just a weak ranking.
+- Timing: total 14051ms | llm 11298ms | tools 2467ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that are currently breaking out with overwhelmingly positive reviews:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Funi Raccoon Game](game:3599690) | 99.4% | 897 | This game has seen a significant increase in reviews recently, indicating a strong breakout. |
+| [AETHUS](game:2541530) | 95.2% | 880 | With a high review percentage and a notable increase in reviews, this game is gaining traction. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3885 | This title has an exceptionally high review velocity, marking it as a standout. |
+| [Lucid Blocks](game:3495730) | 94.7% | 1993 | The game has a strong review percentage and is rapidly gaining attention. |
+| [Dragonkin: The Banished](game:1863430) | 73.5% | 1485 | While not overwhelmingly positive, its recent review activity suggests a breakout potential. |
+| [Timber Rush](game:4298880) | 82.6% | 218 | This game is experiencing a good influx of reviews, indicating growing popularity. |
+| [Tomb Raider I-III Remastered Starring Lara Croft](game:2478970) | 84.8% | 8180 | A classic title that continues to attract positive reviews and attention. |
+| [UBERMOSH](game:357070) | 90.5% | 6046 | This game has maintained a strong review percentage and is gaining new players. |
+| [MIMESIS](game:2827200) | 84.8% | 8510 | With a solid review score and increasing player interest, it's a notable title. |
+| [WWE 2K26](game:3717070) | 48.1% | 1465 | Despite a lower review percentage, its recent activity suggests it is gaining traction. |
+
+These games have shown significant recent activity and positive reception, making them noteworthy in the current gaming landscape.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "breaking_out",
+      "filters": {
+        "review_percentage": {
+          "gte": 95
+        }
+      }
+    },
+    "executionMs": 2467,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### accelerating-review-velocity Which games have accelerating review velocity?
+
+- Suite key: `accelerating-review-velocity`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 6.8/10
+- Verdict: Mixed
+- Usefulness verdict: Useful
+- Usefulness summary: The best trend answer in the run; it mostly matches the asked metric, even though it still lacks baseline context and exact date anchoring.
+- Rationale: This one actually routes to the right trend type and returns a coherent watchlist. It still reduces `accelerating` to raw 7-day review additions instead of explicitly comparing 7-day versus 30-day rate, but the output is directionally useful and much more trustworthy than the rest of the suite.
+- Timing: total 14577ms | llm 9715ms | tools 4617ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games with accelerating review velocity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | High review velocity of 3,410.75 reviews added in the last 7 days. |
+| [Grand Theft Auto V Enhanced](game:3240220) | 81.1% | 164,250 | 465.95 reviews added in the last 7 days. |
+| [Battlefield 1](game:1238840) | 86.4% | 212,597 | 376.43 reviews added in the last 7 days. |
+| [Ready or Not](game:1144200) | 77.1% | 317,410 | 341.27 reviews added in the last 7 days. |
+| [Dead by Daylight](game:381210) | 78.6% | 885,341 | 335.23 reviews added in the last 7 days. |
+| [Schedule I](game:3164500) | 97.9% | 284,837 | 327.00 reviews added in the last 7 days. |
+| [Teardown](game:1167630) | 95.8% | 125,185 | 305.61 reviews added in the last 7 days. |
+| [ELDEN RING](game:1245620) | 93.0% | 1,120,363 | 249.14 reviews added in the last 7 days. |
+| [Slay the Spire](game:646570) | 97.6% | 209,233 | 246.21 reviews added in the last 7 days. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.0% | 25,450 | 241.05 reviews added in the last 7 days. |
+
+These games have shown a significant increase in review activity, indicating growing interest and engagement from players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 4617,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### most-active-games-by-reviews Most active games by reviews
+
+- Suite key: `most-active-games-by-reviews`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 3.8/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: It answers all-time review totals, not current activity.
+- Rationale: The prompt implies current review activity or momentum. The tool call orders `Discovery.totalReviews desc`, and the answer says `most active` while showing lifetime review counts. That is the wrong metric, full stop.
+- Timing: total 8226ms | llm 6283ms | tools 1691ms | iterations 2
+- Tools: query_analytics
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the most active games on Steam, ranked by the total number of reviews:
+
+| Game | Total Reviews |
+|------|---------------|
+| [Counter-Strike: Global Offensive](game:730) | 9,476,142 |
+| [Dota 2](game:570) | 2,681,060 |
+| [Terraria](game:105600) | 1,508,032 |
+| [Tom Clancy's Rainbow Six Siege](game:359550) | 1,493,723 |
+| [Rust](game:252490) | 1,340,247 |
+| [Garry's Mod](game:4000) | 1,223,679 |
+| [Team Fortress 2](game:440) | 1,221,192 |
+| [Black Myth: Wukong](game:2358720) | 1,196,047 |
+| [ELDEN RING](game:1245620) | 1,120,363 |
+| [HELLDIVERS™ 2](game:553850) | 1,118,040 |
+
+These games have garnered significant player engagement, as indicated by their high review counts.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "query_analytics",
+    "arguments": {
+      "cube": "Discovery",
+      "dimensions": [
+        "Discovery.appid",
+        "Discovery.name",
+        "Discovery.totalReviews"
+      ],
+      "segments": [
+        "Discovery.popular"
+      ],
+      "order": {
+        "Discovery.totalReviews": "desc"
+      },
+      "limit": 10,
+      "reasoning": "To find the most active games based on the total number of reviews."
+    },
+    "executionMs": 1691,
+    "success": true,
+    "result_summary": "10 rows"
+  }
+]
+```
+
+</details>
+
+#### most-reviews-added-this-week Which games have the most reviews added this week?
+
+- Suite key: `most-reviews-added-this-week`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_velocity
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 5.9/10
+- Verdict: Mixed
+- Usefulness verdict: Partially useful
+- Usefulness summary: The metric is right, but the table is not sorted correctly, which dents trust.
+- Rationale: This is closer to the target than many other section 5 answers because it clearly states `Reviews Added (7d)`. The issue is sorting: `DEATH STRANDING 2` has the largest weekly gain in the table but appears last, so an analyst still has to manually re-rank the answer.
+- Timing: total 9138ms | llm 7151ms | tools 1516ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are the games with the most reviews added this week:
+
+| Game | Reviews Added (7d) | Total Reviews | Review % |
+|------|---------------------|---------------|----------|
+| [Counter-Strike: Global Offensive](game:730) | 6,973 | 9,476,142 | 86.2% |
+| [Geometry Dash](game:322170) | 1,330 | 560,158 | 93.1% |
+| [ARC Raiders](game:1808500) | 1,185 | 366,739 | 86.3% |
+| [Dota 2](game:570) | 1,082 | 2,681,060 | 81.1% |
+| [War Thunder](game:236390) | 942 | 727,217 | 72.8% |
+| [HELLDIVERS™ 2](game:553850) | 826 | 1,118,040 | 77.0% |
+| [Poppy Playtime](game:1721470) | 785 | 129,557 | 87.3% |
+| [Grand Theft Auto V Enhanced](game:3240220) | 756 | 164,250 | 81.1% |
+| [Rust](game:252490) | 712 | 1,340,247 | 87.0% |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 2,975 | 3,885 | 96.3% |
+
+These games have shown significant review activity over the past week.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "review_momentum",
+      "timeframe": "7d"
+    },
+    "executionMs": 1516,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### show-games-improving-sentiment Show me games with improving sentiment
+
+- Suite key: `show-games-improving-sentiment`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 2.8/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: It answers accelerating review activity, not improving sentiment.
+- Rationale: The tool call is literally `discover_trending(trend_type: "accelerating")`. Nothing in the answer shows sentiment change, before/after review ratio, or even a sentiment delta. This is a wrong-metric failure dressed up as a sentiment answer.
+- Timing: total 11114ms | llm 8707ms | tools 2146ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games currently experiencing improving sentiment, indicated by a high review activity over the past week:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Grand Theft Auto V Enhanced](game:3240220) | 81.1% | 164,250 | High review activity with 756 new reviews in the last week. |
+| [Battlefield 1](game:1238840) | 86.4% | 212,597 | Strong sentiment with 609 new reviews added recently. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | Exceptional sentiment with 2,975 reviews added in the last week. |
+| [Ready or Not](game:1144200) | 77.1% | 317,410 | Consistent activity with 558 new reviews this week. |
+| [Dead by Daylight](game:381210) | 78.6% | 885,341 | Active engagement with 540 new reviews recently. |
+| [Schedule I](game:3164500) | 97.9% | 284,837 | High positivity with 534 new reviews in the last week. |
+| [Teardown](game:1167630) | 95.8% | 125,185 | Strong activity with 495 new reviews added recently. |
+| [ELDEN RING](game:1245620) | 93.0% | 1,120,363 | High engagement with 405 new reviews this week. |
+| [Slay the Spire](game:646570) | 97.6% | 209,233 | Positive sentiment with 400 new reviews recently. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.0% | 25,450 | Active sentiment with 320 new reviews added this week. |
+
+These games have shown a notable increase in review activity, indicating improving player sentiment.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating"
+    },
+    "executionMs": 2146,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### games-improving-sentiment-past-30-days Games with improving sentiment in the past 30 days
+
+- Suite key: `games-improving-sentiment-past-30-days`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 3.0/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: The 30-day window is present, but the output still measures review activity instead of sentiment improvement.
+- Rationale: The answer says `improving sentiment` yet every row explanation is about new review counts in the last 30 days. A market analyst cannot use this to defend a sentiment shift claim because no old-vs-new sentiment evidence is shown.
+- Timing: total 27383ms | llm 25339ms | tools 1769ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some games that have shown improving sentiment in the past 30 days, based on their review activity:
+
+| Game | Review % | Reviews | Why it fits |
+|------|----------|---------|-------------|
+| [Grand Theft Auto V Enhanced](game:3240220) | 81.1% | 164,250 | High review activity with 2,597 new reviews in the last 30 days. |
+| [Battlefield 1](game:1238840) | 86.4% | 212,597 | Gained 977 new reviews in the last month, indicating renewed interest. |
+| [DEATH STRANDING 2: ON THE BEACH](game:3280350) | 96.3% | 3,885 | Exceptional review percentage with 2,975 reviews added recently. |
+| [Ready or Not](game:1144200) | 77.1% | 317,410 | 1,152 new reviews in the past month show increasing player engagement. |
+| [Dead by Daylight](game:381210) | 78.6% | 885,341 | 1,657 new reviews indicate a positive trend in player sentiment. |
+| [Schedule I](game:3164500) | 97.9% | 284,837 | High review percentage with 1,692 new reviews recently. |
+| [Teardown](game:1167630) | 95.8% | 125,185 | 1,564 new reviews reflect a strong positive shift. |
+| [ELDEN RING](game:1245620) | 93.0% | 1,120,363 | 1,380 new reviews show continued player satisfaction. |
+| [Slay the Spire](game:646570) | 97.6% | 209,233 | 1,239 new reviews highlight its ongoing popularity. |
+| [Call of Duty: Modern Warfare](game:2000950) | 79.0% | 25,450 | 496 new reviews suggest a resurgence in player interest. |
+
+These games have experienced a notable increase in review activity, indicating improving sentiment among players.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "accelerating",
+      "timeframe": "30d"
+    },
+    "executionMs": 1769,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
+
+#### popular-games-worse-reviews-lately Which popular games are getting worse reviews lately?
+
+- Suite key: `popular-games-worse-reviews-lately`
+- Section: 5. Trending and Time-Relative Answers
+- Family: trend_sentiment
+- Primary persona: Competitive / Market Intelligence Analyst
+- User score: 3.6/10
+- Verdict: Failure
+- Usefulness verdict: Not useful
+- Usefulness summary: It maps `worse reviews lately` to declining review activity, which is not the asked signal.
+- Rationale: The tool call uses `trend_type: "declining"`, and the answer then interprets lower review activity as players being less satisfied. That inference is not supported by the data shown, so the answer feels analytical while answering the wrong question.
+- Timing: total 14611ms | llm 6756ms | tools 7590ms | iterations 2
+- Tools: discover_trending
+
+<details>
+<summary>Exact Output</summary>
+
+```md
+Here are some popular games that have been experiencing declining reviews lately:
+
+| Game | Review % | Total Reviews |
+|------|----------|---------------|
+| [Poppy Playtime](game:1721470) | 87.3% | 129,557 |
+| [Rust](game:252490) | 87.0% | 1,340,247 |
+| [ULTRAKILL](game:1229490) | 97.5% | 216,558 |
+| [PEAK](game:3527290) | 94.8% | 300,328 |
+| [Euro Truck Simulator 2](game:227300) | 97.5% | 904,210 |
+| [Poker Night at the Inventory](game:3897800) | 95.1% | 5,990 |
+| [The Crew Motorfest](game:2698940) | 77.8% | 19,900 |
+| [Warhammer 40,000: Space Marine 2](game:2183900) | 83.4% | 203,347 |
+| [Monster Hunter Wilds](game:2246340) | 47.9% | 314,108 |
+| [It Takes Two](game:1426210) | 95.4% | 254,715 |
+
+These games have shown a decrease in review activity over the past week, indicating that players may not be as satisfied with them recently.
+```
+
+</details>
+
+<details>
+<summary>Tool Calls</summary>
+
+```json
+[
+  {
+    "name": "discover_trending",
+    "arguments": {
+      "trend_type": "declining"
+    },
+    "executionMs": 7590,
+    "success": true,
+    "result_summary": "10 results"
+  }
+]
+```
+
+</details>
 
 <!-- CHAT_EVAL_LEDGER_RUN {"runId":"2026-03-21T00:08:57.725Z","generatedAt":"2026-03-21T00:08:57.725Z","environment":"https://www.publisheriq.app","authAccount":"ryanbohmann@gmail.com","promptCount":13,"averageTotalMs":14409,"medianTotalMs":14316,"p95TotalMs":24502,"averageUserScore":6.7,"weakOrFailureCount":2,"artifactPath":"/tmp/publisheriq-chat-evals/critique-sections-3-4-2026-03-21-r5","scope":"full_sections_3_4_quality_pass_round_2","baselineRunId":"2026-03-20T22:06:10.675Z","promptIds":[51,49,132,134,170,171,190,18,195,19,186,42,229]} -->
 ## Run 2026-03-21T00:08:57.725Z

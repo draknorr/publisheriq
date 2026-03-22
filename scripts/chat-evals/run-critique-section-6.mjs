@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { loadPackDefinition } from './lib/prompt-packs.mjs';
 import { parseCommonArgs, runPackSuite } from './lib/suite-runner.mjs';
 
-const PACK_KEY = 'full.sections-1-2';
+const PACK_KEY = 'full.section-6';
 
 export const SUITE_ROWS = (await loadPackDefinition(PACK_KEY)).entries;
 

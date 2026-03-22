@@ -1,14 +1,11 @@
 import { execFile } from 'node:child_process';
-import path from 'node:path';
 import readline from 'node:readline/promises';
 import { promisify } from 'node:util';
 
 import {
-  DEFAULT_BASE_BRANCH,
   DEFAULT_GOLDEN_GOAL,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_PORT,
-  DEFAULT_REMOTE,
   ROOT,
 } from './constants.mjs';
 import { runCodexIteration } from './codex-runner.mjs';
@@ -16,13 +13,11 @@ import { authenticate, loadAutolabEnv, validateAutolabEnv } from './env.mjs';
 import { evaluatePrompt } from './eval-client.mjs';
 import {
   commitAll,
-  createWorktree,
-  discardWorkingTree,
-  ensureSafeRemote,
-  getChangedFiles,
+  discardWorkingTreeChanges,
+  ensureCampaignResume,
+  ensureCampaignStart,
   getHeadSha,
-  hasWorkingTreeChanges,
-  pushBranch,
+  getWorkingTreeSnapshot,
 } from './git.mjs';
 import { buildPromptInventory, chooseNextPrompt, discoverPromptCandidates } from './inventory.mjs';
 import { judgePrompt } from './judge.mjs';
@@ -47,8 +42,6 @@ export async function runCampaign({
   runId = null,
   note = '',
   port = DEFAULT_PORT,
-  remote = DEFAULT_REMOTE,
-  baseBranch = DEFAULT_BASE_BRANCH,
   maxIterations = DEFAULT_MAX_ITERATIONS,
   goldenGoal = DEFAULT_GOLDEN_GOAL,
   onStateChange = null,
@@ -61,95 +54,101 @@ export async function runCampaign({
   const state =
     runId
       ? await loadState(runId)
-      : createInitialState({
+        : createInitialState({
           runId: activeRunId,
           port,
-          remote,
-          baseBranch,
           maxIterations,
           goldenGoal,
           note,
         });
 
-  await updateState(state, onStateChange);
-  await ensureSafeRemote(state.remote);
-
-  if (!state.worktreeDir) {
-    state.branch = state.branch || `chat-autolab/${state.runId}`;
-    state.worktreeDir = path.join(paths.runDir, 'worktree');
-    await createWorktree({
-      runId: state.runId,
-      branch: state.branch,
-      baseBranch: state.baseBranch,
-      worktreeDir: state.worktreeDir,
-    });
-    await appendEvent(state, {
-      type: 'worktree_created',
-      message: `Created worktree ${state.worktreeDir} on branch ${state.branch}.`,
-    });
+  try {
     await updateState(state, onStateChange);
-  }
-
-  const server = await ensureLocalServer({
-    cwd: state.worktreeDir,
-    port: state.port,
-    serverLogPath: paths.serverLogPath,
-    env,
-    existingPid: state.server.pid,
-  });
-  state.evalOrigin = server.origin;
-  state.evalSecret = server.evalSecret;
-  state.server = {
-    pid: server.pid,
-    startedByAutolab: server.startedByAutolab,
-  };
-  await appendEvent(state, {
-    type: 'server_ready',
-    message: `Local admin server ready at ${state.evalOrigin}.`,
-  });
-  await updateState(state, onStateChange);
-
-  const auth = await authenticate(state.evalOrigin, env);
-
-  if (!state.promptResults.length) {
-    setCurrentPhase(state, 'baselining', 'Evaluate the initial seed inventory and build the backlog.');
-    await updateState(state, onStateChange);
-    const inventory = await buildPromptInventory();
-    const discoveredPrompts = await discoverPromptCandidates({
-      databaseUrl: env.DATABASE_URL,
-    });
-    state.discoveredPrompts = discoveredPrompts;
-    await appendEvent(state, {
-      type: 'inventory_loaded',
-      message: `Loaded ${inventory.length} seed prompts and ${discoveredPrompts.length} discovered prompts.`,
-    });
-    await updateState(state, onStateChange);
-
-    const initialPrompts = dedupePromptEntries([...inventory, ...discoveredPrompts]);
-    for (const promptEntry of initialPrompts) {
-    const result = await evaluateAndJudgePrompt({
-      origin: state.evalOrigin,
-      evalSecret: state.evalSecret,
-      auth,
-        promptEntry,
-        baselineResult: null,
+    if (runId) {
+      if (!state.branch) {
+        throw new Error('Stored chat-autolab run is missing branch metadata. Start a new campaign instead.');
+      }
+      await ensureCampaignResume({
+        cwd: ROOT,
+        branch: state.branch,
+        anchorSha: state.best?.sha || state.startSha,
       });
-      upsertPromptResult(state, result);
-      state.baseline = buildBaselineSummary(state);
-      state.best.score = computeCampaignScore(state);
-      state.baseline.score = state.best.score;
+      state.workspaceDir = ROOT;
+      state.workspaceMode = 'current-branch';
+      state.pushMode = 'local-only';
+    } else {
+      const gitState = await ensureCampaignStart(ROOT);
+      state.branch = gitState.branch;
+      state.startSha = gitState.headSha;
+      state.workspaceDir = gitState.workspaceDir;
+      state.best.sha = state.best.sha || gitState.headSha;
       await appendEvent(state, {
-        type: 'prompt_baselined',
-        message: `Baselined ${promptEntry.prompt} at ${result.score.toFixed(1)}.`,
+        type: 'campaign_attached',
+        message: `Using current branch ${state.branch} at ${state.startSha.slice(0, 7)}.`,
       });
       await updateState(state, onStateChange);
     }
-  }
 
-  state.best.score = computeCampaignScore(state);
-  await updateState(state, onStateChange);
+    const server = await ensureLocalServer({
+      cwd: state.workspaceDir,
+      port: state.port,
+      serverLogPath: paths.serverLogPath,
+      env,
+      existingPid: state.server.pid,
+    });
+    state.evalOrigin = server.origin;
+    state.evalSecret = server.evalSecret;
+    state.server = {
+      pid: server.pid,
+      startedByAutolab: server.startedByAutolab,
+    };
+    await appendEvent(state, {
+      type: 'server_ready',
+      message: `Local admin server ready at ${state.evalOrigin}.`,
+    });
+    await updateState(state, onStateChange);
 
-  while (state.iterations.total < state.campaignBudget.maxIterations) {
+    const auth = await authenticate(state.evalOrigin, env);
+
+    if (!state.promptResults.length) {
+      setCurrentPhase(state, 'baselining', 'Evaluate the initial seed inventory and build the backlog.');
+      await updateState(state, onStateChange);
+      const inventory = await buildPromptInventory();
+      const discoveredPrompts = await discoverPromptCandidates({
+        databaseUrl: env.DATABASE_URL,
+      });
+      state.discoveredPrompts = discoveredPrompts;
+      await appendEvent(state, {
+        type: 'inventory_loaded',
+        message: `Loaded ${inventory.length} seed prompts and ${discoveredPrompts.length} discovered prompts.`,
+      });
+      await updateState(state, onStateChange);
+
+      const initialPrompts = dedupePromptEntries([...inventory, ...discoveredPrompts]);
+      for (const promptEntry of initialPrompts) {
+        const result = await evaluateAndJudgePrompt({
+          origin: state.evalOrigin,
+          evalSecret: state.evalSecret,
+          auth,
+          promptEntry,
+          baselineResult: null,
+        });
+        upsertPromptResult(state, result);
+        state.baseline = buildBaselineSummary(state);
+        state.best.score = computeCampaignScore(state);
+        state.baseline.score = state.best.score;
+        await appendEvent(state, {
+          type: 'prompt_baselined',
+          message: `Baselined ${promptEntry.prompt} at ${result.score.toFixed(1)}.`,
+        });
+        await updateState(state, onStateChange);
+      }
+    }
+
+    state.best.score = computeCampaignScore(state);
+    await updateState(state, onStateChange);
+
+    while (state.iterations.total < state.campaignBudget.maxIterations) {
     state.baseline = buildBaselineSummary(state);
     const nextPrompt = chooseNextPrompt(state);
     if (!nextPrompt) {
@@ -176,7 +175,7 @@ export async function runCampaign({
 
     const codexPrompt = buildCodexPrompt(nextPrompt, state);
     const agentResult = await runCodexIteration({
-      cwd: state.worktreeDir,
+      cwd: state.workspaceDir,
       prompt: codexPrompt,
       lastMessagePath: paths.lastMessagePath,
       onEvent: async (message) => {
@@ -189,10 +188,11 @@ export async function runCampaign({
     });
     applyUsageToState(state, 'agent', agentResult.usage);
     state.current.hypothesis = agentResult.lastMessage || state.current.hypothesis;
-    state.current.touchedFiles = await getChangedFiles(state.worktreeDir);
+    const candidateSnapshot = await getWorkingTreeSnapshot(state.workspaceDir);
+    state.current.touchedFiles = candidateSnapshot.allFiles;
     await updateState(state, onStateChange);
 
-    if (!(await hasWorkingTreeChanges(state.worktreeDir))) {
+    if (!candidateSnapshot.hasChanges) {
       state.iterations.total += 1;
       state.iterations.discarded += 1;
       nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
@@ -212,10 +212,10 @@ export async function runCampaign({
 
     setCurrentPhase(state, 'targeted_verify', `Run code guard and targeted prompt verification for "${nextPrompt.prompt}".`);
     await updateState(state, onStateChange);
-    const codeGuard = await runCodeGuard(state.worktreeDir, state.current.touchedFiles);
+    const codeGuard = await runCodeGuard(state.workspaceDir, state.current.touchedFiles);
     state.lastGuard.code = codeGuard.success;
     if (!codeGuard.success) {
-      await discardWorkingTree(state.worktreeDir);
+      await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
       state.iterations.total += 1;
       state.iterations.discarded += 1;
       nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
@@ -235,7 +235,6 @@ export async function runCampaign({
 
     const leadBaseline = getPromptResult(state, nextPrompt.id);
     const leadResult = await evaluateAndJudgePrompt({
-      env,
       origin: state.evalOrigin,
       evalSecret: state.evalSecret,
       auth,
@@ -246,7 +245,6 @@ export async function runCampaign({
     applyUsageToState(state, 'judge', leadResult.judgeUsage);
 
     const goldenResults = await evaluateGoldenPack({
-      env,
       origin: state.evalOrigin,
       evalSecret: state.evalSecret,
       auth,
@@ -263,7 +261,7 @@ export async function runCampaign({
       (leadBaseline?.blockingFlags?.length || 0) > (leadResult.blockingFlags?.length || 0);
 
     if (!leadImproved || hasGoldenRegression) {
-      await discardWorkingTree(state.worktreeDir);
+      await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
       state.iterations.total += 1;
       state.iterations.discarded += 1;
       nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
@@ -285,7 +283,6 @@ export async function runCampaign({
       setCurrentPhase(state, 'full_verify', 'Run the broader sections 1-5 verification pass.');
       await updateState(state, onStateChange);
       const fullResults = await evaluateFrontier({
-        env,
         origin: state.evalOrigin,
         evalSecret: state.evalSecret,
         auth,
@@ -293,7 +290,7 @@ export async function runCampaign({
       });
       state.lastGuard.full = !fullResults.some((result) => result.pairwiseVerdict === 'worse');
       if (!state.lastGuard.full) {
-        await discardWorkingTree(state.worktreeDir);
+        await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
         state.iterations.total += 1;
         state.iterations.discarded += 1;
         nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
@@ -320,14 +317,11 @@ export async function runCampaign({
       upsertPromptResult(state, result);
     }
 
+    const ownedSnapshot = await ensureOwnedCandidateSnapshot(state, candidateSnapshot, onStateChange);
+    state.current.touchedFiles = ownedSnapshot.allFiles;
     const commitSha = await commitAll({
-      cwd: state.worktreeDir,
+      cwd: state.workspaceDir,
       message: `chat-autolab: improve ${nextPrompt.area} for ${nextPrompt.id}`,
-    });
-    await pushBranch({
-      cwd: state.worktreeDir,
-      remote: state.remote,
-      branch: state.branch,
     });
 
     state.iterations.total += 1;
@@ -342,24 +336,39 @@ export async function runCampaign({
     };
     await appendEvent(state, {
       type: 'keep',
-      message: `Kept ${nextPrompt.prompt} at ${leadResult.score.toFixed(1)} and pushed ${commitSha.slice(0, 7)}.`,
+      message: `Kept ${nextPrompt.prompt} at ${leadResult.score.toFixed(1)} and committed ${commitSha.slice(0, 7)} locally.`,
     });
     await updateState(state, onStateChange);
   }
 
-  state.baseline = buildBaselineSummary(state);
-  if (state.baseline.goldenAtGoal === state.baseline.totalGoldens && state.manualReview.length === 0) {
-    setCurrentPhase(state, 'success', 'All active golden prompts meet the quality target.');
-  } else {
-    setCurrentPhase(state, 'needs_manual_review', 'Some prompts still need manual review.');
+    state.baseline = buildBaselineSummary(state);
+    if (state.baseline.goldenAtGoal === state.baseline.totalGoldens && state.manualReview.length === 0) {
+      setCurrentPhase(state, 'success', 'All active golden prompts meet the quality target.');
+    } else {
+      setCurrentPhase(state, 'needs_manual_review', 'Some prompts still need manual review.');
+    }
+    await appendEvent(state, {
+      type: 'campaign_complete',
+      message: `Campaign finished with status ${state.status}.`,
+    });
+    await updateState(state, onStateChange);
+    await clearCurrentRun(state.runId);
+    return state;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!['needs_context', 'failed'].includes(state.status)) {
+      setCurrentPhase(state, 'failed', message);
+    } else {
+      state.current.nextAction = message;
+    }
+    await appendEvent(state, {
+      type: 'campaign_error',
+      message,
+    });
+    await updateState(state, onStateChange);
+    await clearCurrentRun(state.runId);
+    throw error;
   }
-  await appendEvent(state, {
-    type: 'campaign_complete',
-    message: `Campaign finished with status ${state.status}.`,
-  });
-  await updateState(state, onStateChange);
-  await clearCurrentRun(state.runId);
-  return state;
 }
 
 function buildRunId() {
@@ -426,14 +435,13 @@ async function evaluateAndJudgePrompt({
   };
 }
 
-async function evaluateGoldenPack({ env, origin, evalSecret, auth, state }) {
+async function evaluateGoldenPack({ origin, evalSecret, auth, state }) {
   const goldens = state.promptResults.filter((entry) => entry.isGolden);
   const results = [];
   setCurrentPhase(state, 'golden_verify', 'Run the golden verification pack.');
 
   for (const golden of goldens) {
     const result = await evaluateAndJudgePrompt({
-      env,
       origin,
       evalSecret,
       auth,
@@ -449,12 +457,11 @@ async function evaluateGoldenPack({ env, origin, evalSecret, auth, state }) {
   return results;
 }
 
-async function evaluateFrontier({ env, origin, evalSecret, auth, state }) {
+async function evaluateFrontier({ origin, evalSecret, auth, state }) {
   const frontier = state.promptResults.filter((entry) => !entry.isGolden);
   const results = [];
   for (const promptEntry of frontier) {
     const result = await evaluateAndJudgePrompt({
-      env,
       origin,
       evalSecret,
       auth,
@@ -466,6 +473,33 @@ async function evaluateFrontier({ env, origin, evalSecret, auth, state }) {
     results.push(result);
   }
   return results;
+}
+
+async function discardCandidateSnapshot(state, candidateSnapshot, onStateChange) {
+  const latestSnapshot = await ensureOwnedCandidateSnapshot(state, candidateSnapshot, onStateChange);
+  await discardWorkingTreeChanges(latestSnapshot, state.workspaceDir);
+}
+
+async function ensureOwnedCandidateSnapshot(state, candidateSnapshot, onStateChange) {
+  const latestSnapshot = await getWorkingTreeSnapshot(state.workspaceDir);
+  const allowedFiles = new Set(candidateSnapshot.allFiles);
+  const unexpectedFiles = latestSnapshot.allFiles.filter((file) => !allowedFiles.has(file));
+
+  if (unexpectedFiles.length > 0) {
+    setCurrentPhase(
+      state,
+      'needs_context',
+      'Autolab found unexpected local changes and stopped instead of discarding them.'
+    );
+    await appendEvent(state, {
+      type: 'candidate_ownership_conflict',
+      message: `Refused automatic ownership of changes outside the candidate patch: ${unexpectedFiles.join(', ')}`,
+    });
+    await updateState(state, onStateChange);
+    throw new Error('chat-autolab found unexpected local changes while handling a candidate. Resolve them manually before continuing.');
+  }
+
+  return latestSnapshot;
 }
 
 function buildBaselineSummary(state) {

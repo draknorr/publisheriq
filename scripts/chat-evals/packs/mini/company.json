@@ -1,0 +1,59 @@
+{
+  "packKey": "mini.company",
+  "label": "Company Mini Iteration Pack",
+  "packType": "mini",
+  "area": "company",
+  "active": true,
+  "blocking": false,
+  "sectionRefs": ["1", "2"],
+  "scopeDescription": "Cheap default dev loop for the sections `1` and `2` lookup and company work",
+  "defaultOutDirPrefix": "mini-company",
+  "draftTitle": "Company Mini Pack Draft Run",
+  "entries": [
+    {
+      "critiqueId": 10,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "game_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "tell me about Hades II",
+      "packTags": ["tier:mini", "area:company"]
+    },
+    {
+      "critiqueId": 141,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "filtered_discovery",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Highly rated games under $10 released in the past year",
+      "packTags": ["tier:mini", "area:company"]
+    },
+    {
+      "critiqueId": 89,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Which indie developers have multiple hit games?",
+      "packTags": ["tier:mini", "area:company"]
+    },
+    {
+      "critiqueId": 155,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "developer_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Show me all games by FromSoftware",
+      "packTags": ["tier:mini", "area:company"]
+    },
+    {
+      "critiqueId": 170,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_similarity",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "What publishers are similar to Devolver Digital?",
+      "packTags": ["tier:mini", "area:company"]
+    }
+  ]
+}

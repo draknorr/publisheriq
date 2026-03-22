@@ -4,13 +4,12 @@ import path from 'node:path';
 import {
   AUTOLAB_DIR,
   CURRENT_RUN_PATH,
-  DEFAULT_BASE_BRANCH,
   DEFAULT_GOLDEN_GOAL,
   DEFAULT_MAX_DISCARDS_PER_PROMPT,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_MAX_PIVOTS_PER_PROMPT,
   DEFAULT_PORT,
-  DEFAULT_REMOTE,
+  ROOT,
 } from './constants.mjs';
 
 export async function ensureAutolabDir() {
@@ -76,8 +75,6 @@ export async function clearCurrentRun(runId) {
 
 export function createInitialState({
   runId,
-  remote = DEFAULT_REMOTE,
-  baseBranch = DEFAULT_BASE_BRANCH,
   port = DEFAULT_PORT,
   maxIterations = DEFAULT_MAX_ITERATIONS,
   maxDiscardsPerPrompt = DEFAULT_MAX_DISCARDS_PER_PROMPT,
@@ -87,17 +84,18 @@ export function createInitialState({
 }) {
   const now = new Date().toISOString();
   return {
-    version: 1,
+    version: 2,
     runId,
     status: 'booting',
     startedAt: now,
     updatedAt: now,
     note,
-    remote,
-    baseBranch,
     port,
     branch: null,
-    worktreeDir: null,
+    startSha: null,
+    workspaceDir: ROOT,
+    workspaceMode: 'current-branch',
+    pushMode: 'local-only',
     evalOrigin: null,
     evalSecret: null,
     server: {
@@ -204,7 +202,7 @@ export async function loadState(runId = null) {
   }
   const paths = buildRunPaths(resolvedRunId);
   const raw = await fs.readFile(paths.statePath, 'utf8');
-  return JSON.parse(raw);
+  return normalizeLoadedState(JSON.parse(raw));
 }
 
 export async function appendEvent(state, event) {
@@ -247,9 +245,12 @@ export function renderStatusMarkdown(state) {
   lines.push(`- Run ID: \`${state.runId}\``);
   lines.push(`- Updated: ${state.updatedAt}`);
   lines.push(`- Status: \`${state.status}\``);
-  lines.push(`- Worktree: ${state.worktreeDir || 'not created yet'}`);
-  lines.push(`- Branch: ${state.branch || 'not created yet'}`);
-  lines.push(`- Remote: \`${state.remote}\``);
+  lines.push(`- Branch: ${state.branch || 'not attached yet'}`);
+  lines.push(`- Workspace mode: \`${state.workspaceMode}\``);
+  lines.push(`- Workspace path: ${state.workspaceDir || ROOT}`);
+  lines.push(`- Push mode: \`${state.pushMode}\``);
+  lines.push(`- Start SHA: ${state.startSha || 'not captured yet'}`);
+  lines.push(`- Latest kept SHA: ${state.best.sha || 'none yet'}`);
   lines.push(`- Origin: ${state.evalOrigin || 'not started yet'}`);
   lines.push(`- Current prompt: ${state.current.prompt || 'none'}`);
   lines.push(`- Current persona: ${state.current.persona || 'none'}`);
@@ -289,7 +290,8 @@ export function renderDashboard(state) {
   lines.push(`Run: ${state.runId}`);
   lines.push(`Status: ${state.status}`);
   lines.push(`Branch: ${state.branch || '-'}`);
-  lines.push(`Worktree: ${state.worktreeDir || '-'}`);
+  lines.push(`Workspace: ${state.workspaceMode || '-'} | Push: ${state.pushMode || '-'}`);
+  lines.push(`Base SHA: ${shortSha(state.startSha)} | Current kept: ${shortSha(state.best.sha)}`);
   lines.push(`Phase: ${state.current.phase}`);
   lines.push(`Prompt: ${state.current.prompt || '-'}`);
   lines.push(`Area / Persona: ${state.current.area || '-'} / ${state.current.persona || '-'}`);
@@ -331,4 +333,19 @@ function formatUsage(bucket) {
 
 function formatMaybeNumber(value) {
   return typeof value === 'number' ? value.toFixed(2) : '-';
+}
+
+function normalizeLoadedState(state) {
+  return {
+    ...state,
+    version: Math.max(Number(state.version || 1), 2),
+    startSha: state.startSha || state.best?.sha || null,
+    workspaceDir: state.workspaceDir || state.worktreeDir || ROOT,
+    workspaceMode: state.workspaceMode || (state.worktreeDir ? 'legacy-worktree' : 'current-branch'),
+    pushMode: state.pushMode || (state.remote ? 'legacy-remote' : 'local-only'),
+  };
+}
+
+function shortSha(value) {
+  return value ? value.slice(0, 7) : '-';
 }

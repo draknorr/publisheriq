@@ -62,6 +62,7 @@ export const QDRANT_SEARCH_TIMEOUT_MS = 10000;
 export const QDRANT_TIMEOUT_ERROR = 'Similarity search timed out. Please try again.';
 const DEFAULT_COMPANY_RESULTS = 6;
 const MIN_USEFUL_COMPANY_SIMILARITY_RESULTS = 3;
+const MIN_USEFUL_PUBLISHER_SIMILARITY_RESULTS = 2;
 const MAX_COMPANY_REFERENCE_TITLES = 4;
 const COMPANY_GAME_EVIDENCE_NEIGHBORS = 10;
 const MIN_COMPANY_GAME_EVIDENCE_SCORE = 0.6;
@@ -145,6 +146,15 @@ const LOW_INFORMATION_GAME_ATTRIBUTES = new Set([
   'exploration',
   'atmospheric',
   'female protagonist',
+]);
+
+const LOW_VALUE_REVIEW_COMPARISON_ATTRIBUTES = new Set([
+  '2d',
+  '3d',
+  'difficult',
+  'great soundtrack',
+  'multiple endings',
+  'precision platformer',
 ]);
 
 type ConceptFacetDefinition = {
@@ -603,19 +613,23 @@ async function findSameSeriesByTitleTokens(
   reference: { id: number; name: string; type?: string; metrics?: object },
   limit: number
 ): Promise<SimilarEntity[]> {
-  const titleTokens = tokenizeTitle(reference.name, GAME_TITLE_GENERIC_WORDS).slice(0, 3);
-  if (titleTokens.length < 2) {
+  const referenceRoot = extractSeriesTitleRoot(reference.name);
+  if (!referenceRoot) {
     return [];
   }
+  const titleTokens = referenceRoot.split(/\s+/);
 
   const supabase = getSupabase();
-  const ilikePattern = `%${titleTokens.join('%')}%`;
+  const ilikePattern =
+    titleTokens.length >= 2
+      ? `%${titleTokens[0]}%${titleTokens[1]}%`
+      : `%${titleTokens[0]}%`;
   const { data } = await supabase
     .from('apps')
     .select('appid, name, type')
     .ilike('name', ilikePattern)
     .eq('type', 'game')
-    .limit(20);
+    .limit(40);
 
   if (!Array.isArray(data) || data.length === 0) {
     return [];
@@ -626,8 +640,7 @@ async function findSameSeriesByTitleTokens(
       .filter((row) => Number(row.appid) !== reference.id)
       .map(async (row) => {
         const candidateName = String(row.name ?? '');
-        const normalizedCandidateName = normalizeTextToken(candidateName);
-        if (!titleTokens.every((token) => normalizedCandidateName.includes(token))) {
+        if (!hasExactSeriesTitleRootMatch(referenceRoot, candidateName)) {
           return null;
         }
 
@@ -639,7 +652,7 @@ async function findSameSeriesByTitleTokens(
         return {
           id: Number(row.appid),
           name: candidateName,
-          normalizedName: normalizedCandidateName,
+          normalizedName: normalizeTextToken(candidateName),
           payload: qdrantCandidate.payload,
         };
       })
@@ -648,10 +661,10 @@ async function findSameSeriesByTitleTokens(
   return candidates
     .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
     .sort((left, right) => {
-      const leftStartsWithAllTokens = titleTokens.every((token) => left.normalizedName.startsWith(token) || left.normalizedName.includes(`${token} `));
-      const rightStartsWithAllTokens = titleTokens.every((token) => right.normalizedName.startsWith(token) || right.normalizedName.includes(`${token} `));
-      if (leftStartsWithAllTokens !== rightStartsWithAllTokens) {
-        return Number(rightStartsWithAllTokens) - Number(leftStartsWithAllTokens);
+      const leftExactRoot = left.normalizedName === referenceRoot;
+      const rightExactRoot = right.normalizedName === referenceRoot;
+      if (leftExactRoot !== rightExactRoot) {
+        return Number(rightExactRoot) - Number(leftExactRoot);
       }
 
       const leftReviews = asOptionalNullableNumber(left.payload.total_reviews) ?? 0;
@@ -677,7 +690,7 @@ async function findSameSeriesByTitleTokens(
       price_cents: candidate.payload.price_cents as number | null | undefined,
       is_free: candidate.payload.is_free as boolean | undefined,
       steam_deck: candidate.payload.steam_deck as SimilarEntity['steam_deck'],
-      matchReasons: ['Same series title match'],
+      matchReasons: ['Exact series title root match'],
     }));
 }
 
@@ -798,6 +811,12 @@ function normalizeTextToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function getMinimumUsefulCompanySimilarityResults(entityType: CompanyEntityType): number {
+  return entityType === 'publisher'
+    ? MIN_USEFUL_PUBLISHER_SIMILARITY_RESULTS
+    : MIN_USEFUL_COMPANY_SIMILARITY_RESULTS;
+}
+
 function tokenizeTitle(name: string, genericWords: Set<string>): string[] {
   const normalized = normalizeTextToken(name);
   if (!normalized) {
@@ -838,6 +857,49 @@ function payloadTextValues(payload: Record<string, unknown>): string[] {
     ...(asOptionalStringArray(payload.tags) ?? []),
     ...(asOptionalStringArray(payload.genres) ?? []),
   ];
+}
+
+function filterReviewComparisonAnchorAttributes(values: string[]): string[] {
+  const seen = new Set<string>();
+  const filtered: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeTextToken(value);
+    if (
+      !normalized ||
+      seen.has(normalized) ||
+      LOW_INFORMATION_GAME_ATTRIBUTES.has(normalized) ||
+      LOW_VALUE_REVIEW_COMPARISON_ATTRIBUTES.has(normalized)
+    ) {
+      continue;
+    }
+
+    filtered.push(value);
+    seen.add(normalized);
+  }
+
+  return filtered;
+}
+
+function extractSeriesTitleRoot(referenceName: string): string | null {
+  const titleTokens = tokenizeTitle(referenceName, GAME_TITLE_GENERIC_WORDS).slice(0, 3);
+  if (titleTokens.length < 2) {
+    return null;
+  }
+
+  return titleTokens.join(' ');
+}
+
+function hasExactSeriesTitleRootMatch(referenceRoot: string, candidateName: string): boolean {
+  const normalizedCandidateName = normalizeTextToken(candidateName);
+  if (!normalizedCandidateName) {
+    return false;
+  }
+
+  return (
+    normalizedCandidateName === referenceRoot ||
+    normalizedCandidateName.startsWith(`${referenceRoot} `)
+  );
 }
 
 function filterInformativeGameAttributes(values: string[]): string[] {
@@ -1634,6 +1696,7 @@ function closenessScore(source: number, candidate: number): number {
 }
 
 function buildPortfolioMatchReasons(
+  entityType: CompanyEntityType,
   source: CompanyMetricsSnapshot,
   candidate: CompanyMetricsSnapshot,
   genreOverlap: number,
@@ -1646,7 +1709,11 @@ function buildPortfolioMatchReasons(
   }
 
   if (tagOverlap >= 0.1) {
-    reasons.push('Overlapping portfolio tags');
+    reasons.push(
+      entityType === 'publisher'
+        ? 'Overlapping portfolio tags and publishing niches'
+        : 'Overlapping portfolio tags'
+    );
   }
 
   if (closenessScore(source.totalReviews, candidate.totalReviews) >= 0.5) {
@@ -1654,7 +1721,7 @@ function buildPortfolioMatchReasons(
   }
 
   if (closenessScore(source.gameCount, candidate.gameCount) >= 0.6) {
-    reasons.push('Similar catalog size');
+    reasons.push(entityType === 'publisher' ? 'Similar publishing scale' : 'Similar catalog size');
   }
 
   if (
@@ -1670,10 +1737,36 @@ function buildPortfolioMatchReasons(
     candidate.gamesReleasedLastYear > 0 &&
     Math.abs(source.gamesReleasedLastYear - candidate.gamesReleasedLastYear) <= 2
   ) {
-    reasons.push('Similar recent release cadence');
+    reasons.push(
+      entityType === 'publisher'
+        ? 'Similar recent publishing cadence'
+        : 'Similar recent release cadence'
+    );
   }
 
   return reasons.slice(0, 3);
+}
+
+function countPublisherSimilaritySignals(support: CompanySimilaritySupport): number {
+  let signalCount = 0;
+
+  if (support.genreOverlap >= 0.12 || support.tagOverlap >= 0.08) {
+    signalCount += 1;
+  }
+
+  if (support.catalogCloseness >= 0.55) {
+    signalCount += 1;
+  }
+
+  if (support.reviewCloseness >= 0.5) {
+    signalCount += 1;
+  }
+
+  if (support.cadenceCloseness >= 0.55) {
+    signalCount += 1;
+  }
+
+  return signalCount;
 }
 
 async function findSimilarCompaniesFallback(
@@ -1776,7 +1869,7 @@ async function findSimilarCompaniesFallback(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (query as any);
 
-  if (error || !Array.isArray(data) || data.length === 0) {
+  if (error) {
     return {
       success: false,
       entityType,
@@ -1789,8 +1882,8 @@ async function findSimilarCompaniesFallback(
     };
   }
 
-  const scoredCandidates = data.map((row: Record<string, unknown>) => {
-      const candidate: CompanyMetricsSnapshot = {
+  const candidateSnapshots: CompanyMetricsSnapshot[] = Array.isArray(data)
+    ? data.map((row: Record<string, unknown>) => ({
         id: Number(row[idColumn] ?? 0),
         name: String(row[nameColumn] ?? ''),
         gameCount: Number(row.game_count ?? 0),
@@ -1799,11 +1892,51 @@ async function findSimilarCompaniesFallback(
         gamesReleasedLastYear: Number(row.games_released_last_year ?? 0),
         genreIds: normalizeMetricArray(row.genre_ids as number[] | null | undefined),
         tagIds: normalizeMetricArray(row.tag_ids as number[] | null | undefined),
-      };
-      const support = buildCompanySimilaritySupport(source, candidate);
+      }))
+    : [];
+
+  if (canUseGameEvidence && gameEvidenceByCompany.size > 0) {
+    const candidateIds = new Set(candidateSnapshots.map((candidate) => candidate.id));
+    const evidenceCandidateIds = [...gameEvidenceByCompany.entries()]
+      .sort((left, right) => right[1].weightedGameEvidenceScore - left[1].weightedGameEvidenceScore)
+      .map(([candidateId]) => candidateId)
+      .filter((candidateId) => candidateId !== reference.id && !candidateIds.has(candidateId))
+      .slice(0, Math.max(limit * 2, 8));
+
+    if (evidenceCandidateIds.length > 0) {
+      const evidenceSnapshots = await fetchCompanyMetricsSnapshots(entityType, evidenceCandidateIds);
+      for (const candidateId of evidenceCandidateIds) {
+        const snapshot = evidenceSnapshots.get(candidateId);
+        if (!snapshot) {
+          continue;
+        }
+
+        candidateSnapshots.push(snapshot);
+      }
+    }
+  }
+
+  if (candidateSnapshots.length === 0) {
+    return {
+      success: false,
+      entityType,
+      reference: {
+        id: reference.id,
+        name: reference.name,
+        type: entityType,
+      },
+      error: `No comparable ${entityType} portfolios were found for "${reference.name}".`,
+    };
+  }
+
+  const scoredCandidates = candidateSnapshots
+    .filter((candidate) => passesCompanySimilarityFilters(candidate, filters))
+    .map((candidate) => {
+      const support = buildCompanySimilaritySupport(entityType, source, candidate);
       const gameEvidence = gameEvidenceByCompany.get(candidate.id);
       const score = canUseGameEvidence
         ? buildFinalCompanySimilarityScore(
+            entityType,
             gameEvidence?.weightedGameEvidenceScore ?? 0,
             support.portfolioScore,
             0,
@@ -1811,8 +1944,16 @@ async function findSimilarCompaniesFallback(
           )
         : support.portfolioScore;
       const matchReasons = canUseGameEvidence
-        ? buildCompanySimilarityMatchReasons(source, candidate, support, gameEvidence, false)
+        ? buildCompanySimilarityMatchReasons(
+            entityType,
+            source,
+            candidate,
+            support,
+            gameEvidence,
+            false
+          )
         : buildPortfolioMatchReasons(
+            entityType,
             source,
             candidate,
             support.genreOverlap,
@@ -1825,8 +1966,11 @@ async function findSimilarCompaniesFallback(
         gameEvidence,
         portfolioScore: support.portfolioScore,
         scaleQualityScore: support.scaleQualityScore,
+        genreOverlap: support.genreOverlap,
         reviewCloseness: support.reviewCloseness,
         catalogCloseness: support.catalogCloseness,
+        tagOverlap: support.tagOverlap,
+        cadenceCloseness: support.cadenceCloseness,
         matchReasons,
       };
     });
@@ -1835,8 +1979,9 @@ async function findSimilarCompaniesFallback(
     .filter((item) => {
       if (canUseGameEvidence) {
         return (
-          item.score >= 0.4 &&
+          item.score >= (entityType === 'publisher' ? 0.46 : 0.4) &&
           !shouldRejectCompanyCandidate(
+            entityType,
             reference.name,
             item.candidate.name,
             0,
@@ -1844,6 +1989,9 @@ async function findSimilarCompaniesFallback(
             item.scaleQualityScore,
             item.reviewCloseness,
             item.catalogCloseness,
+            item.genreOverlap,
+            item.tagOverlap,
+            item.cadenceCloseness,
             false,
             item.gameEvidence
           )
@@ -1860,10 +2008,89 @@ async function findSimilarCompaniesFallback(
     .slice(0, limit);
 
   if (rankedResults.length === 0) {
+    const publisherEvidenceFallback =
+      canUseGameEvidence && entityType === 'publisher' && gameEvidenceByCompany.size > 0
+        ? scoredCandidates
+          .filter((item) => {
+            if (
+              !item.gameEvidence ||
+              isPlaceholderCompanyName(item.candidate.name) ||
+              normalizeCompanyName(reference.name) === normalizeCompanyName(item.candidate.name) ||
+              hasLexicalBrandContamination(reference.name, item.candidate.name)
+            ) {
+              return false;
+            }
+
+            return item.gameEvidence.weightedGameEvidenceScore >= MIN_COMPANY_GAME_EVIDENCE_SCORE;
+          })
+          .sort((left, right) => {
+            const leftScore =
+              (left.gameEvidence?.weightedGameEvidenceScore ?? 0) * 0.72 +
+              left.portfolioScore * 0.28;
+            const rightScore =
+              (right.gameEvidence?.weightedGameEvidenceScore ?? 0) * 0.72 +
+              right.portfolioScore * 0.28;
+            return rightScore - leftScore;
+          })
+          .slice(0, Math.min(limit, 2))
+        : [];
+
+    if (publisherEvidenceFallback.length > 0) {
+      return {
+        success: true,
+        mode: 'heuristic_portfolio',
+        reference: {
+          id: reference.id,
+          name: reference.name,
+          type: entityType,
+        },
+        results: publisherEvidenceFallback.map(({ candidate, gameEvidence, portfolioScore, matchReasons }) => ({
+          id: candidate.id,
+          name: candidate.name,
+          score: Math.round(
+            (
+              (gameEvidence?.weightedGameEvidenceScore ?? 0) * 0.72 +
+              portfolioScore * 0.28
+            ) * 100
+          ),
+          type: entityType,
+          game_count: candidate.gameCount,
+          review_percentage: candidate.avgReviewScore,
+          matchReasons: matchReasons.length > 0 ? matchReasons : ['Comparable portfolio profile'],
+        })),
+        total_found: publisherEvidenceFallback.length,
+        sufficient_to_answer: true,
+        sufficiency_reason:
+          'Returned the smallest evidence-backed publisher peer set. Respond directly and say the comparable peer set is limited instead of broadening.',
+        debug: {
+          searchParams: {
+            entity_type: entityType,
+            reference_id: reference.id,
+            fallback: 'publisher_evidence',
+            gameEvidenceCandidates: gameEvidenceByCompany.size,
+            publisherEvidenceOnlyFallback: true,
+          },
+        },
+      };
+    }
+
     const relaxedFallback = canUseGameEvidence
       ? scoredCandidates
         .filter((item) => (
-          item.portfolioScore >= 0.5 &&
+          item.portfolioScore >= (entityType === 'publisher' ? 0.55 : 0.5) &&
+          (
+            entityType !== 'publisher' ||
+            countPublisherSimilaritySignals({
+              genreOverlap: item.genreOverlap,
+              tagOverlap: item.tagOverlap,
+              reviewCloseness: item.reviewCloseness,
+              catalogCloseness: item.catalogCloseness,
+              qualityCloseness: 0,
+              cadenceCloseness: item.cadenceCloseness,
+              portfolioScore: item.portfolioScore,
+              scaleQualityScore: item.scaleQualityScore,
+            }) >= 2
+          ) &&
           item.matchReasons.length > 0 &&
           !isPlaceholderCompanyName(item.candidate.name) &&
           normalizeCompanyName(reference.name) !== normalizeCompanyName(item.candidate.name) &&
@@ -2421,6 +2648,7 @@ function mergeCompanySearchResults(points: CompanySearchPoint[]): CompanyMergedC
 }
 
 function buildCompanySimilaritySupport(
+  entityType: CompanyEntityType,
   source: CompanyMetricsSnapshot,
   candidate: CompanyMetricsSnapshot
 ): CompanySimilaritySupport {
@@ -2435,12 +2663,23 @@ function buildCompanySimilaritySupport(
   const cadenceCloseness = closenessScore(source.gamesReleasedLastYear, candidate.gamesReleasedLastYear);
 
   const portfolioScore =
-    genreOverlap * 0.3 +
-    tagOverlap * 0.15 +
-    reviewCloseness * 0.2 +
-    catalogCloseness * 0.15 +
-    qualityCloseness * 0.1 +
-    cadenceCloseness * 0.1;
+    entityType === 'publisher'
+      ? (
+          genreOverlap * 0.2 +
+          tagOverlap * 0.25 +
+          reviewCloseness * 0.18 +
+          catalogCloseness * 0.17 +
+          qualityCloseness * 0.1 +
+          cadenceCloseness * 0.1
+        )
+      : (
+          genreOverlap * 0.3 +
+          tagOverlap * 0.15 +
+          reviewCloseness * 0.2 +
+          catalogCloseness * 0.15 +
+          qualityCloseness * 0.1 +
+          cadenceCloseness * 0.1
+        );
 
   return {
     genreOverlap,
@@ -2459,6 +2698,7 @@ function buildCompanySimilaritySupport(
 }
 
 function buildFinalCompanySimilarityScore(
+  entityType: CompanyEntityType,
   gameEvidenceScore: number,
   portfolioScore: number,
   semanticScore: number,
@@ -2466,14 +2706,24 @@ function buildFinalCompanySimilarityScore(
 ): number {
   return Math.min(
     1,
-    gameEvidenceScore * 0.55 +
-      portfolioScore * 0.25 +
-      semanticScore * 0.1 +
-      scaleQualityScore * 0.1
+    entityType === 'publisher'
+      ? (
+          gameEvidenceScore * 0.62 +
+          portfolioScore * 0.22 +
+          semanticScore * 0.06 +
+          scaleQualityScore * 0.1
+        )
+      : (
+          gameEvidenceScore * 0.55 +
+          portfolioScore * 0.25 +
+          semanticScore * 0.1 +
+          scaleQualityScore * 0.1
+        )
   );
 }
 
 function buildCompanySimilarityMatchReasons(
+  entityType: CompanyEntityType,
   source: CompanyMetricsSnapshot,
   candidate: CompanyMetricsSnapshot,
   support: CompanySimilaritySupport,
@@ -2493,6 +2743,7 @@ function buildCompanySimilarityMatchReasons(
   }
 
   const portfolioReasons = buildPortfolioMatchReasons(
+    entityType,
     source,
     candidate,
     support.genreOverlap,
@@ -2517,11 +2768,28 @@ function buildCompanySimilarityMatchReasons(
 }
 
 function hasStrongCompanyGameEvidence(
+  entityType: CompanyEntityType,
   gameEvidence: CompanyGameEvidence | undefined,
   portfolioScore: number
 ): boolean {
   if (!gameEvidence) {
     return false;
+  }
+
+  if (entityType === 'publisher') {
+    return (
+      gameEvidence.referenceTitleHits >= 2 ||
+      (
+        gameEvidence.flagshipHit &&
+        gameEvidence.weightedGameEvidenceScore >= 0.82 &&
+        portfolioScore >= 0.45
+      ) ||
+      (
+        gameEvidence.referenceTitleHits >= 1 &&
+        gameEvidence.weightedGameEvidenceScore >= 0.9 &&
+        portfolioScore >= 0.5
+      )
+    );
   }
 
   if (gameEvidence.referenceTitleHits >= 2) {
@@ -2603,6 +2871,7 @@ function passesCompanySimilarityFilters(
 }
 
 function shouldRejectCompanyCandidate(
+  entityType: CompanyEntityType,
   referenceName: string,
   candidateName: string,
   _similarityScore: number,
@@ -2610,6 +2879,9 @@ function shouldRejectCompanyCandidate(
   scaleQualityScore: number,
   reviewCloseness: number,
   catalogCloseness: number,
+  genreOverlap: number,
+  tagOverlap: number,
+  cadenceCloseness: number,
   matchedBothVariants: boolean,
   gameEvidence: CompanyGameEvidence | undefined
 ): boolean {
@@ -2632,8 +2904,41 @@ function shouldRejectCompanyCandidate(
     return true;
   }
 
-  if (!hasStrongCompanyGameEvidence(gameEvidence, portfolioScore)) {
+  if (!hasStrongCompanyGameEvidence(entityType, gameEvidence, portfolioScore)) {
     return true;
+  }
+
+  if (entityType === 'publisher') {
+    const publisherSignalCount = countPublisherSimilaritySignals({
+      genreOverlap,
+      tagOverlap,
+      reviewCloseness,
+      catalogCloseness,
+      qualityCloseness: 0,
+      cadenceCloseness,
+      portfolioScore,
+      scaleQualityScore,
+    });
+
+    if (publisherSignalCount < 2) {
+      return true;
+    }
+
+    if (
+      tagOverlap < 0.05 &&
+      gameEvidence.referenceTitleHits < 2 &&
+      gameEvidence.weightedGameEvidenceScore < 0.9
+    ) {
+      return true;
+    }
+
+    if (
+      gameEvidence.referenceTitleHits < 2 &&
+      !gameEvidence.flagshipHit &&
+      gameEvidence.weightedGameEvidenceScore < 0.88
+    ) {
+      return true;
+    }
   }
 
   if (scaleQualityScore < 0.32 && gameEvidence.weightedGameEvidenceScore < 0.85) {
@@ -2771,10 +3076,11 @@ async function findSimilarCompaniesSemantic(
       const matchedBothVariants =
         candidate?.variantScores.identity !== undefined &&
         candidate?.variantScores.portfolio !== undefined;
-      const support = buildCompanySimilaritySupport(source, snapshot);
+      const support = buildCompanySimilaritySupport(entityType, source, snapshot);
       const semanticScore = candidate?.semanticScore ?? 0;
       const gameEvidence = gameEvidenceByCompany.get(candidateId);
       const finalScore = buildFinalCompanySimilarityScore(
+        entityType,
         gameEvidence?.weightedGameEvidenceScore ?? 0,
         support.portfolioScore,
         semanticScore,
@@ -2783,6 +3089,7 @@ async function findSimilarCompaniesSemantic(
 
       if (
         shouldRejectCompanyCandidate(
+          entityType,
           reference.name,
           snapshot.name,
           semanticScore,
@@ -2790,6 +3097,9 @@ async function findSimilarCompaniesSemantic(
           support.scaleQualityScore,
           support.reviewCloseness,
           support.catalogCloseness,
+          support.genreOverlap,
+          support.tagOverlap,
+          support.cadenceCloseness,
           matchedBothVariants,
           gameEvidence
         )
@@ -2798,6 +3108,7 @@ async function findSimilarCompaniesSemantic(
       }
 
       const matchReasons = buildCompanySimilarityMatchReasons(
+        entityType,
         source,
         snapshot,
         support,
@@ -2808,7 +3119,7 @@ async function findSimilarCompaniesSemantic(
         ? matchReasons
         : ['Comparable portfolio profile'];
 
-      if (finalScore < 0.4) {
+      if (finalScore < (entityType === 'publisher' ? 0.46 : 0.4)) {
         continue;
       }
 
@@ -2984,6 +3295,12 @@ function applyScoreBoosts(
       const resultGenres = result.payload.genres || result.payload.top_genres || [];
       const sharedGenres = sharedNormalizedStrings(sourceGenres, resultGenres);
       const sharedInformativeGenres = filterInformativeGameAttributes(sharedGenres);
+      const sourceReviewComparisonGenres = filterReviewComparisonAnchorAttributes(sourceGenres);
+      const resultReviewComparisonGenres = filterReviewComparisonAnchorAttributes(resultGenres);
+      const sharedReviewComparisonGenres = sharedNormalizedStrings(
+        sourceReviewComparisonGenres,
+        resultReviewComparisonGenres
+      );
       if (sourceGenres.length && resultGenres.length) {
         const genreBoostCount = Math.min(sharedGenres.length, SCORE_BOOSTS.MAX_GENRE_BOOSTS);
         boost += genreBoostCount * SCORE_BOOSTS.SHARED_GENRE;
@@ -2994,6 +3311,12 @@ function applyScoreBoosts(
       const resultTags = result.payload.tags || result.payload.top_tags || [];
       const sharedTags = sharedNormalizedStrings(sourceTags, resultTags);
       const sharedInformativeTags = filterInformativeGameAttributes(sharedTags);
+      const sourceReviewComparisonTags = filterReviewComparisonAnchorAttributes(sourceTags);
+      const resultReviewComparisonTags = filterReviewComparisonAnchorAttributes(resultTags);
+      const sharedReviewComparisonTags = sharedNormalizedStrings(
+        sourceReviewComparisonTags,
+        resultReviewComparisonTags
+      );
       if (sourceTags.length && resultTags.length) {
         const tagBoostCount = Math.min(sharedTags.length, SCORE_BOOSTS.MAX_TAG_BOOSTS);
         boost += tagBoostCount * SCORE_BOOSTS.SHARED_TAG;
@@ -3033,6 +3356,18 @@ function applyScoreBoosts(
         sharedInformativeTags.length >= 1 ||
         sharedInformativeGenres.length >= 1 ||
         sharedTags.length >= 2;
+      const reviewComparisonAnchorCount =
+        sharedReviewComparisonGenres.length + sharedReviewComparisonTags.length;
+      const hasStrongReviewComparisonEvidence =
+        hasStructuralEntityMatch ||
+        reviewComparisonAnchorCount >= 2 ||
+        (
+          reviewComparisonAnchorCount >= 1 &&
+          (
+            sharedInformativeTags.length >= 1 ||
+            sharedInformativeGenres.length >= 1
+          )
+        );
 
       if (sharedInformativeTags.length >= 2) {
         boost += 0.04;
@@ -3102,25 +3437,22 @@ function applyScoreBoosts(
         (
           filters?.review_comparison !== undefined &&
           filters.review_comparison !== 'any' &&
-          !veryStrongSimilarityEvidence &&
-          sharedInformativeTags.length === 0 &&
-          sharedInformativeGenres.length === 0
+          !hasStrongReviewComparisonEvidence
         ) ||
         (
           filters?.review_comparison !== undefined &&
           filters.review_comparison !== 'any' &&
           !hasStructuralEntityMatch &&
-          sharedInformativeTags.length === 0 &&
-          result.score < 0.78
+          reviewComparisonAnchorCount < 2 &&
+          result.score < 0.82
         ) ||
         (
           filters?.review_comparison !== undefined &&
           filters.review_comparison !== 'any' &&
           candidateTotalReviews !== null &&
           candidateTotalReviews !== undefined &&
-          candidateTotalReviews < 100 &&
-          !hasStructuralEntityMatch &&
-          sharedInformativeTags.length < 2
+          candidateTotalReviews < 250 &&
+          !hasStructuralEntityMatch
         ) ||
         (!mediumSimilarityEvidence && adjustedScore < 0.68);
 
@@ -3144,6 +3476,8 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
   const normalizedArgs = normalizeFindSimilarArgs(args);
   const { entity_type, reference_id, reference_name, filters, limit = DEFAULT_RESULTS } = normalizedArgs;
   const requestedLimit = entity_type === 'game' ? limit : Math.min(limit, DEFAULT_COMPANY_RESULTS);
+  const minimumUsefulPeerCount =
+    entity_type === 'game' ? 0 : getMinimumUsefulCompanySimilarityResults(entity_type);
   // Request one extra for publishers/developers since we filter client-side
   const extraForFilter = entity_type !== 'game' ? 1 : 0;
   const actualLimit = Math.min(requestedLimit + extraForFilter, MAX_RESULTS);
@@ -3236,7 +3570,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
       );
 
       if (semanticCompanyResult?.success && semanticCompanyResult.results && semanticCompanyResult.results.length > 0) {
-        if (semanticCompanyResult.results.length >= MIN_USEFUL_COMPANY_SIMILARITY_RESULTS) {
+        if (semanticCompanyResult.results.length >= minimumUsefulPeerCount) {
           return semanticCompanyResult;
         }
 
@@ -3247,7 +3581,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
               ...(semanticCompanyResult.debug?.searchParams ?? {}),
               semanticSparseFallbackTriggered: true,
               semanticResultCount: semanticCompanyResult.results.length,
-              minimumUsefulPeerCount: MIN_USEFUL_COMPANY_SIMILARITY_RESULTS,
+              minimumUsefulPeerCount,
             },
           },
         };
@@ -3286,7 +3620,7 @@ export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarRes
                 sparseSemanticResult?.debug?.searchParams?.semanticSparseFallbackTriggered === true,
               semanticResultCount:
                 sparseSemanticResult?.debug?.searchParams?.semanticResultCount ?? null,
-              minimumUsefulPeerCount: MIN_USEFUL_COMPANY_SIMILARITY_RESULTS,
+              minimumUsefulPeerCount,
             },
           },
         };

@@ -1,0 +1,59 @@
+{
+  "packKey": "mini.trend",
+  "label": "Trend Mini Iteration Pack",
+  "packType": "mini",
+  "area": "trend",
+  "active": true,
+  "blocking": false,
+  "sectionRefs": ["5"],
+  "scopeDescription": "Cheap default dev loop for trend routing and response-shape changes",
+  "defaultOutDirPrefix": "mini-trend",
+  "draftTitle": "Trend Mini Pack Draft Run",
+  "entries": [
+    {
+      "critiqueId": 102,
+      "suiteKey": "roguelites-review-velocity-vs-ccu",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_comparison",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Compare top 5 roguelites by review velocity and CCU",
+      "packTags": ["tier:mini", "area:trend"]
+    },
+    {
+      "critiqueId": 158,
+      "suiteKey": "free-to-play-most-players-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_leaderboard",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What free-to-play games have the most players right now?",
+      "packTags": ["tier:mini", "area:trend"]
+    },
+    {
+      "critiqueId": 181,
+      "suiteKey": "horror-games-gaining-momentum",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_filtered",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What horror games are gaining momentum?",
+      "packTags": ["tier:mini", "area:trend"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "breaking-out-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_breakout",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What’s breaking out right now?",
+      "packTags": ["tier:mini", "area:trend"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "most-reviews-added-this-week",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_velocity",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Which games have the most reviews added this week?",
+      "packTags": ["tier:mini", "area:trend"]
+    }
+  ]
+}

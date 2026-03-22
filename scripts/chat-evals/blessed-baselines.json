@@ -1,0 +1,26 @@
+{
+  "defaults": {
+    "goldenFloor": 7,
+    "maxGoldenDrop": 0.5,
+    "maxAverageDrop": 0.3,
+    "maxWeakFailureIncrease": 0
+  },
+  "blessed": {
+    "company": {
+      "docPath": "docs/chat-prompt-evals-round-2.md",
+      "runId": "2026-03-21T20:48:09.907Z"
+    },
+    "similarity": {
+      "docPath": "docs/chat-prompt-evals-round-2.md",
+      "runId": "2026-03-21T20:51:12.336Z"
+    },
+    "trend": {
+      "docPath": "docs/chat-prompt-evals-round-2.md",
+      "runId": "2026-03-21T20:54:55.538Z"
+    },
+    "change": {
+      "docPath": "docs/chat-prompt-evals-round-2.md",
+      "runId": "2026-03-21T21:02:45.393Z"
+    }
+  }
+}

@@ -3,8 +3,6 @@ import path from 'node:path';
 export const ROOT = process.cwd();
 export const AUTOLAB_DIR = path.join(ROOT, '.chat-autolab');
 export const CURRENT_RUN_PATH = path.join(AUTOLAB_DIR, 'current-run.txt');
-export const DEFAULT_REMOTE = 'autolab';
-export const DEFAULT_BASE_BRANCH = 'origin/main';
 export const DEFAULT_PORT = 3011;
 export const DEFAULT_MAX_ITERATIONS = 40;
 export const DEFAULT_MAX_DISCARDS_PER_PROMPT = 5;

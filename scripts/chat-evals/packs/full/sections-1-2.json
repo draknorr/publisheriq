@@ -1,0 +1,221 @@
+{
+  "packKey": "full.sections-1-2",
+  "label": "Sections 1-2 Full Critique Pack",
+  "packType": "full",
+  "area": "company",
+  "active": true,
+  "blocking": true,
+  "sectionRefs": ["1", "2"],
+  "scopeDescription": "`docs/chat-output-user-critique.md` sections `1` and `2`",
+  "defaultOutDirPrefix": "critique-sections-1-2",
+  "draftTitle": "Critique Sections 1+2 Draft Run",
+  "entries": [
+    {
+      "critiqueId": 2,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "filtered_discovery",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "free metroidvania games",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 10,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "game_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "tell me about Hades II",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 21,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "game_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Show me all the DLC for Elden Ring",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 138,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "filtered_discovery",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Games currently on sale",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 141,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "filtered_discovery",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Highly rated games under $10 released in the past year",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 219,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "filtered_discovery",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Games under $5 with overwhelmingly positive reviews",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 242,
+      "suiteKey": null,
+      "section": "1. Game Lookups and Filtered Discovery",
+      "family": "filtered_discovery",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Premium games over $40 with great reviews",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 89,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Which indie developers have multiple hit games?",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 97,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_comparison",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "Compare FromSoftware and Team Cherry by reviews",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 127,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "What publishers are releasing the most games this year?",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 130,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Publishers with the most games released in the past 6 months",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 140,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "Publishers with 5+ games averaging 85%+ reviews in the past 3 years",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 151,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Developers with 3+ games, all above 90% reviews, with a release in the past year",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 152,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "tag_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "What tags exist for colony sim games?",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 155,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "developer_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Show me all games by FromSoftware",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 156,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "developer_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "top games from FromSoftware",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 157,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "Which publishers released the most games this year?",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 161,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "developer_lookup",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "games by FromSoftware",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 170,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_similarity",
+      "primaryPersona": "Publishing Strategy Lead",
+      "prompt": "What publishers are similar to Devolver Digital?",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 171,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_similarity",
+      "primaryPersona": "Developer Studio Lead or Product Lead",
+      "prompt": "Show me developers similar to Supergiant Games",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 175,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "company_ranking",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "Publishers with releases in every year since 2020",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2", "tier:golden"]
+    },
+    {
+      "critiqueId": 178,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "publisher_lookup",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "how many games has Krafton published?",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    },
+    {
+      "critiqueId": 179,
+      "suiteKey": null,
+      "section": "2. Publisher, Developer, and Company Answers",
+      "family": "publisher_lookup",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "How many games has Valve published?",
+      "packTags": ["tier:full", "area:company", "scope:sections-1-2"]
+    }
+  ]
+}

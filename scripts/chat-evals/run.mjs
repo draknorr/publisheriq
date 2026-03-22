@@ -125,13 +125,20 @@ async function runFullEvaluation(env, manifest, executableManifest, includePromp
   if (results.length === 0 && manifestToRun.length > 0) {
     const calibrationPrompt = manifestToRun[0];
     const calibrationResult = await evaluatePrompt(calibrationPrompt, auth);
+    const finalizedCalibration = finalizeResult(calibrationPrompt, calibrationResult);
+    console.log(
+      `Calibration ${finalizedCalibration.status} | ${finalizedCalibration.timing?.totalMs ?? '-'}ms | ${
+        finalizedCalibration.tool_calls.map((tool) => tool.name).join(', ') || 'no tools'
+      }`
+    );
     if (calibrationResult.status !== 'success') {
-      throw new Error(
+      console.warn(
         `Calibration failed for "${calibrationPrompt.prompt_text}": ${calibrationResult.error_message || 'Unknown error'}`
       );
+      console.warn('Continuing so the batch captures the full prompt set instead of aborting on the first row.');
     }
 
-    results.push(finalizeResult(calibrationPrompt, calibrationResult));
+    results.push(finalizedCalibration);
     await checkpoint(results);
   }
 

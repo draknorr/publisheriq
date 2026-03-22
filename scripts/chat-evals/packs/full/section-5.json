@@ -1,0 +1,158 @@
+{
+  "packKey": "full.section-5",
+  "label": "Section 5 Full Critique Pack",
+  "packType": "full",
+  "area": "trend",
+  "active": true,
+  "blocking": true,
+  "sectionRefs": ["5"],
+  "scopeDescription": "`docs/chat-output-user-critique.md` section `5`",
+  "defaultOutDirPrefix": "critique-section-5",
+  "draftTitle": "Critique Section 5 Draft Run",
+  "entries": [
+    {
+      "critiqueId": 102,
+      "suiteKey": "roguelites-review-velocity-vs-ccu",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_comparison",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Compare top 5 roguelites by review velocity and CCU",
+      "packTags": ["tier:full", "area:trend", "scope:section-5", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": 158,
+      "suiteKey": "free-to-play-most-players-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_leaderboard",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What free-to-play games have the most players right now?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "games-trending-up-in-reviews-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_leaderboard",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What games are trending up in reviews right now?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "games-trending-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_leaderboard",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "what games are trending right now?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": 181,
+      "suiteKey": "horror-games-gaining-momentum",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_filtered",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What horror games are gaining momentum?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "breaking-out-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_breakout",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "What’s breaking out right now?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "show-breaking-out-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_breakout",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Show me breaking out games right now",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "breaking-out-indie-this-month",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_breakout",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "Breaking out indie games this month",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "breaking-out-indie-right-now",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_breakout",
+      "primaryPersona": "Investor / Portfolio Analyst",
+      "prompt": "Breaking out indie games right now",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "breaking-out-overwhelmingly-positive",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_breakout",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Games breaking out with overwhelmingly positive reviews",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "accelerating-review-velocity",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_velocity",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Which games have accelerating review velocity?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "most-active-games-by-reviews",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_velocity",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Most active games by reviews",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "most-reviews-added-this-week",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_velocity",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Which games have the most reviews added this week?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5", "tier:golden", "tier:mini"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "show-games-improving-sentiment",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_sentiment",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Show me games with improving sentiment",
+      "packTags": ["tier:full", "area:trend", "scope:section-5", "tier:golden"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "games-improving-sentiment-past-30-days",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_sentiment",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Games with improving sentiment in the past 30 days",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    },
+    {
+      "critiqueId": null,
+      "suiteKey": "popular-games-worse-reviews-lately",
+      "section": "5. Trending and Time-Relative Answers",
+      "family": "trend_sentiment",
+      "primaryPersona": "Competitive / Market Intelligence Analyst",
+      "prompt": "Which popular games are getting worse reviews lately?",
+      "packTags": ["tier:full", "area:trend", "scope:section-5"]
+    }
+  ]
+}
