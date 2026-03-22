@@ -4,10 +4,7 @@ import readline from 'node:readline/promises';
 import { promisify } from 'node:util';
 
 import {
-  DEFAULT_CANARY_LIMIT,
   DEFAULT_GOLDEN_GOAL,
-  DEFAULT_FULL_SWEEP_INTERVAL,
-  DEFAULT_HIGH_RISK_CANARY_LIMIT,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_PORT,
   ROOT,
@@ -27,7 +24,6 @@ import {
   buildPromptInventory,
   chooseNextPrompt,
   discoverPromptCandidates,
-  selectCanaryPrompts,
 } from './inventory.mjs';
 import { getPromptTarget, isPromptAtTarget } from './judge-config.mjs';
 import { judgePrompt } from './judge.mjs';
@@ -52,6 +48,7 @@ import {
 } from './state.mjs';
 
 const execFileAsync = promisify(execFile);
+const DEFAULT_GOLDEN_SWEEP_INTERVAL = 5;
 
 export async function runCampaign({
   runId = null,
@@ -64,11 +61,8 @@ export async function runCampaign({
   const env = await loadAutolabEnv();
   validateAutolabEnv(env);
   const verificationPolicy = {
-    canaryLimit: parsePositiveInt(env.CHAT_AUTOLAB_CANARY_LIMIT) ?? DEFAULT_CANARY_LIMIT,
-    highRiskCanaryLimit:
-      parsePositiveInt(env.CHAT_AUTOLAB_HIGH_RISK_CANARY_LIMIT) ?? DEFAULT_HIGH_RISK_CANARY_LIMIT,
-    fullSweepInterval:
-      parseNonNegativeInt(env.CHAT_AUTOLAB_FULL_SWEEP_INTERVAL) ?? DEFAULT_FULL_SWEEP_INTERVAL,
+    goldenSweepInterval:
+      parsePositiveInt(env.CHAT_AUTOLAB_GOLDEN_SWEEP_INTERVAL) ?? DEFAULT_GOLDEN_SWEEP_INTERVAL,
   };
 
   const activeRunId = runId || buildRunId();
@@ -310,29 +304,19 @@ export async function runCampaign({
       }
 
       const candidateFingerprint = await getWorkingTreeFingerprint(candidateSnapshot, state.workspaceDir);
-      const canaryPrompts = selectCanaryPrompts({
-        state,
-        leadPrompt: nextPrompt,
-        touchedFiles: candidateSnapshot.allFiles,
-        baseLimit: verificationPolicy.canaryLimit,
-        highRiskLimit: verificationPolicy.highRiskCanaryLimit,
-      });
-      state.current.canaryPromptIds = canaryPrompts.map((entry) => entry.id);
-      state.current.canaryPrompts = canaryPrompts.map((entry) => entry.prompt);
+      state.current.canaryPromptIds = [];
+      state.current.canaryPrompts = [];
       startVerificationCheckpoint(state, {
         mode: 'candidate_gate',
         phase: 'targeted_verify',
         leadPromptId: nextPrompt.id,
         candidateFingerprint,
         candidateSnapshot,
-        pendingTaskIds: [
-          buildVerificationTaskId('targeted', nextPrompt.id),
-          ...canaryPrompts.map((entry) => buildVerificationTaskId('canary', entry.id)),
-        ],
+        pendingTaskIds: [buildVerificationTaskId('targeted', nextPrompt.id)],
       });
       await appendEvent(state, {
         type: 'verification_started',
-        message: `Checkpointed targeted and canary verification for ${nextPrompt.prompt} with ${canaryPrompts.length} live canaries.`,
+        message: `Checkpointed targeted verification for ${nextPrompt.prompt}.`,
       });
       await updateState(state, onStateChange);
       await continueVerificationCheckpoint({
@@ -673,6 +657,19 @@ async function continueVerificationCheckpoint({
       return true;
     }
 
+    if (!shouldRunGoldenSweep(refreshedCheckpoint.candidateSnapshot.allFiles, state.iterations.accepted, verificationPolicy)) {
+      await acceptVerifiedCandidate({
+        state,
+        promptEntry: leadPrompt,
+        candidateSnapshot: refreshedCheckpoint.candidateSnapshot,
+        leadResult,
+        goldenResults: [],
+        fullResults: [],
+        onStateChange,
+      });
+      return true;
+    }
+
     startVerificationCheckpoint(state, {
       mode: 'golden_gate',
       phase: 'golden_verify',
@@ -685,7 +682,7 @@ async function continueVerificationCheckpoint({
     setCurrentPhase(state, 'golden_verify', 'Run the final live golden sweep before keeping this candidate.');
     await appendEvent(state, {
       type: 'verification_started',
-      message: `Canaries passed for ${leadPrompt.prompt}; running the final live golden sweep before keep.`,
+      message: `Lead prompt passed for ${leadPrompt.prompt}; running the final live golden sweep before keep.`,
     });
     await updateState(state, onStateChange);
     return await continueVerificationCheckpoint({
@@ -733,34 +730,6 @@ async function continueVerificationCheckpoint({
         message: `Discarded ${leadPrompt.prompt} because it failed the final golden sweep.`,
       });
       return true;
-    }
-
-    if (shouldRunFullVerify(verificationPolicy.fullSweepInterval, state.iterations.accepted)) {
-      startVerificationCheckpoint(state, {
-        mode: 'full_verify',
-        phase: 'full_verify',
-        leadPromptId: refreshedCheckpoint.leadPromptId,
-        candidateFingerprint: refreshedCheckpoint.candidateFingerprint,
-        candidateSnapshot: refreshedCheckpoint.candidateSnapshot,
-        completedResults: refreshedCheckpoint.completedResults,
-        pendingTaskIds: state.promptResults
-          .filter((entry) => !entry.isGolden)
-          .map((entry) => buildVerificationTaskId('frontier', entry.id)),
-      });
-      setCurrentPhase(state, 'full_verify', 'Run the broader sections 1-5 verification pass.');
-      await appendEvent(state, {
-        type: 'verification_started',
-        message: `Checkpointed full verification for ${leadPrompt.prompt}.`,
-      });
-      await updateState(state, onStateChange);
-      return await continueVerificationCheckpoint({
-        state,
-        origin,
-        evalSecret,
-        auth,
-        onStateChange,
-        verificationPolicy,
-      });
     }
 
     await acceptVerifiedCandidate({
@@ -1368,9 +1337,21 @@ async function runCodeGuard(cwd, touchedFiles) {
   }
 }
 
-function shouldRunFullVerify(interval, acceptedCount) {
+function shouldRunGoldenSweep(touchedFiles, acceptedCount, verificationPolicy) {
+  if (hasHighRiskSharedChange(touchedFiles)) {
+    return true;
+  }
   const nextAcceptedCount = acceptedCount + 1;
+  const interval = verificationPolicy?.goldenSweepInterval;
   return Number.isFinite(interval) && interval > 0 && nextAcceptedCount % interval === 0;
+}
+
+function hasHighRiskSharedChange(touchedFiles) {
+  return touchedFiles.some((file) =>
+    file.startsWith('apps/admin/src/app/api/chat/') ||
+    file.startsWith('apps/admin/src/lib/llm/') ||
+    file.startsWith('apps/admin/src/lib/chat/')
+  );
 }
 
 function buildCodexPrompt(promptEntry, state) {
@@ -1445,14 +1426,6 @@ function zeroUsage() {
 function parsePositiveInt(value) {
   const parsed = Number.parseInt(String(value || '').trim(), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
-  }
-  return parsed;
-}
-
-function parseNonNegativeInt(value) {
-  const parsed = Number.parseInt(String(value || '').trim(), 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
     return null;
   }
   return parsed;
