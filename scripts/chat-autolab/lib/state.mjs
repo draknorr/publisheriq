@@ -87,7 +87,7 @@ export function createInitialState({
 }) {
   const now = new Date().toISOString();
   return {
-    version: 3,
+    version: 4,
     runId,
     status: 'booting',
     startedAt: now,
@@ -149,6 +149,7 @@ export function createInitialState({
     baselineQueue: [],
     manualReview: [],
     discoveredPrompts: [],
+    verificationCheckpoint: null,
     recentEvents: [],
     tokenUsage: {
       answer: createUsageBucket(),
@@ -240,6 +241,58 @@ export function setCurrentPhase(state, phase, nextAction) {
   if (nextAction) {
     state.current.nextAction = nextAction;
   }
+}
+
+export function startVerificationCheckpoint(
+  state,
+  {
+    mode,
+    phase,
+    leadPromptId,
+    candidateFingerprint,
+    candidateSnapshot,
+    pendingTaskIds,
+    completedResults = {},
+  }
+) {
+  const now = new Date().toISOString();
+  state.verificationCheckpoint = {
+    mode,
+    phase,
+    leadPromptId,
+    candidateFingerprint,
+    candidateSnapshot: normalizeSnapshot(candidateSnapshot),
+    pendingTaskIds: [...new Set(pendingTaskIds || [])],
+    completedResults: { ...completedResults },
+    startedAt: now,
+    updatedAt: now,
+  };
+  return state.verificationCheckpoint;
+}
+
+export function recordVerificationResult(state, taskId, completedEntry) {
+  if (!state.verificationCheckpoint) {
+    return null;
+  }
+  state.verificationCheckpoint.completedResults[taskId] = completedEntry;
+  state.verificationCheckpoint.pendingTaskIds = state.verificationCheckpoint.pendingTaskIds.filter(
+    (entry) => entry !== taskId
+  );
+  state.verificationCheckpoint.updatedAt = new Date().toISOString();
+  return state.verificationCheckpoint;
+}
+
+export function updateVerificationCheckpointPhase(state, phase) {
+  if (!state.verificationCheckpoint) {
+    return null;
+  }
+  state.verificationCheckpoint.phase = phase;
+  state.verificationCheckpoint.updatedAt = new Date().toISOString();
+  return state.verificationCheckpoint;
+}
+
+export function clearVerificationCheckpoint(state) {
+  state.verificationCheckpoint = null;
 }
 
 export function upsertPromptResult(state, result) {
@@ -359,7 +412,7 @@ function formatMaybeNumber(value) {
 function normalizeLoadedState(state) {
   return {
     ...state,
-    version: Math.max(Number(state.version || 1), 3),
+    version: Math.max(Number(state.version || 1), 4),
     startSha: state.startSha || state.best?.sha || null,
     workspaceDir: state.workspaceDir || state.worktreeDir || ROOT,
     workspaceMode: state.workspaceMode || (state.worktreeDir ? 'legacy-worktree' : 'current-branch'),
@@ -371,6 +424,7 @@ function normalizeLoadedState(state) {
         ? Number(state.current.targetScore)
         : null,
     },
+    verificationCheckpoint: normalizeVerificationCheckpoint(state.verificationCheckpoint),
     promptResults: Array.isArray(state.promptResults)
       ? state.promptResults.map((entry) => ({
         ...entry,
@@ -388,4 +442,49 @@ function shortSha(value) {
 
 function safeFilePart(value) {
   return String(value || 'unknown').replace(/[^a-zA-Z0-9._-]+/g, '-');
+}
+
+function normalizeVerificationCheckpoint(checkpoint) {
+  if (!checkpoint || typeof checkpoint !== 'object') {
+    return null;
+  }
+  return {
+    mode: checkpoint.mode || 'candidate_gate',
+    phase: checkpoint.phase || 'targeted_verify',
+    leadPromptId: checkpoint.leadPromptId || null,
+    candidateFingerprint: checkpoint.candidateFingerprint || null,
+    candidateSnapshot: normalizeSnapshot(checkpoint.candidateSnapshot),
+    pendingTaskIds: Array.isArray(checkpoint.pendingTaskIds) ? checkpoint.pendingTaskIds : [],
+    completedResults:
+      checkpoint.completedResults && typeof checkpoint.completedResults === 'object'
+        ? checkpoint.completedResults
+        : {},
+    startedAt: checkpoint.startedAt || new Date(0).toISOString(),
+    updatedAt: checkpoint.updatedAt || checkpoint.startedAt || new Date(0).toISOString(),
+  };
+}
+
+function normalizeSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return {
+      trackedFiles: [],
+      untrackedFiles: [],
+      allFiles: [],
+      hasChanges: false,
+    };
+  }
+  const trackedFiles = Array.isArray(snapshot.trackedFiles) ? snapshot.trackedFiles : [];
+  const untrackedFiles = Array.isArray(snapshot.untrackedFiles) ? snapshot.untrackedFiles : [];
+  const allFiles = Array.isArray(snapshot.allFiles)
+    ? snapshot.allFiles
+    : [...new Set([...trackedFiles, ...untrackedFiles])];
+  return {
+    trackedFiles,
+    untrackedFiles,
+    allFiles,
+    hasChanges:
+      typeof snapshot.hasChanges === 'boolean'
+        ? snapshot.hasChanges
+        : trackedFiles.length > 0 || untrackedFiles.length > 0,
+  };
 }

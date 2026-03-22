@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -29,7 +31,7 @@ export async function ensureCampaignStart(cwd = ROOT) {
   };
 }
 
-export async function ensureCampaignResume({ cwd = ROOT, branch, anchorSha }) {
+export async function ensureCampaignResume({ cwd = ROOT, branch, anchorSha, allowDirty = false }) {
   await ensureNoGitOperationInProgress(cwd);
 
   const currentBranch = await getCurrentBranch(cwd);
@@ -41,7 +43,7 @@ export async function ensureCampaignResume({ cwd = ROOT, branch, anchorSha }) {
   }
 
   const snapshot = await getWorkingTreeSnapshot(cwd);
-  if (snapshot.hasChanges) {
+  if (snapshot.hasChanges && !allowDirty) {
     throw new Error('chat-autolab resume requires a clean working tree.');
   }
 
@@ -92,6 +94,33 @@ export async function getWorkingTreeSnapshot(cwd = ROOT) {
     allFiles: [...new Set([...tracked, ...untracked])],
     hasChanges: tracked.length > 0 || untracked.length > 0,
   };
+}
+
+export async function getWorkingTreeFingerprint(snapshot = null, cwd = ROOT) {
+  const resolvedSnapshot = snapshot || (await getWorkingTreeSnapshot(cwd));
+  const hash = createHash('sha256');
+  hash.update(`head:${await getHeadSha(cwd)}\n`);
+  hash.update(`tracked:${JSON.stringify([...resolvedSnapshot.trackedFiles].sort())}\n`);
+  hash.update(`untracked:${JSON.stringify([...resolvedSnapshot.untrackedFiles].sort())}\n`);
+
+  if (resolvedSnapshot.trackedFiles.length > 0) {
+    const { stdout } = await execGit(['diff', '--no-ext-diff', '--', ...resolvedSnapshot.trackedFiles], {
+      cwd,
+    });
+    hash.update(stdout);
+  }
+
+  for (const relativePath of [...resolvedSnapshot.untrackedFiles].sort()) {
+    hash.update(`file:${relativePath}\n`);
+    try {
+      const content = await fs.readFile(path.join(cwd, relativePath));
+      hash.update(content);
+    } catch {
+      hash.update('missing\n');
+    }
+  }
+
+  return hash.digest('hex');
 }
 
 export async function discardWorkingTreeChanges(snapshot, cwd = ROOT) {

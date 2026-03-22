@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { promisify } from 'node:util';
@@ -16,7 +17,7 @@ import {
   discardWorkingTreeChanges,
   ensureCampaignResume,
   ensureCampaignStart,
-  getHeadSha,
+  getWorkingTreeFingerprint,
   getWorkingTreeSnapshot,
 } from './git.mjs';
 import { buildPromptInventory, chooseNextPrompt, discoverPromptCandidates } from './inventory.mjs';
@@ -27,13 +28,17 @@ import {
   appendEvent,
   applyUsageToState,
   buildRunPaths,
+  clearVerificationCheckpoint,
   clearCurrentRun,
   createInitialState,
   getPromptResult,
   initRunStorage,
   loadState,
+  recordVerificationResult,
   saveState,
   setCurrentPhase,
+  startVerificationCheckpoint,
+  updateVerificationCheckpointPhase,
   upsertPromptResult,
   writeEvaluationArtifact,
 } from './state.mjs';
@@ -82,6 +87,7 @@ export async function runCampaign({
         cwd: ROOT,
         branch: state.branch,
         anchorSha: state.best?.sha || state.startSha,
+        allowDirty: Boolean(state.verificationCheckpoint) || isVerificationPhase(state.current?.phase),
       });
       state.workspaceDir = ROOT;
       state.workspaceMode = 'current-branch';
@@ -181,9 +187,23 @@ export async function runCampaign({
     }
 
     state.best.score = computeCampaignScore(state);
+    await recoverVerificationCheckpointFromArtifacts({ state, onStateChange });
     await updateState(state, onStateChange);
 
     while (state.iterations.total < state.campaignBudget.maxIterations) {
+      if (await continueVerificationCheckpoint({
+        state,
+        origin: state.evalOrigin,
+        evalSecret: state.evalSecret,
+        auth,
+        onStateChange,
+      })) {
+        if (state.status === 'stopped') {
+          return state;
+        }
+        continue;
+      }
+
       state.baseline = buildBaselineSummary(state);
       const nextPrompt = chooseNextPrompt(state);
       if (!nextPrompt) {
@@ -269,115 +289,36 @@ export async function runCampaign({
         continue;
       }
 
-      const leadBaseline = getPromptResult(state, nextPrompt.id);
-      const leadResult = await evaluateAndJudgePrompt({
-        state,
-        origin: state.evalOrigin,
-        evalSecret: state.evalSecret,
-        auth,
-        promptEntry: nextPrompt,
-        baselineResult: leadBaseline,
-        stage: 'targeted',
+      const candidateFingerprint = await getWorkingTreeFingerprint(candidateSnapshot, state.workspaceDir);
+      startVerificationCheckpoint(state, {
+        mode: 'candidate_gate',
+        phase: 'targeted_verify',
+        leadPromptId: nextPrompt.id,
+        candidateFingerprint,
+        candidateSnapshot,
+        pendingTaskIds: [
+          buildVerificationTaskId('targeted', nextPrompt.id),
+          ...state.promptResults
+            .filter((entry) => entry.isGolden)
+            .map((entry) => buildVerificationTaskId('golden', entry.id)),
+        ],
       });
-      applyUsageToState(state, 'answer', leadResult.answerUsage);
-      applyUsageToState(state, 'judge', leadResult.judgeUsage);
-
-      const goldenResults = await evaluateGoldenPack({
-        origin: state.evalOrigin,
-        evalSecret: state.evalSecret,
-        auth,
-        state,
-      });
-
-      const hasGoldenRegression = goldenResults.some(
-        (result) =>
-          result.pairwiseVerdict === 'worse' ||
-          (result.blockingFlags?.length || 0) > 0
-      );
-      const leadImproved =
-        leadResult.pairwiseVerdict === 'better' ||
-        leadResult.score > Number(leadBaseline?.score || 0) ||
-        (leadBaseline?.blockingFlags?.length || 0) > (leadResult.blockingFlags?.length || 0);
-
-      if (!leadImproved || hasGoldenRegression) {
-        await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
-        state.iterations.total += 1;
-        state.iterations.discarded += 1;
-        nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
-        await appendEvent(state, {
-          type: 'discard',
-          message: `Discarded ${nextPrompt.prompt} because it failed the targeted or golden gate.`,
-        });
-        markManualReviewIfNeeded(state, nextPrompt);
-        state.latest = {
-          score: leadResult.score,
-          verdict: 'discard',
-          reason: hasGoldenRegression ? 'Golden regression detected.' : 'Lead prompt did not improve.',
-        };
-        await updateState(state, onStateChange);
-        continue;
-      }
-
-      if (shouldRunFullVerify(state.current.touchedFiles, state.iterations.accepted)) {
-        setCurrentPhase(state, 'full_verify', 'Run the broader sections 1-5 verification pass.');
-        await updateState(state, onStateChange);
-        const fullResults = await evaluateFrontier({
-          origin: state.evalOrigin,
-          evalSecret: state.evalSecret,
-          auth,
-          state,
-        });
-        state.lastGuard.full = !fullResults.some((result) => result.pairwiseVerdict === 'worse');
-        if (!state.lastGuard.full) {
-          await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
-          state.iterations.total += 1;
-          state.iterations.discarded += 1;
-          nextPrompt.discardCount = Number(nextPrompt.discardCount || 0) + 1;
-          await appendEvent(state, {
-            type: 'discard',
-            message: `Discarded ${nextPrompt.prompt} because the full verification pass regressed.`,
-          });
-          markManualReviewIfNeeded(state, nextPrompt);
-          state.latest = {
-            score: leadResult.score,
-            verdict: 'discard',
-            reason: 'Full verification regressed.',
-          };
-          await updateState(state, onStateChange);
-          continue;
-        }
-        for (const result of fullResults) {
-          upsertPromptResult(state, result);
-        }
-      }
-
-      upsertPromptResult(state, leadResult);
-      for (const result of goldenResults) {
-        upsertPromptResult(state, result);
-      }
-
-      const ownedSnapshot = await ensureOwnedCandidateSnapshot(state, candidateSnapshot, onStateChange);
-      state.current.touchedFiles = ownedSnapshot.allFiles;
-      const commitSha = await commitAll({
-        cwd: state.workspaceDir,
-        message: `chat-autolab: improve ${nextPrompt.area} for ${nextPrompt.id}`,
-      });
-
-      state.iterations.total += 1;
-      state.iterations.accepted += 1;
-      state.best.score = computeCampaignScore(state);
-      state.best.sha = commitSha;
-      state.best.acceptedAt = new Date().toISOString();
-      state.latest = {
-        score: leadResult.score,
-        verdict: 'keep',
-        reason: `Accepted ${nextPrompt.prompt} after passing the golden gate.`,
-      };
       await appendEvent(state, {
-        type: 'keep',
-        message: `Kept ${nextPrompt.prompt} at ${leadResult.score.toFixed(1)} and committed ${commitSha.slice(0, 7)} locally.`,
+        type: 'verification_started',
+        message: `Checkpointed targeted and golden verification for ${nextPrompt.prompt}.`,
       });
       await updateState(state, onStateChange);
+      await continueVerificationCheckpoint({
+        state,
+        origin: state.evalOrigin,
+        evalSecret: state.evalSecret,
+        auth,
+        onStateChange,
+      });
+      if (state.status === 'stopped') {
+        return state;
+      }
+      continue;
     }
 
     state.baseline = buildBaselineSummary(state);
@@ -395,6 +336,15 @@ export async function runCampaign({
     return state;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (error?.code === 'JUDGE_TIMEOUT' && state.verificationCheckpoint) {
+      setCurrentPhase(state, 'stopped', 'Run pnpm chat-autolab:resume to continue verification from the first unfinished judge call.');
+      await appendEvent(state, {
+        type: 'campaign_stopped',
+        message: `Campaign stopped after a ${error.mode || 'judge'} timeout. Run pnpm chat-autolab:resume to continue.`,
+      });
+      await updateState(state, onStateChange);
+      return state;
+    }
     if (!['needs_context', 'failed'].includes(state.status)) {
       setCurrentPhase(state, 'failed', message);
     } else {
@@ -445,7 +395,7 @@ function installStopHandlers({ state, onStateChange, managed }) {
 
 async function handleStopSignal({ signal, state, onStateChange, managed }) {
   try {
-    if (['editing', 'targeted_verify', 'full_verify'].includes(state.current.phase)) {
+    if (state.current.phase === 'editing') {
       const snapshot = await getWorkingTreeSnapshot(state.workspaceDir);
       if (snapshot.hasChanges) {
         await discardWorkingTreeChanges(snapshot, state.workspaceDir);
@@ -466,7 +416,9 @@ async function handleStopSignal({ signal, state, onStateChange, managed }) {
     pid: null,
     startedByAutolab: false,
   };
-  state.current.touchedFiles = [];
+  if (state.current.phase === 'editing') {
+    state.current.touchedFiles = [];
+  }
   setCurrentPhase(state, 'stopped', 'Run pnpm chat-autolab:resume to continue this campaign.');
   await appendEvent(state, {
     type: 'campaign_stopped',
@@ -548,6 +500,7 @@ async function evaluateAndJudgePrompt({
   promptEntry,
   baselineResult,
   stage,
+  onJudgeStatus = null,
 }) {
   const evalResult = await evaluatePrompt({
     origin,
@@ -559,6 +512,7 @@ async function evaluateAndJudgePrompt({
     promptEntry,
     currentResult: evalResult,
     baselineResult,
+    onStatus: onJudgeStatus,
   });
 
   await writeEvaluationArtifact({
@@ -633,48 +587,557 @@ async function evaluateAndJudgePrompt({
   };
 }
 
-async function evaluateGoldenPack({ origin, evalSecret, auth, state }) {
-  const goldens = state.promptResults.filter((entry) => entry.isGolden);
-  const results = [];
-  setCurrentPhase(state, 'golden_verify', 'Run the golden verification pack.');
+async function continueVerificationCheckpoint({
+  state,
+  origin,
+  evalSecret,
+  auth,
+  onStateChange,
+}) {
+  const checkpoint = state.verificationCheckpoint;
+  if (!checkpoint) {
+    return false;
+  }
 
-  for (const golden of goldens) {
-    const result = await evaluateAndJudgePrompt({
+  await assertMatchingVerificationCheckpoint(state, onStateChange);
+
+  if (checkpoint.mode === 'candidate_gate') {
+    await runVerificationTasks({
       state,
       origin,
       evalSecret,
       auth,
-      promptEntry: golden,
-      baselineResult: golden,
-      stage: 'golden',
+      onStateChange,
+      stageFilter: new Set(['targeted', 'golden']),
     });
-    applyUsageToState(state, 'answer', result.answerUsage);
-    applyUsageToState(state, 'judge', result.judgeUsage);
-    results.push(result);
-    state.lastGuard.golden = !results.some((row) => row.pairwiseVerdict === 'worse');
+
+    const refreshedCheckpoint = state.verificationCheckpoint;
+    if (!refreshedCheckpoint) {
+      return true;
+    }
+    const leadPrompt = findPromptEntry(state, refreshedCheckpoint.leadPromptId);
+    const leadBaseline = getPromptResult(state, refreshedCheckpoint.leadPromptId);
+    const leadResult = getCheckpointResult(refreshedCheckpoint, 'targeted', refreshedCheckpoint.leadPromptId);
+    const goldenResults = getCheckpointResultsByStage(refreshedCheckpoint, 'golden');
+    if (!leadPrompt || !leadBaseline || !leadResult) {
+      throw new Error('chat-autolab verification checkpoint is missing the lead prompt result.');
+    }
+
+    const hasGoldenRegression = goldenResults.some(
+      (result) => result.pairwiseVerdict === 'worse' || (result.blockingFlags?.length || 0) > 0
+    );
+    const leadImproved =
+      leadResult.pairwiseVerdict === 'better' ||
+      leadResult.score > Number(leadBaseline?.score || 0) ||
+      (leadBaseline?.blockingFlags?.length || 0) > (leadResult.blockingFlags?.length || 0);
+
+    if (!leadImproved || hasGoldenRegression) {
+      await discardAfterVerificationFailure({
+        state,
+        promptEntry: leadPrompt,
+        candidateSnapshot: refreshedCheckpoint.candidateSnapshot,
+        onStateChange,
+        score: leadResult.score,
+        reason: hasGoldenRegression ? 'Golden regression detected.' : 'Lead prompt did not improve.',
+        message: `Discarded ${leadPrompt.prompt} because it failed the targeted or golden gate.`,
+      });
+      return true;
+    }
+
+    if (shouldRunFullVerify(refreshedCheckpoint.candidateSnapshot.allFiles, state.iterations.accepted)) {
+      startVerificationCheckpoint(state, {
+        mode: 'full_verify',
+        phase: 'full_verify',
+        leadPromptId: refreshedCheckpoint.leadPromptId,
+        candidateFingerprint: refreshedCheckpoint.candidateFingerprint,
+        candidateSnapshot: refreshedCheckpoint.candidateSnapshot,
+        completedResults: refreshedCheckpoint.completedResults,
+        pendingTaskIds: state.promptResults
+          .filter((entry) => !entry.isGolden)
+          .map((entry) => buildVerificationTaskId('frontier', entry.id)),
+      });
+      setCurrentPhase(state, 'full_verify', 'Run the broader sections 1-5 verification pass.');
+      await appendEvent(state, {
+        type: 'verification_started',
+        message: `Checkpointed full verification for ${leadPrompt.prompt}.`,
+      });
+      await updateState(state, onStateChange);
+      return await continueVerificationCheckpoint({
+        state,
+        origin,
+        evalSecret,
+        auth,
+        onStateChange,
+      });
+    }
+
+    await acceptVerifiedCandidate({
+      state,
+      promptEntry: leadPrompt,
+      candidateSnapshot: refreshedCheckpoint.candidateSnapshot,
+      leadResult,
+      goldenResults,
+      fullResults: [],
+      onStateChange,
+    });
+    return true;
   }
 
-  return results;
+  if (checkpoint.mode === 'full_verify') {
+    await runVerificationTasks({
+      state,
+      origin,
+      evalSecret,
+      auth,
+      onStateChange,
+      stageFilter: new Set(['frontier']),
+    });
+
+    const refreshedCheckpoint = state.verificationCheckpoint;
+    if (!refreshedCheckpoint) {
+      return true;
+    }
+    const leadPrompt = findPromptEntry(state, refreshedCheckpoint.leadPromptId);
+    const leadResult = getCheckpointResult(refreshedCheckpoint, 'targeted', refreshedCheckpoint.leadPromptId);
+    const goldenResults = getCheckpointResultsByStage(refreshedCheckpoint, 'golden');
+    const fullResults = getCheckpointResultsByStage(refreshedCheckpoint, 'frontier');
+    if (!leadPrompt || !leadResult) {
+      throw new Error('chat-autolab full verification checkpoint is missing the lead prompt result.');
+    }
+
+    state.lastGuard.full = !fullResults.some((result) => result.pairwiseVerdict === 'worse');
+    if (!state.lastGuard.full) {
+      await discardAfterVerificationFailure({
+        state,
+        promptEntry: leadPrompt,
+        candidateSnapshot: refreshedCheckpoint.candidateSnapshot,
+        onStateChange,
+        score: leadResult.score,
+        reason: 'Full verification regressed.',
+        message: `Discarded ${leadPrompt.prompt} because the full verification pass regressed.`,
+      });
+      return true;
+    }
+
+    await acceptVerifiedCandidate({
+      state,
+      promptEntry: leadPrompt,
+      candidateSnapshot: refreshedCheckpoint.candidateSnapshot,
+      leadResult,
+      goldenResults,
+      fullResults,
+      onStateChange,
+    });
+    return true;
+  }
+
+  throw new Error(`Unsupported verification checkpoint mode "${checkpoint.mode}".`);
 }
 
-async function evaluateFrontier({ origin, evalSecret, auth, state }) {
-  const frontier = state.promptResults.filter((entry) => !entry.isGolden);
-  const results = [];
-  for (const promptEntry of frontier) {
+async function runVerificationTasks({
+  state,
+  origin,
+  evalSecret,
+  auth,
+  onStateChange,
+  stageFilter,
+}) {
+  const checkpoint = state.verificationCheckpoint;
+  if (!checkpoint) {
+    return;
+  }
+
+  for (const taskId of [...checkpoint.pendingTaskIds]) {
+    const task = parseVerificationTaskId(taskId);
+    if (!stageFilter.has(task.stage)) {
+      continue;
+    }
+
+    const promptEntry = findPromptEntry(state, task.promptId);
+    if (!promptEntry) {
+      throw new Error(`chat-autolab could not find prompt ${task.promptId} while resuming verification.`);
+    }
+
+    if (task.stage === 'golden') {
+      updateVerificationCheckpointPhase(state, 'golden_verify');
+      setCurrentPhase(state, 'golden_verify', `Run the golden verification pack for "${state.current.prompt}".`);
+    } else if (task.stage === 'frontier') {
+      updateVerificationCheckpointPhase(state, 'full_verify');
+      setCurrentPhase(state, 'full_verify', 'Run the broader sections 1-5 verification pass.');
+    } else {
+      updateVerificationCheckpointPhase(state, 'targeted_verify');
+      setCurrentPhase(state, 'targeted_verify', `Run code guard and targeted prompt verification for "${state.current.prompt}".`);
+    }
+    state.current.nextAction = `Verify ${task.stage} prompt "${promptEntry.prompt}".`;
+    await appendEvent(state, {
+      type: 'judge_started',
+      message: `Started ${task.stage} verification for ${promptEntry.prompt}.`,
+    });
+    await updateState(state, onStateChange);
+
+    const baselineResult =
+      task.stage === 'targeted' ? getPromptResult(state, promptEntry.id) : getPromptResult(state, promptEntry.id);
     const result = await evaluateAndJudgePrompt({
       state,
       origin,
       evalSecret,
       auth,
       promptEntry,
-      baselineResult: promptEntry,
-      stage: 'frontier',
+      baselineResult,
+      stage: task.stage,
+      onJudgeStatus: async (status) => {
+        const message = formatJudgeStatusMessage(promptEntry.prompt, task.stage, status);
+        if (!message) {
+          return;
+        }
+        await appendEvent(state, {
+          type: 'judge_progress',
+          message,
+        });
+        await updateState(state, onStateChange);
+      },
     });
     applyUsageToState(state, 'answer', result.answerUsage);
     applyUsageToState(state, 'judge', result.judgeUsage);
-    results.push(result);
+    recordVerificationResult(state, taskId, {
+      promptId: promptEntry.id,
+      stage: task.stage,
+      result,
+      recordedAt: new Date().toISOString(),
+    });
+    if (task.stage === 'golden') {
+      state.lastGuard.golden = !getCheckpointResultsByStage(state.verificationCheckpoint, 'golden').some(
+        (row) => row.pairwiseVerdict === 'worse'
+      );
+    }
+    if (task.stage === 'frontier') {
+      state.lastGuard.full = !getCheckpointResultsByStage(state.verificationCheckpoint, 'frontier').some(
+        (row) => row.pairwiseVerdict === 'worse'
+      );
+    }
+    await appendEvent(state, {
+      type: 'judge_completed',
+      message: `Saved ${task.stage} verification for ${promptEntry.prompt}. ${state.verificationCheckpoint.pendingTaskIds.length} verification tasks remain.`,
+    });
+    await updateState(state, onStateChange);
   }
-  return results;
+}
+
+async function acceptVerifiedCandidate({
+  state,
+  promptEntry,
+  candidateSnapshot,
+  leadResult,
+  goldenResults,
+  fullResults,
+  onStateChange,
+}) {
+  upsertPromptResult(state, leadResult);
+  for (const result of goldenResults) {
+    upsertPromptResult(state, result);
+  }
+  for (const result of fullResults) {
+    upsertPromptResult(state, result);
+  }
+
+  const ownedSnapshot = await ensureOwnedCandidateSnapshot(state, candidateSnapshot, onStateChange);
+  state.current.touchedFiles = ownedSnapshot.allFiles;
+  const commitSha = await commitAll({
+    cwd: state.workspaceDir,
+    message: `chat-autolab: improve ${promptEntry.area} for ${promptEntry.id}`,
+  });
+
+  state.iterations.total += 1;
+  state.iterations.accepted += 1;
+  state.best.score = computeCampaignScore(state);
+  state.best.sha = commitSha;
+  state.best.acceptedAt = new Date().toISOString();
+  state.latest = {
+    score: leadResult.score,
+    verdict: 'keep',
+    reason: `Accepted ${promptEntry.prompt} after passing the golden gate.`,
+  };
+  clearVerificationCheckpoint(state);
+  await appendEvent(state, {
+    type: 'keep',
+    message: `Kept ${promptEntry.prompt} at ${leadResult.score.toFixed(1)} and committed ${commitSha.slice(0, 7)} locally.`,
+  });
+  await updateState(state, onStateChange);
+}
+
+async function discardAfterVerificationFailure({
+  state,
+  promptEntry,
+  candidateSnapshot,
+  onStateChange,
+  score,
+  reason,
+  message,
+}) {
+  await discardCandidateSnapshot(state, candidateSnapshot, onStateChange);
+  clearVerificationCheckpoint(state);
+  state.iterations.total += 1;
+  state.iterations.discarded += 1;
+  promptEntry.discardCount = Number(promptEntry.discardCount || 0) + 1;
+  await appendEvent(state, {
+    type: 'discard',
+    message,
+  });
+  markManualReviewIfNeeded(state, promptEntry);
+  state.latest = {
+    score,
+    verdict: 'discard',
+    reason,
+  };
+  await updateState(state, onStateChange);
+}
+
+async function recoverVerificationCheckpointFromArtifacts({ state, onStateChange }) {
+  if (state.verificationCheckpoint || !isVerificationPhase(state.current.phase) || !state.current.promptId) {
+    return false;
+  }
+
+  const candidateSnapshot = await getWorkingTreeSnapshot(state.workspaceDir);
+  if (!candidateSnapshot.hasChanges) {
+    return false;
+  }
+
+  const relevantStages = getRelevantRecoveryStages(state.current.phase);
+  if (relevantStages.length === 0) {
+    return false;
+  }
+
+  const artifacts = await loadVerificationArtifacts(state.runId);
+  const anchor = [...artifacts]
+    .reverse()
+    .find((artifact) => artifact.stage === 'targeted' && artifact.promptId === state.current.promptId);
+  if (!anchor) {
+    return false;
+  }
+
+  const expectedTaskIds = [
+    buildVerificationTaskId('targeted', state.current.promptId),
+    ...state.promptResults
+      .filter((entry) => entry.isGolden)
+      .map((entry) => buildVerificationTaskId('golden', entry.id)),
+    ...(
+      state.current.phase === 'full_verify'
+        ? state.promptResults
+            .filter((entry) => !entry.isGolden)
+            .map((entry) => buildVerificationTaskId('frontier', entry.id))
+        : []
+    ),
+  ];
+  const completedResults = {};
+
+  for (const artifact of artifacts) {
+    if (artifact.sortKey < anchor.sortKey || !relevantStages.includes(artifact.stage)) {
+      continue;
+    }
+    const taskId = buildVerificationTaskId(artifact.stage, artifact.promptId);
+    completedResults[taskId] = {
+      promptId: artifact.promptId,
+      stage: artifact.stage,
+      result: hydratePromptResultFromArtifact(artifact),
+      recordedAt: artifact.timestamp,
+    };
+  }
+
+  if (Object.keys(completedResults).length === 0) {
+    return false;
+  }
+
+  startVerificationCheckpoint(state, {
+    mode: state.current.phase === 'full_verify' ? 'full_verify' : 'candidate_gate',
+    phase: state.current.phase,
+    leadPromptId: state.current.promptId,
+    candidateFingerprint: await getWorkingTreeFingerprint(candidateSnapshot, state.workspaceDir),
+    candidateSnapshot,
+    completedResults,
+    pendingTaskIds: expectedTaskIds.filter((taskId) => !completedResults[taskId]),
+  });
+  await appendEvent(state, {
+    type: 'verification_recovered',
+    message: `Recovered ${Object.keys(completedResults).length} completed verification tasks from saved artifacts.`,
+  });
+  await updateState(state, onStateChange);
+  return true;
+}
+
+async function assertMatchingVerificationCheckpoint(state, onStateChange) {
+  const checkpoint = state.verificationCheckpoint;
+  if (!checkpoint) {
+    return;
+  }
+
+  const currentSnapshot = await getWorkingTreeSnapshot(state.workspaceDir);
+  if (!currentSnapshot.hasChanges) {
+    setCurrentPhase(
+      state,
+      'needs_context',
+      'The candidate changes for this verification checkpoint are no longer in the working tree.'
+    );
+    await appendEvent(state, {
+      type: 'verification_checkpoint_invalid',
+      message: 'Verification checkpoint no longer matches the working tree. Resolve the candidate changes manually before resuming.',
+    });
+    await updateState(state, onStateChange);
+    throw new Error('chat-autolab cannot resume verification because the candidate patch is no longer present.');
+  }
+
+  const currentFingerprint = await getWorkingTreeFingerprint(currentSnapshot, state.workspaceDir);
+  if (checkpoint.candidateFingerprint && checkpoint.candidateFingerprint !== currentFingerprint) {
+    setCurrentPhase(
+      state,
+      'needs_context',
+      'The candidate worktree changed after verification was checkpointed.'
+    );
+    await appendEvent(state, {
+      type: 'verification_checkpoint_invalid',
+      message: 'Verification checkpoint fingerprint mismatch. Resolve the worktree manually before resuming.',
+    });
+    await updateState(state, onStateChange);
+    throw new Error('chat-autolab cannot resume verification because the candidate fingerprint changed.');
+  }
+
+  state.current.touchedFiles = checkpoint.candidateSnapshot?.allFiles || currentSnapshot.allFiles;
+}
+
+async function loadVerificationArtifacts(runId) {
+  const { artifactsDir } = buildRunPaths(runId);
+  let filenames = [];
+  try {
+    filenames = await fs.readdir(artifactsDir);
+  } catch {
+    return [];
+  }
+
+  const artifacts = [];
+  for (const filename of filenames.sort()) {
+    const match = filename.match(/^(.+?)-(targeted|golden|frontier)-([^.]+)\.json$/);
+    if (!match) {
+      continue;
+    }
+    const [, timestamp, stage, promptId] = match;
+    try {
+      const raw = await fs.readFile(`${artifactsDir}/${filename}`, 'utf8');
+      artifacts.push({
+        filename,
+        sortKey: filename,
+        timestamp: timestamp.replace(/-/g, ':').replace(/:(\d\d\d)Z$/, '.$1Z'),
+        stage,
+        promptId,
+        payload: JSON.parse(raw),
+      });
+    } catch {
+      // Ignore malformed artifacts while recovering older runs.
+    }
+  }
+  return artifacts;
+}
+
+function hydratePromptResultFromArtifact(artifact) {
+  const payload = artifact.payload || {};
+  return {
+    id: artifact.promptId || payload?.prompt || 'unknown',
+    prompt: payload?.prompt || '',
+    area: payload?.area || null,
+    family: payload?.family || null,
+    persona: payload?.persona || null,
+    critiqueRef: payload?.critiqueRef || null,
+    isGolden: payload?.isGolden === true || artifact.stage === 'golden',
+    source: payload?.source || null,
+    targetScore: payload?.targetScore ?? null,
+    targetVerdict: payload?.targetVerdict ?? null,
+    referenceScore: payload?.referenceScore ?? null,
+    referenceVerdict: payload?.referenceVerdict ?? null,
+    judgeNotes: payload?.judgeNotes ?? null,
+    status: payload?.eval?.status || 'success',
+    answer: payload?.eval?.answer || '',
+    toolCalls: summarizeToolCallsForState(payload?.eval?.toolCalls),
+    iterations: payload?.eval?.iterations || [],
+    timing: payload?.eval?.timing || null,
+    score: Number(payload?.judge?.score || 0),
+    subscores: payload?.judge?.subscores || {},
+    blockingFlags: payload?.judge?.blockingFlags || [],
+    rationale: payload?.judge?.rationale || 'No rationale provided.',
+    pairwiseVerdict: payload?.judge?.pairwiseVerdict || 'same',
+    pairwiseReason: payload?.judge?.pairwiseReason || '',
+    evidenceDigest: payload?.judge?.evidenceDigest || null,
+    calibration: payload?.judge?.calibration || null,
+    answerUsage: payload?.eval?.usage || zeroUsage(),
+    judgeUsage: payload?.judge?.usage || zeroUsage(),
+  };
+}
+
+function getRelevantRecoveryStages(phase) {
+  if (phase === 'targeted_verify' || phase === 'golden_verify') {
+    return ['targeted', 'golden'];
+  }
+  if (phase === 'full_verify') {
+    return ['targeted', 'golden', 'frontier'];
+  }
+  return [];
+}
+
+function findPromptEntry(state, promptId) {
+  return (
+    state.promptResults.find((entry) => entry.id === promptId) ||
+    state.baselineQueue.find((entry) => entry.id === promptId) ||
+    state.discoveredPrompts.find((entry) => entry.id === promptId) ||
+    null
+  );
+}
+
+function buildVerificationTaskId(stage, promptId) {
+  return `${stage}:${promptId}`;
+}
+
+function parseVerificationTaskId(taskId) {
+  const [stage, ...rest] = String(taskId || '').split(':');
+  return {
+    stage,
+    promptId: rest.join(':'),
+  };
+}
+
+function getCheckpointResult(checkpoint, stage, promptId) {
+  return checkpoint?.completedResults?.[buildVerificationTaskId(stage, promptId)]?.result || null;
+}
+
+function getCheckpointResultsByStage(checkpoint, stage) {
+  return Object.values(checkpoint?.completedResults || {})
+    .filter((entry) => entry?.stage === stage)
+    .map((entry) => entry.result);
+}
+
+function formatJudgeStatusMessage(prompt, stage, status) {
+  const elapsed = Number(status?.elapsedMs || 0);
+  const seconds = elapsed > 0 ? `${Math.round(elapsed / 1000)}s` : null;
+  switch (status?.kind) {
+    case 'absolute_started':
+      return `Started absolute judge for ${prompt} during ${stage} verification.`;
+    case 'pairwise_started':
+      return `Started pairwise judge for ${prompt} during ${stage} verification.`;
+    case 'absolute_heartbeat':
+      return `Absolute judge still running for ${prompt}${seconds ? ` (${seconds})` : ''}.`;
+    case 'pairwise_heartbeat':
+      return `Pairwise judge still running for ${prompt}${seconds ? ` (${seconds})` : ''}.`;
+    case 'absolute_completed':
+      return `Absolute judge completed for ${prompt}.`;
+    case 'pairwise_completed':
+      return `Pairwise judge completed for ${prompt}.`;
+    case 'absolute_timed_out':
+      return `Absolute judge timed out for ${prompt}.`;
+    case 'pairwise_timed_out':
+      return `Pairwise judge timed out for ${prompt}.`;
+    default:
+      return null;
+  }
+}
+
+function isVerificationPhase(phase) {
+  return ['targeted_verify', 'golden_verify', 'full_verify'].includes(phase);
 }
 
 async function discardCandidateSnapshot(state, candidateSnapshot, onStateChange) {

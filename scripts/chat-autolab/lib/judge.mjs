@@ -11,6 +11,7 @@ export async function judgePrompt({
   promptEntry,
   currentResult,
   baselineResult = null,
+  onStatus = null,
 }) {
   const hardChecks = runHardChecks(promptEntry.prompt, currentResult);
   const calibration = getPromptCalibration(promptEntry);
@@ -21,6 +22,7 @@ export async function judgePrompt({
     hardChecks,
     evidenceDigest,
     calibration,
+    onStatus,
   });
   const pairwise = baselineResult
     ? await runPairwiseJudge({
@@ -31,6 +33,7 @@ export async function judgePrompt({
         candidateEvidenceDigest: evidenceDigest,
         baselineEvidenceDigest: baselineResult.evidenceDigest || buildEvidenceDigest(baselineResult),
         calibration,
+        onStatus,
       })
     : {
         verdict: 'same',
@@ -105,15 +108,29 @@ async function runAbsoluteJudge({
   hardChecks,
   evidenceDigest,
   calibration,
+  onStatus,
 }) {
   const persona = PERSONAS[promptEntry.persona] || PERSONAS.publishing_strategy_lead;
   const familyRubric = getFamilyRubric(promptEntry.family);
   try {
+    emitStatus(onStatus, {
+      kind: 'absolute_started',
+      promptId: promptEntry.id,
+      stage: 'absolute',
+    });
     const response = await runCodexPrompt({
       cwd: ROOT,
       lastMessagePath: path.join(AUTOLAB_DIR, 'judge-absolute-last-message.txt'),
       sandbox: 'read-only',
       timeoutMs: ABSOLUTE_JUDGE_TIMEOUT_MS,
+      onHeartbeat: ({ elapsedMs }) => {
+        emitStatus(onStatus, {
+          kind: 'absolute_heartbeat',
+          promptId: promptEntry.id,
+          stage: 'absolute',
+          elapsedMs,
+        });
+      },
       prompt: buildAbsoluteJudgePrompt({
         promptEntry,
         persona,
@@ -125,6 +142,11 @@ async function runAbsoluteJudge({
       }),
     });
     const parsed = parseJudgeJson(response, 'absolute');
+    emitStatus(onStatus, {
+      kind: 'absolute_completed',
+      promptId: promptEntry.id,
+      stage: 'absolute',
+    });
 
     return {
       score: clampNumber(parsed.score, 0, 10),
@@ -136,6 +158,14 @@ async function runAbsoluteJudge({
       parsed,
     };
   } catch (error) {
+    if (error?.code === 'CODEX_TIMEOUT') {
+      emitStatus(onStatus, {
+        kind: 'absolute_timed_out',
+        promptId: promptEntry.id,
+        stage: 'absolute',
+      });
+      throw createJudgeTimeoutError('absolute', error);
+    }
     return {
       score: 0,
       subscores: {},
@@ -156,15 +186,29 @@ async function runPairwiseJudge({
   candidateEvidenceDigest,
   baselineEvidenceDigest,
   calibration,
+  onStatus,
 }) {
   const persona = PERSONAS[promptEntry.persona] || PERSONAS.publishing_strategy_lead;
   const familyRubric = getFamilyRubric(promptEntry.family);
   try {
+    emitStatus(onStatus, {
+      kind: 'pairwise_started',
+      promptId: promptEntry.id,
+      stage: 'pairwise',
+    });
     const response = await runCodexPrompt({
       cwd: ROOT,
       lastMessagePath: path.join(AUTOLAB_DIR, 'judge-pairwise-last-message.txt'),
       sandbox: 'read-only',
       timeoutMs: PAIRWISE_JUDGE_TIMEOUT_MS,
+      onHeartbeat: ({ elapsedMs }) => {
+        emitStatus(onStatus, {
+          kind: 'pairwise_heartbeat',
+          promptId: promptEntry.id,
+          stage: 'pairwise',
+          elapsedMs,
+        });
+      },
       prompt: buildPairwiseJudgePrompt({
         promptEntry,
         persona,
@@ -178,6 +222,11 @@ async function runPairwiseJudge({
       }),
     });
     const parsed = parseJudgeJson(response, 'pairwise');
+    emitStatus(onStatus, {
+      kind: 'pairwise_completed',
+      promptId: promptEntry.id,
+      stage: 'pairwise',
+    });
 
     return {
       verdict: ['better', 'same', 'worse'].includes(parsed.verdict) ? parsed.verdict : 'same',
@@ -187,6 +236,14 @@ async function runPairwiseJudge({
       parsed,
     };
   } catch (error) {
+    if (error?.code === 'CODEX_TIMEOUT') {
+      emitStatus(onStatus, {
+        kind: 'pairwise_timed_out',
+        promptId: promptEntry.id,
+        stage: 'pairwise',
+      });
+      throw createJudgeTimeoutError('pairwise', error);
+    }
     return {
       verdict: 'same',
       reason: `Pairwise judge unavailable: ${error instanceof Error ? error.message : String(error)}`,
@@ -195,6 +252,21 @@ async function runPairwiseJudge({
       parsed: null,
     };
   }
+}
+
+function emitStatus(callback, payload) {
+  if (typeof callback !== 'function') {
+    return;
+  }
+  callback(payload);
+}
+
+function createJudgeTimeoutError(mode, cause) {
+  const error = new Error(`chat-autolab ${mode} judge timed out`);
+  error.code = 'JUDGE_TIMEOUT';
+  error.mode = mode;
+  error.cause = cause;
+  return error;
 }
 
 function mergeUsage(left, right) {

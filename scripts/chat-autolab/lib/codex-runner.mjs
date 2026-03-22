@@ -26,6 +26,8 @@ export async function runCodexPrompt({
   model = null,
   onEvent = null,
   timeoutMs = null,
+  onHeartbeat = null,
+  heartbeatMs = 15000,
 }) {
   await fs.writeFile(lastMessagePath, '');
 
@@ -43,18 +45,36 @@ export async function runCodexPrompt({
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: process.env,
+      detached: process.platform !== 'win32',
     });
+    let settled = false;
+    const startedAt = Date.now();
     const timeout =
       Number.isFinite(timeoutMs) && timeoutMs > 0
         ? setTimeout(() => {
-            child.kill('SIGTERM');
+            const error = new Error(`codex exec timed out after ${timeoutMs}ms`);
+            error.code = 'CODEX_TIMEOUT';
+            terminateCodexProcess(child, 'SIGTERM');
             setTimeout(() => {
               if (child.exitCode === null) {
-                child.kill('SIGKILL');
+                terminateCodexProcess(child, 'SIGKILL');
               }
             }, 1000).unref();
-            reject(new Error(`codex exec timed out after ${timeoutMs}ms`));
+            safeReject(error);
           }, timeoutMs)
+        : null;
+    const heartbeat =
+      typeof onHeartbeat === 'function' && Number.isFinite(heartbeatMs) && heartbeatMs > 0
+        ? setInterval(() => {
+            try {
+              onHeartbeat({
+                elapsedMs: Date.now() - startedAt,
+                pid: child.pid,
+              });
+            } catch {
+              // Ignore heartbeat callback errors.
+            }
+          }, heartbeatMs)
         : null;
 
     let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -94,24 +114,56 @@ export async function runCodexPrompt({
       stderr += chunk.toString();
     });
 
-    child.on('error', reject);
+    child.on('error', (error) => {
+      safeReject(error);
+    });
     child.on('exit', async (code) => {
+      cleanupTimers();
+      if (settled) {
+        return;
+      }
+      if (code !== 0) {
+        const error = new Error(`codex exec failed with code ${code}: ${stderr.trim()}`);
+        error.code = 'CODEX_EXEC_FAILED';
+        safeReject(error);
+        return;
+      }
+      try {
+        const lastMessage = await safeRead(lastMessagePath);
+        const text = lastMessage.trim();
+        safeResolve({
+          usage,
+          text,
+          content: text,
+          lastMessage: text,
+        });
+      } catch (error) {
+        safeReject(error);
+      }
+    });
+
+    function cleanupTimers() {
       if (timeout) {
         clearTimeout(timeout);
       }
-      if (code !== 0) {
-        reject(new Error(`codex exec failed with code ${code}: ${stderr.trim()}`));
-        return;
+      if (heartbeat) {
+        clearInterval(heartbeat);
       }
-      const lastMessage = await safeRead(lastMessagePath);
-      const text = lastMessage.trim();
-      resolve({
-        usage,
-        text,
-        content: text,
-        lastMessage: text,
-      });
-    });
+    }
+
+    function safeResolve(value) {
+      if (settled) return;
+      settled = true;
+      cleanupTimers();
+      resolve(value);
+    }
+
+    function safeReject(error) {
+      if (settled) return;
+      settled = true;
+      cleanupTimers();
+      reject(error);
+    }
   });
 }
 
@@ -120,5 +172,26 @@ async function safeRead(filePath) {
     return await fs.readFile(filePath, 'utf8');
   } catch {
     return '';
+  }
+}
+
+function terminateCodexProcess(child, signal) {
+  if (!child?.pid) {
+    return;
+  }
+
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // Fall through to direct child kill.
+    }
+  }
+
+  try {
+    child.kill(signal);
+  } catch {
+    // Best-effort cleanup for subprocess termination.
   }
 }
