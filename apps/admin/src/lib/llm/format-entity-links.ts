@@ -19,6 +19,11 @@ interface ResultWithData {
   [key: string]: unknown;
 }
 
+interface FormatResultOptions {
+  compact?: boolean;
+  maxRows?: number;
+}
+
 function formatNestedTitleCollections(row: Record<string, unknown>): Record<string, unknown> {
   const formatted = { ...row };
 
@@ -174,9 +179,9 @@ function formatReference(reference: Record<string, unknown>): Record<string, unk
  * ensuring the LLM can pass them through directly without needing
  * to construct links itself.
  */
-export function formatResultWithEntityLinks(result: unknown): string {
+function prepareResultWithEntityLinks(result: unknown): unknown {
   if (!result || typeof result !== 'object') {
-    return JSON.stringify(result);
+    return result;
   }
 
   const typedResult = result as ResultWithData;
@@ -195,12 +200,12 @@ export function formatResultWithEntityLinks(result: unknown): string {
       typedResult.reference && typeof typedResult.reference === 'object'
         ? formatReference(typedResult.reference)
         : typedResult.reference;
-    return JSON.stringify({
+    return {
       ...typedResult,
       candidates: formattedCandidates,
       canonicalResult: formattedCanonical,
       reference: formattedReference,
-    });
+    };
   }
 
   // Handle query_analytics and search_games results (have 'data' array)
@@ -209,7 +214,7 @@ export function formatResultWithEntityLinks(result: unknown): string {
       formatRowWithLinks(row as Record<string, unknown>)
     );
 
-    return JSON.stringify({ ...typedResult, data: formattedData });
+    return { ...typedResult, data: formattedData };
   }
 
   if (typedResult.app && typeof typedResult.app === 'object') {
@@ -218,7 +223,7 @@ export function formatResultWithEntityLinks(result: unknown): string {
       typedResult.reference && typeof typedResult.reference === 'object'
         ? formatReference(typedResult.reference)
         : typedResult.reference;
-    return JSON.stringify({ ...typedResult, app: formattedApp, reference: formattedReference });
+    return { ...typedResult, app: formattedApp, reference: formattedReference };
   }
 
   if (typedResult.detail && typeof typedResult.detail === 'object') {
@@ -227,7 +232,7 @@ export function formatResultWithEntityLinks(result: unknown): string {
       typedResult.reference && typeof typedResult.reference === 'object'
         ? formatReference(typedResult.reference)
         : typedResult.reference;
-    return JSON.stringify({ ...typedResult, detail: formattedDetail, reference: formattedReference });
+    return { ...typedResult, detail: formattedDetail, reference: formattedReference };
   }
 
   // Handle find_similar results (have 'results' array with 'type' field)
@@ -249,25 +254,205 @@ export function formatResultWithEntityLinks(result: unknown): string {
       typedResult.reference && typeof typedResult.reference === 'object'
         ? formatReference(typedResult.reference)
         : typedResult.reference;
-    return JSON.stringify({
+    return {
       ...typedResult,
       results: formattedResults,
       canonicalResult: formattedCanonical,
       reference: formattedReference,
-    });
+    };
   }
 
   // Handle unsuccessful results - return as-is
   if (typedResult.success === false) {
     if (typedResult.reference && typeof typedResult.reference === 'object') {
-      return JSON.stringify({
+      return {
         ...typedResult,
         reference: formatReference(typedResult.reference),
-      });
+      };
     }
-    return JSON.stringify(result);
+    return result;
   }
 
   // No data to format - return as-is
-  return JSON.stringify(result);
+  return result;
+}
+
+function compactMetricsWindow(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const compact = {
+    ccuPeak: candidate.ccuPeak ?? null,
+    totalReviews: candidate.totalReviews ?? null,
+    reviewScore: candidate.reviewScore ?? null,
+    reviewScoreLabel: candidate.reviewScoreLabel ?? null,
+    priceCents: candidate.priceCents ?? null,
+    discountPercent: candidate.discountPercent ?? null,
+  };
+
+  return Object.values(compact).some((field) => field != null) ? compact : null;
+}
+
+function compactRow(row: Record<string, unknown>): Record<string, unknown> {
+  const preferredKeys = [
+    'appid',
+    'name',
+    'appName',
+    'activityId',
+    'occurredAt',
+    'headline',
+    'summary',
+    'storyKind',
+    'signalFamilies',
+    'highlightLabels',
+    'facts',
+    'label',
+    'beforeText',
+    'afterText',
+    'note',
+    'added',
+    'removed',
+    'reviewsAdded7d',
+    'reviewsAdded30d',
+    'velocity7d',
+    'velocity30d',
+    'velocityAcceleration',
+    'totalReviews',
+    'reviewPercentage',
+    'reviewScore',
+    'ccuPeak',
+    'priceDollars',
+    'discountPercent',
+    'positivePercentage',
+    'reasons',
+    'confidence',
+    'primaryProof',
+  ];
+
+  const compact: Record<string, unknown> = {};
+
+  for (const key of preferredKeys) {
+    const value = row[key];
+    if (value == null) {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      compact[key] = value.slice(0, ['facts', 'highlightLabels', 'added', 'removed'].includes(key) ? 3 : 5);
+      continue;
+    }
+
+    if (key === 'primaryProof' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      const proof = value as Record<string, unknown>;
+      compact[key] = {
+        activityId: proof.activityId ?? null,
+        occurredAt: proof.occurredAt ?? null,
+        headline: proof.headline ?? null,
+        summary: proof.summary ?? null,
+        facts: Array.isArray(proof.facts) ? proof.facts.slice(0, 3) : [],
+        signalFamilies: Array.isArray(proof.signalFamilies) ? proof.signalFamilies.slice(0, 3) : [],
+        diffs: Array.isArray(proof.diffs) ? proof.diffs.slice(0, 2) : [],
+      };
+      continue;
+    }
+
+    compact[key] = value;
+  }
+
+  for (const windowKey of ['baseline7d', 'baseline30d', 'response1d', 'response7d', 'response30d']) {
+    const compactWindow = compactMetricsWindow(row[windowKey]);
+    if (compactWindow) {
+      compact[windowKey] = compactWindow;
+    }
+  }
+
+  return compact;
+}
+
+function compactPreparedResult(result: unknown, maxRows: number): unknown {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return result;
+  }
+
+  const typedResult = result as ResultWithData;
+  const compact: Record<string, unknown> = {};
+
+  for (const key of [
+    'success',
+    'error',
+    'ranking_metric',
+    'ranking_label',
+    'ranking_definition',
+    'timeframe',
+    'timeframe_label',
+    'window_start',
+    'window_end',
+    'trend_type',
+    'pattern',
+    'total_found',
+    'filters_applied',
+    'required_answer_fields',
+    'response_guidance',
+    'selected_change_surface',
+    'sufficient_to_answer',
+    'sufficiency_reason',
+    'phase1_contract',
+    'presentation_hints',
+    'answer_payload',
+    'meta',
+  ]) {
+    if (typedResult[key] != null) {
+      compact[key] = typedResult[key];
+    }
+  }
+
+  if (Array.isArray(typedResult.data)) {
+    compact.data = typedResult.data.slice(0, maxRows).map((row) => compactRow(row));
+  }
+
+  if (Array.isArray(typedResult.results)) {
+    compact.results = typedResult.results.slice(0, maxRows).map((row) => compactRow(row));
+  }
+
+  if (Array.isArray(typedResult.candidates)) {
+    compact.candidates = typedResult.candidates.slice(0, Math.min(maxRows, 5)).map((row) => compactRow(row));
+  }
+
+  if (Array.isArray(typedResult.events)) {
+    compact.events = typedResult.events.slice(0, Math.min(maxRows, 8)).map((event) => compactRow(event as Record<string, unknown>));
+  }
+
+  if (typedResult.app && typeof typedResult.app === 'object' && !Array.isArray(typedResult.app)) {
+    compact.app = compactRow(typedResult.app);
+  }
+
+  if (typedResult.detail && typeof typedResult.detail === 'object' && !Array.isArray(typedResult.detail)) {
+    compact.detail = compactRow(typedResult.detail);
+  }
+
+  if (typedResult.reference && typeof typedResult.reference === 'object' && !Array.isArray(typedResult.reference)) {
+    compact.reference = typedResult.reference;
+  }
+
+  return compact;
+}
+
+export function formatResultForModel(
+  result: unknown,
+  options: FormatResultOptions = {}
+): string {
+  const prepared = prepareResultWithEntityLinks(result);
+  const maxRows = Math.max(1, Math.min(options.maxRows ?? 10, 10));
+
+  if (!options.compact) {
+    return JSON.stringify(prepared);
+  }
+
+  return JSON.stringify(compactPreparedResult(prepared, maxRows));
+}
+
+export function formatResultWithEntityLinks(result: unknown): string {
+  return formatResultForModel(result);
 }

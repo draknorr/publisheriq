@@ -274,14 +274,22 @@ export function buildToolAnswerContractSummary(
     (rowCount > 0 && rowCount <= 5 && ['discovery', 'trend', 'change_intel', 'similarity', 'company_similarity'].includes(family));
   const fallbackAllowed =
     result.allow_follow_up_relaxation === true ||
-    ((toolCall.name === 'query_change_activity' || toolCall.name === 'find_change_patterns') && rowCount > 0);
+    (
+      (toolCall.name === 'query_change_activity' || toolCall.name === 'find_change_patterns') &&
+      rowCount > 0 &&
+      result.sufficient_to_answer !== true
+    );
   let fallbackAction: Phase1FallbackAction = 'respond';
 
   if (needsClarification) {
     fallbackAction = 'ask_clarification';
   } else if (result.allow_follow_up_relaxation === true) {
     fallbackAction = 'retry_relaxed_once';
-  } else if ((toolCall.name === 'query_change_activity' || toolCall.name === 'find_change_patterns') && rowCount > 0) {
+  } else if (
+    (toolCall.name === 'query_change_activity' || toolCall.name === 'find_change_patterns') &&
+    rowCount > 0 &&
+    result.sufficient_to_answer !== true
+  ) {
     fallbackAction = 'fetch_one_supporting_detail';
   } else if (noMatch) {
     fallbackAction = 'answer_no_match';

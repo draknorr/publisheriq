@@ -102,4 +102,7 @@ export interface ChatTurnQualityInfo {
   contextApplied: boolean;
   guardrailTrace: GuardrailTraceEntry[];
   terminalContract?: ToolAnswerContractSummary | null;
+  renderMode?: 'model' | 'deterministic';
+  terminalAfterIteration?: number | null;
+  modelHistoryChars?: number;
 }

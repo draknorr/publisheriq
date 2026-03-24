@@ -21,7 +21,7 @@ import {
 import { lookupGames, type LookupGamesArgs } from '@/lib/search/game-lookup';
 import { discoverTrending, type DiscoverTrendingArgs } from '@/lib/search/trend-discovery';
 import { screenGames, type ScreenGamesArgs } from '@/lib/search/screen-games';
-import { formatResultWithEntityLinks } from '@/lib/llm/format-entity-links';
+import { formatResultForModel } from '@/lib/llm/format-entity-links';
 import {
   buildRedundantDiscoverySkipResult,
   extractBroadDiscoveryState,
@@ -68,6 +68,7 @@ import {
   buildSessionContextPrompt,
   summarizeSessionContextForLog,
 } from '@/lib/chat/session-context';
+import { renderToolResultForChat } from '@/lib/chat/chat-edge-renderer';
 import { createServerClient } from '@/lib/supabase/server';
 import {
   calculateTotalCredits,
@@ -193,6 +194,7 @@ function classifyStreamFailureKind(error: unknown): string {
 function buildSessionLogSummary(
   context: SessionChatContext | null | undefined,
   toolCalls: ChatToolCall[],
+  quality?: ChatTurnQualityInfo | null,
   failureKind?: string
 ): Record<string, unknown> | null {
   const summary = summarizeSessionContextForLog(context) ?? {};
@@ -210,6 +212,18 @@ function buildSessionLogSummary(
 
   if (selectedChangeSurfaces.length > 0) {
     summary.selectedChangeSurfaces = selectedChangeSurfaces;
+  }
+
+  if (quality?.renderMode) {
+    summary.renderMode = quality.renderMode;
+  }
+
+  if (typeof quality?.terminalAfterIteration === 'number') {
+    summary.terminalAfterIteration = quality.terminalAfterIteration;
+  }
+
+  if (typeof quality?.modelHistoryChars === 'number') {
+    summary.modelHistoryChars = quality.modelHistoryChars;
   }
 
   if (failureKind) {
@@ -403,6 +417,10 @@ export async function handleChatStreamRequest(
         const phase1State = CHAT_PHASE1_QUALITY_ENABLED
           ? createPhase1GuardrailState(Boolean(sessionContext))
           : null;
+        let forceFinalRenderWithoutTools = false;
+        let renderMode: 'model' | 'deterministic' = 'model';
+        let modelHistoryChars = 0;
+        let terminalAfterIteration: number | null = null;
         updatedSessionContext = sessionContext;
 
         while (iterations < MAX_TOOL_ITERATIONS) {
@@ -411,7 +429,7 @@ export async function handleChatStreamRequest(
           let iterationTextCount = 0;
 
           const llmStart = performance.now();
-          const llmStream = provider.chatStream(messages, tools);
+          const llmStream = provider.chatStream(messages, forceFinalRenderWithoutTools ? undefined : tools);
 
           let accumulatedText = '';
           const completedToolCalls: ToolCall[] = [];
@@ -481,7 +499,10 @@ export async function handleChatStreamRequest(
           }
 
           // Execute all tool calls and collect results
-          const toolResults: Array<{ toolCall: ToolCall; result: QueryResult | SimilarityResult | Record<string, unknown> }> = [];
+          const toolResults: Array<{
+            toolCall: ToolCall;
+            result: QueryResult | SimilarityResult | Record<string, unknown>;
+          }> = [];
           for (const toolCall of completedToolCalls) {
             const companyNormalizedToolCall = normalizeCompanyToolCall(toolCall, lastUserPrompt);
             const trendNormalizedToolCall = normalizeTrendToolCall(
@@ -666,6 +687,35 @@ export async function handleChatStreamRequest(
             ) ?? lastCompanyState;
           }
 
+          const terminalContract = phase1State?.lastContract ?? null;
+          if (terminalContract?.sufficientToAnswer && terminalAfterIteration == null) {
+            terminalAfterIteration = iterations;
+          }
+
+          const lastToolResult = toolResults[toolResults.length - 1];
+          if (
+            !forceFinalRenderWithoutTools &&
+            accumulatedText.trim().length === 0 &&
+            lastToolResult &&
+            isRecord(lastToolResult.result)
+          ) {
+            const renderedText = renderToolResultForChat(
+              lastToolResult.toolCall,
+              lastToolResult.result,
+              terminalContract
+            );
+
+            if (renderedText) {
+              renderMode = 'deterministic';
+              debugStats.textDeltaCount++;
+              debugStats.totalChars += renderedText.length;
+              debugStats.lastIterationHadText = true;
+              const textEvent: TextDeltaEvent = { type: 'text_delta', delta: renderedText };
+              controller.enqueue(encoder.encode(formatSSE(textEvent)));
+              break;
+            }
+          }
+
           // Add assistant message ONCE with ALL tool calls
           messages.push({
             role: 'assistant',
@@ -675,11 +725,21 @@ export async function handleChatStreamRequest(
 
           // Add each tool result to message history (pre-formatted with entity links)
           for (const { toolCall, result } of toolResults) {
+            const modelContent = formatResultForModel(result, { compact: true });
+            modelHistoryChars += modelContent.length;
             messages.push({
               role: 'tool',
               toolCallId: toolCall.id,
-              content: formatResultWithEntityLinks(result),
+              content: modelContent,
             });
+          }
+
+          if (
+            terminalContract?.sufficientToAnswer &&
+            !terminalContract.needsClarification &&
+            !terminalContract.noMatch
+          ) {
+            forceFinalRenderWithoutTools = true;
           }
 
           // Reset accumulated text for next iteration
@@ -696,7 +756,12 @@ export async function handleChatStreamRequest(
         }
 
         if (phase1State) {
-          phase1Quality = buildPhase1QualityInfo(phase1State);
+          phase1Quality = {
+            ...buildPhase1QualityInfo(phase1State),
+            renderMode,
+            terminalAfterIteration,
+            modelHistoryChars,
+          };
           if (iterations >= MAX_TOOL_ITERATIONS && debugStats.toolCallCount > 0) {
             phase1Quality = {
               ...phase1Quality,
@@ -759,7 +824,11 @@ export async function handleChatStreamRequest(
               total_credits_charged: creditsEnabled ? creditsCharged : undefined,
               chat_family: phase1Quality?.family,
               quality_flags: phase1Quality?.qualityFlags,
-              session_context_summary: buildSessionLogSummary(updatedSessionContext, allToolCalls),
+              session_context_summary: buildSessionLogSummary(
+                updatedSessionContext,
+                allToolCalls,
+                phase1Quality
+              ),
               guardrail_trace: phase1Quality?.guardrailTrace,
               answer_contract_summary: phase1Quality?.terminalContract ?? null,
             });
@@ -816,7 +885,12 @@ export async function handleChatStreamRequest(
                   failureKind,
                 ]),
               ],
-              session_context_summary: buildSessionLogSummary(updatedSessionContext, allToolCalls, failureKind),
+              session_context_summary: buildSessionLogSummary(
+                updatedSessionContext,
+                allToolCalls,
+                phase1Quality,
+                failureKind
+              ),
               guardrail_trace: phase1Quality?.guardrailTrace,
               answer_contract_summary: phase1Quality?.terminalContract ?? null,
             });

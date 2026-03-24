@@ -135,7 +135,7 @@ Use these rules for natural-language change questions:
 
 4. Higher-level pattern prompts:
 - Use **find_change_patterns** for marketing push, relaunch pattern, update tease, under-marketed, signable, rescue candidate, and sustained-response requests.
-- If you need more proof or candidate narrowing, then call **query_analytics**, **search_games**, or **discover_trending** as support.
+- Treat **find_change_patterns** as self-sufficient for the normal answer. Do NOT call extra proof tools unless the user explicitly asks to drill into one candidate or compare specific titles.
 
 5. Change-detail drill-down:
 - After **query_change_activity**, use **get_change_activity_detail** when you need the exact before/after diffs or linked announcements behind one result.

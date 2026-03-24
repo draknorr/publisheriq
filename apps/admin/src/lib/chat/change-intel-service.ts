@@ -135,6 +135,23 @@ interface AppMetrics {
   ccuTrend7dPct: number | null;
 }
 
+interface PatternProofPacket {
+  activityId: string;
+  occurredAt: string;
+  headline: string;
+  summary: string;
+  facts: string[];
+  signalFamilies: ChangeActivitySignalFamily[];
+  diffs: Array<{
+    label: string;
+    beforeText: string | null;
+    afterText: string | null;
+    note: string | null;
+    added: string[];
+    removed: string[];
+  }>;
+}
+
 interface PatternCandidate {
   appid: number;
   name: string;
@@ -145,6 +162,7 @@ interface PatternCandidate {
   storyKinds: string[];
   activityIds: string[];
   metrics: AppMetrics | null;
+  primaryProof: PatternProofPacket | null;
 }
 
 interface PatternAggregate {
@@ -720,6 +738,60 @@ function mapActivityRow(row: ChangeActivityRow) {
   };
 }
 
+function buildPatternProofPacket(detail: ChangeActivityDetail | null): PatternProofPacket | null {
+  if (!detail) {
+    return null;
+  }
+
+  return {
+    activityId: detail.activityId,
+    occurredAt: detail.occurredAt,
+    headline: detail.headline,
+    summary: detail.summary,
+    facts: detail.facts.slice(0, 3),
+    signalFamilies: detail.signalFamilies.slice(0, 3),
+    diffs: detail.diffs.slice(0, 2).map((diff) => ({
+      label: diff.label,
+      beforeText: diff.beforeText,
+      afterText: diff.afterText,
+      note: diff.note,
+      added: diff.added.slice(0, 3),
+      removed: diff.removed.slice(0, 3),
+    })),
+  };
+}
+
+async function hydratePatternProofPackets(
+  candidates: PatternCandidate[],
+  maxProofs: number
+): Promise<PatternCandidate[]> {
+  const shortlist = candidates.slice(0, maxProofs);
+  const hydrated: PatternCandidate[] = [];
+  const batchSize = 4;
+
+  for (let index = 0; index < shortlist.length; index += batchSize) {
+    const batch = shortlist.slice(index, index + batchSize);
+    const batchProofs = await Promise.all(
+      batch.map(async (candidate) => {
+        const activityId = candidate.activityIds[0];
+        if (!activityId) {
+          return { ...candidate, primaryProof: null };
+        }
+
+        const detail = await fetchChangeFeedActivityDetail(activityId).catch(() => null);
+        return {
+          ...candidate,
+          primaryProof: buildPatternProofPacket(detail),
+        };
+      })
+    );
+
+    hydrated.push(...batchProofs);
+  }
+
+  return hydrated;
+}
+
 export async function queryChangeActivity(args: QueryChangeActivityArgs) {
   const days = clamp(args.days, DEFAULT_ACTIVITY_DAYS, 1, MAX_ACTIVITY_DAYS);
   const limit = clamp(args.limit, DEFAULT_ACTIVITY_LIMIT, 1, MAX_ACTIVITY_LIMIT);
@@ -765,9 +837,11 @@ export async function queryChangeActivity(args: QueryChangeActivityArgs) {
       };
     }
 
+    const results = response.items.map(mapActivityRow);
+
     return {
       success: true,
-      results: response.items.map(mapActivityRow),
+      results,
       total_found: response.items.length,
       selected_change_surface: 'projection',
       sparse_result: response.items.length < Math.min(limit, 3),
@@ -778,6 +852,22 @@ export async function queryChangeActivity(args: QueryChangeActivityArgs) {
           : 'A ranked change-activity set is available. Fetch one supporting detail only if the answer needs a concrete proof example.',
       required_answer_fields: ['what changed', 'when it changed', 'why it matters', 'evidence quality'],
       response_guidance: 'For each row, name the concrete change signal, when it happened, and why it matters. Do not summarize with generic repeated change labels.',
+      presentation_hints: {
+        format: 'ranked_change_activity',
+        proof_field: 'facts',
+      },
+      answer_payload: {
+        rows: results.map((row) => ({
+          activityId: row.activityId,
+          appid: row.appid,
+          name: row.name,
+          occurredAt: row.occurredAt,
+          headline: row.headline,
+          facts: row.facts.slice(0, 2),
+          signalFamilies: row.signalFamilies,
+          storyKind: row.storyKind,
+        })),
+      },
       meta: response.meta,
     };
   } catch (error) {
@@ -896,6 +986,22 @@ export async function getGameChangeTimeline(args: GetGameChangeTimelineArgs) {
     required_answer_fields: ['dates', 'concrete changes', 'before/after values when available'],
     response_guidance: 'Lead with the most material title-specific changes and dates. Use before/after text when it exists.',
     events,
+    presentation_hints: {
+      format: 'game_change_timeline',
+      proof_field: 'events',
+    },
+    answer_payload: {
+      app,
+      events: events.map((event) => ({
+        occurredAt: event.occurredAt,
+        label: event.label,
+        beforeText: event.beforeText,
+        afterText: event.afterText,
+        added: event.added.slice(0, 3),
+        removed: event.removed.slice(0, 3),
+        note: event.note,
+      })),
+    },
     meta: {
       days,
       limit,
@@ -1102,6 +1208,23 @@ export async function compareChangeBeforeAfter(args: CompareChangeBeforeAfterArg
     },
     diffs: resolved.detail.diffs,
     relatedAnnouncements: resolved.detail.relatedAnnouncements,
+    presentation_hints: {
+      format: 'before_after_change',
+      proof_field: 'diffs',
+    },
+    answer_payload: {
+      app: resolved.app,
+      selectedActivity: {
+        headline: resolved.detail.headline,
+        summary: resolved.detail.summary,
+        occurredAt: resolved.detail.occurredAt,
+      },
+      diffs: resolved.detail.diffs.slice(0, 3),
+      windows: {
+        baseline30d,
+        response30d,
+      },
+    },
     windows: {
       baseline7d: resolved.detail.aftermath?.baseline7d ?? null,
       baseline30d,
@@ -1299,6 +1422,7 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
           reasons,
           signalFamilies: detail.signalFamilies,
           aftermath: detail.aftermath,
+          primaryProof: buildPatternProofPacket(detail),
         };
       })
     );
@@ -1327,10 +1451,26 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
       results,
       total_found: results.length,
       selected_change_surface: 'projection_pattern',
-      sufficient_to_answer: false,
-      sufficiency_reason: 'A ranked sustained-response set is available. Fetch one supporting detail only if the answer needs a proof example.',
+      sufficient_to_answer: true,
+      sufficiency_reason: 'A ranked sustained-response set with proof packets is available and can be answered directly.',
       required_answer_fields: ['ranked candidates', 'evidence', 'timing', 'why it qualifies'],
       response_guidance: 'For each row, cite the concrete response signal and the post-change window. Avoid canned repeated reasons.',
+      presentation_hints: {
+        format: 'ranked_change_patterns',
+        proof_field: 'primaryProof',
+      },
+      answer_payload: {
+        pattern: args.pattern,
+        results: results.map((result) => ({
+          appid: result.appid,
+          name: result.name,
+          occurredAt: result.occurredAt,
+          confidence: result.confidence,
+          reasons: result.reasons,
+          signalFamilies: result.signalFamilies,
+          primaryProof: result.primaryProof,
+        })),
+      },
       meta: { days, limit, search },
     };
   }
@@ -1357,6 +1497,7 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
       storyKinds: Array.from(aggregate.storyKinds),
       activityIds: aggregate.activityIds,
       metrics,
+      primaryProof: null,
     });
   }
 
@@ -1374,9 +1515,9 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
     return right.occurredAt.localeCompare(left.occurredAt);
   });
 
-  const results = candidates.slice(0, limit);
+  const rankedResults = candidates.slice(0, limit);
 
-  if (results.length === 0) {
+  if (rankedResults.length === 0) {
     return {
       success: true,
       pattern: args.pattern,
@@ -1392,6 +1533,8 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
     };
   }
 
+  const results = await hydratePatternProofPackets(rankedResults, Math.min(limit, 5));
+
   return {
     success: true,
     pattern: args.pattern,
@@ -1399,10 +1542,26 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
     total_found: results.length,
     selected_change_surface: 'projection_pattern',
     sparse_result: results.length < Math.min(limit, 3),
-    sufficient_to_answer: false,
-    sufficiency_reason: 'A ranked pattern set is available. Fetch one supporting detail only if the answer needs a proof example.',
+    sufficient_to_answer: true,
+    sufficiency_reason: 'A ranked pattern set with supporting proof packets is available and can be answered directly.',
     required_answer_fields: ['ranked candidates', 'evidence', 'timing', 'why it qualifies'],
     response_guidance: 'For each row, state the exact evidence behind the pattern and why it matters. Do not reuse identical canned reasons.',
+    presentation_hints: {
+      format: 'ranked_change_patterns',
+      proof_field: 'primaryProof',
+    },
+    answer_payload: {
+      pattern: args.pattern,
+      results: results.map((result) => ({
+        appid: result.appid,
+        name: result.name,
+        occurredAt: result.occurredAt,
+        confidence: result.confidence,
+        reasons: result.reasons,
+        signalFamilies: result.signalFamilies,
+        primaryProof: result.primaryProof,
+      })),
+    },
     meta: { days, limit, search },
   };
 }
