@@ -16,6 +16,11 @@ export interface ChatQueryLogEntry {
   output_tokens?: number;
   tool_credits_used?: number;
   total_credits_charged?: number;
+  chat_family?: string;
+  quality_flags?: string[];
+  session_context_summary?: Record<string, unknown> | null;
+  guardrail_trace?: Record<string, unknown>[] | null;
+  answer_contract_summary?: Record<string, unknown> | null;
 }
 
 /**

@@ -6,6 +6,10 @@ This runbook covers the critique-suite workflows for the prompts called out in:
 - `docs/chat-output-user-critique.md` section `2. Publisher, Developer, and Company Answers`
 - `docs/chat-output-user-critique.md` section `3. Similarity and Comp-Finding Answers`
 - `docs/chat-output-user-critique.md` section `4. Concept and Taste-Based Discovery`
+- `docs/chat-output-user-critique.md` section `5. Trending and Time-Relative Answers`
+- `docs/chat-output-user-critique.md` section `6. Change Intelligence and Strategic / Prospecting Answers`
+
+Phase-1 quality work also adds a dedicated multi-turn suite for session-scoped carry-forward behavior.
 
 ## What This Runner Does
 
@@ -17,6 +21,8 @@ Use one of the checked-in wrappers when you want a fresh live run against the pr
 |---|---|---:|
 | Sections `1` and `2` | `scripts/chat-evals/run-critique-sections-1-2.mjs` | 23 |
 | Sections `3` and `4` | `scripts/chat-evals/run-critique-sections-3-4.mjs` | 13 |
+| Sections `5` and `6` | `scripts/chat-evals/run-critique-sections-5-6.mjs` | 18 |
+| Multi-turn phase 1 | `scripts/chat-evals/run-multi-turn-phase1.mjs` | 6 scenarios |
 
 Each wrapper:
 
@@ -50,6 +56,18 @@ Or for sections `3` and `4`:
 node scripts/chat-evals/run-critique-sections-3-4.mjs
 ```
 
+Or for sections `5` and `6`:
+
+```bash
+node scripts/chat-evals/run-critique-sections-5-6.mjs
+```
+
+Or for multi-turn phase-1 scenarios:
+
+```bash
+node scripts/chat-evals/run-multi-turn-phase1.mjs
+```
+
 Optional overrides:
 
 ```bash
@@ -64,6 +82,19 @@ CHAT_EVAL_ORIGIN=https://www.publisheriq.app \
 CHAT_EVAL_CONCURRENCY=1 \
 CHAT_EVAL_DELAY_MS=3000 \
 node scripts/chat-evals/run-critique-sections-3-4.mjs --out-dir /tmp/publisheriq-chat-evals/manual-run-3-4
+```
+
+```bash
+CHAT_EVAL_ORIGIN=https://www.publisheriq.app \
+CHAT_EVAL_CONCURRENCY=1 \
+CHAT_EVAL_DELAY_MS=3000 \
+node scripts/chat-evals/run-critique-sections-5-6.mjs --out-dir /tmp/publisheriq-chat-evals/manual-run-5-6
+```
+
+```bash
+CHAT_EVAL_ORIGIN=https://www.publisheriq.app \
+CHAT_EVAL_DELAY_MS=1000 \
+node scripts/chat-evals/run-multi-turn-phase1.mjs --out-dir /tmp/publisheriq-chat-evals/manual-run-multi-turn
 ```
 
 The wrapper prints the artifact paths when it finishes.
@@ -146,6 +177,8 @@ Each run folder contains:
 - `curation-template.json`: blank score/rationale template for manual evaluation
 - `run-summary.json`: condensed metadata and timings for quick inspection
 
+Multi-turn scenario runs also record per-turn carried `sessionContext` summaries and guardrail/quality payloads inside `results.json`.
+
 ## Updating docs/chat-prompt-evals.md
 
 Use this process after a fresh run:
@@ -173,11 +206,19 @@ The checked-in wrappers hard-code these prompt IDs:
 - Section 2: `89`, `97`, `127`, `130`, `140`, `151`, `152`, `155`, `156`, `157`, `161`, `170`, `171`, `175`, `178`, `179`
 - Section 3: `51`, `49`, `132`, `134`, `170`, `171`, `190`
 - Section 4: `18`, `195`, `19`, `186`, `42`, `229`
+- Section 5: `158`, `181`, `102`, `244`, `248`
+- Section 6: `87`, `88`, `139`, `221`, `222`, `20`, `46`, `48`, `54`, `253`, `254`, `255`, `256`
 
 If the critique doc changes, update the suite array in the corresponding wrapper:
 
 - `scripts/chat-evals/run-critique-sections-1-2.mjs`
 - `scripts/chat-evals/run-critique-sections-3-4.mjs`
+- `scripts/chat-evals/run-critique-sections-5-6.mjs`
+
+If the multi-turn follow-up scenarios change, update:
+
+- `scripts/chat-evals/multi-turn-phase1-scenarios.json`
+- `scripts/chat-evals/run-multi-turn-phase1.mjs`
 
 ## Current Quality Guardrails
 

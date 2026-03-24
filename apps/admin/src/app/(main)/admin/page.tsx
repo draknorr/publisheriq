@@ -22,6 +22,7 @@ import {
   type PICSDataStats,
 } from '@/lib/sync-queries';
 import { getCachedDashboardData, setCachedDashboardData } from '@/lib/admin-dashboard-cache';
+import type { GuardrailTraceEntry, ToolAnswerContractSummary } from '@/lib/chat/chat-context-types';
 import { AdminDashboard } from './AdminDashboard';
 
 export const metadata: Metadata = {
@@ -58,6 +59,11 @@ export interface ChatQueryLog {
   timing_tools_ms: number | null;
   timing_total_ms: number | null;
   created_at: string;
+  chat_family?: string | null;
+  quality_flags?: string[] | null;
+  session_context_summary?: Record<string, unknown> | null;
+  guardrail_trace?: GuardrailTraceEntry[] | null;
+  answer_contract_summary?: ToolAnswerContractSummary | null;
 }
 
 export interface AdminDashboardData {

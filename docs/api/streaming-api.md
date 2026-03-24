@@ -17,9 +17,12 @@ Content-Type: application/json
 {
   "messages": [
     {"role": "user", "content": "What are the top games by CCU?"}
-  ]
+  ],
+  "sessionContext": null
 }
 ```
+
+`sessionContext` is optional. When present, it carries the compact phase-1 follow-up summary for the current in-browser chat session: resolved entities, active constraints, the current candidate set, and the last answer state.
 
 ---
 
@@ -99,6 +102,38 @@ interface MessageEndEvent {
     toolCallCount: number;     // Tools called
     lastIterationHadText: boolean;
   };
+  quality?: {
+    family?: string;
+    qualityFlags: string[];
+    fallbackUsed: boolean;
+    contextApplied: boolean;
+    guardrailTrace: Array<{
+      step: string;
+      decision: 'allow' | 'block' | 'observe';
+      toolName?: string;
+      reason: string;
+    }>;
+  };
+  sessionContext?: {
+    version: 1;
+    entities: Array<{ kind: string; id?: number | string; name: string }>;
+    constraints: Array<{ key: string; label: string; value: string }>;
+    candidateSet?: {
+      kind: 'games' | 'publishers' | 'developers' | 'activities';
+      ids: Array<number | string>;
+      names: string[];
+      totalFound?: number;
+    } | null;
+    lastAnswer?: {
+      family?: string;
+      summary: string;
+      noMatch?: boolean;
+      sparse?: boolean;
+      clarificationNeeded?: boolean;
+      fallbackAction?: string;
+    } | null;
+    updatedAt: string;
+  };
 }
 ```
 
@@ -124,6 +159,11 @@ The streaming API uses a tool loop with a maximum of 5 iterations:
 3. Send tool results back to LLM
 4. Repeat until LLM produces final text response or max iterations reached
 5. Emit `message_end` with timing and debug stats
+
+When `CHAT_PHASE1_QUALITY_ENABLED=true`, the same `message_end` event also returns:
+
+- `quality`: the turn-level guardrail and contract summary used for operator/debug visibility
+- `sessionContext`: the compact carry-forward state the client should resend on the next turn in the same browser session
 
 **Constant**: `MAX_TOOL_ITERATIONS = 5`
 

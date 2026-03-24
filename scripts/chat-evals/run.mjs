@@ -13,6 +13,7 @@ const DOC_PATH = process.env.CHAT_EVAL_DOC_PATH || path.join(ROOT, 'docs/chat-pr
 const MANIFEST_PATH = path.join(OUT_DIR, 'manifest.json');
 const RESULTS_PATH = path.join(OUT_DIR, 'results.json');
 const MODE = process.env.CHAT_EVAL_MODE || 'full';
+const SCENARIOS_FILE = process.env.CHAT_EVAL_SCENARIOS_FILE || '';
 const BASELINE_OUT_DIR = process.env.CHAT_EVAL_BASELINE_OUT_DIR || '';
 const INCLUDE_PROMPTS_FILE = process.env.CHAT_EVAL_INCLUDE_PROMPTS_FILE || '';
 const MAX_CONCURRENCY = Number(process.env.CHAT_EVAL_CONCURRENCY || '1');
@@ -66,6 +67,11 @@ async function main() {
 
   await fs.mkdir(OUT_DIR, { recursive: true });
 
+  if (SCENARIOS_FILE) {
+    await runScenarioEvaluation(env);
+    return;
+  }
+
   const manifest = await buildManifest();
   const executableManifest = manifest.filter((row) => row.executable);
   const includePrompts = await loadIncludedPrompts();
@@ -75,6 +81,123 @@ async function main() {
   }
 
   await runFullEvaluation(env, manifest, executableManifest, includePrompts);
+}
+
+async function runScenarioEvaluation(env) {
+  const scenarios = await loadScenarios(SCENARIOS_FILE);
+  const executableScenarios = MAX_PROMPTS > 0 ? scenarios.slice(0, MAX_PROMPTS) : scenarios;
+  const auth = await authenticate(env);
+  const results = [];
+
+  console.log(`Prepared ${executableScenarios.length} multi-turn scenarios against ${PROD_ORIGIN}`);
+  console.log(`Authenticated against ${PROD_ORIGIN} as ${env.BYPASS_AUTH_EMAIL}`);
+
+  for (let index = 0; index < executableScenarios.length; index += 1) {
+    const scenario = executableScenarios[index];
+    console.log(`[${index + 1}/${executableScenarios.length}] ${scenario.name}`);
+    const result = await evaluateScenario(scenario, auth);
+    console.log(
+      `  -> ${result.status} | ${
+        result.turns.reduce((sum, turn) => sum + (turn.timing?.totalMs ?? 0), 0)
+      }ms | ${result.turns.length} turns`
+    );
+    results.push(result);
+  }
+
+  await fs.writeFile(
+    MANIFEST_PATH,
+    `${JSON.stringify(
+      {
+        mode: 'scenario',
+        generatedAt: new Date().toISOString(),
+        origin: PROD_ORIGIN,
+        scenariosFile: path.relative(ROOT, SCENARIOS_FILE),
+        scenarioCount: executableScenarios.length,
+      },
+      null,
+      2
+    )}\n`
+  );
+  await fs.writeFile(RESULTS_PATH, `${JSON.stringify(results, null, 2)}\n`);
+  await fs.writeFile(DOC_PATH, renderScenarioReport(results));
+
+  console.log(`Wrote ${DOC_PATH} and raw artifacts to ${OUT_DIR}`);
+}
+
+async function loadScenarios(filePath) {
+  const raw = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  if (!Array.isArray(raw)) {
+    throw new Error(`Scenario file must contain an array: ${filePath}`);
+  }
+
+  return raw.map((scenario) => {
+    if (!scenario || typeof scenario !== 'object') {
+      throw new Error(`Invalid scenario entry in ${filePath}`);
+    }
+
+    if (!Array.isArray(scenario.turns) || scenario.turns.length === 0) {
+      throw new Error(`Scenario ${scenario.id || scenario.name || 'unknown'} must define turns`);
+    }
+
+    return {
+      id: String(scenario.id || scenario.name),
+      name: String(scenario.name || scenario.id),
+      notes: typeof scenario.notes === 'string' ? scenario.notes : '',
+      turns: scenario.turns.map((turn) => {
+        if (!turn || typeof turn !== 'object' || typeof turn.user !== 'string') {
+          throw new Error(`Scenario ${scenario.id || scenario.name || 'unknown'} has an invalid turn`);
+        }
+
+        return {
+          user: turn.user,
+          expectation: typeof turn.expectation === 'string' ? turn.expectation : '',
+        };
+      }),
+    };
+  });
+}
+
+function renderScenarioReport(results) {
+  const lines = ['# Chat Multi-Turn Evaluation Report', ''];
+
+  for (const result of results) {
+    lines.push(`## ${result.scenario_name}`);
+    if (result.notes) {
+      lines.push('', result.notes);
+    }
+    lines.push('', `- Status: ${result.status}`);
+    lines.push(`- Turns: ${result.turns.length}`);
+    lines.push('');
+
+    for (const turn of result.turns) {
+      lines.push(`### Turn ${turn.turn_index}`);
+      lines.push(`- User: ${turn.user_prompt}`);
+      if (turn.expectation) {
+        lines.push(`- Expectation: ${turn.expectation}`);
+      }
+      lines.push(`- Status: ${turn.status}`);
+      lines.push(`- Tools: ${turn.tool_calls.map((tool) => tool.name).join(', ') || 'none'}`);
+      lines.push(`- Time: ${turn.timing?.totalMs ?? '-'}ms`);
+      if (turn.session_context_summary) {
+        lines.push(
+          `- Session Context: ${[
+            ...(turn.session_context_summary.entities ?? []),
+            ...(turn.session_context_summary.constraints ?? []),
+            turn.session_context_summary.candidateSet,
+          ]
+            .filter(Boolean)
+            .join(' | ')}`
+        );
+      }
+      lines.push('');
+      lines.push('```text');
+      lines.push(turn.assistant_output_raw || turn.error_message || '');
+      lines.push('```');
+      lines.push('');
+    }
+  }
+
+  return `${lines.join('\n')}\n`;
 }
 
 async function runFullEvaluation(env, manifest, executableManifest, includePrompts) {
@@ -1184,6 +1307,69 @@ async function evaluatePrompt(promptRow, auth) {
 }
 
 async function evaluatePromptOnce(promptRow, auth) {
+  return evaluateChatRequest(
+    {
+      messages: [{ role: 'user', content: promptRow.prompt_text }],
+    },
+    auth
+  );
+}
+
+async function evaluateScenario(scenario, auth) {
+  const turns = [];
+  const messages = [];
+  let sessionContext = null;
+  let status = 'success';
+
+  for (let index = 0; index < scenario.turns.length; index += 1) {
+    const turn = scenario.turns[index];
+    const userMessage = { role: 'user', content: turn.user };
+    const requestMessages = [...messages, userMessage];
+    const result = await evaluateChatRequest(
+      {
+        messages: requestMessages,
+        sessionContext,
+      },
+      auth
+    );
+
+    turns.push({
+      turn_index: index + 1,
+      user_prompt: turn.user,
+      expectation: turn.expectation,
+      status: result.status,
+      error_message: result.error_message,
+      assistant_output_raw: result.assistant_output_raw,
+      tool_calls: result.tool_calls,
+      timing: result.timing,
+      iterations: result.iterations,
+      quality: result.quality,
+      session_context_summary: summarizeScenarioSessionContext(result.sessionContext),
+    });
+
+    if (result.status !== 'success') {
+      status = 'error';
+      break;
+    }
+
+    sessionContext = result.sessionContext ?? sessionContext;
+    messages.push(userMessage, { role: 'assistant', content: result.assistant_output_raw });
+    if (REQUEST_DELAY_MS > 0 && index < scenario.turns.length - 1) {
+      await sleep(REQUEST_DELAY_MS);
+    }
+  }
+
+  return {
+    scenario_id: scenario.id,
+    scenario_name: scenario.name,
+    notes: scenario.notes,
+    status,
+    turns,
+    final_output: turns[turns.length - 1]?.assistant_output_raw || '',
+  };
+}
+
+async function evaluateChatRequest(requestBody, auth) {
   try {
     const response = await fetch(new URL('/api/chat/stream', PROD_ORIGIN), {
       method: 'POST',
@@ -1192,9 +1378,7 @@ async function evaluatePromptOnce(promptRow, auth) {
         'Content-Type': 'application/json',
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: promptRow.prompt_text }],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -1207,6 +1391,8 @@ async function evaluatePromptOnce(promptRow, auth) {
         tool_calls: [],
         timing: null,
         iterations: null,
+        quality: null,
+        sessionContext: null,
         raw_sse: raw,
       };
     }
@@ -1221,6 +1407,8 @@ async function evaluatePromptOnce(promptRow, auth) {
       tool_calls: parsed.tool_calls,
       timing: parsed.timing,
       iterations: parsed.iterations,
+      quality: parsed.quality,
+      sessionContext: parsed.sessionContext,
       raw_sse,
     };
   } catch (error) {
@@ -1232,6 +1420,8 @@ async function evaluatePromptOnce(promptRow, auth) {
       tool_calls: [],
       timing: null,
       iterations: null,
+      quality: null,
+      sessionContext: null,
       raw_sse: '',
     };
   }
@@ -1243,6 +1433,8 @@ function parseSse(rawSse) {
   let timing = null;
   let iterations = null;
   let error_message = null;
+  let quality = null;
+  let sessionContext = null;
 
   for (const block of rawSse.split('\n\n')) {
     const line = block
@@ -1276,6 +1468,8 @@ function parseSse(rawSse) {
     if (event.type === 'message_end') {
       timing = event.timing || null;
       iterations = event.debug?.iterations ?? null;
+      quality = event.quality || null;
+      sessionContext = event.sessionContext || null;
       continue;
     }
 
@@ -1290,6 +1484,38 @@ function parseSse(rawSse) {
     timing,
     iterations,
     error_message,
+    quality,
+    sessionContext,
+  };
+}
+
+function summarizeScenarioSessionContext(sessionContext) {
+  if (!sessionContext || typeof sessionContext !== 'object') {
+    return null;
+  }
+
+  const entities = Array.isArray(sessionContext.entities)
+    ? sessionContext.entities
+        .slice(0, 4)
+        .map((entity) => `${entity.kind}:${entity.name}`)
+    : [];
+  const constraints = Array.isArray(sessionContext.constraints)
+    ? sessionContext.constraints
+        .slice(0, 4)
+        .map((constraint) => `${constraint.key}=${constraint.value}`)
+    : [];
+  const candidateSet =
+    sessionContext.candidateSet &&
+    Array.isArray(sessionContext.candidateSet.names) &&
+    sessionContext.candidateSet.names.length > 0
+      ? `${sessionContext.candidateSet.kind}: ${sessionContext.candidateSet.names.slice(0, 5).join(', ')}`
+      : null;
+
+  return {
+    entities,
+    constraints,
+    candidateSet,
+    lastAnswer: sessionContext.lastAnswer?.summary || null,
   };
 }
 

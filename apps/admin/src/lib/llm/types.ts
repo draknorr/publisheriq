@@ -1,3 +1,5 @@
+import type { SessionChatContext } from '@/lib/chat/chat-context-types';
+
 // Message types for LLM conversation
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -123,6 +125,7 @@ export interface QueryResult extends ToolSufficiencyMetadata {
 // Chat API
 export interface ChatRequest {
   messages: Message[];
+  sessionContext?: SessionChatContext | null;
 }
 
 export interface ChatToolCall {

@@ -33,6 +33,12 @@ export interface DiscoverTrendingResult {
   success: boolean;
   trend_type: string;
   timeframe: string;
+  ranking_label?: string;
+  ranking_definition?: string;
+  timeframe_label?: string;
+  response_guidance?: string;
+  sufficient_to_answer?: boolean;
+  sufficiency_reason?: string;
   results?: Array<{
     appid: number;
     name: string;
@@ -66,6 +72,7 @@ export async function discoverTrending(args: DiscoverTrendingArgs): Promise<Disc
 
   const filtersApplied: string[] = [`trend_type: ${trend_type}`, `timeframe: ${timeframe}`];
   const actualLimit = Math.min(limit, MAX_RESULTS);
+  const timeframeLabel = timeframe === '7d' ? 'Last 7 days' : 'Last 30 days';
 
   try {
     // Build Cube.js query
@@ -247,6 +254,29 @@ export async function discoverTrending(args: DiscoverTrendingArgs): Promise<Disc
       success: true,
       trend_type,
       timeframe,
+      ranking_label:
+        trend_type === 'review_momentum'
+          ? timeframe === '7d'
+            ? 'Review Velocity (7d)'
+            : 'Review Velocity (30d)'
+          : trend_type === 'accelerating'
+            ? 'Acceleration'
+            : trend_type === 'breaking_out'
+              ? 'Breakout Momentum'
+              : 'Decline Signal',
+      ranking_definition:
+        trend_type === 'review_momentum'
+          ? 'Ranks games by recent review activity in the selected window.'
+          : trend_type === 'accelerating'
+            ? 'Ranks games whose recent review rate is rising versus the broader trailing window.'
+            : trend_type === 'breaking_out'
+              ? 'Ranks mid-scale games gaining attention fast rather than the largest games overall.'
+              : 'Ranks games whose recent review momentum is falling relative to the trailing window.',
+      timeframe_label: timeframeLabel,
+      response_guidance:
+        'Answer with the exact window, the ranking metric definition, supporting review metrics, and one short reason each row qualifies. Do not use vague "right now" wording.',
+      sufficient_to_answer: true,
+      sufficiency_reason: 'The trend rows are sufficient to answer directly when the response names the exact window and ranking definition.',
       results,
       total_found: results.length,
       filters_applied: filtersApplied,

@@ -41,6 +41,7 @@ import {
 import { normalizeTrendToolCall } from '@/lib/chat/trend-tool-policy';
 import { sanitizeCompanyAssistantResponse } from '@/lib/chat/company-response-sanitizer';
 import { logChatQuery } from '@/lib/chat-query-logger';
+import type { ChatTurnQualityInfo, SessionChatContext } from '@/lib/chat/chat-context-types';
 import {
   compareChangeBeforeAfter,
   findChangePatterns,
@@ -53,6 +54,19 @@ import {
   type GetGameChangeTimelineArgs,
   type QueryChangeActivityArgs,
 } from '@/lib/chat/change-intel-service';
+import {
+  attachPhase1MetadataToResult,
+  buildPhase1QualityInfo,
+  buildToolAnswerContractSummary,
+  createPhase1GuardrailState,
+  maybeBlockPhase1ToolCall,
+  observeExecutedToolCall,
+} from '@/lib/chat/phase1-quality';
+import {
+  buildSessionContextFromTurn,
+  buildSessionContextPrompt,
+  summarizeSessionContextForLog,
+} from '@/lib/chat/session-context';
 import { createServerClient } from '@/lib/supabase/server';
 import {
   calculateTotalCredits,
@@ -72,6 +86,7 @@ import type {
 } from '@/lib/llm/streaming-types';
 
 const CREDITS_ENABLED = process.env.CREDITS_ENABLED === 'true';
+const CHAT_PHASE1_QUALITY_ENABLED = process.env.CHAT_PHASE1_QUALITY_ENABLED === 'true';
 const MAX_TOOL_ITERATIONS = 5;
 const CHAT_EVAL_SECRET = process.env.CHAT_EVAL_SECRET;
 
@@ -150,6 +165,29 @@ async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; erro
 
 function formatSSE(event: StreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function buildSystemPrompt(sessionContext: SessionChatContext | null): string {
+  const basePrompt = buildCubeSystemPrompt();
+
+  if (!CHAT_PHASE1_QUALITY_ENABLED) {
+    return basePrompt;
+  }
+
+  const contextPrompt = buildSessionContextPrompt(sessionContext);
+  const phase1Instructions = [
+    'PHASE 1 QUALITY CONTRACTS:',
+    '- Respect phase1_contract metadata in tool results.',
+    '- If phase1_contract.needs_clarification is true, ask the clarification instead of broadening.',
+    '- If phase1_contract.no_match is true, explain what was checked and stay constrained unless the fallback_action explicitly allows one retry.',
+    '- If response_guidance is present, use that answer shape exactly.',
+  ].join('\n');
+
+  return [basePrompt, phase1Instructions, contextPrompt].filter(Boolean).join('\n\n');
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -283,7 +321,11 @@ export async function handleChatStreamRequest(
         // Streaming /chat is the canonical production runtime. Keep one
         // structured tool surface here so change-intel behavior does not
         // silently disappear behind legacy SQL-mode environment toggles.
-        const systemPrompt = buildCubeSystemPrompt();
+        const sessionContext =
+          CHAT_PHASE1_QUALITY_ENABLED && isRecord(body.sessionContext)
+            ? (body.sessionContext as SessionChatContext)
+            : null;
+        const systemPrompt = buildSystemPrompt(sessionContext);
         const tools: Tool[] = CUBE_TOOLS;
 
         const messages: Message[] = [{ role: 'system', content: systemPrompt }, ...body.messages];
@@ -293,10 +335,16 @@ export async function handleChatStreamRequest(
         let totalToolsMs = 0;
         const executedToolNames: string[] = []; // Track only executed tools for logging + credits
         const executedToolCalls: ChatToolCall[] = [];
+        const allToolCalls: ChatToolCall[] = [];
         let lastBroadDiscoveryState: BroadDiscoveryState | null = null;
         let lastCompanyState: CompanyAnswerState | null = null;
         const lastUserPrompt = body.messages.filter((message) => message.role === 'user').pop()?.content ?? '';
         const shouldBufferCompanyResponse = Boolean(classifyCompanyIntent(lastUserPrompt));
+        const phase1State = CHAT_PHASE1_QUALITY_ENABLED
+          ? createPhase1GuardrailState(Boolean(sessionContext))
+          : null;
+        let phase1Quality: ChatTurnQualityInfo | undefined;
+        let updatedSessionContext: SessionChatContext | null = sessionContext;
 
         // Debug stats - zero additional cost, just counters
         const debugStats: StreamDebugInfo = {
@@ -420,26 +468,89 @@ export async function handleChatStreamRequest(
               redundantSkipResult;
 
             if (skipResult) {
+              const contract = phase1State
+                ? buildToolAnswerContractSummary(effectiveToolCall, skipResult)
+                : null;
+              const phase1Result = contract
+                ? attachPhase1MetadataToResult(skipResult, contract)
+                : skipResult;
+
+              if (phase1State && contract) {
+                observeExecutedToolCall(phase1State, effectiveToolCall, contract);
+              }
+
               const toolResultEvent: ToolResultEvent = {
                 type: 'tool_result',
                 toolCallId: effectiveToolCall.id,
                 name: effectiveToolCall.name,
                 arguments: effectiveToolCall.arguments,
-                result: skipResult,
+                result: phase1Result,
                 timing: { executionMs: 0 },
               };
               controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
 
-              toolResults.push({ toolCall: effectiveToolCall, result: skipResult });
+              toolResults.push({ toolCall: effectiveToolCall, result: phase1Result });
+              allToolCalls.push({
+                name: effectiveToolCall.name,
+                arguments: effectiveToolCall.arguments,
+                result: phase1Result,
+                timing: { executionMs: 0 },
+              });
               lastBroadDiscoveryState = extractBroadDiscoveryState(
                 effectiveToolCall.name,
                 effectiveToolCall.arguments,
-                skipResult
+                phase1Result
               ) ?? lastBroadDiscoveryState;
               lastCompanyState = extractCompanyAnswerState(
                 lastUserPrompt,
                 effectiveToolCall,
-                skipResult
+                phase1Result
+              ) ?? lastCompanyState;
+              continue;
+            }
+
+            const phase1SkipResult = phase1State
+              ? maybeBlockPhase1ToolCall(phase1State, effectiveToolCall)
+              : null;
+
+            if (phase1SkipResult) {
+              const contract = phase1State
+                ? buildToolAnswerContractSummary(effectiveToolCall, phase1SkipResult)
+                : null;
+              const phase1Result = contract
+                ? attachPhase1MetadataToResult(phase1SkipResult, contract)
+                : phase1SkipResult;
+
+              if (phase1State && contract) {
+                observeExecutedToolCall(phase1State, effectiveToolCall, contract);
+              }
+
+              const toolResultEvent: ToolResultEvent = {
+                type: 'tool_result',
+                toolCallId: effectiveToolCall.id,
+                name: effectiveToolCall.name,
+                arguments: effectiveToolCall.arguments,
+                result: phase1Result,
+                timing: { executionMs: 0 },
+              };
+              controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
+
+              toolResults.push({ toolCall: effectiveToolCall, result: phase1Result });
+              allToolCalls.push({
+                name: effectiveToolCall.name,
+                arguments: effectiveToolCall.arguments,
+                result: phase1Result,
+                timing: { executionMs: 0 },
+              });
+              lastBroadDiscoveryState = extractBroadDiscoveryState(
+                effectiveToolCall.name,
+                effectiveToolCall.arguments,
+                phase1Result
+              ) ?? lastBroadDiscoveryState;
+              lastCompanyState = extractCompanyAnswerState(
+                lastUserPrompt,
+                effectiveToolCall,
+                phase1Result
               ) ?? lastCompanyState;
               continue;
             }
@@ -449,11 +560,22 @@ export async function handleChatStreamRequest(
             const toolExecutionMs = performance.now() - toolStart;
             totalToolsMs += toolExecutionMs;
             executedToolNames.push(effectiveToolCall.name);
-            const result = await applyCompanyToolResultPolicy(
+            const policyResult = await applyCompanyToolResultPolicy(
               lastUserPrompt,
               effectiveToolCall,
               rawResult
             );
+            const contract =
+              phase1State && isRecord(policyResult)
+                ? buildToolAnswerContractSummary(effectiveToolCall, policyResult)
+                : null;
+            const result = contract && isRecord(policyResult)
+              ? attachPhase1MetadataToResult(policyResult, contract)
+              : policyResult;
+
+            if (phase1State && contract) {
+              observeExecutedToolCall(phase1State, effectiveToolCall, contract);
+            }
 
             const toolResultEvent: ToolResultEvent = {
               type: 'tool_result',
@@ -467,6 +589,12 @@ export async function handleChatStreamRequest(
 
             toolResults.push({ toolCall: effectiveToolCall, result });
             executedToolCalls.push({
+              name: effectiveToolCall.name,
+              arguments: effectiveToolCall.arguments,
+              result,
+              timing: { executionMs: Math.round(toolExecutionMs) },
+            });
+            allToolCalls.push({
               name: effectiveToolCall.name,
               arguments: effectiveToolCall.arguments,
               result,
@@ -513,6 +641,22 @@ export async function handleChatStreamRequest(
           debugStats.totalChars = fallbackText.length;
         }
 
+        if (phase1State) {
+          phase1Quality = buildPhase1QualityInfo(phase1State);
+          if (iterations >= MAX_TOOL_ITERATIONS && debugStats.toolCallCount > 0) {
+            phase1Quality = {
+              ...phase1Quality,
+              qualityFlags: [...new Set([...phase1Quality.qualityFlags, 'iteration_limit'])],
+            };
+          }
+
+          updatedSessionContext = buildSessionContextFromTurn({
+            previousContext: sessionContext,
+            executedToolCalls: allToolCalls,
+            terminalContract: phase1Quality.terminalContract ?? null,
+          });
+        }
+
         // Calculate credits if enabled
         if (creditsEnabled && reservationId) {
           creditsCharged = calculateTotalCredits(
@@ -555,6 +699,11 @@ export async function handleChatStreamRequest(
               output_tokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
               tool_credits_used: creditsEnabled ? getCreditBreakdown(executedToolNames, 0, 0).toolCredits : undefined,
               total_credits_charged: creditsEnabled ? creditsCharged : undefined,
+              chat_family: phase1Quality?.family,
+              quality_flags: phase1Quality?.qualityFlags,
+              session_context_summary: summarizeSessionContextForLog(updatedSessionContext),
+              guardrail_trace: phase1Quality?.guardrailTrace,
+              answer_contract_summary: phase1Quality?.terminalContract ?? null,
             });
           } catch (logError) {
             // Log to console but don't fail the request
@@ -571,6 +720,8 @@ export async function handleChatStreamRequest(
             totalMs: Math.round(performance.now() - requestStart),
           },
           debug: debugStats,
+          quality: phase1Quality,
+          sessionContext: CHAT_PHASE1_QUALITY_ENABLED ? updatedSessionContext : undefined,
           usage: {
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,

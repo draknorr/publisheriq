@@ -540,6 +540,10 @@ export async function queryChangeActivity(args: QueryChangeActivityArgs) {
     success: true,
     results: response.items.map(mapActivityRow),
     total_found: response.items.length,
+    sufficient_to_answer: false,
+    sufficiency_reason: 'A ranked change-activity set is available. Fetch one supporting detail only if the answer needs a concrete proof example.',
+    required_answer_fields: ['what changed', 'when it changed', 'why it matters', 'evidence quality'],
+    response_guidance: 'For each row, name the concrete change signal, when it happened, and why it matters. Do not summarize with generic repeated change labels.',
     meta: response.meta,
   };
 }
@@ -619,6 +623,10 @@ export async function getGameChangeTimeline(args: GetGameChangeTimelineArgs) {
     success: true,
     app,
     total_found: events.length,
+    sufficient_to_answer: true,
+    sufficiency_reason: 'The timeline events are sufficient to answer directly when you stay grounded in concrete changes and dates.',
+    required_answer_fields: ['dates', 'concrete changes', 'before/after values when available'],
+    response_guidance: 'Lead with the most material title-specific changes and dates. Use before/after text when it exists.',
     events,
     meta: {
       days,
@@ -640,6 +648,10 @@ export async function getChangeActivityDetail(args: GetChangeActivityDetailArgs)
 
   return {
     success: true,
+    sufficient_to_answer: true,
+    sufficiency_reason: 'The change detail includes enough evidence to answer directly from the structured before/after facts.',
+    required_answer_fields: ['headline', 'concrete diffs', 'why it matters'],
+    response_guidance: 'Use the concrete structured diffs and related announcements. Avoid generic summary filler.',
     detail: {
       activityId: detail.activityId,
       activityKind: detail.activityKind,
@@ -807,6 +819,10 @@ export async function compareChangeBeforeAfter(args: CompareChangeBeforeAfterArg
     success: true,
     app: resolved.app,
     activityId: resolved.activityId,
+    sufficient_to_answer: true,
+    sufficiency_reason: 'The before/after comparison is sufficient to answer directly when you structure the response around before state, after state, and impact.',
+    required_answer_fields: ['what changed', 'before state', 'after state', 'why it matters', 'confidence'],
+    response_guidance: 'Use sections in this order: What changed, Before, After, Why it matters, Confidence.',
     selectedActivity: {
       headline: resolved.detail.headline,
       summary: resolved.detail.summary,
@@ -1011,6 +1027,10 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
       pattern: args.pattern,
       results,
       total_found: results.length,
+      sufficient_to_answer: false,
+      sufficiency_reason: 'A ranked sustained-response set is available. Fetch one supporting detail only if the answer needs a proof example.',
+      required_answer_fields: ['ranked candidates', 'evidence', 'timing', 'why it qualifies'],
+      response_guidance: 'For each row, cite the concrete response signal and the post-change window. Avoid canned repeated reasons.',
       meta: { days, limit, search: normalizeSearch(args.search) },
     };
   }
@@ -1110,6 +1130,10 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
     pattern: args.pattern,
     results,
     total_found: results.length,
+    sufficient_to_answer: false,
+    sufficiency_reason: 'A ranked pattern set is available. Fetch one supporting detail only if the answer needs a proof example.',
+    required_answer_fields: ['ranked candidates', 'evidence', 'timing', 'why it qualifies'],
+    response_guidance: 'For each row, state the exact evidence behind the pattern and why it matters. Do not reuse identical canned reasons.',
     meta: { days, limit, search: normalizeSearch(args.search) },
   };
 }

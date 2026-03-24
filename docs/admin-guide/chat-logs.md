@@ -19,6 +19,8 @@ The chat logs dashboard displays all chat queries from the past 7 days, includin
 - Tools used
 - Performance timing
 - Iteration counts
+- Phase-1 chat family, quality flags, and guardrail trace summaries
+- Compact session carry-forward summaries for follow-up debugging
 
 Data older than 7 days is automatically cleaned up.
 
@@ -46,6 +48,11 @@ Each log entry shows:
 | **Tool Count** | Total number of tool calls made |
 | **Iterations** | How many LLM loops occurred |
 | **Timing** | Performance breakdown |
+| **Family** | Route-level answer family (trend, discovery, change-intel, company, etc.) |
+| **Quality Flags** | Sparse/no-match/clarification/fallback/scaffold signals captured for the turn |
+| **Contract Summary** | The terminal answer contract the route ended on |
+| **Session Context** | Compact entity/constraint/candidate summary carried to the next browser turn |
+| **Guardrail Trace** | Why the route allowed, blocked, or stopped follow-up tool calls |
 | **Timestamp** | When the query was made |
 
 ---
@@ -165,6 +172,9 @@ SELECT cleanup_old_chat_logs();
 2. **Sort by iteration count** - High iterations suggest struggling queries
 3. **Check tools time** - Identify slow tool executions
 4. **Look for missing tools** - If expected tool wasn't called, prompt may need adjustment
+5. **Inspect the contract summary** - Confirms whether the route ended on a clarification, no-match, sparse set, or terminal answerable result
+6. **Inspect session context** - Confirms whether follow-up state preserved the right entities, constraints, and candidate set
+7. **Inspect guardrail trace** - Explains why a second tool call was blocked or why one fallback was allowed
 
 ### Common Issues
 

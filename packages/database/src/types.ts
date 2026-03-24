@@ -1255,14 +1255,19 @@ export type Database = {
       }
       chat_query_logs: {
         Row: {
+          answer_contract_summary: Json | null
+          chat_family: string | null
           created_at: string | null
+          guardrail_trace: Json | null
           id: string
           input_tokens: number | null
           iteration_count: number | null
           output_tokens: number | null
           query_text: string
+          quality_flags: string[] | null
           reservation_id: string | null
           response_length: number | null
+          session_context_summary: Json | null
           timing_llm_ms: number | null
           timing_tools_ms: number | null
           timing_total_ms: number | null
@@ -1273,14 +1278,19 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          answer_contract_summary?: Json | null
+          chat_family?: string | null
           created_at?: string | null
+          guardrail_trace?: Json | null
           id?: string
           input_tokens?: number | null
           iteration_count?: number | null
           output_tokens?: number | null
           query_text: string
+          quality_flags?: string[] | null
           reservation_id?: string | null
           response_length?: number | null
+          session_context_summary?: Json | null
           timing_llm_ms?: number | null
           timing_tools_ms?: number | null
           timing_total_ms?: number | null
@@ -1291,14 +1301,19 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          answer_contract_summary?: Json | null
+          chat_family?: string | null
           created_at?: string | null
+          guardrail_trace?: Json | null
           id?: string
           input_tokens?: number | null
           iteration_count?: number | null
           output_tokens?: number | null
           query_text?: string
+          quality_flags?: string[] | null
           reservation_id?: string | null
           response_length?: number | null
+          session_context_summary?: Json | null
           timing_llm_ms?: number | null
           timing_tools_ms?: number | null
           timing_total_ms?: number | null

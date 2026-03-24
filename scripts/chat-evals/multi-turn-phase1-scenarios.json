@@ -1,0 +1,104 @@
+[
+  {
+    "id": "narrow_discovery_chain",
+    "name": "Narrow prior discovery results through follow-up constraints",
+    "notes": "Checks whether session-scoped carry-forward preserves candidate sets and constraints across a narrowing chain.",
+    "turns": [
+      {
+        "user": "Breaking out indie games this month",
+        "expectation": "Should establish a game candidate set with exact trend framing."
+      },
+      {
+        "user": "Only the ones under $20",
+        "expectation": "Should narrow the prior result set instead of starting a fresh unrelated ranking."
+      },
+      {
+        "user": "Which of those are Steam Deck verified?",
+        "expectation": "Should keep the narrowed set and apply the Steam Deck constraint."
+      }
+    ]
+  },
+  {
+    "id": "publisher_followup_resolution",
+    "name": "Resolve omitted company references from prior game context",
+    "notes": "Checks whether the chat can carry a resolved game and its publisher into a follow-up comparison without the user restating names.",
+    "turns": [
+      {
+        "user": "Tell me about Hades II",
+        "expectation": "Should resolve the game and establish active game/company context."
+      },
+      {
+        "user": "How does the publisher compare to similar studios?",
+        "expectation": "Should resolve the omitted publisher reference and stay inside that company comparison flow."
+      }
+    ]
+  },
+  {
+    "id": "similarity_followup_narrowing",
+    "name": "Narrow similarity results without losing the reference game",
+    "notes": "Checks whether follow-up constraints reuse the prior similarity result set instead of restarting broad search from scratch.",
+    "turns": [
+      {
+        "user": "Games like Hades with better reviews",
+        "expectation": "Should establish the Hades-based similarity candidate set."
+      },
+      {
+        "user": "Only the ones under 10K reviews",
+        "expectation": "Should narrow the same similarity set by review-count constraint."
+      },
+      {
+        "user": "Which of those are Steam Deck verified?",
+        "expectation": "Should preserve both the reference game and the narrowed candidate set."
+      }
+    ]
+  },
+  {
+    "id": "change_drilldown_chain",
+    "name": "Drill from cross-game change discovery into single-title detail",
+    "notes": "Checks whether the runtime carries change-intel context and allows a single supporting detail fetch instead of broadening again.",
+    "turns": [
+      {
+        "user": "What are the biggest Steam page refreshes lately?",
+        "expectation": "Should return a ranked change-intel set."
+      },
+      {
+        "user": "Show me the recent Steam changes for Hades II",
+        "expectation": "Should pivot to the single-title timeline cleanly."
+      },
+      {
+        "user": "Compare the latest Steam-page refresh for Hades II",
+        "expectation": "Should use before/after detail rather than repeating a generic timeline."
+      }
+    ]
+  },
+  {
+    "id": "no_match_recovery_chain",
+    "name": "Recover from a sparse or no-match answer with a constrained relaxation",
+    "notes": "Checks whether the follow-up remains anchored to the earlier failed screen instead of resetting the query family.",
+    "turns": [
+      {
+        "user": "Highly rated games under $2 released in the past year",
+        "expectation": "Should either return a sparse set or explain the no-match condition clearly."
+      },
+      {
+        "user": "Okay, relax that to under $5",
+        "expectation": "Should perform one controlled relaxation of the prior screen."
+      }
+    ]
+  },
+  {
+    "id": "company_followup_compare",
+    "name": "Carry company context into a direct comparison follow-up",
+    "notes": "Checks whether a company-focused follow-up can reuse the prior result set without an unnecessary new lookup chain.",
+    "turns": [
+      {
+        "user": "Show me all games by FromSoftware",
+        "expectation": "Should resolve FromSoftware and return the developer game list."
+      },
+      {
+        "user": "Compare those by reviews",
+        "expectation": "Should keep the FromSoftware game set and answer from that constrained context."
+      }
+    ]
+  }
+]

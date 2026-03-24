@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { Message, ChatToolCall, ChatTiming } from '@/lib/llm/types';
+import type { SessionChatContext } from '@/lib/chat/chat-context-types';
 import type { StreamEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
 
 export interface DisplayMessage {
@@ -29,6 +30,7 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingToolCalls, setPendingToolCalls] = useState<PendingToolCall[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const sessionContextRef = useRef<SessionChatContext | null>(null);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isStreaming) return;
@@ -66,7 +68,10 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({
+          messages: apiMessages,
+          sessionContext: sessionContextRef.current,
+        }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -150,6 +155,9 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
               }
 
               case 'message_end':
+                if (event.sessionContext !== undefined) {
+                  sessionContextRef.current = event.sessionContext ?? null;
+                }
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? {
@@ -203,6 +211,7 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    sessionContextRef.current = null;
   }, []);
 
   return {

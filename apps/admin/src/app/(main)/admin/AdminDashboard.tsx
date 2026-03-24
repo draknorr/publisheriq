@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { StatusBar } from '@/components/data-display/DenseMetricGrid';
 import { SourceCompletionCard } from '@/components/data-display/MiniProgressBar';
@@ -10,7 +10,7 @@ import {
   type PriorityDistribution,
 } from '@/lib/sync-queries';
 import type { AdminDashboardData, SyncJob, ChatQueryLog } from './page';
-import { CheckCircle2, MessageSquare, Search, Copy } from 'lucide-react';
+import { CheckCircle2, MessageSquare, Search, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 
 // Source configuration
 const sourceConfig: Record<string, { label: string; icon: string }> = {
@@ -42,6 +42,43 @@ function formatMs(ms: number | null): string {
   if (ms === null) return '-';
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatChatFlag(flag: string): string {
+  return flag.replace(/_/g, ' ');
+}
+
+function summarizeSessionContext(context: ChatQueryLog['session_context_summary']): string | null {
+  if (!context || typeof context !== 'object') {
+    return null;
+  }
+
+  const typedContext = context as {
+    entities?: Array<{ kind?: string; name?: string }>;
+    constraints?: Array<{ key?: string; value?: string }>;
+    candidateSet?: { kind?: string; names?: string[] };
+  };
+
+  const entitySummary = Array.isArray(typedContext.entities)
+    ? typedContext.entities
+        .slice(0, 3)
+        .map((entity) => `${entity.kind ?? 'entity'}:${entity.name ?? 'unknown'}`)
+        .join(', ')
+    : '';
+  const constraintSummary = Array.isArray(typedContext.constraints)
+    ? typedContext.constraints
+        .slice(0, 3)
+        .map((constraint) => `${constraint.key ?? 'constraint'}=${constraint.value ?? ''}`)
+        .join(', ')
+    : '';
+  const candidateSummary =
+    typedContext.candidateSet &&
+    Array.isArray(typedContext.candidateSet.names) &&
+    typedContext.candidateSet.names.length > 0
+      ? `${typedContext.candidateSet.kind ?? 'set'}: ${typedContext.candidateSet.names.slice(0, 4).join(', ')}`
+      : '';
+
+  return [entitySummary, constraintSummary, candidateSummary].filter(Boolean).join(' | ') || null;
 }
 
 export function AdminDashboard({ data }: { data: AdminDashboardData }) {
@@ -514,6 +551,7 @@ function LastSyncItem({ label, time }: { label: string; time: string | null }) {
 }
 
 function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set());
   const avgResponseTime =
     logs.length > 0
       ? Math.round(logs.reduce((sum, l) => sum + (l.timing_total_ms ?? 0), 0) / logs.length)
@@ -525,6 +563,17 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
       : '-';
 
   const queriesWithTools = logs.filter((l) => l.tool_count > 0).length;
+  const toggleLogExpanded = (id: string) => {
+    setExpandedLogIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   return (
     <CollapsibleSection
@@ -567,15 +616,27 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
             {logs.slice(0, 10).map((log) => (
               <div key={log.id} className="p-2 rounded border border-border-subtle bg-surface-raised">
                 <div className="text-body-sm text-text-primary line-clamp-2 mb-1.5">{log.query_text}</div>
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {log.chat_family && (
+                    <span className="px-1.5 py-0.5 rounded text-caption bg-surface-elevated text-text-secondary">
+                      {log.chat_family}
+                    </span>
+                  )}
+                  {log.quality_flags?.slice(0, 2).map((flag) => (
+                    <span key={flag} className="px-1.5 py-0.5 rounded text-caption bg-accent-primary/15 text-accent-primary">
+                      {formatChatFlag(flag)}
+                    </span>
+                  ))}
+                </div>
                 <div className="flex items-center justify-between text-caption">
                   <div className="flex flex-wrap gap-1">
-                    {log.tool_names.slice(0, 2).map((tool) => (
+                    {(log.tool_names ?? []).slice(0, 2).map((tool) => (
                       <span key={tool} className="px-1.5 py-0.5 rounded bg-accent-primary/15 text-accent-primary">
                         {tool}
                       </span>
                     ))}
-                    {log.tool_names.length > 2 && (
-                      <span className="text-text-muted">+{log.tool_names.length - 2}</span>
+                    {(log.tool_names?.length ?? 0) > 2 && (
+                      <span className="text-text-muted">+{(log.tool_names?.length ?? 0) - 2}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -595,9 +656,42 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </button>
+                      <button
+                        onClick={() => toggleLogExpanded(log.id)}
+                        className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                        title="Toggle details"
+                      >
+                        {expandedLogIds.has(log.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </button>
                     </div>
                   </div>
                 </div>
+                {expandedLogIds.has(log.id) && (
+                  <div className="mt-2 pt-2 border-t border-border-subtle space-y-2 text-caption text-text-secondary">
+                    {log.answer_contract_summary?.summary && (
+                      <div>
+                        <span className="text-text-muted">Contract:</span> {log.answer_contract_summary.summary}
+                      </div>
+                    )}
+                    {summarizeSessionContext(log.session_context_summary) && (
+                      <div>
+                        <span className="text-text-muted">Context:</span> {summarizeSessionContext(log.session_context_summary)}
+                      </div>
+                    )}
+                    {log.guardrail_trace && log.guardrail_trace.length > 0 && (
+                      <div>
+                        <div className="text-text-muted mb-1">Guardrail Trace</div>
+                        <div className="space-y-1">
+                          {log.guardrail_trace.slice(0, 4).map((trace, idx) => (
+                            <div key={idx}>
+                              {trace.decision}: {trace.reason}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {logs.length > 10 && (
@@ -610,6 +704,7 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
               <thead>
                 <tr className="border-b border-border-subtle">
                   <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Query</th>
+                  <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Family</th>
                   <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Tools</th>
                   <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">Time</th>
                   <th className="pb-1.5 text-left text-caption font-medium text-text-tertiary">When</th>
@@ -618,51 +713,109 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
               </thead>
               <tbody className="divide-y divide-border-subtle">
                 {logs.slice(0, 10).map((log) => (
-                  <tr key={log.id} className="hover:bg-surface-elevated/50">
-                    <td className="py-1.5">
-                      <div className="text-text-primary truncate xl:whitespace-normal max-w-[300px] xl:max-w-none" title={log.query_text}>
-                        {log.query_text}
-                      </div>
-                    </td>
-                    <td className="py-1.5">
-                      <div className="flex flex-wrap gap-1">
-                        {log.tool_names.slice(0, 3).map((tool) => (
-                          <span
-                            key={tool}
-                            className="px-1.5 py-0.5 rounded text-caption bg-accent-primary/15 text-accent-primary"
+                  <Fragment key={log.id}>
+                    <tr key={log.id} className="hover:bg-surface-elevated/50">
+                      <td className="py-1.5">
+                        <div className="text-text-primary truncate xl:whitespace-normal max-w-[300px] xl:max-w-none" title={log.query_text}>
+                          {log.query_text}
+                        </div>
+                        {log.quality_flags && log.quality_flags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {log.quality_flags.slice(0, 3).map((flag) => (
+                              <span
+                                key={flag}
+                                className="px-1.5 py-0.5 rounded text-caption bg-surface-elevated text-text-secondary"
+                              >
+                                {formatChatFlag(flag)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-1.5 text-text-secondary">{log.chat_family ?? '-'}</td>
+                      <td className="py-1.5">
+                        <div className="flex flex-wrap gap-1">
+                          {(log.tool_names ?? []).slice(0, 3).map((tool) => (
+                            <span
+                              key={tool}
+                              className="px-1.5 py-0.5 rounded text-caption bg-accent-primary/15 text-accent-primary"
+                            >
+                              {tool}
+                            </span>
+                          ))}
+                          {(log.tool_names?.length ?? 0) > 3 && (
+                            <span className="text-caption text-text-muted">+{(log.tool_names?.length ?? 0) - 3}</span>
+                          )}
+                          {(log.tool_names?.length ?? 0) === 0 && (
+                            <span className="text-caption text-text-muted">-</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-1.5 text-text-secondary">{formatMs(log.timing_total_ms)}</td>
+                      <td className="py-1.5 text-text-muted">{formatRelativeTime(log.created_at)}</td>
+                      <td className="py-1.5">
+                        <div className="flex items-center gap-1">
+                          <a
+                            href={`/chat?q=${encodeURIComponent(log.query_text)}`}
+                            className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                            title="Search this query"
                           >
-                            {tool}
-                          </span>
-                        ))}
-                        {log.tool_names.length > 3 && (
-                          <span className="text-caption text-text-muted">+{log.tool_names.length - 3}</span>
-                        )}
-                        {log.tool_names.length === 0 && (
-                          <span className="text-caption text-text-muted">-</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-1.5 text-text-secondary">{formatMs(log.timing_total_ms)}</td>
-                    <td className="py-1.5 text-text-muted">{formatRelativeTime(log.created_at)}</td>
-                    <td className="py-1.5">
-                      <div className="flex items-center gap-1">
-                        <a
-                          href={`/chat?q=${encodeURIComponent(log.query_text)}`}
-                          className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
-                          title="Search this query"
-                        >
-                          <Search className="h-3.5 w-3.5" />
-                        </a>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(log.query_text)}
-                          className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
-                          title="Copy to clipboard"
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                            <Search className="h-3.5 w-3.5" />
+                          </a>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(log.query_text)}
+                            className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                            title="Copy to clipboard"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => toggleLogExpanded(log.id)}
+                            className="p-1 rounded hover:bg-surface-elevated text-text-muted hover:text-text-primary"
+                            title="Toggle details"
+                          >
+                            {expandedLogIds.has(log.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedLogIds.has(log.id) && (
+                      <tr key={`${log.id}-details`} className="bg-surface-elevated/30">
+                        <td colSpan={6} className="py-2">
+                          <div className="space-y-2 text-caption text-text-secondary">
+                            {log.answer_contract_summary?.summary && (
+                              <div>
+                                <span className="text-text-muted">Contract:</span> {log.answer_contract_summary.summary}
+                              </div>
+                            )}
+                            {log.answer_contract_summary?.requiredAnswerFields && log.answer_contract_summary.requiredAnswerFields.length > 0 && (
+                              <div>
+                                <span className="text-text-muted">Required Fields:</span> {log.answer_contract_summary.requiredAnswerFields.join(', ')}
+                              </div>
+                            )}
+                            {summarizeSessionContext(log.session_context_summary) && (
+                              <div>
+                                <span className="text-text-muted">Context:</span> {summarizeSessionContext(log.session_context_summary)}
+                              </div>
+                            )}
+                            {log.guardrail_trace && log.guardrail_trace.length > 0 && (
+                              <div>
+                                <div className="text-text-muted mb-1">Guardrail Trace</div>
+                                <div className="space-y-1">
+                                  {log.guardrail_trace.slice(0, 6).map((trace, idx) => (
+                                    <div key={idx}>
+                                      <span className="uppercase text-text-muted">{trace.decision}</span> {trace.reason}
+                                      {trace.toolName ? ` (${trace.toolName})` : ''}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

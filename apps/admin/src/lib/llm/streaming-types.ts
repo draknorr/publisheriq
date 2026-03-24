@@ -1,4 +1,5 @@
 import type { ChatTiming } from './types';
+import type { ChatTurnQualityInfo, SessionChatContext } from '@/lib/chat/chat-context-types';
 
 // Streaming event types for Server-Sent Events format
 export type StreamEventType =
@@ -46,6 +47,8 @@ export interface MessageEndEvent extends BaseStreamEvent {
   type: 'message_end';
   timing: ChatTiming;
   debug?: StreamDebugInfo;
+  quality?: ChatTurnQualityInfo;
+  sessionContext?: SessionChatContext | null;
   usage?: {
     inputTokens: number;
     outputTokens: number;
