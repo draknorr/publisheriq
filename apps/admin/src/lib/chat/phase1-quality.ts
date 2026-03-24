@@ -7,6 +7,8 @@ import type {
   ToolAnswerContractSummary,
 } from '@/lib/chat/chat-context-types';
 
+type Phase1ToolResult = { success: boolean; error?: string } & Record<string, unknown>;
+
 interface Phase1GuardrailState {
   contextApplied: boolean;
   fallbackUsed: boolean;
@@ -256,7 +258,7 @@ export function createPhase1GuardrailState(contextApplied: boolean): Phase1Guard
 
 export function buildToolAnswerContractSummary(
   toolCall: ToolCall,
-  result: Record<string, unknown>
+  result: Phase1ToolResult
 ): ToolAnswerContractSummary {
   const family = familyForTool(toolCall, result);
   const rowCount = getRowCount(result);
@@ -336,9 +338,9 @@ export function buildToolAnswerContractSummary(
 }
 
 export function attachPhase1MetadataToResult(
-  result: Record<string, unknown>,
+  result: Phase1ToolResult,
   contract: ToolAnswerContractSummary
-): Record<string, unknown> {
+): Phase1ToolResult {
   return {
     ...result,
     phase1_contract: {
@@ -359,7 +361,7 @@ export function attachPhase1MetadataToResult(
 export function maybeBlockPhase1ToolCall(
   state: Phase1GuardrailState,
   toolCall: ToolCall
-): Record<string, unknown> | null {
+): Phase1ToolResult | null {
   const signature = buildToolSignature(toolCall);
   if (state.executedSignatures.has(signature)) {
     attachFlag(state.qualityFlags, 'duplicate_tool_blocked');

@@ -493,6 +493,30 @@ async function loadIncludedPrompts() {
   return { filePath, entries };
 }
 
+function buildManualIncludeRow(entry, includeFilePath) {
+  const sourceKind = 'manual_include';
+  const supportTier = inferSupportTier([sourceKind]);
+  const family = inferFamily(entry.prompt_text, false);
+  const promptKey = entry.label
+    ? `manual_include:${entry.label}:${entry.normalized_text}`
+    : `manual_include:${entry.normalized_text}`;
+
+  return {
+    prompt_id: crypto.createHash('sha1').update(promptKey).digest('hex').slice(0, 12),
+    prompt_text: entry.prompt_text,
+    normalized_text: entry.normalized_text,
+    executable: true,
+    is_template: false,
+    seed_used: null,
+    support_tier: supportTier,
+    family,
+    expected_tools: inferExpectedTools(family, entry.prompt_text),
+    cost_class: inferCostClass(family, supportTier),
+    source_kinds: [sourceKind],
+    source_locations: includeFilePath ? [path.relative(ROOT, includeFilePath)] : ['manual_include'],
+  };
+}
+
 function applyManifestFilters(executableManifest, includePrompts) {
   let manifestToRun = executableManifest;
 
@@ -506,6 +530,10 @@ function applyManifestFilters(executableManifest, includePrompts) {
     for (const entry of includePrompts.entries) {
       const row = manifestByPrompt.get(entry.normalized_text);
       if (!row) {
+        if (entry.label) {
+          selected.push(buildManualIncludeRow(entry, includePrompts.filePath));
+          continue;
+        }
         missing.push(entry.prompt_text);
         continue;
       }

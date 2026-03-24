@@ -1,4 +1,5 @@
 import { getServiceClient } from '@publisheriq/database';
+import type { GuardrailTraceEntry, ToolAnswerContractSummary } from '@/lib/chat/chat-context-types';
 
 // Types for log entries
 export interface ChatQueryLogEntry {
@@ -19,8 +20,8 @@ export interface ChatQueryLogEntry {
   chat_family?: string;
   quality_flags?: string[];
   session_context_summary?: Record<string, unknown> | null;
-  guardrail_trace?: Record<string, unknown>[] | null;
-  answer_contract_summary?: Record<string, unknown> | null;
+  guardrail_trace?: GuardrailTraceEntry[] | null;
+  answer_contract_summary?: ToolAnswerContractSummary | null;
 }
 
 /**

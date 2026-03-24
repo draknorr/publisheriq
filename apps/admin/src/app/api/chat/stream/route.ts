@@ -646,7 +646,12 @@ export async function handleChatStreamRequest(
           if (iterations >= MAX_TOOL_ITERATIONS && debugStats.toolCallCount > 0) {
             phase1Quality = {
               ...phase1Quality,
-              qualityFlags: [...new Set([...phase1Quality.qualityFlags, 'iteration_limit'])],
+              qualityFlags: [
+                ...new Set<ChatTurnQualityInfo['qualityFlags'][number]>([
+                  ...phase1Quality.qualityFlags,
+                  'iteration_limit',
+                ]),
+              ],
             };
           }
 
