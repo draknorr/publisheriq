@@ -4,8 +4,10 @@ import type {
   SessionChatConstraint,
   SessionChatContext,
   SessionChatEntity,
+  SessionChatResultSet,
   ToolAnswerContractSummary,
 } from '@/lib/chat/chat-context-types';
+import { buildResultSetFromToolExecution } from '@/lib/chat/result-set-continuation';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -320,6 +322,12 @@ export function buildSessionContextPrompt(context: SessionChatContext | null | u
     );
   }
 
+  if (context.resultSet) {
+    sections.push(
+      `Most recent continuable result set (${context.resultSet.itemKind} via ${context.resultSet.sourceTool}): shown ${context.resultSet.shownIds.length}${typeof context.resultSet.totalFound === 'number' ? ` of ${context.resultSet.totalFound}` : ''}`
+    );
+  }
+
   if (context.lastAnswer?.summary) {
     sections.push(`Last answer state: ${context.lastAnswer.summary}`);
   }
@@ -351,6 +359,7 @@ export function buildSessionContextFromTurn(params: {
   const entities: SessionChatEntity[] = [];
   const constraints: SessionChatConstraint[] = [];
   let candidateSet: SessionChatCandidateSet | null = null;
+  let resultSet: SessionChatResultSet | null = null;
 
   for (const toolCall of executedToolCalls) {
     const result = toolCall.result;
@@ -368,9 +377,20 @@ export function buildSessionContextFromTurn(params: {
       candidateSet = nextCandidateSet;
       extractEntitiesFromCandidateSet(nextCandidateSet, entities);
     }
+
+    const nextResultSet = buildResultSetFromToolExecution({
+      toolName: toolCall.name,
+      toolArguments: toolCall.arguments,
+      result,
+      terminalContract: terminalContract ?? null,
+      timestamp,
+    });
+    if (nextResultSet) {
+      resultSet = nextResultSet;
+    }
   }
 
-  if (entities.length === 0 && constraints.length === 0 && !candidateSet) {
+  if (entities.length === 0 && constraints.length === 0 && !candidateSet && !resultSet) {
     return previousContext ?? null;
   }
 
@@ -379,6 +399,7 @@ export function buildSessionContextFromTurn(params: {
     entities,
     constraints,
     candidateSet,
+    resultSet,
     lastAnswer: terminalContract
       ? {
           family: terminalContract.family,
@@ -415,6 +436,17 @@ export function summarizeSessionContextForLog(context: SessionChatContext | null
           ids: context.candidateSet.ids.slice(0, 12),
           names: context.candidateSet.names.slice(0, 12),
           totalFound: context.candidateSet.totalFound ?? null,
+        }
+      : null,
+    resultSet: context.resultSet
+      ? {
+          family: context.resultSet.family,
+          sourceTool: context.resultSet.sourceTool,
+          itemKind: context.resultSet.itemKind,
+          shownIds: context.resultSet.shownIds.slice(0, 25),
+          lastPageSize: context.resultSet.lastPageSize,
+          totalFound: context.resultSet.totalFound ?? null,
+          continuable: context.resultSet.continuable,
         }
       : null,
     lastAnswer: context.lastAnswer ?? null,

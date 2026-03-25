@@ -58,6 +58,7 @@ export interface SearchGamesArgs {
   min_discount_percent?: number;
   limit?: number;
   order_by?: 'reviews' | 'score' | 'release_date' | 'owners';
+  excludeAppIds?: number[];
 }
 
 /**
@@ -177,6 +178,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     min_discount_percent,
     limit = DEFAULT_RESULTS,
     order_by = 'reviews',
+    excludeAppIds = [],
   } = args;
 
   const debug: SearchDebugInfo = {
@@ -187,6 +189,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
   const filtersApplied: string[] = [];
   const actualLimit = Math.min(limit, MAX_RESULTS);
+  const excludedAppIdSet = new Set(excludeAppIds);
   debug.steps.push(`Starting search with limit=${actualLimit}`);
 
   try {
@@ -385,6 +388,11 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
     debug.candidate_pages_fetched = candidatePagesFetched;
     debug.final_candidates = candidateAppids?.length ?? null;
 
+    if (candidateAppids !== null && excludedAppIdSet.size > 0) {
+      candidateAppids = candidateAppids.filter((appid) => !excludedAppIdSet.has(appid));
+      debug.steps.push(`Excluded ${excludedAppIdSet.size} previously shown appids from candidate set`);
+    }
+
     if (candidateAppids !== null && candidateAppids.length === 0) {
       const sufficiency = buildSearchGamesSufficiencyMetadata(args, 0, true, false);
       debug.coverage_complete = true;
@@ -411,7 +419,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
     debug.steps.push(`Final candidate count before main query: ${candidateAppids?.length ?? 'unlimited'}`);
 
-    let fetchLimit = Math.min(actualLimit * 2, UNFILTERED_FETCH_CAP);
+    let fetchLimit = Math.min(actualLimit * 2 + excludedAppIdSet.size, UNFILTERED_FETCH_CAP);
     let rawRows: QueryRow[] = [];
 
     if (candidateAppids !== null) {
@@ -441,7 +449,7 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
       const hasPostFilters = review_percentage?.gte !== undefined || min_reviews !== undefined;
       const needsInMemoryMetricSort = order_by === 'reviews' || order_by === 'owners';
       fetchLimit = Math.min(
-        actualLimit * (hasPostFilters || needsInMemoryMetricSort ? 10 : 2),
+        actualLimit * (hasPostFilters || needsInMemoryMetricSort ? 10 : 2) + excludedAppIdSet.size,
         UNFILTERED_FETCH_CAP
       );
 
@@ -463,7 +471,9 @@ export async function searchGames(args: SearchGamesArgs): Promise<SearchGamesRes
 
     debug.steps.push(`Main query returned ${rawRows.length} rows`);
 
-    const mappedResults = rawRows.map((row) => mapQueryRow(row));
+    const mappedResults = rawRows
+      .filter((row) => !excludedAppIdSet.has(row.appid))
+      .map((row) => mapQueryRow(row));
     debug.steps.push(`Mapped ${mappedResults.length} results`);
 
     const afterReleaseFilter = mappedResults.filter((result) => {

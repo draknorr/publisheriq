@@ -61,6 +61,7 @@ export interface QueryChangeActivityArgs {
   signal_families?: ChangeActivitySignalFamily[];
   search?: string;
   limit?: number;
+  excludeActivityIds?: string[];
 }
 
 export interface GetGameChangeTimelineArgs {
@@ -88,6 +89,7 @@ export interface FindChangePatternsArgs {
   search?: string;
   app_types?: AppType[];
   limit?: number;
+  excludeAppIds?: number[];
 }
 
 interface ResolvedApp {
@@ -943,6 +945,9 @@ async function hydratePatternProofPackets(
 export async function queryChangeActivity(args: QueryChangeActivityArgs) {
   const days = clamp(args.days, DEFAULT_ACTIVITY_DAYS, 1, MAX_ACTIVITY_DAYS);
   const limit = clamp(args.limit, DEFAULT_ACTIVITY_LIMIT, 1, MAX_ACTIVITY_LIMIT);
+  const excludeActivityIds = Array.isArray(args.excludeActivityIds)
+    ? args.excludeActivityIds.filter((value): value is string => typeof value === 'string')
+    : [];
 
   const timelineArgs = await resolveSingleTitleTimelineArgs(
     {
@@ -968,6 +973,7 @@ export async function queryChangeActivity(args: QueryChangeActivityArgs) {
       search: normalizeSearch(args.search),
       cursor: null,
       limit,
+      excludeActivityIds,
     });
 
     if (response.items.length === 0) {
@@ -1507,6 +1513,9 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
   const search = normalizeSearch(args.search);
   const appTypes = args.app_types && args.app_types.length > 0 ? args.app_types : DEFAULT_PATTERN_APP_TYPES;
   const shortlistWindowDays = getPatternShortlistWindowDays(days);
+  const excludeAppIds = Array.isArray(args.excludeAppIds)
+    ? args.excludeAppIds.filter((value): value is number => typeof value === 'number')
+    : [];
   let rawCandidates: ChatChangePatternCandidateRow[];
   try {
     rawCandidates = await fetchChatChangePatternCandidates({
@@ -1514,7 +1523,7 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
       days,
       appTypes,
       search,
-      limit: getPatternRpcLimit(limit),
+      limit: Math.min(Math.max(limit + excludeAppIds.length + 10, getPatternRpcLimit(limit)), 80),
     });
   } catch (error) {
     const classification = classifyChangeIntelError(error);
@@ -1537,12 +1546,17 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
     evaluatedDays: days,
     shortlistWindowDays,
     shortlistCount: rawCandidates.length,
+    excludedAppCount: excludeAppIds.length,
   };
+  const filteredRawCandidates =
+    excludeAppIds.length > 0
+      ? rawCandidates.filter((candidate) => !excludeAppIds.includes(candidate.appid))
+      : rawCandidates;
 
   if (isResponsePattern(args.pattern)) {
     const responsePattern = args.pattern;
     const details = await Promise.all(
-      rawCandidates.slice(0, Math.min(limit * 2, 8)).map(async (candidate) => {
+      filteredRawCandidates.slice(0, Math.min(limit * 2, 8)).map(async (candidate) => {
         const activityId = candidate.activityIds[0];
         if (!activityId) {
           return null;
@@ -1619,10 +1633,12 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
 
   const fallbackMetrics = patternNeedsLiveMetrics(args.pattern)
     ? await fetchAppMetrics(
-        rawCandidates.filter((candidate) => !candidateHasEmbeddedMetrics(candidate)).map((candidate) => candidate.appid)
+        filteredRawCandidates
+          .filter((candidate) => !candidateHasEmbeddedMetrics(candidate))
+          .map((candidate) => candidate.appid)
       )
     : new Map<number, AppMetrics>();
-  const hydratedCandidates = hydratePatternMetrics(rawCandidates, fallbackMetrics);
+  const hydratedCandidates = hydratePatternMetrics(filteredRawCandidates, fallbackMetrics);
 
   const aggregates = buildPatternAggregates(hydratedCandidates);
   const candidates: PatternCandidate[] = [];

@@ -57,6 +57,7 @@ export interface ScreenGamesArgs {
     max_sentiment_delta?: number;
   };
   limit?: number;
+  excludeAppIds?: number[];
 }
 
 interface RpcAppRow {
@@ -998,7 +999,11 @@ async function fetchScreenedApps(
 ): Promise<RpcAppRow[]> {
   const filters = args.filters ?? {};
   const sortOrder = args.sort_order ?? 'desc';
-  const limit = buildPrefetchLimit(clampLimit(args.limit));
+  const excludedAppIds = Array.isArray(args.excludeAppIds)
+    ? args.excludeAppIds.filter((value): value is number => typeof value === 'number')
+    : [];
+  const excludedAppIdSet = new Set(excludedAppIds);
+  const limit = buildPrefetchLimit(clampLimit(args.limit) + excludedAppIds.length);
   const steamDeck = filters.steam_deck?.length ? filters.steam_deck.join(',') : undefined;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1066,6 +1071,10 @@ async function fetchScreenedApps(
   }
 
   let rows = (data ?? []) as RpcAppRow[];
+
+  if (excludedAppIdSet.size > 0) {
+    rows = rows.filter((row) => !excludedAppIdSet.has(row.appid));
+  }
 
   if (filters.release_year?.gte !== undefined || filters.release_year?.lte !== undefined) {
     rows = rows.filter((row) => {

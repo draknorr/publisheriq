@@ -24,6 +24,7 @@ export interface DiscoverTrendingArgs {
     release_year?: { gte?: number; lte?: number };
   };
   limit?: number;
+  excludeAppIds?: number[];
 }
 
 /**
@@ -68,10 +69,13 @@ export async function discoverTrending(args: DiscoverTrendingArgs): Promise<Disc
     timeframe = '7d',
     filters = {},
     limit = DEFAULT_RESULTS,
+    excludeAppIds = [],
   } = args;
 
   const filtersApplied: string[] = [`trend_type: ${trend_type}`, `timeframe: ${timeframe}`];
   const actualLimit = Math.min(limit, MAX_RESULTS);
+  const excludedIds = new Set(excludeAppIds);
+  const queryLimit = Math.min(actualLimit + excludedIds.size + 10, MAX_RESULTS + 40);
   const timeframeLabel = timeframe === '7d' ? 'Last 7 days' : 'Last 30 days';
 
   try {
@@ -102,7 +106,7 @@ export async function discoverTrending(args: DiscoverTrendingArgs): Promise<Disc
       ],
       segments: [],
       order: {},
-      limit: actualLimit,
+      limit: queryLimit,
     };
 
     // Apply trend-type specific logic
@@ -238,17 +242,20 @@ export async function discoverTrending(args: DiscoverTrendingArgs): Promise<Disc
     }
 
     // Map results to expected format
-    const results = result.data.map((row) => ({
-      appid: row.appid as number,
-      name: row.name as string,
-      velocity7d: row.velocity7d as number | null,
-      velocity30d: row.velocity30d as number | null,
-      velocityTier: row.velocityTier as string | null,
-      reviewsAdded7d: row.reviewsAdded7d as number | null,
-      reviewsAdded30d: row.reviewsAdded30d as number | null,
-      totalReviews: row.totalReviews as number | null,
-      reviewPercentage: row.reviewPercentage as number | null,
-    }));
+    const results = result.data
+      .map((row) => ({
+        appid: row.appid as number,
+        name: row.name as string,
+        velocity7d: row.velocity7d as number | null,
+        velocity30d: row.velocity30d as number | null,
+        velocityTier: row.velocityTier as string | null,
+        reviewsAdded7d: row.reviewsAdded7d as number | null,
+        reviewsAdded30d: row.reviewsAdded30d as number | null,
+        totalReviews: row.totalReviews as number | null,
+        reviewPercentage: row.reviewPercentage as number | null,
+      }))
+      .filter((row) => !excludedIds.has(row.appid))
+      .slice(0, actualLimit);
 
     return {
       success: true,

@@ -64,6 +64,12 @@ import {
   observeExecutedToolCall,
 } from '@/lib/chat/phase1-quality';
 import {
+  attachContinuationMeta,
+  buildContinuationExhaustedResult,
+  buildContinuationResultSet,
+  resolveResultSetContinuation,
+} from '@/lib/chat/result-set-continuation';
+import {
   buildSessionContextFromTurn,
   buildSessionContextPrompt,
   summarizeSessionContextForLog,
@@ -226,6 +232,15 @@ function buildSessionLogSummary(
     summary.modelHistoryChars = quality.modelHistoryChars;
   }
 
+  if (quality?.continuationDetected) {
+    summary.continuationDetected = true;
+    summary.continuationIntent = quality.continuationIntent ?? null;
+    summary.continuationSourceTool = quality.continuationSourceTool ?? null;
+    summary.requestedCount = quality.requestedCount ?? null;
+    summary.excludedCount = quality.excludedCount ?? null;
+    summary.continuationExhausted = quality.continuationExhausted ?? false;
+  }
+
   if (failureKind) {
     summary.failureKind = failureKind;
   }
@@ -250,6 +265,65 @@ function buildSystemPrompt(sessionContext: SessionChatContext | null): string {
   ].join('\n');
 
   return [basePrompt, phase1Instructions, contextPrompt].filter(Boolean).join('\n\n');
+}
+
+async function executeResolvedToolCall(params: {
+  toolCall: ToolCall;
+  lastUserPrompt: string;
+  phase1State: ReturnType<typeof createPhase1GuardrailState> | null;
+  controller: ReadableStreamDefaultController<Uint8Array>;
+  encoder: TextEncoder;
+  emitResultEvent?: boolean;
+}): Promise<{
+  result: QueryResult | SimilarityResult | Record<string, unknown>;
+  toolExecutionMs: number;
+  contract: ReturnType<typeof buildToolAnswerContractSummary> | null;
+}> {
+  const {
+    toolCall,
+    lastUserPrompt,
+    phase1State,
+    controller,
+    encoder,
+    emitResultEvent = true,
+  } = params;
+  const toolStart = performance.now();
+  const rawResult = await executeTool(toolCall);
+  const toolExecutionMs = performance.now() - toolStart;
+  const policyResult = await applyCompanyToolResultPolicy(
+    lastUserPrompt,
+    toolCall,
+    rawResult
+  );
+  const contract =
+    phase1State && isRecord(policyResult)
+      ? buildToolAnswerContractSummary(toolCall, policyResult)
+      : null;
+  const result = contract && isRecord(policyResult)
+    ? attachPhase1MetadataToResult(policyResult, contract)
+    : policyResult;
+
+  if (phase1State && contract) {
+    observeExecutedToolCall(phase1State, toolCall, contract);
+  }
+
+  if (emitResultEvent) {
+    const toolResultEvent: ToolResultEvent = {
+      type: 'tool_result',
+      toolCallId: toolCall.id,
+      name: toolCall.name,
+      arguments: toolCall.arguments,
+      result,
+      timing: { executionMs: Math.round(toolExecutionMs) },
+    };
+    controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
+  }
+
+  return {
+    result,
+    toolExecutionMs,
+    contract,
+  };
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -406,7 +480,7 @@ export async function handleChatStreamRequest(
         const systemPrompt = buildSystemPrompt(sessionContext);
         const tools: Tool[] = CUBE_TOOLS;
 
-        const messages: Message[] = [{ role: 'system', content: systemPrompt }, ...body.messages];
+        let messages: Message[] = [{ role: 'system', content: systemPrompt }, ...body.messages];
 
         let iterations = 0;
         let lastBroadDiscoveryState: BroadDiscoveryState | null = null;
@@ -421,9 +495,158 @@ export async function handleChatStreamRequest(
         let renderMode: 'model' | 'deterministic' = 'model';
         let modelHistoryChars = 0;
         let terminalAfterIteration: number | null = null;
+        let continuationQualityInfo:
+          | Pick<
+              ChatTurnQualityInfo,
+              | 'continuationDetected'
+              | 'continuationIntent'
+              | 'continuationSourceTool'
+              | 'requestedCount'
+              | 'excludedCount'
+              | 'continuationExhausted'
+            >
+          | null = null;
         updatedSessionContext = sessionContext;
 
-        while (iterations < MAX_TOOL_ITERATIONS) {
+        const continuationResolution = CHAT_PHASE1_QUALITY_ENABLED
+          ? resolveResultSetContinuation(lastUserPrompt, sessionContext)
+          : null;
+
+        if (continuationResolution) {
+          const continuationToolCall: ToolCall = {
+            id: `continuation_${crypto.randomUUID()}`,
+            name: continuationResolution.sourceTool,
+            arguments: continuationResolution.sourceArgs,
+          };
+          const toolStartEvent: ToolStartEvent = {
+            type: 'tool_start',
+            toolCallId: continuationToolCall.id,
+            name: continuationToolCall.name,
+            arguments: continuationToolCall.arguments,
+          };
+          controller.enqueue(encoder.encode(formatSSE(toolStartEvent)));
+
+          const executed = await executeResolvedToolCall({
+            toolCall: continuationToolCall,
+            lastUserPrompt,
+            phase1State: null,
+            controller,
+            encoder,
+            emitResultEvent: false,
+          });
+
+          totalToolsMs += executed.toolExecutionMs;
+          executedToolNames.push(continuationToolCall.name);
+
+          let continuationResult = executed.result;
+          let continuationContract = executed.contract;
+
+          if (isRecord(continuationResult)) {
+            const nextResultSet = buildContinuationResultSet({
+              resolution: continuationResolution,
+              result: continuationResult,
+              terminalContract: executed.contract,
+            });
+
+            continuationResult = nextResultSet.exhausted && continuationResult.success === true
+              ? buildContinuationExhaustedResult({
+                  resultSet: nextResultSet.resultSet,
+                  requestedCount: continuationResolution.requestedCount,
+                  terminalContract: executed.contract,
+                })
+              : attachContinuationMeta(continuationResult, {
+                  resultSet: nextResultSet.resultSet,
+                  intent: continuationResolution.intent,
+                  requestedCount: continuationResolution.requestedCount,
+                  excludedCount: continuationResolution.excludedCount,
+                  exhausted: nextResultSet.exhausted,
+                });
+
+            continuationQualityInfo = {
+              continuationDetected: true,
+              continuationIntent: continuationResolution.intent,
+              continuationSourceTool: continuationResolution.sourceTool,
+              requestedCount: continuationResolution.requestedCount,
+              excludedCount: continuationResolution.excludedCount,
+              continuationExhausted: nextResultSet.exhausted,
+            };
+
+            const hasContinuationSuccessFlag = typeof continuationResult.success === 'boolean';
+            continuationContract = executed.contract;
+            if (phase1State && hasContinuationSuccessFlag) {
+              continuationContract = buildToolAnswerContractSummary(
+                continuationToolCall,
+                continuationResult as { success: boolean; error?: string } & Record<string, unknown>
+              );
+            }
+            if (phase1State && continuationContract) {
+              observeExecutedToolCall(phase1State, continuationToolCall, continuationContract);
+            }
+            if (continuationContract?.sufficientToAnswer && terminalAfterIteration == null) {
+              terminalAfterIteration = 0;
+            }
+          }
+
+          const continuationToolResultEvent: ToolResultEvent = {
+            type: 'tool_result',
+            toolCallId: continuationToolCall.id,
+            name: continuationToolCall.name,
+            arguments: continuationToolCall.arguments,
+            result: continuationResult as { success: boolean; error?: string } & Record<string, unknown>,
+            timing: { executionMs: Math.round(executed.toolExecutionMs) },
+          };
+          controller.enqueue(encoder.encode(formatSSE(continuationToolResultEvent)));
+
+          executedToolCalls.push({
+            name: continuationToolCall.name,
+            arguments: continuationToolCall.arguments,
+            result: continuationResult as { success: boolean; error?: string } & Record<string, unknown>,
+            timing: { executionMs: Math.round(executed.toolExecutionMs) },
+          });
+          allToolCalls.push({
+            name: continuationToolCall.name,
+            arguments: continuationToolCall.arguments,
+            result: continuationResult as { success: boolean; error?: string } & Record<string, unknown>,
+            timing: { executionMs: Math.round(executed.toolExecutionMs) },
+          });
+          debugStats.toolCallCount += 1;
+
+          const renderedContinuationText = isRecord(continuationResult)
+            ? renderToolResultForChat(
+                continuationToolCall,
+                continuationResult,
+                continuationContract
+              )
+            : null;
+
+          if (renderedContinuationText) {
+            renderMode = 'deterministic';
+            debugStats.textDeltaCount++;
+            debugStats.totalChars += renderedContinuationText.length;
+            debugStats.lastIterationHadText = true;
+            const textEvent: TextDeltaEvent = { type: 'text_delta', delta: renderedContinuationText };
+            controller.enqueue(encoder.encode(formatSSE(textEvent)));
+          } else {
+            const modelContent = formatResultForModel(continuationResult, { compact: true });
+            messages = [
+              ...messages,
+              {
+                role: 'assistant',
+                content: '',
+                toolCalls: [continuationToolCall],
+              },
+              {
+                role: 'tool',
+                toolCallId: continuationToolCall.id,
+                content: modelContent,
+              },
+            ];
+            modelHistoryChars += modelContent.length;
+            forceFinalRenderWithoutTools = true;
+          }
+        }
+
+        while (debugStats.totalChars === 0 && iterations < MAX_TOOL_ITERATIONS) {
           iterations++;
           debugStats.iterations = iterations;
           let iterationTextCount = 0;
@@ -761,6 +984,7 @@ export async function handleChatStreamRequest(
             renderMode,
             terminalAfterIteration,
             modelHistoryChars,
+            ...continuationQualityInfo,
           };
           if (iterations >= MAX_TOOL_ITERATIONS && debugStats.toolCallCount > 0) {
             phase1Quality = {

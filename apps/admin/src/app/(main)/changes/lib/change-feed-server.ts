@@ -534,6 +534,7 @@ function mapChatChangePatternCandidateRow(
 
 async function fetchChatChangeRows(params: ChangeFeedActivityParams): Promise<ChangeActivityRow[]> {
   const sort = normalizeChatActivitySort(params);
+  const excludedIds = new Set(params.excludeActivityIds ?? []);
 
   const data = await executeChangeFeedRpc<RawChatChangeActivityCandidateRow[]>(
     'get_chat_change_activity_candidates',
@@ -544,7 +545,7 @@ async function fetchChatChangeRows(params: ChangeFeedActivityParams): Promise<Ch
       p_app_types: params.appTypes,
       p_signal_families: params.signalFamilies,
       p_search: params.search,
-      p_limit: Math.min(Math.max(params.limit + 10, 25), 100),
+      p_limit: Math.min(Math.max(params.limit + excludedIds.size + 10, 25), 100),
     }
   );
 
@@ -552,6 +553,9 @@ async function fetchChatChangeRows(params: ChangeFeedActivityParams): Promise<Ch
   items = filterActivitiesBySignalFamilies(items, params.signalFamilies);
   items = filterActivitiesForView(items, params.view);
   items = sortActivities(items, sort);
+  if (excludedIds.size > 0) {
+    items = items.filter((item) => !excludedIds.has(item.activityId));
+  }
   return items.slice(0, params.limit);
 }
 
@@ -559,6 +563,7 @@ export async function fetchChatChangeActivityResponse(
   params: ChangeFeedActivityParams
 ): Promise<ChangeFeedActivityResponse> {
   const sort = normalizeChatActivitySort(params);
+  const excludedIds = new Set(params.excludeActivityIds ?? []);
 
   if (params.mode === 'announcements') {
     const newsResponse = await fetchChangeFeedNewsResponse({
@@ -574,6 +579,9 @@ export async function fetchChatChangeActivityResponse(
     items = filterActivitiesBySignalFamilies(items, params.signalFamilies);
     items = filterActivitiesForView(items, params.view);
     items = sortActivities(items, sort);
+    if (excludedIds.size > 0) {
+      items = items.filter((item) => !excludedIds.has(item.activityId));
+    }
 
     return {
       items: items.slice(0, params.limit),
@@ -614,6 +622,9 @@ export async function fetchChatChangeActivityResponse(
   items = filterActivitiesBySignalFamilies(items, params.signalFamilies);
   items = filterActivitiesForView(items, params.view);
   items = sortActivities(items, sort);
+  if (excludedIds.size > 0) {
+    items = items.filter((item) => !excludedIds.has(item.activityId));
+  }
 
   return {
     items: items.slice(0, params.limit),

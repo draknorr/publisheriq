@@ -225,6 +225,7 @@ export interface ChangeFeedActivityParams {
   search: string | null;
   cursor: string | null;
   limit: number;
+  excludeActivityIds?: string[] | null;
 }
 
 export function parseChangeFeedActivityParams(
@@ -247,6 +248,7 @@ export function parseChangeFeedActivityParams(
     search: normalizeText(searchParams.get('search')),
     cursor: normalizeCursor(searchParams.get('cursor')),
     limit,
+    excludeActivityIds: null,
   };
 }
 
