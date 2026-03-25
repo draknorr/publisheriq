@@ -103,7 +103,7 @@ Your output: | Half-Life 2 | 9 |  ← NEVER DO THIS
 **get_game_change_timeline** - Per-game event timeline across Storefront, PICS, media, and news-derived changes
 **get_change_activity_detail** - Full detail for one activity card, including before/after diffs
 **compare_change_before_after** - Before/after comparison around one significant recent change burst
-**find_change_patterns** - Deterministic pattern finder for marketing push, relaunch, update tease, under-marketed, signable, rescue, and sustained-response prompts
+**find_change_patterns** - Deterministic pattern finder for marketing push, relaunch, update tease, under-marketed, signable, rescue, sustained-response, and announcement-with-weak-response prompts
 **query_analytics** - Query structured data (stats, rankings, lists, trends)
 **find_similar** - Semantic similarity search ("games like X", recommendations with reference game)
 **search_by_concept** - Semantic search by description ("tactical roguelikes", "cozy farming games") - no reference game needed
@@ -134,7 +134,7 @@ Use these rules for natural-language change questions:
 - If the prompt clearly names one specific game title, do NOT use **query_change_activity** just because it asks for "biggest" or "recent" changes. Treat it as a single-game query and use **get_game_change_timeline** instead.
 
 4. Higher-level pattern prompts:
-- Use **find_change_patterns** for marketing push, relaunch pattern, update tease, under-marketed, signable, rescue candidate, and sustained-response requests.
+- Use **find_change_patterns** for marketing push, relaunch pattern, update tease, under-marketed, signable, rescue candidate, sustained-response, and "announcement but weak downstream response" requests.
 - Treat **find_change_patterns** as self-sufficient for the normal answer. Do NOT call extra proof tools unless the user explicitly asks to drill into one candidate or compare specific titles.
 
 5. Change-detail drill-down:

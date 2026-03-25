@@ -511,6 +511,27 @@ export async function refreshChangePatternActivityDaysForApp(
   return Number(data ?? 0);
 }
 
+export async function refreshChangePatternAppWindowsForApp(
+  supabase: TypedSupabaseClient,
+  appid: number,
+  lookbackDays = 180
+): Promise<number> {
+  const { data, error } = await runSupabaseOperation<number | null>(
+    'refresh_change_pattern_app_windows_for_app',
+    () =>
+      getDb(supabase).rpc('refresh_change_pattern_app_windows_for_app', {
+        p_appid: appid,
+        p_lookback_days: lookbackDays,
+      })
+  );
+
+  if (error) {
+    throw new Error(`Failed to refresh change_pattern_app_windows: ${error.message}`);
+  }
+
+  return Number(data ?? 0);
+}
+
 export async function listRecentChangeActivityAppIds(
   supabase: TypedSupabaseClient,
   lookbackDays = 180,

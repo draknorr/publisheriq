@@ -36,7 +36,6 @@ const DEFAULT_TIMELINE_LIMIT = 20;
 const MAX_TIMELINE_LIMIT = 50;
 const DEFAULT_PATTERN_LIMIT = 10;
 const MAX_PATTERN_LIMIT = 10;
-const INTERNAL_PATTERN_ACTIVITY_LIMIT = 60;
 const DEFAULT_PATTERN_APP_TYPES: AppType[] = ['game'];
 const HIGH_CONFIDENCE_SIMILARITY = 0.72;
 const MINIMUM_CONFIDENCE_SIMILARITY = 0.45;
@@ -50,7 +49,8 @@ export type ChangePattern =
   | 'under_marketed'
   | 'signable_candidate'
   | 'rescue_candidate'
-  | 'sustained_response';
+  | 'sustained_response'
+  | 'announcement_weak_response';
 
 export interface QueryChangeActivityArgs {
   days?: number;
@@ -538,6 +538,56 @@ async function resolveSingleTitleTimelineArgs(
   };
 }
 
+function shouldUseAnnouncementWeakResponsePattern(userPrompt: string | undefined): boolean {
+  const prompt = normalizeSearch(userPrompt)?.toLowerCase();
+  if (!prompt) {
+    return false;
+  }
+
+  const mentionsAnnouncement = /\bannouncement\b/.test(prompt);
+  const mentionsWeakResponse =
+    /\bweak\b/.test(prompt) ||
+    /\bdownstream\b/.test(prompt) ||
+    /\bsoft\b/.test(prompt) ||
+    /\blimited\b/.test(prompt) ||
+    /\bunderwhelming\b/.test(prompt);
+  const mentionsOutcome =
+    /\bccu\b/.test(prompt) ||
+    /\breview\b/.test(prompt) ||
+    /\bresponse\b/.test(prompt) ||
+    /\bmomentum\b/.test(prompt);
+
+  return mentionsAnnouncement && mentionsWeakResponse && mentionsOutcome;
+}
+
+function patternNeedsLiveMetrics(pattern: ChangePattern): boolean {
+  return pattern === 'under_marketed' || pattern === 'signable_candidate' || pattern === 'rescue_candidate';
+}
+
+function isResponsePattern(pattern: ChangePattern): pattern is 'sustained_response' | 'announcement_weak_response' {
+  return pattern === 'sustained_response' || pattern === 'announcement_weak_response';
+}
+
+function getPatternRpcLimit(limit: number): number {
+  return Math.min(Math.max(limit * 2, 20), 30);
+}
+
+function getPatternShortlistWindowDays(days: number): number {
+  if (days <= 7) {
+    return 7;
+  }
+
+  if (days <= 30) {
+    return 30;
+  }
+
+  if (days <= 90) {
+    return 90;
+  }
+
+  return 180;
+}
+
 function classifyChangeIntelError(error: unknown): {
   failureKind: string;
   userMessage: string;
@@ -575,6 +625,20 @@ export async function normalizeChangeIntelToolCall(
   const args = toolCall.arguments as QueryChangeActivityArgs;
   const timelineArgs = await resolveSingleTitleTimelineArgs(args, userPrompt);
   if (!timelineArgs) {
+    if (shouldUseAnnouncementWeakResponsePattern(userPrompt)) {
+      return {
+        ...toolCall,
+        name: 'find_change_patterns',
+        arguments: {
+          pattern: 'announcement_weak_response',
+          days: args.days,
+          search: normalizeSearch(args.search) ?? undefined,
+          app_types: args.app_types,
+          limit: args.limit,
+        } as unknown as Record<string, unknown>,
+      };
+    }
+
     return toolCall;
   }
 
@@ -671,30 +735,35 @@ async function fetchAppMetrics(appIds: number[]): Promise<Map<number, AppMetrics
   return metricsByApp;
 }
 
+function candidateHasEmbeddedMetrics(candidate: ChatChangePatternCandidateRow): boolean {
+  return (
+    candidate.positivePercentage != null ||
+    candidate.totalReviews != null ||
+    candidate.reviewVelocity30d != null ||
+    candidate.reviewVelocity7d != null ||
+    candidate.ccuTrend7dPct != null
+  );
+}
+
 function hydratePatternMetrics(
   candidates: ChatChangePatternCandidateRow[],
   fallbackMetrics: Map<number, AppMetrics>
 ): Array<ChatChangePatternCandidateRow & { metrics: AppMetrics | null }> {
   return candidates.map((candidate) => {
-    const existingMetrics =
-      candidate.positivePercentage != null ||
-      candidate.totalReviews != null ||
-      candidate.reviewVelocity30d != null ||
-      candidate.reviewVelocity7d != null ||
-      candidate.ccuTrend7dPct != null
-        ? {
-            appid: candidate.appid,
-            positivePercentage: candidate.positivePercentage,
-            totalReviews: candidate.totalReviews,
-            ccuPeak: candidate.ccuPeak,
-            priceCents: candidate.priceCents,
-            discountPercent: candidate.discountPercent,
-            reviewVelocity7d: candidate.reviewVelocity7d,
-            reviewVelocity30d: candidate.reviewVelocity30d,
-            trend30dDirection: candidate.trend30dDirection,
-            ccuTrend7dPct: candidate.ccuTrend7dPct,
-          }
-        : null;
+    const existingMetrics = candidateHasEmbeddedMetrics(candidate)
+      ? {
+          appid: candidate.appid,
+          positivePercentage: candidate.positivePercentage,
+          totalReviews: candidate.totalReviews,
+          ccuPeak: candidate.ccuPeak,
+          priceCents: candidate.priceCents,
+          discountPercent: candidate.discountPercent,
+          reviewVelocity7d: candidate.reviewVelocity7d,
+          reviewVelocity30d: candidate.reviewVelocity30d,
+          trend30dDirection: candidate.trend30dDirection,
+          ccuTrend7dPct: candidate.ccuTrend7dPct,
+        }
+      : null;
 
     return {
       ...candidate,
@@ -736,6 +805,84 @@ function mapActivityRow(row: ChangeActivityRow) {
     signalFamilies: row.signalFamilies,
     relatedAnnouncementCount: row.relatedAnnouncementCount,
     externalUrl: row.externalUrl,
+  };
+}
+
+function buildResponsePatternCandidate(
+  pattern: Extract<ChangePattern, 'sustained_response' | 'announcement_weak_response'>,
+  detail: ChangeActivityDetail
+) {
+  if (!detail.aftermath) {
+    return null;
+  }
+
+  const reviewDelta = metricDelta(
+    detail.aftermath.response7d?.totalReviews ?? null,
+    detail.aftermath.baseline7d?.totalReviews ?? null
+  );
+  const ccuLift = percentLift(
+    detail.aftermath.response7d?.ccuPeak ?? null,
+    detail.aftermath.baseline7d?.ccuPeak ?? null
+  );
+
+  if (pattern === 'sustained_response') {
+    if ((reviewDelta ?? 0) < 25 && (ccuLift ?? 0) < 15) {
+      return null;
+    }
+
+    const reasons: string[] = [];
+    if (reviewDelta != null && reviewDelta >= 25) {
+      reasons.push(`7-day review total rose by ${reviewDelta.toLocaleString()} after the change window.`);
+    }
+    if (ccuLift != null && ccuLift >= 15) {
+      reasons.push(`7-day CCU peak was ${ccuLift.toFixed(0)}% above the baseline window.`);
+    }
+
+    return {
+      appid: detail.appid,
+      name: detail.appName,
+      occurredAt: detail.occurredAt,
+      confidence: reviewDelta != null && reviewDelta >= 50 ? 'high' : 'medium',
+      activityId: detail.activityId,
+      headline: detail.headline,
+      reasons,
+      signalFamilies: detail.signalFamilies,
+      aftermath: detail.aftermath,
+      primaryProof: buildPatternProofPacket(detail),
+    };
+  }
+
+  const hasRelatedAnnouncement = detail.relatedAnnouncements.length > 0 || detail.signalFamilies.includes('announcement');
+  const weakReviewResponse = reviewDelta == null || reviewDelta < 10;
+  const weakCcuResponse = ccuLift == null || ccuLift < 5;
+
+  if (!hasRelatedAnnouncement || (!weakReviewResponse && !weakCcuResponse)) {
+    return null;
+  }
+
+  const reasons: string[] = ['A recent announcement is attached to the same change window.'];
+  if (reviewDelta != null) {
+    reasons.push(`7-day review total moved by only ${reviewDelta.toLocaleString()} after the announcement window.`);
+  } else {
+    reasons.push('Review totals did not show a clear 7-day lift after the announcement window.');
+  }
+  if (ccuLift != null) {
+    reasons.push(`7-day CCU peak was only ${ccuLift.toFixed(0)}% above the baseline window.`);
+  } else {
+    reasons.push('CCU did not show a clear post-announcement lift.');
+  }
+
+  return {
+    appid: detail.appid,
+    name: detail.appName,
+    occurredAt: detail.occurredAt,
+    confidence: weakReviewResponse && weakCcuResponse ? 'high' : 'medium',
+    activityId: detail.activityId,
+    headline: detail.headline,
+    reasons,
+    signalFamilies: detail.signalFamilies,
+    aftermath: detail.aftermath,
+    primaryProof: buildPatternProofPacket(detail),
   };
 }
 
@@ -1349,6 +1496,7 @@ function buildReasons(
     }
 
     case 'sustained_response':
+    case 'announcement_weak_response':
       return null;
   }
 }
@@ -1357,9 +1505,8 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
   const days = clamp(args.days, DEFAULT_ACTIVITY_DAYS, 1, MAX_ACTIVITY_DAYS);
   const limit = clamp(args.limit, DEFAULT_PATTERN_LIMIT, 1, MAX_PATTERN_LIMIT);
   const search = normalizeSearch(args.search);
-  const appTypes = args.app_types && args.app_types.length > 0
-    ? args.app_types
-    : DEFAULT_PATTERN_APP_TYPES;
+  const appTypes = args.app_types && args.app_types.length > 0 ? args.app_types : DEFAULT_PATTERN_APP_TYPES;
+  const shortlistWindowDays = getPatternShortlistWindowDays(days);
   let rawCandidates: ChatChangePatternCandidateRow[];
   try {
     rawCandidates = await fetchChatChangePatternCandidates({
@@ -1367,7 +1514,7 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
       days,
       appTypes,
       search,
-      limit: INTERNAL_PATTERN_ACTIVITY_LIMIT,
+      limit: getPatternRpcLimit(limit),
     });
   } catch (error) {
     const classification = classifyChangeIntelError(error);
@@ -1383,53 +1530,30 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
         'Say the change-pattern surface is temporarily unavailable and suggest a narrower follow-up such as a specific title, recent store-page changes, or release-timing changes.',
     };
   }
-  const fallbackMetrics = await fetchAppMetrics(rawCandidates.map((candidate) => candidate.appid));
-  const hydratedCandidates = hydratePatternMetrics(rawCandidates, fallbackMetrics);
+  const meta = {
+    days,
+    limit,
+    search,
+    evaluatedDays: days,
+    shortlistWindowDays,
+    shortlistCount: rawCandidates.length,
+  };
 
-  if (args.pattern === 'sustained_response') {
+  if (isResponsePattern(args.pattern)) {
+    const responsePattern = args.pattern;
     const details = await Promise.all(
-      hydratedCandidates
-        .flatMap((candidate) => candidate.activityIds.slice(0, 1))
-        .slice(0, 12)
-        .map(async (activityId) => {
-        const detail = await fetchChangeFeedActivityDetail(activityId);
-        if (!detail?.aftermath) {
+      rawCandidates.slice(0, Math.min(limit * 2, 8)).map(async (candidate) => {
+        const activityId = candidate.activityIds[0];
+        if (!activityId) {
           return null;
         }
 
-        const reviewDelta = metricDelta(
-          detail.aftermath.response7d?.totalReviews ?? null,
-          detail.aftermath.baseline7d?.totalReviews ?? null
-        );
-        const ccuLift = percentLift(
-          detail.aftermath.response7d?.ccuPeak ?? null,
-          detail.aftermath.baseline7d?.ccuPeak ?? null
-        );
-
-        if ((reviewDelta ?? 0) < 25 && (ccuLift ?? 0) < 15) {
+        const detail = await fetchChangeFeedActivityDetail(activityId).catch(() => null);
+        if (!detail) {
           return null;
         }
 
-        const reasons: string[] = [];
-        if (reviewDelta != null && reviewDelta >= 25) {
-          reasons.push(`7-day review total rose by ${reviewDelta.toLocaleString()} after the change window.`);
-        }
-        if (ccuLift != null && ccuLift >= 15) {
-          reasons.push(`7-day CCU peak was ${ccuLift.toFixed(0)}% above the baseline window.`);
-        }
-
-        return {
-          appid: detail.appid,
-          name: detail.appName,
-          occurredAt: detail.occurredAt,
-          confidence: reviewDelta != null && reviewDelta >= 50 ? 'high' : 'medium',
-          activityId: detail.activityId,
-          headline: detail.headline,
-          reasons,
-          signalFamilies: detail.signalFamilies,
-          aftermath: detail.aftermath,
-          primaryProof: buildPatternProofPacket(detail),
-        };
+        return buildResponsePatternCandidate(responsePattern, detail);
       })
     );
 
@@ -1444,10 +1568,16 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
         selected_change_surface: 'projection_pattern',
         no_match: true,
         sufficient_to_answer: true,
-        sufficiency_reason: 'No sustained-response candidates met the evidence threshold in the requested window.',
+        sufficiency_reason:
+          args.pattern === 'announcement_weak_response'
+            ? 'No recent announcement windows showed a clearly weak downstream response in the requested timeframe.'
+            : 'No sustained-response candidates met the evidence threshold in the requested window.',
         required_answer_fields: ['what was checked', 'why the evidence was insufficient'],
-        response_guidance: 'Explain the checked response threshold and say no candidates cleared it.',
-        meta: { days, limit, search },
+        response_guidance:
+          args.pattern === 'announcement_weak_response'
+            ? 'Explain that the query looked for announcement-linked change windows with weak follow-through and that no candidates cleared the threshold.'
+            : 'Explain the checked response threshold and say no candidates cleared it.',
+        meta,
       };
     }
 
@@ -1458,9 +1588,15 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
       total_found: results.length,
       selected_change_surface: 'projection_pattern',
       sufficient_to_answer: true,
-      sufficiency_reason: 'A ranked sustained-response set with proof packets is available and can be answered directly.',
+      sufficiency_reason:
+        args.pattern === 'announcement_weak_response'
+          ? 'A ranked announcement-response set with proof packets is available and can be answered directly.'
+          : 'A ranked sustained-response set with proof packets is available and can be answered directly.',
       required_answer_fields: ['ranked candidates', 'evidence', 'timing', 'why it qualifies'],
-      response_guidance: 'For each row, cite the concrete response signal and the post-change window. Avoid canned repeated reasons.',
+      response_guidance:
+        args.pattern === 'announcement_weak_response'
+          ? 'For each row, cite the attached announcement evidence and the weak downstream response window. Avoid generic “low engagement” filler.'
+          : 'For each row, cite the concrete response signal and the post-change window. Avoid canned repeated reasons.',
       presentation_hints: {
         format: 'ranked_change_patterns',
         proof_field: 'primaryProof',
@@ -1477,9 +1613,16 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
           primaryProof: result.primaryProof,
         })),
       },
-      meta: { days, limit, search },
+      meta,
     };
   }
+
+  const fallbackMetrics = patternNeedsLiveMetrics(args.pattern)
+    ? await fetchAppMetrics(
+        rawCandidates.filter((candidate) => !candidateHasEmbeddedMetrics(candidate)).map((candidate) => candidate.appid)
+      )
+    : new Map<number, AppMetrics>();
+  const hydratedCandidates = hydratePatternMetrics(rawCandidates, fallbackMetrics);
 
   const aggregates = buildPatternAggregates(hydratedCandidates);
   const candidates: PatternCandidate[] = [];
@@ -1535,7 +1678,7 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
       sufficiency_reason: 'No change-pattern candidates matched the requested evidence threshold.',
       required_answer_fields: ['what was checked', 'time window', 'why no candidate qualified'],
       response_guidance: 'State the requested pattern and why no candidate cleared the evidence threshold.',
-      meta: { days, limit, search },
+      meta,
     };
   }
 
@@ -1568,6 +1711,6 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
         primaryProof: result.primaryProof,
       })),
     },
-    meta: { days, limit, search },
+    meta,
   };
 }

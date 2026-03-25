@@ -17,6 +17,7 @@ import {
   completeCaptureQueueItems,
   createSyncJobRecord,
   refreshChangeActivityBurstsForApp,
+  refreshChangePatternAppWindowsForApp,
   refreshChangePatternActivityDaysForApp,
   requeueStaleCaptureClaims,
   updateSyncJobRecord,
@@ -71,6 +72,7 @@ async function processStorefrontJob(supabase: SupabaseClient, appid: number, tri
 async function processProjectionRefreshJob(supabase: SupabaseClient, appid: number): Promise<void> {
   await refreshChangeActivityBurstsForApp(supabase, appid);
   await refreshChangePatternActivityDaysForApp(supabase, appid);
+  await refreshChangePatternAppWindowsForApp(supabase, appid);
 }
 
 async function processJob(

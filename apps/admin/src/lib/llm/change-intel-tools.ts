@@ -173,6 +173,7 @@ Use this for:
 - "Games starting a new marketing push"
 - "Likely relaunch patterns"
 - "Games teasing a big update"
+- "Major Steam announcements with weak downstream response"
 - "Under-marketed games"
 - "Signable candidates"
 - "Rescue candidates"
@@ -190,6 +191,7 @@ Use this for:
             'signable_candidate',
             'rescue_candidate',
             'sustained_response',
+            'announcement_weak_response',
           ],
           description: 'The pattern to search for.',
         },
