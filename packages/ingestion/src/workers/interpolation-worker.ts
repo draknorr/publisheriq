@@ -8,18 +8,17 @@
  */
 
 import { getServiceClient } from "@publisheriq/database";
+import {
+  InterpolationBatchTimeoutError,
+  runInterpolationReviewDeltasBatch,
+  type InterpolationBatchResult,
+} from "@publisheriq/database/ingestion";
 import { logger } from "@publisheriq/shared";
 
 const log = logger.child({ worker: "interpolation" });
 const DEFAULT_INTERPOLATION_DAYS = 30;
-const DEFAULT_APP_BATCH_SIZE = 2000;
-
-type InterpolationBatchResult = {
-  apps_processed: number;
-  has_more: boolean;
-  last_appid: number | null;
-  total_interpolated: number;
-};
+const DEFAULT_APP_BATCH_SIZE = 1000;
+const MIN_APP_BATCH_SIZE = 250;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) {
@@ -34,6 +33,34 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const parts = [
+      typeof record.message === "string" ? record.message : null,
+      typeof record.code === "string" ? `code=${record.code}` : null,
+      typeof record.details === "string" ? `details=${record.details}` : null,
+      typeof record.hint === "string" ? `hint=${record.hint}` : null,
+    ].filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(" | ");
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
 async function main(): Promise<void> {
   const startTime = Date.now();
   const githubRunId = process.env.GITHUB_RUN_ID;
@@ -43,7 +70,7 @@ async function main(): Promise<void> {
     process.env.INTERPOLATION_DAYS,
     DEFAULT_INTERPOLATION_DAYS,
   );
-  const appBatchSize = parsePositiveInt(
+  const initialAppBatchSize = parsePositiveInt(
     process.env.INTERPOLATION_APP_BATCH_SIZE,
     DEFAULT_APP_BATCH_SIZE,
   );
@@ -57,7 +84,8 @@ async function main(): Promise<void> {
     startDate,
     endDate,
     daysBack,
-    appBatchSize,
+    initialAppBatchSize,
+    minAppBatchSize: MIN_APP_BATCH_SIZE,
   });
 
   const supabase = getServiceClient();
@@ -80,56 +108,87 @@ async function main(): Promise<void> {
     let batchCount = 0;
     let lastAppId = 0;
     let hasMore = true;
+    let currentBatchSize = initialAppBatchSize;
 
     while (hasMore) {
       batchCount += 1;
+      let attemptCount = 0;
+      let attemptBatchSize = currentBatchSize;
+      const attemptedBatchSizes: number[] = [];
+      let batchResult: InterpolationBatchResult | null = null;
 
-      log.info("Running interpolation batch", {
-        batchCount,
-        appBatchSize,
-        startDate,
-        endDate,
-        afterAppId: lastAppId,
-      });
+      while (!batchResult) {
+        attemptCount += 1;
+        attemptedBatchSizes.push(attemptBatchSize);
+        const batchStartedAt = Date.now();
 
-      const { data, error: interpolateError } = await supabase.rpc(
-        "interpolate_review_deltas_batch",
-        {
-          p_start_date: startDate,
-          p_end_date: endDate,
-          p_after_appid: lastAppId,
-          p_app_limit: appBatchSize,
-        },
-      );
+        log.info("Running interpolation batch", {
+          batchCount,
+          attemptCount,
+          appBatchSize: attemptBatchSize,
+          startDate,
+          endDate,
+          afterAppId: lastAppId,
+        });
 
-      if (interpolateError) {
-        throw new Error(
-          `Failed to interpolate batch ${batchCount}: ${interpolateError.message}`,
-        );
+        try {
+          batchResult = await runInterpolationReviewDeltasBatch({
+            startDate,
+            endDate,
+            afterAppId: lastAppId,
+            appLimit: attemptBatchSize,
+          });
+          currentBatchSize = attemptBatchSize;
+
+          const batchDurationMs = Date.now() - batchStartedAt;
+          totalInterpolated += batchResult.total_interpolated ?? 0;
+          appsProcessed += batchResult.apps_processed ?? 0;
+
+          log.info("Interpolation batch completed", {
+            batchCount,
+            attemptCount,
+            appBatchSize: attemptBatchSize,
+            batchDurationMs,
+            appsProcessed: batchResult.apps_processed ?? 0,
+            batchInterpolated: batchResult.total_interpolated ?? 0,
+            totalInterpolated,
+            cumulativeAppsProcessed: appsProcessed,
+            lastAppId: batchResult.last_appid,
+            hasMore: batchResult.has_more,
+          });
+        } catch (error) {
+          const batchDurationMs = Date.now() - batchStartedAt;
+
+          if (
+            error instanceof InterpolationBatchTimeoutError &&
+            attemptBatchSize > MIN_APP_BATCH_SIZE
+          ) {
+            const nextBatchSize = Math.max(
+              MIN_APP_BATCH_SIZE,
+              Math.floor(attemptBatchSize / 2),
+            );
+
+            log.warn("Interpolation batch timed out; reducing batch size", {
+              batchCount,
+              attemptCount,
+              afterAppId: lastAppId,
+              attemptedBatchSize: attemptBatchSize,
+              nextBatchSize,
+              timeoutMs: error.timeoutMs,
+              batchDurationMs,
+            });
+
+            attemptBatchSize = nextBatchSize;
+            continue;
+          }
+
+          throw new Error(
+            `Failed to interpolate batch ${batchCount} after appid ${lastAppId} with batch sizes [${attemptedBatchSizes.join(", ")}]: ${formatUnknownError(error)}`,
+          );
+        }
       }
 
-      const batchResult = data?.[0] as InterpolationBatchResult | undefined;
-      if (!batchResult) {
-        break;
-      }
-
-      totalInterpolated += batchResult.total_interpolated ?? 0;
-      appsProcessed += batchResult.apps_processed ?? 0;
-
-      log.info("Interpolation batch completed", {
-        batchCount,
-        appsProcessed: batchResult.apps_processed ?? 0,
-        batchInterpolated: batchResult.total_interpolated ?? 0,
-        totalInterpolated,
-        cumulativeAppsProcessed: appsProcessed,
-        lastAppId: batchResult.last_appid,
-        hasMore: batchResult.has_more,
-      });
-
-      if (
-        (batchResult.apps_processed ?? 0) === 0 ||
-        batchResult.last_appid === null
-      ) {
+      if ((batchResult.apps_processed ?? 0) === 0 || batchResult.last_appid === null) {
         hasMore = false;
         break;
       }
@@ -148,6 +207,7 @@ async function main(): Promise<void> {
       totalInterpolated,
       appsProcessed,
       batchCount,
+      finalBatchSize: currentBatchSize,
     });
 
     // Get stats on interpolated vs actual data
@@ -205,7 +265,7 @@ async function main(): Promise<void> {
       batchCount,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = formatUnknownError(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
 
     log.error("Interpolation failed", {

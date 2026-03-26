@@ -22,6 +22,21 @@ export interface AcquireApiRateTokenResult {
   waitMs: number;
 }
 
+export interface InterpolationBatchResult {
+  apps_processed: number;
+  has_more: boolean;
+  last_appid: number | null;
+  total_interpolated: number;
+}
+
+export interface RunInterpolationReviewDeltasBatchParams {
+  afterAppId: number;
+  appLimit: number;
+  endDate: string;
+  startDate: string;
+  timeoutMs?: number;
+}
+
 export interface ReviewsQueueLaneHealth {
   lane: ReviewLane;
   dueCount: number;
@@ -54,6 +69,13 @@ interface RefreshReviewVelocityStatsOptions {
   timeoutMs?: number;
 }
 
+interface InterpolationBatchRow extends QueryResultRow {
+  apps_processed: number | string;
+  has_more: boolean | string | null;
+  last_appid: number | string | null;
+  total_interpolated: number | string;
+}
+
 interface UpdateReviewVelocityTiersRow extends QueryResultRow {
   count: number | string;
 }
@@ -76,10 +98,22 @@ const CLAIM_TIMEOUT_MS = 60_000;
 const TOKEN_TIMEOUT_MS = 5_000;
 const RELEASE_CLAIMS_TIMEOUT_MS = 15_000;
 const QUEUE_HEALTH_TIMEOUT_MS = 60_000;
+const INTERPOLATION_BATCH_TIMEOUT_MS = 60_000;
 const VELOCITY_REFRESH_TIMEOUT_MS = 600_000;
 const VELOCITY_UPDATE_TIMEOUT_MS = 600_000;
 
 let ingestionPool: Pool | null = null;
+
+export class InterpolationBatchTimeoutError extends Error {
+  readonly code = '57014';
+  readonly timeoutMs: number;
+
+  constructor(message: string, timeoutMs: number) {
+    super(message);
+    this.name = 'InterpolationBatchTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
 
 function requireDatabaseUrl(): string {
   const databaseUrl = process.env.DATABASE_URL;
@@ -113,6 +147,18 @@ function parseOptionalNumber(value: number | string | null | undefined): number 
 
   const parsed = parseNumber(value);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function parseBoolean(value: boolean | string | null | undefined): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true';
+  }
+
+  return false;
 }
 
 function normalizeTimestamp(value: Date | string | null | undefined): string | null {
@@ -201,6 +247,17 @@ async function withSessionStatementTimeout<T>(
   });
 }
 
+function isStatementTimeoutError(error: unknown): error is { code?: string; message?: string } {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  const code = 'code' in error ? error.code : undefined;
+  const message = 'message' in error ? error.message : undefined;
+
+  return code === '57014' || (typeof message === 'string' && message.includes('statement timeout'));
+}
+
 export async function claimAppsForReviewsSync(params: {
   workerId: string;
   limit: number;
@@ -279,6 +336,48 @@ export async function releaseReviewClaims(params: {
     );
 
     return result.rowCount ?? 0;
+  });
+}
+
+export async function runInterpolationReviewDeltasBatch(
+  params: RunInterpolationReviewDeltasBatchParams
+): Promise<InterpolationBatchResult> {
+  const timeoutMs = params.timeoutMs ?? INTERPOLATION_BATCH_TIMEOUT_MS;
+
+  return withSessionStatementTimeout(timeoutMs, async (client) => {
+    try {
+      const { rows } = await client.query<InterpolationBatchRow>(
+        `
+          SELECT
+            total_interpolated,
+            apps_processed,
+            last_appid,
+            has_more
+          FROM interpolate_review_deltas_batch($1, $2, $3, $4)
+        `,
+        [params.startDate, params.endDate, params.afterAppId, params.appLimit]
+      );
+
+      const row = rows[0];
+
+      return {
+        total_interpolated: parseNumber(row?.total_interpolated),
+        apps_processed: parseNumber(row?.apps_processed),
+        last_appid: parseOptionalNumber(row?.last_appid),
+        has_more: parseBoolean(row?.has_more),
+      };
+    } catch (error) {
+      if (isStatementTimeoutError(error)) {
+        const message =
+          error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+            ? error.message
+            : `interpolate_review_deltas_batch exceeded ${timeoutMs}ms`;
+
+        throw new InterpolationBatchTimeoutError(message, timeoutMs);
+      }
+
+      throw error;
+    }
   });
 }
 
