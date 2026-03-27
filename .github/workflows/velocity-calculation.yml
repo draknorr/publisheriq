@@ -40,3 +40,4 @@ jobs:
         run: pnpm --filter @publisheriq/ingestion calculate-velocity
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
+          VELOCITY_BATCH_SIZE: '1000'

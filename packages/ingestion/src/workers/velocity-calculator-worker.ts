@@ -9,12 +9,18 @@
 
 import { getServiceClient } from '@publisheriq/database';
 import {
+  getReviewVelocityTierDistribution,
   refreshReviewVelocityStats,
-  updateReviewVelocityTiers,
+  updateReviewVelocityTiersBatch,
 } from '@publisheriq/database/ingestion';
 import { logger } from '@publisheriq/shared';
+import { withRetry } from '../utils/retry.js';
 
 const log = logger.child({ worker: 'velocity-calc' });
+const DEFAULT_BATCH_SIZE = 1000;
+const DEFAULT_EMPTY_BATCH_EXIT_THRESHOLD = 2;
+const DEFAULT_IDLE_BATCH_DELAY_MS = 2000;
+const DEFAULT_DUPLICATE_GUARD_WINDOW_HOURS = 2;
 
 function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
@@ -44,13 +50,73 @@ function formatUnknownError(error: unknown): string {
   return String(error);
 }
 
+function isDeadlockError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  const code = 'code' in error ? error.code : undefined;
+  const message = 'message' in error ? error.message : undefined;
+
+  return (
+    code === '40P01' ||
+    (typeof message === 'string' && message.toLowerCase().includes('deadlock detected'))
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function main(): Promise<void> {
   const startTime = Date.now();
   const githubRunId = process.env.GITHUB_RUN_ID;
+  const batchSize = parseInt(process.env.VELOCITY_BATCH_SIZE || `${DEFAULT_BATCH_SIZE}`, 10);
+  const emptyBatchExitThreshold = parseInt(
+    process.env.VELOCITY_EMPTY_BATCH_EXIT_THRESHOLD || `${DEFAULT_EMPTY_BATCH_EXIT_THRESHOLD}`,
+    10
+  );
+  const idleBatchDelayMs = parseInt(
+    process.env.VELOCITY_IDLE_BATCH_DELAY_MS || `${DEFAULT_IDLE_BATCH_DELAY_MS}`,
+    10
+  );
+  const duplicateGuardWindowHours = parseInt(
+    process.env.VELOCITY_DUPLICATE_GUARD_WINDOW_HOURS ||
+      `${DEFAULT_DUPLICATE_GUARD_WINDOW_HOURS}`,
+    10
+  );
 
-  log.info('Starting velocity calculation', { githubRunId });
+  log.info('Starting velocity calculation', {
+    githubRunId,
+    batchSize,
+    emptyBatchExitThreshold,
+  });
 
   const supabase = getServiceClient();
+
+  const duplicateGuardSince = new Date(
+    Date.now() - duplicateGuardWindowHours * 60 * 60 * 1000
+  ).toISOString();
+  const { count: runningVelocityJobs, error: runningVelocityJobsError } = await supabase
+    .from('sync_jobs')
+    .select('*', { count: 'exact', head: true })
+    .eq('job_type', 'velocity-calc')
+    .eq('status', 'running')
+    .gte('started_at', duplicateGuardSince);
+
+  if (runningVelocityJobsError) {
+    throw new Error(
+      `Failed to check for duplicate velocity jobs: ${runningVelocityJobsError.message}`
+    );
+  }
+
+  if ((runningVelocityJobs ?? 0) > 0) {
+    log.warn('Another velocity calculation job is already running, exiting early', {
+      runningVelocityJobs,
+      duplicateGuardSince,
+    });
+    return;
+  }
 
   // Create sync job record
   const { data: job } = await supabase
@@ -59,7 +125,7 @@ async function main(): Promise<void> {
       job_type: 'velocity-calc',
       github_run_id: githubRunId,
       status: 'running',
-      batch_size: 0,
+      batch_size: batchSize,
     })
     .select()
     .single();
@@ -74,29 +140,66 @@ async function main(): Promise<void> {
     log.info('Materialized view refreshed successfully', { refreshDurationMs });
 
     // 2. Update sync_status with new velocity data
-    log.info('Updating sync_status with velocity tiers');
+    log.info('Updating sync_status with velocity tiers in ordered batches');
     const tierUpdateStartedAt = Date.now();
-    const updatedCount = await updateReviewVelocityTiers();
+    let updatedCount = 0;
+    let batchCount = 0;
+    let emptyBatchCount = 0;
+    let deadlockRetries = 0;
+
+    while (emptyBatchCount < emptyBatchExitThreshold) {
+      const batchStartedAt = Date.now();
+      const batchResult = await withRetry(
+        () => updateReviewVelocityTiersBatch(batchSize),
+        {
+          initialDelayMs: idleBatchDelayMs,
+          maxRetries: 3,
+          maxDelayMs: 15000,
+          shouldRetry: isDeadlockError,
+          onRetry: (error, attempt, delayMs) => {
+            deadlockRetries += 1;
+            log.warn('Velocity batch deadlocked, retrying', {
+              attempt,
+              delayMs,
+              batchSize,
+              error: formatUnknownError(error),
+            });
+          },
+        }
+      );
+
+      batchCount += 1;
+
+      if (batchResult.updatedCount === 0) {
+        emptyBatchCount += 1;
+        if (emptyBatchCount < emptyBatchExitThreshold) {
+          await sleep(idleBatchDelayMs);
+        }
+        continue;
+      }
+
+      emptyBatchCount = 0;
+      updatedCount += batchResult.updatedCount;
+
+      log.info('Velocity tier batch applied', {
+        batchCount,
+        batchDurationMs: Date.now() - batchStartedAt,
+        updatedCount: batchResult.updatedCount,
+      });
+    }
+
     const tierUpdateDurationMs = Date.now() - tierUpdateStartedAt;
-    log.info('Velocity tiers updated', { updatedCount, tierUpdateDurationMs });
+    log.info('Velocity tiers updated', {
+      updatedCount,
+      batchCount,
+      deadlockRetries,
+      tierUpdateDurationMs,
+    });
 
     // 3. Get tier distribution for logging
-    const { data: tierStats } = await supabase
-      .from('sync_status')
-      .select('review_velocity_tier')
-      .not('review_velocity_tier', 'is', null);
+    const tierDistribution = await getReviewVelocityTierDistribution();
 
-    const tierDistribution =
-      tierStats?.reduce(
-        (acc: Record<string, number>, row) => {
-          const tier = row.review_velocity_tier || 'unknown';
-          acc[tier] = (acc[tier] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      ) ?? {};
-
-    log.info('Velocity tier distribution', tierDistribution);
+    log.info('Velocity tier distribution', { ...tierDistribution });
 
     // Update job as completed
     if (job) {

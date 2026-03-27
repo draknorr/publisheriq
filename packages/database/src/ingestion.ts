@@ -17,6 +17,17 @@ export interface ClaimedReviewApp {
   last_reviews_sync: string | null;
 }
 
+export interface ClaimAppsForReviewsSyncParams {
+  workerId: string;
+  limit: number;
+  claimTtlMinutes: number;
+  launchLimit?: number;
+  changeLimit?: number;
+  activeLimit?: number;
+  backfillLimit?: number;
+  unknownLimit?: number;
+}
+
 export interface AcquireApiRateTokenResult {
   granted: boolean;
   waitMs: number;
@@ -50,6 +61,18 @@ export interface ReviewsQueueHealth {
   oldestStuckClaimMinutes: number | null;
 }
 
+export interface VelocityTierUpdateBatchResult {
+  updatedCount: number;
+}
+
+export interface ReviewVelocityTierDistribution {
+  dormant: number;
+  high: number;
+  low: number;
+  medium: number;
+  unknown: number;
+}
+
 interface ClaimedReviewAppRow extends QueryResultRow {
   appid: number;
   lane: ReviewLane;
@@ -80,6 +103,10 @@ interface UpdateReviewVelocityTiersRow extends QueryResultRow {
   count: number | string;
 }
 
+interface UpdateReviewVelocityTiersBatchRow extends QueryResultRow {
+  updated_count: number | string;
+}
+
 interface ReviewsQueueLaneHealthRow extends QueryResultRow {
   lane: ReviewLane;
   due_count: number | string;
@@ -89,6 +116,11 @@ interface ReviewsQueueLaneHealthRow extends QueryResultRow {
 interface ReviewsQueueHealthStuckRow extends QueryResultRow {
   stuck_claim_count: number | string;
   oldest_stuck_claim_minutes: number | string | null;
+}
+
+interface ReviewVelocityTierDistributionRow extends QueryResultRow {
+  count: number | string;
+  tier: string | null;
 }
 
 const DEFAULT_POOL_MAX = 3;
@@ -111,6 +143,17 @@ export class InterpolationBatchTimeoutError extends Error {
   constructor(message: string, timeoutMs: number) {
     super(message);
     this.name = 'InterpolationBatchTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+export class ClaimAppsTimeoutError extends Error {
+  readonly code = '57014';
+  readonly timeoutMs: number;
+
+  constructor(message: string, timeoutMs: number) {
+    super(message);
+    this.name = 'ClaimAppsTimeoutError';
     this.timeoutMs = timeoutMs;
   }
 }
@@ -258,36 +301,56 @@ function isStatementTimeoutError(error: unknown): error is { code?: string; mess
   return code === '57014' || (typeof message === 'string' && message.includes('statement timeout'));
 }
 
-export async function claimAppsForReviewsSync(params: {
-  workerId: string;
-  limit: number;
-  claimTtlMinutes: number;
-}): Promise<ClaimedReviewApp[]> {
+export async function claimAppsForReviewsSync(
+  params: ClaimAppsForReviewsSyncParams
+): Promise<ClaimedReviewApp[]> {
   return withTransaction(CLAIM_TIMEOUT_MS, async (client) => {
-    const { rows } = await client.query<ClaimedReviewAppRow>(
-      `
-        SELECT
-          appid,
-          lane,
-          priority_score,
-          velocity_tier,
-          hours_overdue,
-          last_known_total_reviews,
-          last_reviews_sync
-        FROM claim_apps_for_reviews_sync($1, $2, $3)
-      `,
-      [params.workerId, params.limit, params.claimTtlMinutes]
-    );
+    try {
+      const { rows } = await client.query<ClaimedReviewAppRow>(
+        `
+          SELECT
+            appid,
+            lane,
+            priority_score,
+            velocity_tier,
+            hours_overdue,
+            last_known_total_reviews,
+            last_reviews_sync
+          FROM claim_apps_for_reviews_sync($1, $2, $3, $4, $5, $6, $7, $8)
+        `,
+        [
+          params.workerId,
+          params.limit,
+          params.claimTtlMinutes,
+          params.launchLimit ?? null,
+          params.changeLimit ?? null,
+          params.activeLimit ?? null,
+          params.backfillLimit ?? null,
+          params.unknownLimit ?? null,
+        ]
+      );
 
-    return rows.map((row: ClaimedReviewAppRow) => ({
-      appid: row.appid,
-      lane: row.lane,
-      priority_score: row.priority_score,
-      velocity_tier: row.velocity_tier,
-      hours_overdue: parseNumber(row.hours_overdue),
-      last_known_total_reviews: row.last_known_total_reviews,
-      last_reviews_sync: normalizeTimestamp(row.last_reviews_sync),
-    }));
+      return rows.map((row: ClaimedReviewAppRow) => ({
+        appid: row.appid,
+        lane: row.lane,
+        priority_score: row.priority_score,
+        velocity_tier: row.velocity_tier,
+        hours_overdue: parseNumber(row.hours_overdue),
+        last_known_total_reviews: row.last_known_total_reviews,
+        last_reviews_sync: normalizeTimestamp(row.last_reviews_sync),
+      }));
+    } catch (error) {
+      if (isStatementTimeoutError(error)) {
+        const message =
+          error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+            ? error.message
+            : `claim_apps_for_reviews_sync exceeded ${CLAIM_TIMEOUT_MS}ms`;
+
+        throw new ClaimAppsTimeoutError(message, CLAIM_TIMEOUT_MS);
+      }
+
+      throw error;
+    }
   });
 }
 
@@ -405,6 +468,53 @@ export async function updateReviewVelocityTiers(): Promise<number> {
   });
 }
 
+export async function updateReviewVelocityTiersBatch(
+  batchLimit = 1000
+): Promise<VelocityTierUpdateBatchResult> {
+  return withTransaction(VELOCITY_UPDATE_TIMEOUT_MS, async (client) => {
+    const { rows } = await client.query<UpdateReviewVelocityTiersBatchRow>(
+      `
+        SELECT updated_count
+        FROM update_review_velocity_tiers_batch($1)
+      `,
+      [batchLimit]
+    );
+
+    return {
+      updatedCount: parseNumber(rows[0]?.updated_count),
+    };
+  });
+}
+
+export async function getReviewVelocityTierDistribution(): Promise<ReviewVelocityTierDistribution> {
+  return withTransaction(QUEUE_HEALTH_TIMEOUT_MS, async (client) => {
+    const { rows } = await client.query<ReviewVelocityTierDistributionRow>(`
+      SELECT
+        COALESCE(review_velocity_tier, 'unknown') AS tier,
+        COUNT(*)::INT AS count
+      FROM sync_status
+      GROUP BY COALESCE(review_velocity_tier, 'unknown')
+    `);
+
+    const distribution: ReviewVelocityTierDistribution = {
+      dormant: 0,
+      high: 0,
+      low: 0,
+      medium: 0,
+      unknown: 0,
+    };
+
+    for (const row of rows) {
+      const tier = (row.tier ?? 'unknown') as keyof ReviewVelocityTierDistribution;
+      if (tier in distribution) {
+        distribution[tier] = parseNumber(row.count);
+      }
+    }
+
+    return distribution;
+  });
+}
+
 export async function getReviewsQueueHealth(): Promise<ReviewsQueueHealth> {
   return withTransaction(QUEUE_HEALTH_TIMEOUT_MS, async (client) => {
     const { rows: laneRows } = await client.query<ReviewsQueueLaneHealthRow>(`
@@ -419,20 +529,16 @@ export async function getReviewsQueueHealth(): Promise<ReviewsQueueHealth> {
                  AND (a.release_date IS NULL OR a.release_date >= CURRENT_DATE - INTERVAL '7 days')
             THEN 'launch_critical'
             WHEN COALESCE(s.review_velocity_tier, 'unknown') IN ('high', 'medium')
-                 OR COALESCE(at.review_velocity_7d, s.velocity_7d, 0) >= 1
+                 OR COALESCE(s.velocity_7d, 0) >= 1
             THEN 'active_reviews'
             WHEN COALESCE(s.priority_score, 0) >= 50
-                 OR COALESCE(ct.ccu_tier, 99) IN (1, 2)
-                 OR COALESCE(ldm.total_reviews, s.last_known_total_reviews, 0) >= 1000
+                 OR COALESCE(s.last_known_total_reviews, 0) >= 1000
             THEN 'important_backfill'
             ELSE 'unknown_sweep'
           END::TEXT AS lane,
           EXTRACT(EPOCH FROM (NOW() - COALESCE(s.next_reviews_sync, NOW()))) / 3600.0 AS hours_overdue
         FROM sync_status s
         LEFT JOIN apps a ON a.appid = s.appid
-        LEFT JOIN app_trends at ON at.appid = s.appid
-        LEFT JOIN latest_daily_metrics ldm ON ldm.appid = s.appid
-        LEFT JOIN ccu_tier_assignments ct ON ct.appid = s.appid
         WHERE s.is_syncable = TRUE
           AND (s.next_reviews_sync IS NULL OR s.next_reviews_sync <= NOW())
           AND (s.reviews_claim_expires_at IS NULL OR s.reviews_claim_expires_at <= NOW())

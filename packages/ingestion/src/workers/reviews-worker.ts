@@ -11,6 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import { getServiceClient } from '@publisheriq/database';
 import {
+  ClaimAppsTimeoutError,
   acquireApiRateToken as acquireSharedApiRateToken,
   claimAppsForReviewsSync as claimReviewApps,
   releaseReviewClaims as releaseClaimedReviewApps,
@@ -20,6 +21,7 @@ import {
 import { logger, BATCH_SIZES } from '@publisheriq/shared';
 import pLimit from 'p-limit';
 import { fetchReviewSummary } from '../apis/reviews.js';
+import { withRetry } from '../utils/retry.js';
 
 const log = logger.child({ worker: 'reviews-sync' });
 
@@ -29,6 +31,12 @@ const DEFAULT_CLAIM_TTL_MINUTES = 15;
 const DEFAULT_MAX_RUNTIME_MINUTES = 45;
 const DEFAULT_EMPTY_CLAIM_EXIT_THRESHOLD = 3;
 const DEFAULT_IDLE_DELAY_MS = 1500;
+const DEFAULT_LAUNCH_LIMIT = 25;
+const DEFAULT_CHANGE_LIMIT = 20;
+const DEFAULT_ACTIVE_LIMIT = 35;
+const DEFAULT_BACKFILL_LIMIT = 19;
+const DEFAULT_UNKNOWN_LIMIT = 1;
+const DEFAULT_CLAIM_TIMEOUT_RETRIES = 3;
 
 type SupabaseClient = ReturnType<typeof getServiceClient>;
 
@@ -46,19 +54,17 @@ interface SyncStats {
   claimLatencyMsTotal: number;
   claimLatencySamples: number;
   lastClaimLatencyMs: number;
+  claimTimeouts: number;
+  consecutiveClaimTimeouts: number;
   laneClaims: Record<ReviewLane, number>;
 }
 
 interface PreviousSyncData {
+  intervalHours: number;
   totalReviews: number;
   positiveReviews: number;
   lastSync: Date | null;
   consecutiveErrors: number;
-}
-
-interface VelocityTierResult {
-  tier: string;
-  intervalHours: number;
 }
 
 function getDb(supabase: SupabaseClient): any {
@@ -85,25 +91,32 @@ function formatUnknownError(error: unknown): string {
   return String(error);
 }
 
-function calculateVelocityTier(dailyVelocity: number): VelocityTierResult {
-  if (dailyVelocity >= 5) {
-    return { tier: 'high', intervalHours: 4 };
-  }
-
-  if (dailyVelocity >= 1) {
-    return { tier: 'medium', intervalHours: 12 };
-  }
-
-  if (dailyVelocity >= 0.1) {
-    return { tier: 'low', intervalHours: 24 };
-  }
-
-  return { tier: 'dormant', intervalHours: 72 };
-}
-
 function calculateFailureBackoffMinutes(consecutiveErrors: number): number {
   const cappedErrors = Math.max(1, Math.min(consecutiveErrors, 6));
   return Math.min(15 * 2 ** (cappedErrors - 1), 360);
+}
+
+function getIntervalHoursForVelocityTier(velocityTier: string | null | undefined): number {
+  switch (velocityTier) {
+    case 'high':
+      return 4;
+    case 'medium':
+      return 12;
+    case 'low':
+      return 24;
+    case 'dormant':
+      return 72;
+    default:
+      return 24;
+  }
+}
+
+function normalizeIntervalHours(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return 24;
+  }
+
+  return Math.max(1, Math.round(value));
 }
 
 function createEmptyLaneCounts(): Record<ReviewLane, number> {
@@ -173,7 +186,9 @@ async function loadPreviousSyncData(
 ): Promise<{ previousSyncData: Map<number, PreviousSyncData>; neverSyncedSet: Set<number> }> {
   const { data: syncStatuses, error: syncError } = await getDb(supabase)
     .from('sync_status')
-    .select('appid, last_reviews_sync, last_known_total_reviews, consecutive_errors')
+    .select(
+      'appid, last_reviews_sync, last_known_total_reviews, consecutive_errors, reviews_interval_hours'
+    )
     .in('appid', appIds);
 
   if (syncError) {
@@ -194,6 +209,7 @@ async function loadPreviousSyncData(
 
   for (const status of syncStatuses ?? []) {
     previousSyncData.set(status.appid, {
+      intervalHours: normalizeIntervalHours(status.reviews_interval_hours),
       totalReviews: status.last_known_total_reviews ?? 0,
       positiveReviews: 0,
       lastSync: status.last_reviews_sync ? new Date(status.last_reviews_sync) : null,
@@ -292,12 +308,8 @@ async function processApp(
       ? (Date.now() - lastSyncTime.getTime()) / (1000 * 60 * 60)
       : null;
 
-    const dailyVelocity =
-      hoursSinceLastSync && hoursSinceLastSync > 0
-        ? (reviewsAdded * 24) / hoursSinceLastSync
-        : 0;
-
-    const { tier, intervalHours } = calculateVelocityTier(dailyVelocity);
+    const intervalHours =
+      previous?.intervalHours ?? getIntervalHoursForVelocityTier(app.velocity_tier);
     const nextSync = new Date(Date.now() + intervalHours * 60 * 60 * 1000);
     const nowIso = new Date().toISOString();
 
@@ -342,8 +354,6 @@ async function processApp(
     const syncUpdate: Record<string, unknown> = {
       last_reviews_sync: nowIso,
       next_reviews_sync: nextSync.toISOString(),
-      reviews_interval_hours: intervalHours,
-      review_velocity_tier: tier,
       last_known_total_reviews: summary.totalReviews,
       consecutive_errors: 0,
       last_error_source: null,
@@ -409,6 +419,21 @@ async function main(): Promise<void> {
     process.env.MAX_RUNTIME_MINUTES || `${DEFAULT_MAX_RUNTIME_MINUTES}`,
     10
   );
+  const launchLimit = parseInt(process.env.REVIEWS_LAUNCH_LIMIT || `${DEFAULT_LAUNCH_LIMIT}`, 10);
+  const changeLimit = parseInt(process.env.REVIEWS_CHANGE_LIMIT || `${DEFAULT_CHANGE_LIMIT}`, 10);
+  const activeLimit = parseInt(process.env.REVIEWS_ACTIVE_LIMIT || `${DEFAULT_ACTIVE_LIMIT}`, 10);
+  const backfillLimit = parseInt(
+    process.env.REVIEWS_BACKFILL_LIMIT || `${DEFAULT_BACKFILL_LIMIT}`,
+    10
+  );
+  const unknownLimit = parseInt(
+    process.env.REVIEWS_UNKNOWN_LIMIT || `${DEFAULT_UNKNOWN_LIMIT}`,
+    10
+  );
+  const claimTimeoutRetries = parseInt(
+    process.env.CLAIM_TIMEOUT_RETRIES || `${DEFAULT_CLAIM_TIMEOUT_RETRIES}`,
+    10
+  );
   const emptyClaimExitThreshold = parseInt(
     process.env.EMPTY_CLAIM_EXIT_THRESHOLD || `${DEFAULT_EMPTY_CLAIM_EXIT_THRESHOLD}`,
     10
@@ -422,6 +447,13 @@ async function main(): Promise<void> {
     maxAppsToProcess,
     claimBatchSize,
     claimTtlMinutes,
+    laneLimits: {
+      launch: launchLimit,
+      change: changeLimit,
+      active: activeLimit,
+      backfill: backfillLimit,
+      unknown: unknownLimit,
+    },
     maxRuntimeMinutes,
   });
 
@@ -452,6 +484,8 @@ async function main(): Promise<void> {
     claimLatencyMsTotal: 0,
     claimLatencySamples: 0,
     lastClaimLatencyMs: 0,
+    claimTimeouts: 0,
+    consecutiveClaimTimeouts: 0,
     laneClaims: createEmptyLaneCounts(),
   };
 
@@ -461,6 +495,10 @@ async function main(): Promise<void> {
   const progressInterval = setInterval(() => {
     log.info('Reviews sync progress', {
       ...stats,
+      avgClaimLatencyMs:
+        stats.claimLatencySamples > 0
+          ? Number((stats.claimLatencyMsTotal / stats.claimLatencySamples).toFixed(1))
+          : 0,
       tokenWaitSeconds: Number((stats.tokenWaitMs / 1000).toFixed(1)),
       elapsedMinutes: Number(((Date.now() - startTime) / 1000 / 60).toFixed(1)),
       remainingMinutes: Number(
@@ -480,12 +518,38 @@ async function main(): Promise<void> {
       stats.claimsRequested += requestLimit;
 
       const claimStartedAt = Date.now();
-      const claimedApps = await claimReviewApps({
-        workerId,
-        limit: requestLimit,
-        claimTtlMinutes,
-      });
+      const claimedApps = await withRetry(
+        () =>
+          claimReviewApps({
+            workerId,
+            limit: requestLimit,
+            claimTtlMinutes,
+            launchLimit,
+            changeLimit,
+            activeLimit,
+            backfillLimit,
+            unknownLimit,
+          }),
+        {
+          initialDelayMs: Math.max(idleDelayMs * 4, 5000),
+          maxRetries: Math.max(0, claimTimeoutRetries),
+          maxDelayMs: 20000,
+          shouldRetry: (error) => error instanceof ClaimAppsTimeoutError,
+          onRetry: (error, attempt, delayMs) => {
+            stats.claimTimeouts += 1;
+            stats.consecutiveClaimTimeouts += 1;
+            log.warn('Claim batch timed out, retrying', {
+              attempt,
+              delayMs,
+              requestLimit,
+              workerId,
+              error: formatUnknownError(error),
+            });
+          },
+        }
+      );
       const claimLatencyMs = Date.now() - claimStartedAt;
+      stats.consecutiveClaimTimeouts = 0;
 
       stats.claimLatencyMsTotal += claimLatencyMs;
       stats.claimLatencySamples += 1;
