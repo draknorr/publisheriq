@@ -4,9 +4,10 @@ import { claimCaptureQueue, enqueueCaptureJobs, requeueStaleCaptureClaims } from
 
 interface QueueRpcArgs {
   p_jobs: Array<Record<string, unknown>>;
+  p_cooldown_hours?: number;
 }
 
-test('enqueueCaptureJobs delegates dedupe-safe inserts to enqueue_app_capture_queue', async () => {
+test('enqueueCaptureJobs delegates dedupe-safe inserts to mark_app_capture_work_dirty', async () => {
   let rpcName: string | null = null;
   let rpcArgs: QueueRpcArgs | null = null;
 
@@ -37,11 +38,13 @@ test('enqueueCaptureJobs delegates dedupe-safe inserts to enqueue_app_capture_qu
   ]);
 
   assert.equal(inserted, 1);
-  assert.equal(rpcName, 'enqueue_app_capture_queue');
+  assert.equal(rpcName, 'mark_app_capture_work_dirty');
   if (!rpcArgs) {
-    throw new Error('Expected enqueue_app_capture_queue RPC to be called');
+    throw new Error('Expected mark_app_capture_work_dirty RPC to be called');
   }
-  const queueRows = (rpcArgs as QueueRpcArgs).p_jobs;
+  const capturedArgs = rpcArgs as QueueRpcArgs;
+  const queueRows = capturedArgs.p_jobs;
+  assert.equal(capturedArgs.p_cooldown_hours, 6);
   assert.equal(queueRows.length, 2);
   assert.deepEqual(queueRows[0], {
     appid: 10,
@@ -50,7 +53,6 @@ test('enqueueCaptureJobs delegates dedupe-safe inserts to enqueue_app_capture_qu
     trigger_reason: 'steam_app_change_hint',
     trigger_cursor: '123:456',
     payload: { source: 'hint' },
-    available_at: queueRows[0].available_at,
   });
   assert.deepEqual(queueRows[1], {
     appid: 10,
@@ -59,10 +61,7 @@ test('enqueueCaptureJobs delegates dedupe-safe inserts to enqueue_app_capture_qu
     trigger_reason: 'stale_news_catchup',
     trigger_cursor: '',
     payload: {},
-    available_at: queueRows[0].available_at,
   });
-  assert.ok(typeof queueRows[0].available_at === 'string');
-  assert.ok(!Number.isNaN(Date.parse(String(queueRows[0].available_at))));
 });
 
 test('enqueueCaptureJobs returns zero without issuing an RPC for empty batches', async () => {
@@ -101,39 +100,11 @@ test('enqueueCaptureJobs surfaces RPC errors', async () => {
   );
 });
 
-test('requeueStaleCaptureClaims requeues stale claimed rows through complete_app_capture_queue', async () => {
+test('requeueStaleCaptureClaims requeues stale claimed rows through requeue_stale_app_capture_work', async () => {
   let rpcName: string | null = null;
   let rpcArgs: Record<string, unknown> | null = null;
 
-  const query = {
-    select() {
-      return query;
-    },
-    eq() {
-      return query;
-    },
-    in() {
-      return query;
-    },
-    lt() {
-      return query;
-    },
-    order() {
-      return query;
-    },
-    limit() {
-      return Promise.resolve({
-        data: [{ id: 41 }, { id: 42 }],
-        error: null,
-      });
-    },
-  };
-
   const supabase = {
-    from(table: string) {
-      assert.equal(table, 'app_capture_queue');
-      return query;
-    },
     rpc(name: string, args: Record<string, unknown>) {
       rpcName = name;
       rpcArgs = args;
@@ -144,44 +115,18 @@ test('requeueStaleCaptureClaims requeues stale claimed rows through complete_app
   const requeued = await requeueStaleCaptureClaims(supabase, ['storefront', 'news'], '2026-03-14T09:00:00.000Z', 100);
 
   assert.equal(requeued, 2);
-  assert.equal(rpcName, 'complete_app_capture_queue');
+  assert.equal(rpcName, 'requeue_stale_app_capture_work');
   assert.deepEqual(rpcArgs, {
-    p_ids: [41, 42],
-    p_status: 'queued',
-    p_error: 'stale_claim_requeued',
+    p_sources: ['storefront', 'news'],
+    p_claimed_before: '2026-03-14T09:00:00.000Z',
+    p_limit: 100,
   });
 });
 
-test('requeueStaleCaptureClaims skips completion when no stale rows were found', async () => {
+test('requeueStaleCaptureClaims returns zero when the stale-claim RPC finds nothing to requeue', async () => {
   let rpcCalled = false;
-  const query = {
-    select() {
-      return query;
-    },
-    eq() {
-      return query;
-    },
-    in() {
-      return query;
-    },
-    lt() {
-      return query;
-    },
-    order() {
-      return query;
-    },
-    limit() {
-      return Promise.resolve({
-        data: [],
-        error: null,
-      });
-    },
-  };
 
   const supabase = {
-    from() {
-      return query;
-    },
     rpc() {
       rpcCalled = true;
       return Promise.resolve({ data: 0, error: null });
@@ -191,7 +136,7 @@ test('requeueStaleCaptureClaims skips completion when no stale rows were found',
   const requeued = await requeueStaleCaptureClaims(supabase, ['hero_asset'], '2026-03-14T09:00:00.000Z', 100);
 
   assert.equal(requeued, 0);
-  assert.equal(rpcCalled, false);
+  assert.equal(rpcCalled, true);
 });
 
 test('claimCaptureQueue retries transient RPC failures before succeeding', async () => {

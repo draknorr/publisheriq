@@ -2,8 +2,8 @@ name: Storefront Details Sync
 
 on:
   schedule:
-    # Run every 30 minutes for continuous sync
-    - cron: '0,30 * * * *'
+    # Run every 2 hours; hint-driven change-intel now carries the changed-app freshness SLA.
+    - cron: '0 */2 * * *'
   workflow_dispatch:
     inputs:
       batch_size:

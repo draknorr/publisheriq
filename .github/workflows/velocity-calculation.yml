@@ -2,8 +2,8 @@ name: Velocity Calculation
 
 on:
   schedule:
-    # Run hourly so review lane decisions track recent review and launch signals.
-    - cron: '50 * * * *'
+    # Run every 6 hours; hourly recalculation was adding shared-pool load without matching user-facing value.
+    - cron: '50 */6 * * *'
   workflow_dispatch:
 
 env:

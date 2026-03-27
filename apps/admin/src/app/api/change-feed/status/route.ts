@@ -165,16 +165,18 @@ export async function GET() {
       latestProjectionRefreshResult,
     ] = await Promise.all([
       db
-        .from('app_capture_queue')
+        .from('app_capture_work_state')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'queued')
+        .not('dirty_since', 'is', null)
+        .is('dead_lettered_at', null)
         .in('source', ['storefront', 'news']),
       db
-        .from('app_capture_queue')
-        .select('available_at')
-        .eq('status', 'queued')
+        .from('app_capture_work_state')
+        .select('dirty_since')
+        .not('dirty_since', 'is', null)
+        .is('dead_lettered_at', null)
         .in('source', ['storefront', 'news'])
-        .order('available_at', { ascending: true })
+        .order('dirty_since', { ascending: true })
         .limit(1)
         .maybeSingle(),
       db
@@ -192,16 +194,18 @@ export async function GET() {
         .limit(1)
         .maybeSingle(),
       db
-        .from('app_capture_queue')
+        .from('app_capture_work_state')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'queued')
+        .not('dirty_since', 'is', null)
+        .is('dead_lettered_at', null)
         .eq('source', 'projection_refresh'),
       db
-        .from('app_capture_queue')
-        .select('available_at')
-        .eq('status', 'queued')
+        .from('app_capture_work_state')
+        .select('dirty_since')
+        .not('dirty_since', 'is', null)
+        .is('dead_lettered_at', null)
         .eq('source', 'projection_refresh')
-        .order('available_at', { ascending: true })
+        .order('dirty_since', { ascending: true })
         .limit(1)
         .maybeSingle(),
       db
@@ -229,11 +233,11 @@ export async function GET() {
 
     const status = determineState(
       queuedJobsResult.count ?? 0,
-      oldestQueuedResult.data?.available_at ?? null,
+      oldestQueuedResult.data?.dirty_since ?? null,
       latestStorefrontResult.data?.occurred_at ?? null,
       latestNewsResult.data?.occurred_at ?? null,
       projectionQueuedJobsResult.count ?? 0,
-      oldestProjectionQueuedResult.data?.available_at ?? null,
+      oldestProjectionQueuedResult.data?.dirty_since ?? null,
       latestProjectionRefreshResult.data?.updated_at ?? null
     );
 

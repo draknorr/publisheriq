@@ -2,8 +2,8 @@ name: Reviews Sync
 
 on:
   schedule:
-    # Run hourly so launch/change promotions land within the next claim window.
-    - cron: '15 * * * *'
+    # Run every 2 hours; launch/change promotions still land quickly without hourly pooler churn.
+    - cron: '15 */2 * * *'
   workflow_dispatch:
     inputs:
       batch_size:

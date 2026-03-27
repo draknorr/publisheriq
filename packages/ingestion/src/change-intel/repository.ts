@@ -51,6 +51,10 @@ function getSupabaseRetryDelayMs(): number {
   return Math.max(25, parseInt(process.env.CHANGE_INTEL_SUPABASE_RETRY_DELAY_MS || `${DEFAULT_SUPABASE_RETRY_DELAY_MS}`, 10));
 }
 
+function getCaptureDirtyWindowHours(): number {
+  return Math.max(1, parseInt(process.env.CHANGE_INTEL_DIRTY_WINDOW_HOURS || '6', 10));
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -454,8 +458,7 @@ export async function enqueueCaptureJobs(
     return 0;
   }
 
-  const availableAt = new Date().toISOString();
-  const { data, error } = await getDb(supabase).rpc('enqueue_app_capture_queue', {
+  const { data, error } = await getDb(supabase).rpc('mark_app_capture_work_dirty', {
     p_jobs: jobs.map((job) => ({
       appid: job.appid,
       source: job.source,
@@ -463,8 +466,8 @@ export async function enqueueCaptureJobs(
       trigger_reason: job.triggerReason,
       trigger_cursor: job.triggerCursor ?? '',
       payload: job.payload ?? {},
-      available_at: availableAt,
     })),
+    p_cooldown_hours: getCaptureDirtyWindowHours(),
   });
 
   if (error) {
@@ -569,9 +572,9 @@ export async function claimCaptureQueue(
   workerId: string
 ): Promise<CaptureQueueJob[]> {
   const { data, error } = await runSupabaseOperation<Array<Record<string, unknown>> | null>(
-    'claim_app_capture_queue',
+    'claim_app_capture_work',
     () =>
-      getDb(supabase).rpc('claim_app_capture_queue', {
+      getDb(supabase).rpc('claim_app_capture_work', {
         p_sources: sources,
         p_worker_id: workerId,
         p_limit: limit,
@@ -602,16 +605,17 @@ export async function completeCaptureQueueItems(
     return;
   }
 
-  const { error } = await runSupabaseOperation('complete_app_capture_queue', () =>
-    getDb(supabase).rpc('complete_app_capture_queue', {
+  const { error } = await runSupabaseOperation('complete_app_capture_work', () =>
+    getDb(supabase).rpc('complete_app_capture_work', {
       p_ids: jobIds.map(Number),
       p_status: status,
       p_error: errorMessage ?? null,
+      p_cooldown_hours: getCaptureDirtyWindowHours(),
     })
   );
 
   if (error) {
-    throw new Error(`Failed to complete app capture queue jobs: ${error.message}`);
+    throw new Error(`Failed to complete app capture work items: ${error.message}`);
   }
 }
 
@@ -626,30 +630,21 @@ export async function requeueStaleCaptureClaims(
   }
 
   const boundedLimit = Math.max(1, Math.min(limit, 500));
-  const { data, error } = await runSupabaseOperation<Array<{ id: number }> | null>(
-    'select_stale_app_capture_claims',
+  const { data, error } = await runSupabaseOperation<number | null>(
+    'requeue_stale_app_capture_work',
     () =>
-      getDb(supabase)
-        .from('app_capture_queue')
-        .select('id')
-        .eq('status', 'claimed')
-        .in('source', sources)
-        .lt('claimed_at', claimedBeforeIso)
-        .order('claimed_at', { ascending: true })
-        .limit(boundedLimit)
+      getDb(supabase).rpc('requeue_stale_app_capture_work', {
+        p_sources: sources,
+        p_claimed_before: claimedBeforeIso,
+        p_limit: boundedLimit,
+      })
   );
 
   if (error) {
-    throw new Error(`Failed to fetch stale app capture queue claims: ${error.message}`);
+    throw new Error(`Failed to requeue stale app capture work items: ${error.message}`);
   }
 
-  const staleIds = (data ?? []).map((row: { id: number }) => String(row.id));
-  if (staleIds.length === 0) {
-    return 0;
-  }
-
-  await completeCaptureQueueItems(supabase, staleIds, 'queued', 'stale_claim_requeued');
-  return staleIds.length;
+  return Number(data ?? 0);
 }
 
 export async function updateSyncStatusFields(
