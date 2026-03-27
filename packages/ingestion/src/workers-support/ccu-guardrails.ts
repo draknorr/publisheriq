@@ -1,12 +1,18 @@
 import { getServiceClient } from '@publisheriq/database';
+import { logger } from '@publisheriq/shared';
 
 const TIER_ASSIGNMENT_STALE_HOURS = 24;
 const SUSPICIOUS_ZERO_REVIEW_THRESHOLD = 1000;
 const SUSPICIOUS_ZERO_RELEASE_WINDOW_DAYS = 180;
 const RECENT_CCU_ACTIVITY_WINDOW_DAYS = 30;
 const APPID_CHUNK_SIZE = 250;
+const SUSPICIOUS_ZERO_RPC = 'get_suspicious_zero_appids';
 
 type ServiceClient = ReturnType<typeof getServiceClient>;
+type QueryError = { message?: string } | null;
+type QueryResponse<T> = { data: T[] | null; error: QueryError };
+
+const log = logger.child({ component: 'ccu-guardrails' });
 
 function chunkAppids(appids: number[], chunkSize: number = APPID_CHUNK_SIZE): number[][] {
   const chunks: number[][] = [];
@@ -16,6 +22,189 @@ function chunkAppids(appids: number[], chunkSize: number = APPID_CHUNK_SIZE): nu
   }
 
   return chunks;
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function appendNumericAppids(target: Set<number>, appids: Iterable<unknown>): void {
+  for (const appid of appids) {
+    const parsedAppid = typeof appid === 'number' ? appid : Number(appid);
+    if (Number.isInteger(parsedAppid)) {
+      target.add(parsedAppid);
+    }
+  }
+}
+
+function readSettledRows<T>(
+  source: string,
+  result: PromiseSettledResult<QueryResponse<T>>,
+  chunkSize: number
+): T[] {
+  if (result.status === 'rejected') {
+    log.warn('Suspicious zero lookup query rejected; continuing without this source', {
+      source,
+      chunkSize,
+      error: describeError(result.reason),
+    });
+    return [];
+  }
+
+  if (result.value.error) {
+    log.warn('Suspicious zero lookup query failed; continuing without this source', {
+      source,
+      chunkSize,
+      error: result.value.error.message ?? 'Unknown error',
+    });
+    return [];
+  }
+
+  return result.value.data ?? [];
+}
+
+function didSettledQueryDegrade<T>(result: PromiseSettledResult<QueryResponse<T>>): boolean {
+  return result.status === 'rejected' || !!result.value.error;
+}
+
+async function getSuspiciousZeroAppidsViaRpc(
+  supabase: ServiceClient,
+  appids: number[]
+): Promise<Set<number> | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc(SUSPICIOUS_ZERO_RPC, {
+      p_appids: appids,
+    });
+
+    if (error) {
+      log.warn('Suspicious zero RPC unavailable; falling back to chunked lookup', {
+        appids: appids.length,
+        error: error.message ?? 'Unknown error',
+      });
+      return null;
+    }
+
+    const suspicious = new Set<number>();
+    appendNumericAppids(suspicious, Array.isArray(data) ? data : []);
+    return suspicious;
+  } catch (error) {
+    log.warn('Suspicious zero RPC threw; falling back to chunked lookup', {
+      appids: appids.length,
+      error: describeError(error),
+    });
+    return null;
+  }
+}
+
+async function getSuspiciousZeroAppidsViaFallback(
+  supabase: ServiceClient,
+  uniqueAppids: number[]
+): Promise<Set<number>> {
+  const suspicious = new Set<number>();
+  const recentReleaseCutoff = new Date();
+  recentReleaseCutoff.setDate(recentReleaseCutoff.getDate() - SUSPICIOUS_ZERO_RELEASE_WINDOW_DAYS);
+
+  const ccuWindowStart = new Date();
+  ccuWindowStart.setDate(ccuWindowStart.getDate() - RECENT_CCU_ACTIVITY_WINDOW_DAYS);
+
+  let degradedChunks = 0;
+
+  for (const appidChunk of chunkAppids(uniqueAppids)) {
+    const [appsResult, latestMetricsResult, dailyMetricsResult, snapshotsResult] =
+      await Promise.allSettled([
+        supabase
+          .from('apps')
+          .select('appid, release_date')
+          .in('appid', appidChunk),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('latest_daily_metrics')
+          .select('appid, total_reviews')
+          .in('appid', appidChunk),
+        supabase
+          .from('daily_metrics')
+          .select('appid')
+          .in('appid', appidChunk)
+          .gte('metric_date', ccuWindowStart.toISOString().slice(0, 10))
+          .gt('ccu_peak', 0),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('ccu_snapshots')
+          .select('appid')
+          .in('appid', appidChunk)
+          .gte('snapshot_time', ccuWindowStart.toISOString())
+          .gt('player_count', 0),
+      ]);
+
+    const appsRows = readSettledRows<{ appid: number; release_date: string | null }>(
+      'apps',
+      appsResult,
+      appidChunk.length
+    );
+    const latestMetricsRows = readSettledRows<{ appid: number; total_reviews: number | null }>(
+      'latest_daily_metrics',
+      latestMetricsResult,
+      appidChunk.length
+    );
+    const dailyMetricsRows = readSettledRows<{ appid: number }>(
+      'daily_metrics',
+      dailyMetricsResult,
+      appidChunk.length
+    );
+    const snapshotRows = readSettledRows<{ appid: number }>(
+      'ccu_snapshots',
+      snapshotsResult,
+      appidChunk.length
+    );
+
+    const chunkDegraded = [
+      appsResult,
+      latestMetricsResult,
+      dailyMetricsResult,
+      snapshotsResult,
+    ].some(didSettledQueryDegrade);
+
+    if (chunkDegraded) {
+      degradedChunks++;
+    }
+
+    for (const row of appsRows) {
+      if (row.release_date && row.release_date >= recentReleaseCutoff.toISOString().slice(0, 10)) {
+        suspicious.add(row.appid);
+      }
+    }
+
+    for (const row of latestMetricsRows) {
+      if ((row.total_reviews ?? 0) >= SUSPICIOUS_ZERO_REVIEW_THRESHOLD) {
+        suspicious.add(row.appid);
+      }
+    }
+
+    appendNumericAppids(
+      suspicious,
+      dailyMetricsRows.map((row) => row.appid)
+    );
+    appendNumericAppids(
+      suspicious,
+      snapshotRows.map((row) => row.appid)
+    );
+  }
+
+  if (degradedChunks > 0) {
+    log.warn('Suspicious zero lookup degraded; continuing with partial guardrail results', {
+      appids: uniqueAppids.length,
+      suspiciousCount: suspicious.size,
+      degradedChunks,
+      totalChunks: Math.ceil(uniqueAppids.length / APPID_CHUNK_SIZE),
+    });
+  }
+
+  return suspicious;
 }
 
 export async function isTierAssignmentsStale(
@@ -48,77 +237,23 @@ export async function getSuspiciousZeroAppids(
   appids: number[]
 ): Promise<Set<number>> {
   const uniqueAppids = Array.from(new Set(appids));
-  const suspicious = new Set<number>();
 
   if (uniqueAppids.length === 0) {
-    return suspicious;
+    return new Set<number>();
   }
 
-  const recentReleaseCutoff = new Date();
-  recentReleaseCutoff.setDate(recentReleaseCutoff.getDate() - SUSPICIOUS_ZERO_RELEASE_WINDOW_DAYS);
-
-  const ccuWindowStart = new Date();
-  ccuWindowStart.setDate(ccuWindowStart.getDate() - RECENT_CCU_ACTIVITY_WINDOW_DAYS);
-
-  for (const appidChunk of chunkAppids(uniqueAppids)) {
-    const [appsResult, latestMetricsResult, dailyMetricsResult, snapshotsResult] = await Promise.all([
-      supabase
-        .from('apps')
-        .select('appid, release_date')
-        .in('appid', appidChunk),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
-        .from('latest_daily_metrics')
-        .select('appid, total_reviews')
-        .in('appid', appidChunk),
-      supabase
-        .from('daily_metrics')
-        .select('appid')
-        .in('appid', appidChunk)
-        .gte('metric_date', ccuWindowStart.toISOString().slice(0, 10))
-        .gt('ccu_peak', 0),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
-        .from('ccu_snapshots')
-        .select('appid')
-        .in('appid', appidChunk)
-        .gte('snapshot_time', ccuWindowStart.toISOString())
-        .gt('player_count', 0),
-    ]);
-
-    if (appsResult.error) {
-      throw new Error(`Failed to inspect app release dates for zero guard: ${appsResult.error.message}`);
-    }
-    if (latestMetricsResult.error) {
-      throw new Error(`Failed to inspect latest metrics for zero guard: ${latestMetricsResult.error.message}`);
-    }
-    if (dailyMetricsResult.error) {
-      throw new Error(`Failed to inspect recent daily metrics for zero guard: ${dailyMetricsResult.error.message}`);
-    }
-    if (snapshotsResult.error) {
-      throw new Error(`Failed to inspect recent CCU snapshots for zero guard: ${snapshotsResult.error.message}`);
-    }
-
-    for (const row of appsResult.data ?? []) {
-      if (row.release_date && row.release_date >= recentReleaseCutoff.toISOString().slice(0, 10)) {
-        suspicious.add(row.appid);
-      }
-    }
-
-    for (const row of latestMetricsResult.data ?? []) {
-      if ((row.total_reviews ?? 0) >= SUSPICIOUS_ZERO_REVIEW_THRESHOLD) {
-        suspicious.add(row.appid);
-      }
-    }
-
-    for (const row of dailyMetricsResult.data ?? []) {
-      suspicious.add(row.appid);
-    }
-
-    for (const row of snapshotsResult.data ?? []) {
-      suspicious.add(row.appid);
-    }
+  const suspiciousViaRpc = await getSuspiciousZeroAppidsViaRpc(supabase, uniqueAppids);
+  if (suspiciousViaRpc) {
+    return suspiciousViaRpc;
   }
 
-  return suspicious;
+  try {
+    return await getSuspiciousZeroAppidsViaFallback(supabase, uniqueAppids);
+  } catch (error) {
+    log.warn('Suspicious zero lookup failed completely; continuing without guardrail results', {
+      appids: uniqueAppids.length,
+      error: describeError(error),
+    });
+    return new Set<number>();
+  }
 }
