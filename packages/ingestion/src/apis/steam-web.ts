@@ -168,6 +168,22 @@ export async function fetchAppNews(
   const response = await withRetry(async () => {
     const res = await fetch(url.toString());
 
+    // Steam returns 403 with an empty body for some delisted or inaccessible apps.
+    // Treat that as "no accessible news" so workers do not burn through 5 queue retries.
+    if (res.status === 403) {
+      log.info('Steam news inaccessible for app; treating as empty response', {
+        appid,
+        url: url.toString(),
+      });
+      return {
+        appnews: {
+          appid,
+          newsitems: [],
+          count: 0,
+        },
+      } satisfies NewsResponse;
+    }
+
     if (!res.ok) {
       throw new ApiError(`Failed to fetch news for app ${appid}`, res.status, url.toString());
     }
