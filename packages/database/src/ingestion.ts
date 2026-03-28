@@ -65,6 +65,12 @@ export interface VelocityTierUpdateBatchResult {
   updatedCount: number;
 }
 
+export interface RecalculateCcuTiersResult {
+  tier1Count: number;
+  tier2Count: number;
+  tier3Count: number;
+}
+
 export interface ReviewVelocityTierDistribution {
   dormant: number;
   high: number;
@@ -107,6 +113,12 @@ interface UpdateReviewVelocityTiersBatchRow extends QueryResultRow {
   updated_count: number | string;
 }
 
+interface RecalculateCcuTiersRow extends QueryResultRow {
+  tier1_count: number | string;
+  tier2_count: number | string;
+  tier3_count: number | string;
+}
+
 interface ReviewsQueueLaneHealthRow extends QueryResultRow {
   lane: ReviewLane;
   due_count: number | string;
@@ -133,6 +145,7 @@ const QUEUE_HEALTH_TIMEOUT_MS = 60_000;
 const INTERPOLATION_BATCH_TIMEOUT_MS = 60_000;
 const VELOCITY_REFRESH_TIMEOUT_MS = 600_000;
 const VELOCITY_UPDATE_TIMEOUT_MS = 600_000;
+const CCU_TIER_RECALC_TIMEOUT_MS = 300_000;
 
 let ingestionPool: Pool | null = null;
 
@@ -455,6 +468,26 @@ export async function refreshReviewVelocityStats(
     } catch {
       await client.query('REFRESH MATERIALIZED VIEW review_velocity_stats');
     }
+  });
+}
+
+export async function recalculateCcuTiers(options: {
+  timeoutMs?: number;
+} = {}): Promise<RecalculateCcuTiersResult> {
+  const timeoutMs = options.timeoutMs ?? CCU_TIER_RECALC_TIMEOUT_MS;
+
+  return withSessionStatementTimeout(timeoutMs, async (client) => {
+    const { rows } = await client.query<RecalculateCcuTiersRow>(
+      'SELECT tier1_count, tier2_count, tier3_count FROM recalculate_ccu_tiers()'
+    );
+
+    const row = rows[0];
+
+    return {
+      tier1Count: parseNumber(row?.tier1_count),
+      tier2Count: parseNumber(row?.tier2_count),
+      tier3Count: parseNumber(row?.tier3_count),
+    };
   });
 }
 

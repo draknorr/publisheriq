@@ -6,6 +6,9 @@ export {
   type TypedSupabaseClient,
 } from './client.js';
 
+// Operational helpers used by ingestion workers
+export { recalculateCcuTiers, type RecalculateCcuTiersResult } from './ingestion.js';
+
 // Types
 export type { Database } from './types.js';
 

@@ -10,7 +10,7 @@
  * Run with: pnpm --filter @publisheriq/ingestion ccu-tiered-sync
  */
 
-import { getServiceClient } from '@publisheriq/database';
+import * as database from '@publisheriq/database';
 import { logger } from '@publisheriq/shared';
 import { fetchSteamCCUBatch } from '../apis/steam-ccu.js';
 import {
@@ -18,7 +18,19 @@ import {
   isTierAssignmentsStale,
 } from '../workers-support/ccu-guardrails.js';
 
+type DatabaseModule = typeof database & {
+  recalculateCcuTiers: (options?: {
+    timeoutMs?: number;
+  }) => Promise<{
+    tier1Count: number;
+    tier2Count: number;
+    tier3Count: number;
+  }>;
+};
+
 const log = logger.child({ worker: 'ccu-tiered-sync' });
+const DEFAULT_RECALC_TIMEOUT_MS = 300_000;
+const { getServiceClient, recalculateCcuTiers } = database as DatabaseModule;
 
 interface SyncStats {
   tier1Processed: number;
@@ -34,33 +46,52 @@ interface TierAssignment {
   ccu_tier: number;
 }
 
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Expected a positive integer but received "${value}"`);
+  }
+
+  return parsed;
+}
+
 /**
  * Recalculate tier assignments by calling the database function
  */
 async function recalculateTiers(
-  supabase: ReturnType<typeof getServiceClient>
+  timeoutMs: number
 ): Promise<{ tier1: number; tier2: number; tier3: number }> {
-  log.info('Recalculating tier assignments...');
+  const startedAt = Date.now();
 
-  const { data, error } = await supabase.rpc('recalculate_ccu_tiers');
+  log.info('Recalculating tier assignments...', { timeoutMs });
 
-  if (error) {
-    throw new Error(`Failed to recalculate tiers: ${error.message}`);
+  let result: Awaited<ReturnType<typeof recalculateCcuTiers>>;
+
+  try {
+    result = await recalculateCcuTiers({ timeoutMs });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to recalculate tiers: ${error.message}`);
+    }
+
+    throw new Error(`Failed to recalculate tiers: ${String(error)}`);
   }
 
-  // The function returns a single row with tier counts
-  const result = Array.isArray(data) ? data[0] : data;
-
   log.info('Tier recalculation complete', {
-    tier1: result.tier1_count,
-    tier2: result.tier2_count,
-    tier3: result.tier3_count,
+    tier1: result.tier1Count,
+    tier2: result.tier2Count,
+    tier3: result.tier3Count,
+    durationMs: Date.now() - startedAt,
   });
 
   return {
-    tier1: result.tier1_count,
-    tier2: result.tier2_count,
-    tier3: result.tier3_count,
+    tier1: result.tier1Count,
+    tier2: result.tier2Count,
+    tier3: result.tier3Count,
   };
 }
 
@@ -182,6 +213,10 @@ async function main(): Promise<void> {
   const githubRunId = process.env.GITHUB_RUN_ID;
   const currentHour = new Date().getUTCHours();
   const isEvenHour = currentHour % 2 === 0;
+  const recalcTimeoutMs = parsePositiveInt(
+    process.env.CCU_TIER_RECALC_TIMEOUT_MS,
+    DEFAULT_RECALC_TIMEOUT_MS
+  );
   const supabase = getServiceClient();
   const tierAssignmentsStale = await isTierAssignmentsStale(supabase);
   const shouldRecalculateTiers = currentHour === 0 || tierAssignmentsStale;
@@ -192,6 +227,7 @@ async function main(): Promise<void> {
     isEvenHour,
     shouldRecalculateTiers,
     tierAssignmentsStale,
+    recalcTimeoutMs,
   });
 
   // Create sync job record
@@ -217,7 +253,7 @@ async function main(): Promise<void> {
   try {
     // Recalculate tiers at midnight UTC
     if (shouldRecalculateTiers) {
-      await recalculateTiers(supabase);
+      await recalculateTiers(recalcTimeoutMs);
       stats.tierRecalculated = true;
     }
 
@@ -231,7 +267,7 @@ async function main(): Promise<void> {
     // If no tier assignments exist yet, run initial calculation
     if (tier1Games.length === 0 && !stats.tierRecalculated) {
       log.info('No tier assignments found, running initial calculation...');
-      await recalculateTiers(supabase);
+      await recalculateTiers(recalcTimeoutMs);
       stats.tierRecalculated = true;
 
       // Re-fetch tier games
