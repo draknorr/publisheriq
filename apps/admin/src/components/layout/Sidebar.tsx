@@ -51,6 +51,7 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/waitlist', label: 'Waitlist', icon: ClipboardList },
   { href: '/admin/usage', label: 'Usage', icon: BarChart3 },
+  { href: '/admin/chat-smoke', label: 'Chat Smoke', icon: MessageSquare },
 ];
 
 export function Sidebar() {

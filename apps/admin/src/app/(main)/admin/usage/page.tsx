@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth-utils';
 import { createServerClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
@@ -23,8 +24,8 @@ interface UsageStats {
   totalCreditsInSystem: number;
   totalCreditsUsed: number;
   totalMessages: number;
-  messagesLast7Days: number;
-  creditsUsedLast7Days: number;
+  messagesInWindow: number;
+  creditsUsedInWindow: number;
 }
 
 interface ToolUsage {
@@ -36,7 +37,7 @@ interface ChatUsageLog {
   user_id: string | null;
   total_credits_charged: number | null;
   tool_names: string[] | null;
-  created_at: string;
+  created_at: string | null;
 }
 
 interface UserProfileSummary {
@@ -44,124 +45,81 @@ interface UserProfileSummary {
   email: string;
   full_name: string | null;
   credit_balance: number;
+  total_credits_used: number;
+  total_messages_sent: number;
 }
 
-const CHAT_LOGS_PAGE_SIZE = 1000;
+const USAGE_WINDOWS = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+} as const;
 
-async function fetchAllChatLogs(): Promise<ChatUsageLog[]> {
-  const supabase = await createServerClient();
-  const logs: ChatUsageLog[] = [];
+type UsageWindow = keyof typeof USAGE_WINDOWS;
 
-  for (let from = 0; ; from += CHAT_LOGS_PAGE_SIZE) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from('chat_query_logs') as any)
-      .select('user_id, total_credits_charged, tool_names, created_at')
-      .order('created_at', { ascending: false })
-      .range(from, from + CHAT_LOGS_PAGE_SIZE - 1) as {
-        data: ChatUsageLog[] | null;
-        error: { message: string } | null;
-      };
-
-    if (error) {
-      throw new Error(`Failed to fetch chat usage logs: ${error.message}`);
-    }
-
-    if (!data || data.length === 0) {
-      break;
-    }
-
-    logs.push(...data);
-
-    if (data.length < CHAT_LOGS_PAGE_SIZE) {
-      break;
-    }
+function parseUsageWindow(windowParam?: string): UsageWindow {
+  if (windowParam === '7d' || windowParam === '90d') {
+    return windowParam;
   }
-
-  return logs;
+  return '30d';
 }
 
-async function getUsagePageData(): Promise<{
+async function getUsagePageDataForWindow(window: UsageWindow): Promise<{
   stats: UsageStats;
   topUsers: UserUsage[];
   toolUsage: ToolUsage[];
+  window: UsageWindow;
 }> {
   const supabase = await createServerClient();
+  const cutoff = new Date(
+    Date.now() - USAGE_WINDOWS[window] * 24 * 60 * 60 * 1000
+  ).toISOString();
 
-  const [logs, profilesResult] = await Promise.all([
-    fetchAllChatLogs(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase.from('user_profiles') as any)
-      .select('id, email, full_name, credit_balance') as PromiseLike<{
-        data: UserProfileSummary[] | null;
-      }>,
+  const [recentLogsResult, profilesResult, topUsersResult] = await Promise.all([
+    supabase
+      .from('chat_query_logs')
+      .select('user_id, total_credits_charged, tool_names, created_at')
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('user_profiles')
+      .select('id, email, full_name, credit_balance, total_credits_used, total_messages_sent'),
+    supabase
+      .from('user_profiles')
+      .select(
+        'id, email, full_name, credit_balance, total_credits_used, total_messages_sent'
+      )
+      .order('total_credits_used', { ascending: false })
+      .order('total_messages_sent', { ascending: false })
+      .limit(10),
   ]);
 
-  const profiles = profilesResult.data ?? [];
-  const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
+  const logs: ChatUsageLog[] = recentLogsResult.data ?? [];
+  const profiles: UserProfileSummary[] = profilesResult.data ?? [];
   const toolCounts: Record<string, number> = {};
-  const userUsage = new Map<string, { total_credits_used: number; total_messages_sent: number }>();
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
-  let totalCreditsUsed = 0;
-  let messagesLast7Days = 0;
-  let creditsUsedLast7Days = 0;
+  let creditsUsedInWindow = 0;
 
   for (const log of logs) {
     const creditsCharged = log.total_credits_charged ?? 0;
-    totalCreditsUsed += creditsCharged;
-
-    if (new Date(log.created_at).getTime() >= sevenDaysAgo) {
-      messagesLast7Days += 1;
-      creditsUsedLast7Days += creditsCharged;
-    }
+    creditsUsedInWindow += creditsCharged;
 
     log.tool_names?.forEach((tool) => {
       toolCounts[tool] = (toolCounts[tool] || 0) + 1;
     });
-
-    if (!log.user_id) {
-      continue;
-    }
-
-    const existing = userUsage.get(log.user_id) ?? {
-      total_credits_used: 0,
-      total_messages_sent: 0,
-    };
-
-    existing.total_credits_used += creditsCharged;
-    existing.total_messages_sent += 1;
-    userUsage.set(log.user_id, existing);
   }
 
   const totalCreditsInSystem = profiles.reduce((sum, profile) => {
     return sum + (profile.credit_balance ?? 0);
   }, 0);
 
-  const topUsers = [...userUsage.entries()]
-    .map(([userId, usage]) => {
-      const profile = profileMap.get(userId);
-      if (!profile) {
-        return null;
-      }
+  const totalCreditsUsed = profiles.reduce((sum, profile) => {
+    return sum + (profile.total_credits_used ?? 0);
+  }, 0);
 
-      return {
-        id: userId,
-        email: profile.email,
-        full_name: profile.full_name,
-        credit_balance: profile.credit_balance,
-        total_credits_used: usage.total_credits_used,
-        total_messages_sent: usage.total_messages_sent,
-      };
-    })
-    .filter((user): user is UserUsage => user !== null)
-    .sort((a, b) => {
-      if (b.total_credits_used !== a.total_credits_used) {
-        return b.total_credits_used - a.total_credits_used;
-      }
-
-      return b.total_messages_sent - a.total_messages_sent;
-    })
-    .slice(0, 10);
+  const totalMessages = profiles.reduce((sum, profile) => {
+    return sum + (profile.total_messages_sent ?? 0);
+  }, 0);
 
   const toolUsage = Object.entries(toolCounts)
     .map(([name, count]) => ({ name, count }))
@@ -171,27 +129,68 @@ async function getUsagePageData(): Promise<{
     stats: {
       totalCreditsInSystem,
       totalCreditsUsed,
-      totalMessages: logs.length,
-      messagesLast7Days,
-      creditsUsedLast7Days,
+      totalMessages,
+      messagesInWindow: logs.length,
+      creditsUsedInWindow,
     },
-    topUsers,
+    topUsers: (topUsersResult.data ?? []) as UserUsage[],
     toolUsage,
+    window,
   };
 }
 
-export default async function AdminUsagePage() {
+export default async function AdminUsagePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ window?: string }>;
+}) {
   await requireAdmin();
-  const { stats, topUsers, toolUsage } = await getUsagePageData();
+  const params = await searchParams;
+  const selectedWindow = parseUsageWindow(params.window);
+  const { stats, topUsers, toolUsage, window } = await getUsagePageDataForWindow(selectedWindow);
+  const currentParams = new URLSearchParams();
+
+  if (window !== '30d') {
+    currentParams.set('window', window);
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-display-sm text-text-primary">Usage Analytics</h1>
-        <p className="mt-1 text-body-sm text-text-secondary">
-          Credit usage and chat activity metrics
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-display-sm text-text-primary">Usage Analytics</h1>
+          <p className="mt-1 text-body-sm text-text-secondary">
+            All-time profile totals plus recent chat activity windows
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-raised p-1">
+          {(Object.keys(USAGE_WINDOWS) as UsageWindow[]).map((windowOption) => {
+            const nextParams = new URLSearchParams(currentParams.toString());
+            if (windowOption === '30d') {
+              nextParams.delete('window');
+            } else {
+              nextParams.set('window', windowOption);
+            }
+            const href = nextParams.toString()
+              ? `/admin/usage?${nextParams.toString()}`
+              : '/admin/usage';
+
+            return (
+              <Link
+                key={windowOption}
+                href={href}
+                className={`rounded-md px-3 py-1.5 text-body-sm font-medium transition-colors ${
+                  window === windowOption
+                    ? 'bg-surface-elevated text-text-primary shadow-subtle'
+                    : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                }`}
+              >
+                {windowOption}
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -237,12 +236,12 @@ export default async function AdminUsagePage() {
           <div className="flex items-center gap-3">
             <Users className="h-5 w-5 text-accent-orange" />
             <div>
-              <p className="text-body-sm text-text-secondary">Last 7 Days</p>
+              <p className="text-body-sm text-text-secondary">{window} Activity</p>
               <p className="text-display-sm text-text-primary">
-                {stats.messagesLast7Days} msgs
+                {stats.messagesInWindow.toLocaleString()} msgs
               </p>
               <p className="text-caption text-text-muted">
-                {stats.creditsUsedLast7Days.toLocaleString()} credits
+                {stats.creditsUsedInWindow.toLocaleString()} credits
               </p>
             </div>
           </div>
@@ -310,7 +309,7 @@ export default async function AdminUsagePage() {
         {/* Tool Usage */}
         <Card variant="default" padding="none">
           <div className="p-4 border-b border-border-subtle">
-            <h2 className="text-subheading text-text-primary">Tool Usage</h2>
+            <h2 className="text-subheading text-text-primary">Tool Usage ({window})</h2>
           </div>
           <div className="p-4 space-y-3">
             {toolUsage.map((tool) => {

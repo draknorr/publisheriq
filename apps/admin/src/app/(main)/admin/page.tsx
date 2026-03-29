@@ -35,6 +35,9 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
+const ALL_JOBS_LIMIT = 100;
+const RECENT_CHAT_LOG_LIMIT = 50;
+
 export interface SyncJob {
   id: string;
   job_type: string;
@@ -99,6 +102,7 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
   }
 
   const supabase = getServiceSupabase();
+  const recentChatCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   // Phase 1: Fetch shared data first to avoid duplicate queries
   // These are used by multiple functions below
@@ -132,23 +136,30 @@ async function getAdminDashboardData(): Promise<AdminDashboardData | null> {
     getFullyCompletedAppsCount(supabase),
     supabase
       .from('sync_jobs')
-      .select('*')
+      .select(
+        'id, job_type, status, items_processed, items_succeeded, items_failed, items_created, items_updated, started_at, completed_at, error_message, github_run_id, batch_size, created_at'
+      )
       .eq('status', 'running')
       .order('started_at', { ascending: false }),
     supabase
       .from('sync_jobs')
-      .select('*')
+      .select(
+        'id, job_type, status, items_processed, items_succeeded, items_failed, items_created, items_updated, started_at, completed_at, error_message, github_run_id, batch_size, created_at'
+      )
       .order('started_at', { ascending: false })
-      .limit(100),
+      .limit(ALL_JOBS_LIMIT),
     getPICSSyncState(supabase),
     // Pass totalApps to avoid re-fetching
     getPICSDataStats(supabase, totalApps),
     getCcuQualityStats(supabase, totalApps),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase.from('chat_query_logs') as any)
-      .select('*')
+      .select(
+        'id, query_text, tool_names, tool_count, timing_total_ms, created_at, chat_family, quality_flags, session_context_summary, guardrail_trace, answer_contract_summary'
+      )
+      .gte('created_at', recentChatCutoff)
       .order('created_at', { ascending: false })
-      .limit(20),
+      .limit(RECENT_CHAT_LOG_LIMIT),
   ]);
 
   const allJobsData = allJobs.data ?? [];

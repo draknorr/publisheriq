@@ -138,7 +138,14 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
           {
             label: 'Overdue',
             value: data.syncHealth.overdueApps,
-            status: data.syncHealth.overdueApps > 500 ? 'error' : data.syncHealth.overdueApps > 100 ? 'warning' : 'success',
+            status:
+              data.queueStatus.dataSource !== 'live'
+                ? 'warning'
+                : data.syncHealth.overdueApps > 500
+                  ? 'error'
+                  : data.syncHealth.overdueApps > 100
+                    ? 'warning'
+                    : 'success',
           },
           {
             label: 'Errors',
@@ -148,7 +155,12 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
           {
             label: 'PICS',
             value: data.picsSyncState.lastChangeNumber > 0 ? `#${data.picsSyncState.lastChangeNumber.toLocaleString()}` : 'N/A',
-            status: data.picsSyncState.lastChangeNumber > 0 ? 'info' : 'neutral',
+            status:
+              data.picsDataStats.isApproximate
+                ? 'warning'
+                : data.picsSyncState.lastChangeNumber > 0
+                  ? 'info'
+                  : 'neutral',
           },
         ]}
       />
@@ -181,14 +193,20 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         title="Catalog Control"
         badge={{
           value: data.catalogControlStats.currentCatalogApps.toLocaleString(),
-          variant: data.catalogControlStats.liveOnlyMissing > 0 || data.catalogControlStats.staleRunningApplistJobs > 0
-            ? 'warning'
-            : 'success',
+          variant:
+            data.catalogControlStats.dataSource !== 'live'
+              ? 'warning'
+              : data.catalogControlStats.liveOnlyMissing > 0 || data.catalogControlStats.staleRunningApplistJobs > 0
+                ? 'warning'
+                : 'success',
         }}
         headerExtra={
-          <span className="text-caption text-text-muted">
-            live applist: {data.catalogControlStats.latestLiveAppCount.toLocaleString()}
-          </span>
+          <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
+            <span>live applist: {data.catalogControlStats.latestLiveAppCount.toLocaleString()}</span>
+            {data.catalogControlStats.dataSource !== 'live' ? (
+              <span className="text-accent-orange">fallback stats</span>
+            ) : null}
+          </div>
         }
       >
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
@@ -318,8 +336,20 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         title="Sync Queue"
         badge={{
           value: data.queueStatus.overdue,
-          variant: data.queueStatus.overdue > 500 ? 'error' : data.queueStatus.overdue > 100 ? 'warning' : 'success',
+          variant:
+            data.queueStatus.dataSource !== 'live'
+              ? 'warning'
+              : data.queueStatus.overdue > 500
+                ? 'error'
+                : data.queueStatus.overdue > 100
+                  ? 'warning'
+                  : 'success',
         }}
+        headerExtra={
+          data.queueStatus.dataSource !== 'live' ? (
+            <span className="text-caption text-accent-orange">RPC unavailable</span>
+          ) : null
+        }
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Priority Distribution */}
@@ -385,8 +415,18 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         title="PICS Service"
         badge={{
           value: data.picsSyncState.lastChangeNumber > 0 ? 'Active' : 'Inactive',
-          variant: data.picsSyncState.lastChangeNumber > 0 ? 'success' : 'warning',
+          variant:
+            data.picsDataStats.isApproximate
+              ? 'warning'
+              : data.picsSyncState.lastChangeNumber > 0
+                ? 'success'
+                : 'warning',
         }}
+        headerExtra={
+          data.picsDataStats.isApproximate ? (
+            <span className="text-caption text-accent-orange">approximate fallback</span>
+          ) : null
+        }
       >
         <div className="p-2 rounded-md border border-border-subtle bg-surface-elevated/50">
           {/* Mobile-friendly grid: 2 cols base, scales up on larger screens */}
@@ -506,6 +546,9 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
       <CollapsibleSection
         title="Recent Jobs"
         badge={{ value: data.allJobs.length, variant: 'default' }}
+        headerExtra={
+          <span className="text-caption text-text-muted">latest 100</span>
+        }
       >
         <div className="space-y-1">
           {data.allJobs.slice(0, 15).map((job) => (
@@ -720,18 +763,18 @@ function ChatLogsSection({ logs }: { logs: ChatQueryLog[] }) {
     });
   };
 
-  return (
+      return (
     <CollapsibleSection
-      title="Chat Logs"
+      title="Recent Chat Logs"
       badge={{ value: logs.length, variant: 'default' }}
       headerExtra={
-        <span className="text-caption text-text-muted">7-day retention</span>
+        <span className="text-caption text-text-muted">last 7 days, latest 50</span>
       }
     >
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         <div className="p-2 rounded border border-border-subtle bg-surface-elevated/50">
-          <div className="text-caption text-text-tertiary">Total Queries</div>
+          <div className="text-caption text-text-tertiary">Displayed Queries</div>
           <div className="text-body font-semibold text-text-primary">{logs.length}</div>
         </div>
         <div className="p-2 rounded border border-border-subtle bg-surface-elevated/50">

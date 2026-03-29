@@ -35,6 +35,7 @@ export interface QueueStatus {
   dueIn1Hour: number;
   dueIn6Hours: number;
   dueIn24Hours: number;
+  dataSource: 'live' | 'unavailable';
 }
 
 export interface AppWithError {
@@ -69,6 +70,8 @@ export interface PICSDataStats {
   withTags: number;
   withFranchises: number;
   withParentApp: number;
+  dataSource: 'live' | 'approximate_fallback';
+  isApproximate: boolean;
 }
 
 export interface CatalogControlStats {
@@ -79,6 +82,7 @@ export interface CatalogControlStats {
   staleRunningApplistJobs: number;
   latestApplistStartedAt: string | null;
   latestApplistCompletedAt: string | null;
+  dataSource: 'live' | 'fallback';
 }
 
 export interface CcuQualityStats {
@@ -310,6 +314,7 @@ export async function getQueueStatus(supabase: SupabaseClient<Database>): Promis
       dueIn1Hour: Number(row.due_in_1_hour ?? 0),
       dueIn6Hours: Number(row.due_in_6_hours ?? 0),
       dueIn24Hours: Number(row.due_in_24_hours ?? 0),
+      dataSource: 'live',
     };
   }
 
@@ -321,6 +326,7 @@ export async function getQueueStatus(supabase: SupabaseClient<Database>): Promis
     dueIn1Hour: 0,
     dueIn6Hours: 0,
     dueIn24Hours: 0,
+    dataSource: 'unavailable',
   };
 }
 
@@ -383,6 +389,7 @@ export async function getSourceCompletionStats(
     storefront: lastSyncs.storefront,
     reviews: lastSyncs.reviews,
     histogram: lastSyncs.histogram,
+    pics: null,
   };
 
   if (!error && data && data.length > 0) {
@@ -423,6 +430,7 @@ export async function getSourceCompletionStats(
     storefrontSynced, storefrontStale,
     reviewsSynced, reviewsStale,
     histogramSynced, histogramStale,
+    picsSynced, picsStale,
   ] = await Promise.all([
     // SteamSpy
     supabase.from('sync_status').select('*', { count: 'exact', head: true })
@@ -444,6 +452,11 @@ export async function getSourceCompletionStats(
       .eq('is_syncable', true).not('last_histogram_sync', 'is', null),
     supabase.from('sync_status').select('*', { count: 'exact', head: true })
       .eq('is_syncable', true).not('last_histogram_sync', 'is', null).lt('last_histogram_sync', sevenDaysAgo),
+    // PICS
+    supabase.from('sync_status').select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true).not('last_pics_sync', 'is', null),
+    supabase.from('sync_status').select('*', { count: 'exact', head: true })
+      .eq('is_syncable', true).not('last_pics_sync', 'is', null).lt('last_pics_sync', oneDayAgo),
   ]);
 
   const buildStats = (
@@ -465,6 +478,7 @@ export async function getSourceCompletionStats(
     buildStats('storefront', storefrontSynced.count ?? 0, storefrontStale.count ?? 0),
     buildStats('reviews', reviewsSynced.count ?? 0, reviewsStale.count ?? 0),
     buildStats('histogram', histogramSynced.count ?? 0, histogramStale.count ?? 0),
+    buildStats('pics', picsSynced.count ?? 0, picsStale.count ?? 0),
   ];
 }
 
@@ -488,7 +502,8 @@ export async function getFullyCompletedAppsCount(
     .not('last_steamspy_sync', 'is', null)
     .not('last_storefront_sync', 'is', null)
     .not('last_reviews_sync', 'is', null)
-    .not('last_histogram_sync', 'is', null);
+    .not('last_histogram_sync', 'is', null)
+    .not('last_pics_sync', 'is', null);
 
   return count ?? 0;
 }
@@ -509,6 +524,7 @@ export async function getCatalogControlStats(
       staleRunningApplistJobs: Number(row.stale_running_applist_jobs ?? 0),
       latestApplistStartedAt: row.latest_applist_started_at ?? null,
       latestApplistCompletedAt: row.latest_applist_completed_at ?? null,
+      dataSource: 'live',
     };
   }
 
@@ -535,6 +551,7 @@ export async function getCatalogControlStats(
     staleRunningApplistJobs: staleRunningJobs.count ?? 0,
     latestApplistStartedAt: null,
     latestApplistCompletedAt: null,
+    dataSource: 'fallback',
   };
 }
 
@@ -692,6 +709,8 @@ export async function getPICSDataStats(
       withTags: Number(row.with_tags ?? 0),
       withFranchises: Number(row.with_franchises ?? 0),
       withParentApp: Number(row.with_parent_app ?? 0),
+      dataSource: 'live' as const,
+      isApproximate: false,
     };
     // Only return RPC result if it looks valid (totalApps > 0 means RPC worked)
     if (result.totalApps > 0) {
@@ -744,5 +763,7 @@ export async function getPICSDataStats(
     withTags: withTags.count ?? 0,
     withFranchises: withFranchises.count ?? 0,
     withParentApp: withParentApp.count ?? 0,
+    dataSource: 'approximate_fallback',
+    isApproximate: true,
   };
 }

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { requireAdmin } from '@/lib/auth-utils';
 import { createServerClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui';
+import { ToastProvider } from '@/components/ui/Toast';
 import { Users } from 'lucide-react';
 import { UsersTable } from './UsersTable';
 
@@ -24,12 +25,18 @@ interface UserWithProfile {
   updated_at: string;
 }
 
+interface ActiveUserLog {
+  user_id: string | null;
+}
+
 async function getUsers(): Promise<UserWithProfile[]> {
   const supabase = await createServerClient();
 
   const { data: users, error } = await supabase
     .from('user_profiles')
-    .select('*')
+    .select(
+      'id, email, full_name, organization, role, credit_balance, total_credits_used, total_messages_sent, created_at, updated_at'
+    )
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -42,21 +49,29 @@ async function getUsers(): Promise<UserWithProfile[]> {
 
 async function getUserStats() {
   const supabase = await createServerClient();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [totalUsersResult, adminUsersResult, activeUsersResult] = await Promise.all([
+  const [totalUsersResult, adminUsersResult, activeLogsResult] = await Promise.all([
     supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
     supabase.from('user_profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin'),
-    // Active = sent message in last 7 days
+    // Active = sent at least one chat message in the last 7 days
     supabase
-      .from('user_profiles')
-      .select('*', { count: 'exact', head: true })
-      .gt('updated_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+      .from('chat_query_logs')
+      .select('user_id')
+      .gte('created_at', sevenDaysAgo)
+      .not('user_id', 'is', null),
   ]);
+
+  const activeUsers = new Set(
+    ((activeLogsResult.data ?? []) as ActiveUserLog[])
+      .map((entry) => entry.user_id)
+      .filter((userId): userId is string => typeof userId === 'string' && userId.length > 0)
+  ).size;
 
   return {
     totalUsers: totalUsersResult.count ?? 0,
     adminUsers: adminUsersResult.count ?? 0,
-    activeUsers: activeUsersResult.count ?? 0,
+    activeUsers,
   };
 }
 
@@ -98,7 +113,9 @@ export default async function AdminUsersPage() {
             <h2 className="text-subheading text-text-primary">All Users</h2>
           </div>
         </div>
-        <UsersTable users={users} />
+        <ToastProvider>
+          <UsersTable users={users} />
+        </ToastProvider>
       </Card>
     </div>
   );

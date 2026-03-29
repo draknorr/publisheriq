@@ -5,8 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { UnderlineTabs } from '@/components/ui/Tabs';
-import { CheckCircle, XCircle, Mail, X, RefreshCw } from 'lucide-react';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { CheckCircle, Filter, Mail, RefreshCw, Search, X, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface WaitlistEntry {
@@ -24,7 +23,6 @@ interface WaitlistEntry {
 
 interface WaitlistTableProps {
   entries: WaitlistEntry[];
-  adminId: string;
 }
 
 function formatDate(dateString: string): string {
@@ -50,35 +48,67 @@ function getStatusBadgeVariant(status: string): 'default' | 'primary' | 'success
   }
 }
 
-export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
+function formatReviewer(reviewedBy: string | null): string {
+  if (!reviewedBy) return 'Unknown reviewer';
+  return `Reviewer ${reviewedBy.slice(0, 8)}`;
+}
+
+export function WaitlistTable({ entries }: WaitlistTableProps) {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [selectedEntry, setSelectedEntry] = useState<WaitlistEntry | null>(null);
   const [initialCredits, setInitialCredits] = useState('1000');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showInviteNotSentOnly, setShowInviteNotSentOnly] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [expandedUseCases, setExpandedUseCases] = useState<Set<string>>(new Set());
   const router = useRouter();
 
-  const filteredEntries = entries.filter((entry) => entry.status === activeTab);
+  const filteredEntries = entries.filter((entry) => {
+    if (entry.status !== activeTab) {
+      return false;
+    }
 
-  // Send invite via server-side API route
-  const sendInvite = async (email: string, waitlistId: string): Promise<{ success: boolean; error?: string }> => {
+    if (showInviteNotSentOnly && activeTab === 'approved' && entry.invite_sent_at) {
+      return false;
+    }
+
+    if (!searchQuery.trim()) {
+      return true;
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    return (
+      entry.email.toLowerCase().includes(query)
+      || entry.full_name.toLowerCase().includes(query)
+      || entry.organization?.toLowerCase().includes(query)
+      || entry.how_i_plan_to_use?.toLowerCase().includes(query)
+    );
+  });
+
+  const dismissMessages = () => {
+    setError('');
+    setSuccessMessage('');
+  };
+
+  const resendInvite = async (waitlistId: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch('/api/admin/send-invite', {
+      const response = await fetch('/api/admin/waitlist/resend-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, waitlistId }),
+        body: JSON.stringify({ entryId: waitlistId }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as { status?: string; error?: string };
 
       if (!response.ok) {
         return { success: false, error: data.error || 'Failed to send invite' };
       }
 
-      return { success: true };
+      return { success: data.status === 'success', error: data.error };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Network error' };
     }
@@ -95,39 +125,38 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
 
     setIsApproving(true);
     setError('');
+    setSuccessMessage('');
 
     try {
-      const supabase = createBrowserClient();
+      const response = await fetch('/api/admin/waitlist/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entryId: selectedEntry.id,
+          decision: 'approve',
+          initialCredits: credits,
+        }),
+      });
 
-      // Update waitlist status and initial credits
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase.from('waitlist') as any)
-        .update({
-          status: 'approved',
-          reviewed_by: adminId,
-          reviewed_at: new Date().toISOString(),
-          initial_credits: credits,
-        })
-        .eq('id', selectedEntry.id);
+      const result = await response.json() as {
+        status?: string;
+        error?: string;
+      };
 
-      if (updateError) {
-        setError(updateError.message);
+      if (!response.ok) {
+        setError(result.error ?? 'Failed to approve entry');
         return;
       }
 
-      // Send invite via server-side API
-      const inviteResult = await sendInvite(selectedEntry.email, selectedEntry.id);
-
-      if (!inviteResult.success) {
-        // Show error but don't block - user is still approved
-        setError(`User approved but invite failed: ${inviteResult.error}. You can resend the invite from the Approved tab.`);
-        // Still close modal after a delay so user can see the message
-        setTimeout(() => {
-          setSelectedEntry(null);
-          setError('');
-          router.refresh();
-        }, 3000);
+      if (result.status === 'approved_without_invite') {
+        setSuccessMessage(
+          `Approved ${selectedEntry.email}, but invite sending failed. Resend it from the Approved tab.`
+        );
+      } else if (result.status !== 'success') {
+        setError(result.error ?? 'Failed to approve entry');
         return;
+      } else {
+        setSuccessMessage(`Approved ${selectedEntry.email} and sent invite.`);
       }
 
       setSelectedEntry(null);
@@ -144,54 +173,68 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
     setError('');
     setSuccessMessage('');
 
-    const result = await sendInvite(entry.email, entry.id);
+    const result = await resendInvite(entry.id);
 
     if (result.success) {
       setSuccessMessage(`Invite sent to ${entry.email}`);
       router.refresh();
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(''), 3000);
     } else {
       setError(result.error || 'Failed to send invite');
-      // Clear error after 5 seconds
-      setTimeout(() => setError(''), 5000);
     }
 
     setResendingId(null);
   };
 
   const handleReject = async (entry: WaitlistEntry) => {
-    setIsRejecting(true);
+    setRejectingId(entry.id);
+    setError('');
+    setSuccessMessage('');
 
     try {
-      const supabase = createBrowserClient();
+      const response = await fetch('/api/admin/waitlist/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entryId: entry.id,
+          decision: 'reject',
+        }),
+      });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase.from('waitlist') as any)
-        .update({
-          status: 'rejected',
-          reviewed_by: adminId,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', entry.id);
+      const result = await response.json() as {
+        status?: string;
+        error?: string;
+      };
 
-      if (updateError) {
-        console.error('Error rejecting:', updateError);
+      if (!response.ok || result.status !== 'success') {
+        setError(result.error ?? 'Failed to reject entry');
         return;
       }
 
+      setSuccessMessage(`Rejected ${entry.email}.`);
       router.refresh();
     } catch (err) {
-      console.error('Error rejecting:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      setIsRejecting(false);
+      setRejectingId(null);
     }
   };
 
+  const toggleUseCaseExpanded = (entryId: string) => {
+    setExpandedUseCases((prev) => {
+      const next = new Set(prev);
+      if (next.has(entryId)) {
+        next.delete(entryId);
+      } else {
+        next.add(entryId);
+      }
+      return next;
+    });
+  };
+
   const tabs = [
-    { id: 'pending', label: 'Pending' },
-    { id: 'approved', label: 'Approved' },
-    { id: 'rejected', label: 'Rejected' },
+    { id: 'pending', label: 'Pending', count: entries.filter((entry) => entry.status === 'pending').length },
+    { id: 'approved', label: 'Approved', count: entries.filter((entry) => entry.status === 'approved').length },
+    { id: 'rejected', label: 'Rejected', count: entries.filter((entry) => entry.status === 'rejected').length },
   ];
 
   const showActionsColumn = activeTab === 'pending' || activeTab === 'approved';
@@ -205,23 +248,63 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
           activeTab={activeTab}
           onChange={(id: string) => {
             setActiveTab(id as typeof activeTab);
-            setError('');
-            setSuccessMessage('');
+            if (id !== 'approved') {
+              setShowInviteNotSentOnly(false);
+            }
+            dismissMessages();
           }}
         />
+      </div>
+
+      <div className="flex flex-col gap-3 p-4 border-b border-border-subtle md:flex-row md:items-center md:justify-between">
+        <div className="w-full md:max-w-md">
+          <Input
+            type="search"
+            placeholder="Search by email, name, org, or use case..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            leftIcon={<Search className="h-4 w-4" />}
+          />
+        </div>
+        {activeTab === 'approved' ? (
+          <Button
+            variant={showInviteNotSentOnly ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => setShowInviteNotSentOnly((prev) => !prev)}
+          >
+            <Filter className="h-4 w-4 mr-1" />
+            {showInviteNotSentOnly ? 'Showing Invite Gaps' : 'Invite Not Sent'}
+          </Button>
+        ) : null}
       </div>
 
       {/* Status Messages */}
       {(error || successMessage) && (
         <div className="px-4 pt-4">
           {error && (
-            <div className="p-3 rounded-lg bg-accent-red/10 text-accent-red text-body-sm">
-              {error}
+            <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-accent-red/10 text-accent-red text-body-sm">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={dismissMessages}
+                className="text-accent-red/80 hover:text-accent-red"
+                aria-label="Dismiss error"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
           {successMessage && (
-            <div className="p-3 rounded-lg bg-accent-green/10 text-accent-green text-body-sm">
-              {successMessage}
+            <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-accent-green/10 text-accent-green text-body-sm">
+              <span>{successMessage}</span>
+              <button
+                type="button"
+                onClick={dismissMessages}
+                className="text-accent-green/80 hover:text-accent-green"
+                aria-label="Dismiss success"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
         </div>
@@ -269,9 +352,28 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="text-body-sm text-text-secondary max-w-xs truncate">
-                    {entry.how_i_plan_to_use || '-'}
-                  </p>
+                  {entry.how_i_plan_to_use ? (
+                    <div className="max-w-xs">
+                      <p
+                        className={`text-body-sm text-text-secondary ${
+                          expandedUseCases.has(entry.id) ? '' : 'line-clamp-2'
+                        }`}
+                      >
+                        {entry.how_i_plan_to_use}
+                      </p>
+                      {entry.how_i_plan_to_use.length > 90 ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleUseCaseExpanded(entry.id)}
+                          className="mt-1 text-caption text-accent-primary hover:text-accent-primary/80"
+                        >
+                          {expandedUseCases.has(entry.id) ? 'Show less' : 'Show more'}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-body-sm text-text-secondary">-</p>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-body-sm text-text-secondary">
@@ -292,6 +394,11 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
                         )}
                       </span>
                     )}
+                    {(entry.status === 'approved' || entry.status === 'rejected') && entry.reviewed_at && (
+                      <span className="text-caption text-text-muted">
+                        Reviewed {formatDate(entry.reviewed_at)} by {formatReviewer(entry.reviewed_by)}
+                      </span>
+                    )}
                   </div>
                 </td>
                 {activeTab === 'pending' && (
@@ -309,7 +416,8 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleReject(entry)}
-                        isLoading={isRejecting}
+                        isLoading={rejectingId === entry.id}
+                        disabled={rejectingId !== null || isApproving}
                       >
                         <XCircle className="h-4 w-4 mr-1 text-accent-red" />
                         Reject
@@ -324,7 +432,7 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
                       size="sm"
                       onClick={() => handleResendInvite(entry)}
                       isLoading={resendingId === entry.id}
-                      disabled={resendingId !== null}
+                      disabled={resendingId !== null || entry.status !== 'approved'}
                     >
                       <RefreshCw className="h-4 w-4 mr-1" />
                       {entry.invite_sent_at ? 'Resend Invite' : 'Send Invite'}
@@ -339,7 +447,7 @@ export function WaitlistTable({ entries, adminId }: WaitlistTableProps) {
 
       {filteredEntries.length === 0 && (
         <div className="p-8 text-center text-text-secondary">
-          No {activeTab} entries.
+          No {activeTab} entries{searchQuery ? ' matching your search' : ''}.
         </div>
       )}
 

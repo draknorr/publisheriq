@@ -29,7 +29,9 @@ async function getWaitlistEntries(): Promise<WaitlistEntry[]> {
 
   const { data: entries, error } = await supabase
     .from('waitlist')
-    .select('*')
+    .select(
+      'id, email, full_name, organization, how_i_plan_to_use, status, reviewed_by, reviewed_at, invite_sent_at, created_at'
+    )
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -57,7 +59,7 @@ async function getWaitlistStats() {
 }
 
 export default async function AdminWaitlistPage() {
-  const result = await requireAdmin();
+  await requireAdmin();
   const [entries, stats] = await Promise.all([getWaitlistEntries(), getWaitlistStats()]);
 
   return (
@@ -103,7 +105,7 @@ export default async function AdminWaitlistPage() {
 
       {/* Waitlist Table */}
       <Card variant="default" padding="none">
-        <WaitlistTable entries={entries} adminId={result.user.id} />
+        <WaitlistTable entries={entries} />
       </Card>
     </div>
   );

@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useToastActions } from '@/components/ui/Toast';
 import { Coins, X } from 'lucide-react';
-import { createBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 interface UserWithProfile {
@@ -41,6 +41,7 @@ export function UsersTable({ users }: UsersTableProps) {
   const [isAdjusting, setIsAdjusting] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const toast = useToastActions();
 
   const filteredUsers = users.filter(
     (user) =>
@@ -62,22 +63,24 @@ export function UsersTable({ users }: UsersTableProps) {
     setError('');
 
     try {
-      const supabase = createBrowserClient();
+      const response = await fetch('/api/admin/users/adjust-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          amount,
+          reason: creditReason.trim(),
+        }),
+      });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: rpcError } = await (supabase.rpc as any)('admin_adjust_user_credits', {
-        p_user_id: selectedUser.id,
-        p_amount: amount,
-        p_description: creditReason,
-      }) as { data: Array<{ success: boolean; new_balance?: number }> | null; error: Error | null };
+      const data = await response.json() as {
+        status?: string;
+        error?: string;
+        newBalance?: number;
+      };
 
-      if (rpcError) {
-        setError(rpcError.message);
-        return;
-      }
-
-      if (!data?.[0]?.success) {
-        setError('Failed to adjust credits');
+      if (!response.ok || data.status !== 'success') {
+        setError(data.error ?? 'Failed to adjust credits');
         return;
       }
 
@@ -85,9 +88,14 @@ export function UsersTable({ users }: UsersTableProps) {
       setSelectedUser(null);
       setCreditAmount('');
       setCreditReason('');
+      toast.success(
+        `Credits updated. New balance: ${(data.newBalance ?? selectedUser.credit_balance + amount).toLocaleString()}`
+      );
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const message = err instanceof Error ? err.message : 'An error occurred';
+      setError(message);
+      toast.error(message);
     } finally {
       setIsAdjusting(false);
     }
