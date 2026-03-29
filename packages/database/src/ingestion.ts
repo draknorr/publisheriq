@@ -215,6 +215,7 @@ const CLAIM_TIMEOUT_MS = 60_000;
 const TOKEN_TIMEOUT_MS = 5_000;
 const RELEASE_CLAIMS_TIMEOUT_MS = 15_000;
 const QUEUE_HEALTH_TIMEOUT_MS = 60_000;
+const CCU_REPAIR_QUERY_TIMEOUT_MS = 300_000;
 const INTERPOLATION_BATCH_TIMEOUT_MS = 60_000;
 const VELOCITY_REFRESH_TIMEOUT_MS = 600_000;
 const VELOCITY_UPDATE_TIMEOUT_MS = 600_000;
@@ -297,6 +298,15 @@ function normalizeTimestamp(value: Date | string | null | undefined): string | n
   }
 
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function normalizeDate(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const raw = value instanceof Date ? value.toISOString() : value;
+  return raw.slice(0, 10);
 }
 
 function createIngestionPool(): Pool {
@@ -700,10 +710,10 @@ export async function getCcuProvenanceRepairCandidates(params: {
   const requestedLimit = Math.max(1, Math.min(params.limit, 5000));
   const explicitAppids = params.appids && params.appids.length > 0 ? params.appids : null;
 
-  return withTransaction(QUEUE_HEALTH_TIMEOUT_MS, async (client) => {
+  return withSessionStatementTimeout(CCU_REPAIR_QUERY_TIMEOUT_MS, async (client) => {
     const { rows } = await client.query<CcuProvenanceRepairCandidateRow>(
       `
-        WITH current_catalog AS (
+        WITH catalog_appids AS (
           SELECT appid
           FROM public.get_current_catalog_appids()
         ),
@@ -725,7 +735,7 @@ export async function getCcuProvenanceRepairCandidates(params: {
               THEN 'steamspy'
               ELSE NULL
             END AS inferred_source
-          FROM current_catalog c
+          FROM catalog_appids c
           JOIN public.latest_daily_metrics ldm ON ldm.appid = c.appid
           LEFT JOIN public.sync_status s ON s.appid = c.appid
           LEFT JOIN public.ccu_tier_assignments ct ON ct.appid = c.appid
@@ -756,7 +766,7 @@ export async function getCcuProvenanceRepairCandidates(params: {
       appid: row.appid,
       ccuPeak: parseNumber(row.ccu_peak),
       inferredSource: row.inferred_source,
-      metricDate: row.metric_date,
+      metricDate: normalizeDate(row.metric_date)!,
     }));
   });
 }
@@ -768,10 +778,10 @@ export async function getCcuValidationBackfillCandidates(params: {
   const requestedLimit = Math.max(1, Math.min(params.limit, 5000));
   const explicitAppids = params.appids && params.appids.length > 0 ? params.appids : null;
 
-  return withTransaction(QUEUE_HEALTH_TIMEOUT_MS, async (client) => {
+  return withSessionStatementTimeout(CCU_REPAIR_QUERY_TIMEOUT_MS, async (client) => {
     const { rows } = await client.query<CcuValidationBackfillCandidateRow>(
       `
-        WITH current_catalog AS (
+        WITH catalog_appids AS (
           SELECT appid
           FROM public.get_current_catalog_appids()
         ),
@@ -780,7 +790,7 @@ export async function getCcuValidationBackfillCandidates(params: {
             cs.appid,
             MAX(cs.snapshot_time) AS latest_positive_snapshot_at
           FROM public.ccu_snapshots cs
-          JOIN current_catalog c ON c.appid = cs.appid
+          JOIN catalog_appids c ON c.appid = cs.appid
           WHERE cs.player_count > 0
             AND cs.snapshot_time >= NOW() - INTERVAL '30 days'
           GROUP BY cs.appid
@@ -797,7 +807,7 @@ export async function getCcuValidationBackfillCandidates(params: {
           ldm.metric_date,
           ct.updated_at
         FROM public.ccu_tier_assignments ct
-        JOIN current_catalog c ON c.appid = ct.appid
+        JOIN catalog_appids c ON c.appid = ct.appid
         LEFT JOIN public.latest_daily_metrics ldm ON ldm.appid = ct.appid
         LEFT JOIN positive_snapshots ps ON ps.appid = ct.appid
         WHERE (
@@ -826,7 +836,7 @@ export async function getCcuValidationBackfillCandidates(params: {
       existingValidationState: row.existing_validation_state,
       lastCcuSynced: normalizeTimestamp(row.last_ccu_synced),
       latestPositiveSnapshotAt: normalizeTimestamp(row.latest_positive_snapshot_at),
-      metricDate: row.metric_date,
+      metricDate: normalizeDate(row.metric_date),
       updatedAt: normalizeTimestamp(row.updated_at),
     }));
   });

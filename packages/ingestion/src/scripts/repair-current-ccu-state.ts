@@ -69,7 +69,16 @@ function parseAppIds(raw: string | undefined): number[] | null {
 }
 
 function normalizeMetricDateToIso(metricDate: string | null): string | null {
-  return metricDate ? `${metricDate}T00:00:00.000Z` : null;
+  if (!metricDate) {
+    return null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(metricDate)) {
+    return `${metricDate}T00:00:00.000Z`;
+  }
+
+  const parsed = new Date(metricDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 function resolveValidationBackfill(
