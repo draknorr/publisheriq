@@ -163,7 +163,7 @@ function extractEntities(toolCalls: ChatToolCall[]): ExtractedEntities {
       }
     }
 
-    if (tc.name === 'get_recent_news_digest') {
+    if (tc.name === 'get_recent_news_detail' || tc.name === 'get_recent_news_digest') {
       if (Array.isArray(tc.result.apps)) {
         const apps = tc.result.apps as Array<{ name?: string; appid?: number }>;
         for (const app of apps.slice(0, 3)) {
@@ -184,6 +184,15 @@ function extractEntities(toolCalls: ChatToolCall[]): ExtractedEntities {
           if (item.appName) {
             entities.games.push({ name: item.appName, appid: item.appid });
           }
+        }
+      }
+    }
+
+    if (tc.name === 'search_recent_news_topics' && Array.isArray(tc.result.items)) {
+      const items = tc.result.items as Array<{ appName?: string; appid?: number }>;
+      for (const item of items.slice(0, 3)) {
+        if (item.appName) {
+          entities.games.push({ name: item.appName, appid: item.appid });
         }
       }
     }
@@ -316,10 +325,18 @@ function generateToolBasedSuggestions(
   if (
     (toolNames.has('query_change_activity') ||
       toolNames.has('get_game_change_timeline') ||
-      toolNames.has('get_recent_news_digest')) &&
+      toolNames.has('get_recent_news_detail') ||
+      toolNames.has('get_recent_news_digest') ||
+      toolNames.has('search_recent_news_topics')) &&
     entities.games.length > 0
   ) {
-    if (entities.games.length > 1 && (toolNames.has('query_change_activity') || toolNames.has('get_recent_news_digest'))) {
+    if (
+      entities.games.length > 1 &&
+      (toolNames.has('query_change_activity') ||
+        toolNames.has('get_recent_news_detail') ||
+        toolNames.has('get_recent_news_digest') ||
+        toolNames.has('search_recent_news_topics'))
+    ) {
       const titles = entities.games.slice(0, 3).map((game) => game.name);
       const joinedTitles =
         titles.length === 2
@@ -348,7 +365,11 @@ function generateToolBasedSuggestions(
         query: `Summarize the most important recent Steam news updates for ${game.name}.`,
         category: 'game',
       });
-      if (toolNames.has('get_game_change_timeline') || toolNames.has('query_change_activity')) {
+      if (
+        toolNames.has('get_game_change_timeline') ||
+        toolNames.has('query_change_activity') ||
+        toolNames.has('get_recent_news_detail')
+      ) {
         suggestions.push({
           label: `Compare ${game.name} before and after`,
           query: `What changed on ${game.name} before and after its latest major update?`,
@@ -367,6 +388,19 @@ function generateToolBasedSuggestions(
     suggestions.push({
       label: 'Recent relaunch patterns',
       query: 'Show me games that used a likely relaunch pattern recently',
+      category: 'template',
+    });
+  }
+
+  if (toolNames.has('search_recent_news_topics')) {
+    suggestions.push({
+      label: 'Recent roadmaps',
+      query: 'What games mentioned a roadmap in recent Steam news?',
+      category: 'template',
+    });
+    suggestions.push({
+      label: 'Recent demos or playtests',
+      query: 'Which games announced a demo or playtest lately?',
       category: 'template',
     });
   }

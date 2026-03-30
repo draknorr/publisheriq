@@ -292,6 +292,26 @@ export interface ChangeRecentNewsDigestItem {
   bodyPreview: string | null;
 }
 
+export type ChangeRecentNewsFeedScope = 'community_announcements' | 'external_coverage' | 'all';
+
+export interface ChangeRecentNewsTopicMatchItem {
+  gid: string;
+  appid: number;
+  appName: string;
+  appType: AppType | null;
+  publishedAt: string | null;
+  firstSeenAt: string | null;
+  sortTime: string;
+  feedScope: Exclude<ChangeRecentNewsFeedScope, 'all'>;
+  feedLabel: string | null;
+  feedName: string | null;
+  title: string | null;
+  url: string | null;
+  excerpt: string | null;
+  bodyPreview: string | null;
+  matchReason: string | null;
+}
+
 export interface ChangeBurstDetail {
   burstId: string;
   appid: number;
@@ -447,6 +467,14 @@ export interface RawChangeNewsRow {
 
 export interface RawChatRecentNewsRow extends RawChangeNewsRow {
   contents: string | null;
+}
+
+export interface RawChatRecentNewsTopicRow extends RawChangeNewsRow {
+  sort_time: string;
+  feed_scope: Exclude<ChangeRecentNewsFeedScope, 'all'>;
+  excerpt: string | null;
+  content_preview: string | null;
+  match_reason: string | null;
 }
 
 export interface RawChangeBurstDetailRow extends RawChangeBurstRow {

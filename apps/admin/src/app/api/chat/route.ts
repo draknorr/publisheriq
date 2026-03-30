@@ -44,13 +44,19 @@ import {
   findChangePatterns,
   getChangeActivityDetail,
   getGameChangeTimeline,
+  getRecentNewsDetail,
+  getRecentNewsDigest,
   normalizeChangeIntelToolCall,
   queryChangeActivity,
+  searchRecentNewsTopics,
   type CompareChangeBeforeAfterArgs,
   type FindChangePatternsArgs,
   type GetChangeActivityDetailArgs,
   type GetGameChangeTimelineArgs,
+  type GetRecentNewsDetailArgs,
+  type GetRecentNewsDigestArgs,
   type QueryChangeActivityArgs,
+  type SearchRecentNewsTopicsArgs,
 } from '@/lib/chat/change-intel-service';
 import { createServerClient } from '@/lib/supabase/server';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, ChatTiming, LLMResponse, Tool } from '@/lib/llm/types';
@@ -217,6 +223,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
           } else if (routedToolCall.name === 'get_game_change_timeline') {
             const args = routedToolCall.arguments as unknown as GetGameChangeTimelineArgs;
             result = await getGameChangeTimeline(args);
+          } else if (routedToolCall.name === 'get_recent_news_detail') {
+            const args = routedToolCall.arguments as unknown as GetRecentNewsDetailArgs;
+            result = await getRecentNewsDetail(args);
+          } else if (routedToolCall.name === 'get_recent_news_digest') {
+            const args = routedToolCall.arguments as unknown as GetRecentNewsDigestArgs;
+            result = await getRecentNewsDigest(args);
+          } else if (routedToolCall.name === 'search_recent_news_topics') {
+            const args = routedToolCall.arguments as unknown as SearchRecentNewsTopicsArgs;
+            result = await searchRecentNewsTopics(args);
           } else if (routedToolCall.name === 'get_change_activity_detail') {
             const args = routedToolCall.arguments as unknown as GetChangeActivityDetailArgs;
             result = await getChangeActivityDetail(args);

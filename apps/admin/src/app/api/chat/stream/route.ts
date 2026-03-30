@@ -47,15 +47,19 @@ import {
   findChangePatterns,
   getChangeActivityDetail,
   getGameChangeTimeline,
+  getRecentNewsDetail,
   getRecentNewsDigest,
   normalizeChangeIntelToolCall,
   queryChangeActivity,
+  searchRecentNewsTopics,
   type CompareChangeBeforeAfterArgs,
   type FindChangePatternsArgs,
   type GetChangeActivityDetailArgs,
   type GetGameChangeTimelineArgs,
+  type GetRecentNewsDetailArgs,
   type GetRecentNewsDigestArgs,
   type QueryChangeActivityArgs,
+  type SearchRecentNewsTopicsArgs,
 } from '@/lib/chat/change-intel-service';
 import {
   attachPhase1MetadataToResult,
@@ -160,9 +164,15 @@ async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; erro
   } else if (toolCall.name === 'get_game_change_timeline') {
     const args = toolCall.arguments as unknown as GetGameChangeTimelineArgs;
     return getGameChangeTimeline(args);
+  } else if (toolCall.name === 'get_recent_news_detail') {
+    const args = toolCall.arguments as unknown as GetRecentNewsDetailArgs;
+    return getRecentNewsDetail(args);
   } else if (toolCall.name === 'get_recent_news_digest') {
     const args = toolCall.arguments as unknown as GetRecentNewsDigestArgs;
     return getRecentNewsDigest(args);
+  } else if (toolCall.name === 'search_recent_news_topics') {
+    const args = toolCall.arguments as unknown as SearchRecentNewsTopicsArgs;
+    return searchRecentNewsTopics(args);
   } else if (toolCall.name === 'get_change_activity_detail') {
     const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;
     return getChangeActivityDetail(args);

@@ -540,6 +540,25 @@ export async function refreshChangePatternAppWindowsForApp(
   return Number(data ?? 0);
 }
 
+export async function refreshSteamNewsLatestProjectionForApp(
+  supabase: TypedSupabaseClient,
+  appid: number
+): Promise<number> {
+  const { data, error } = await runSupabaseOperation<number | null>(
+    'refresh_steam_news_latest_projection_for_app',
+    () =>
+      getDb(supabase).rpc('refresh_steam_news_latest_projection_for_app', {
+        p_appid: appid,
+      })
+  );
+
+  if (error) {
+    throw new Error(`Failed to refresh steam_news_latest_projection: ${error.message}`);
+  }
+
+  return Number(data ?? 0);
+}
+
 export async function listRecentChangeActivityAppIds(
   supabase: TypedSupabaseClient,
   lookbackDays = 180,

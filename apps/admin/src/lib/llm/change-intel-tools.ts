@@ -114,11 +114,11 @@ export const GET_RECENT_NEWS_DIGEST_TOOL: Tool = {
     description: `Get a bounded digest of recent Steam news bodies for one game or a small known set of games.
 
 Use this for:
-- "What actually changed in the latest Steam news for Hades II?"
 - "Summarize the most important recent Steam news updates for ARC Raiders"
 - "Summarize the most meaningful recent Steam news across these 3 titles"
+- "Which of these titles had the most material recent Steam news change?"
 
-Prefer this over query_change_activity when the user explicitly wants the recent news itself summarized, not the broader change timeline.`,
+Prefer this over query_change_activity when the user explicitly wants a bounded recent-news summary, not the broader change timeline or a single newest-item detail view.`,
     parameters: {
       type: 'object',
       properties: {
@@ -150,6 +150,90 @@ Prefer this over query_change_activity when the user explicitly wants the recent
         },
       },
       required: [],
+    },
+  },
+};
+
+export const GET_RECENT_NEWS_DETAIL_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'get_recent_news_detail',
+    description: `Get the latest Steam news item for one game and summarize what actually changed in that most recent post.
+
+Use this for:
+- "What actually changed in the latest Steam news for Hades II?"
+- "What changed in the newest Steam announcement for ARC Raiders?"
+
+Prefer this over get_recent_news_digest when the user wants the latest item specifically, not a broader recent digest.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        app_name: {
+          type: 'string',
+          description: 'Steam game name to resolve for the latest-news detail view.',
+        },
+        appid: {
+          type: 'number',
+          description: 'Optional Steam appid if already resolved.',
+        },
+        days: {
+          type: 'number',
+          description: 'Lookback window in days. Defaults to 14 and is capped server-side.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum recent items to inspect before deciding whether the latest item is substantial enough. Defaults to 3 and is capped server-side.',
+        },
+      },
+      required: [],
+    },
+  },
+};
+
+export const SEARCH_RECENT_NEWS_TOPICS_TOOL: Tool = {
+  type: 'function',
+  function: {
+    name: 'search_recent_news_topics',
+    description: `Search recent Steam news text across many games for a concrete topic such as developer diaries, roadmaps, demos, playtests, or patch notes.
+
+Use this for:
+- "What games have released developer diaries lately?"
+- "What games mentioned a roadmap in recent Steam news?"
+- "Which games announced a demo or playtest lately?"
+
+This searches recent stored news text, not just app names or announcement headlines.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Topic or phrase to search for in recent news text, such as "developer diary" or "roadmap".',
+        },
+        days: {
+          type: 'number',
+          description: 'Lookback window in days. Defaults to 30 and is capped server-side.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum matches to return. Defaults to 8 and is capped server-side.',
+        },
+        feed_scope: {
+          type: 'string',
+          enum: ['community_announcements', 'external_coverage', 'all'],
+          description: 'Which news feed scope to search. Default to community_announcements unless the user explicitly asks for broader coverage.',
+        },
+        app_types: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional app types to include. Usually ["game"].',
+        },
+        appids: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Optional explicit appids when restricting topic search to a known set of titles.',
+        },
+      },
+      required: ['query'],
     },
   },
 };

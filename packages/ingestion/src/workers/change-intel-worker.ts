@@ -19,6 +19,7 @@ import {
   refreshChangeActivityBurstsForApp,
   refreshChangePatternAppWindowsForApp,
   refreshChangePatternActivityDaysForApp,
+  refreshSteamNewsLatestProjectionForApp,
   requeueStaleCaptureClaims,
   updateSyncStatusFields,
   updateSyncJobRecord,
@@ -74,6 +75,7 @@ async function processStorefrontJob(supabase: SupabaseClient, appid: number, tri
 }
 
 async function processProjectionRefreshJob(supabase: SupabaseClient, appid: number): Promise<void> {
+  await refreshSteamNewsLatestProjectionForApp(supabase, appid);
   await refreshChangeActivityBurstsForApp(supabase, appid);
   await refreshChangePatternActivityDaysForApp(supabase, appid);
   await refreshChangePatternAppWindowsForApp(supabase, appid);

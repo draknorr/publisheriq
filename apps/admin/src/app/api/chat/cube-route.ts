@@ -34,13 +34,19 @@ import {
   findChangePatterns,
   getChangeActivityDetail,
   getGameChangeTimeline,
+  getRecentNewsDetail,
+  getRecentNewsDigest,
   normalizeChangeIntelToolCall,
   queryChangeActivity,
+  searchRecentNewsTopics,
   type CompareChangeBeforeAfterArgs,
   type FindChangePatternsArgs,
   type GetChangeActivityDetailArgs,
   type GetGameChangeTimelineArgs,
+  type GetRecentNewsDetailArgs,
+  type GetRecentNewsDigestArgs,
   type QueryChangeActivityArgs,
+  type SearchRecentNewsTopicsArgs,
 } from '@/lib/chat/change-intel-service';
 import { createServerClient } from '@/lib/supabase/server';
 import type { Message, ChatRequest, ChatResponse, ChatToolCall, LLMResponse } from '@/lib/llm/types';
@@ -376,6 +382,69 @@ export async function POST(request: NextRequest): Promise<NextResponse<ChatRespo
             role: 'tool',
             toolCallId: toolCall.id,
             content: formatResultWithEntityLinks(timelineResult),
+          });
+        } else if (toolCall.name === 'get_recent_news_detail') {
+          const args = toolCall.arguments as unknown as GetRecentNewsDetailArgs;
+          const newsDetailResult = await getRecentNewsDetail(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: newsDetailResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(newsDetailResult),
+          });
+        } else if (toolCall.name === 'get_recent_news_digest') {
+          const args = toolCall.arguments as unknown as GetRecentNewsDigestArgs;
+          const newsDigestResult = await getRecentNewsDigest(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: newsDigestResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(newsDigestResult),
+          });
+        } else if (toolCall.name === 'search_recent_news_topics') {
+          const args = toolCall.arguments as unknown as SearchRecentNewsTopicsArgs;
+          const newsTopicResult = await searchRecentNewsTopics(args);
+
+          executedToolCalls.push({
+            name: toolCall.name,
+            arguments: args as unknown as Record<string, unknown>,
+            result: newsTopicResult,
+          });
+
+          messages.push({
+            role: 'assistant',
+            content: response.content || '',
+            toolCalls: [toolCall],
+          });
+
+          messages.push({
+            role: 'tool',
+            toolCallId: toolCall.id,
+            content: formatResultWithEntityLinks(newsTopicResult),
           });
         } else if (toolCall.name === 'get_change_activity_detail') {
           const args = toolCall.arguments as unknown as GetChangeActivityDetailArgs;

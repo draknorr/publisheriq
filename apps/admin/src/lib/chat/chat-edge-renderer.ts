@@ -272,6 +272,70 @@ function renderRecentNewsDigestResult(result: Record<string, unknown>): string |
   return `Here are the most recent Steam news updates.\n\n${buildMarkdownTable(['Game', 'Date', 'Headline', 'Summary'], rows)}`;
 }
 
+function renderRecentNewsDetailResult(result: Record<string, unknown>): string | null {
+  const latestItem = isRecord(result.latestItem) ? result.latestItem : null;
+  const items = asArrayOfRecords(result.items);
+  const rows = (latestItem ? [latestItem] : items).slice(0, 3);
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const detailMode = typeof result.detail_mode === 'string' ? result.detail_mode : 'latest_item';
+  const tableRows = rows.map((item) => ({
+    appid: item.appid,
+    name:
+      typeof item.appName === 'string'
+        ? item.appName
+        : typeof item.name === 'string'
+          ? item.name
+          : 'Unknown',
+    Date: formatDate(item.publishedAt ?? item.firstSeenAt),
+    Headline: typeof item.title === 'string' && item.title.trim().length > 0 ? item.title : 'Steam news update',
+    Details:
+      typeof item.bodyPreview === 'string' && item.bodyPreview.trim().length > 0
+        ? item.bodyPreview
+        : typeof item.excerpt === 'string' && item.excerpt.trim().length > 0
+          ? item.excerpt
+          : 'Recent news body available.',
+  }));
+
+  const intro =
+    detailMode === 'latest_item'
+      ? 'Here is what changed in the latest Steam news item.'
+      : 'The latest item was thin on its own, so here is the short recent-news context.';
+
+  return `${intro}\n\n${buildMarkdownTable(['Game', 'Date', 'Headline', 'Details'], tableRows)}`;
+}
+
+function renderRecentNewsTopicSearchResult(result: Record<string, unknown>): string | null {
+  const items = asArrayOfRecords(result.items);
+  if (items.length === 0) {
+    return null;
+  }
+
+  const rows = items.slice(0, 8).map((item) => ({
+    appid: item.appid,
+    name:
+      typeof item.appName === 'string'
+        ? item.appName
+        : typeof item.name === 'string'
+          ? item.name
+          : 'Unknown',
+    Date: formatDate(item.publishedAt ?? item.firstSeenAt ?? item.sortTime),
+    Headline: typeof item.title === 'string' && item.title.trim().length > 0 ? item.title : 'Steam news update',
+    Match:
+      typeof item.excerpt === 'string' && item.excerpt.trim().length > 0
+        ? item.excerpt
+        : typeof item.bodyPreview === 'string' && item.bodyPreview.trim().length > 0
+          ? item.bodyPreview
+          : typeof item.matchReason === 'string' && item.matchReason.trim().length > 0
+            ? item.matchReason
+            : 'Matched recent Steam news text.',
+  }));
+
+  return `Here are the recent Steam news matches for that topic.\n\n${buildMarkdownTable(['Game', 'Date', 'Headline', 'Match'], rows)}`;
+}
+
 export function renderToolResultForChat(
   toolCall: ToolCall,
   result: Record<string, unknown>,
@@ -287,8 +351,12 @@ export function renderToolResultForChat(
       return renderTrendResult(result);
     case 'get_game_change_timeline':
       return renderGameTimelineResult(result);
+    case 'get_recent_news_detail':
+      return renderRecentNewsDetailResult(result);
     case 'get_recent_news_digest':
       return renderRecentNewsDigestResult(result);
+    case 'search_recent_news_topics':
+      return renderRecentNewsTopicSearchResult(result);
     case 'compare_change_before_after':
       return renderBeforeAfterResult(result);
     default:

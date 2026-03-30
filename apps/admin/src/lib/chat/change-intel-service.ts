@@ -3,8 +3,10 @@ import 'server-only';
 import type { Database } from '@publisheriq/database';
 import {
   buildDiffPreview,
+  ChangeFeedUnavailableError,
   fetchChangeFeedActivityDetail,
   fetchChangeFeedBurstDetail,
+  fetchChatRecentNewsTopicSearch,
   fetchChatRecentNewsDigest,
   fetchChatChangeActivityResponse,
   fetchChatChangePatternCandidates,
@@ -14,7 +16,9 @@ import {
   type ChangeActivityDetail,
   type ChangeActivityMode,
   type ChangeActivityRow,
+  type ChangeRecentNewsFeedScope,
   type ChangeRecentNewsDigestItem,
+  type ChangeRecentNewsTopicMatchItem,
   type ChangeRecentNewsScope,
   type ChangeActivitySignalFamily,
   type ChangeActivitySort,
@@ -42,6 +46,15 @@ const MAX_RECENT_NEWS_DAYS = 30;
 const DEFAULT_SINGLE_RECENT_NEWS_LIMIT = 4;
 const DEFAULT_MULTI_RECENT_NEWS_LIMIT = 6;
 const MAX_RECENT_NEWS_LIMIT = 6;
+const DEFAULT_RECENT_NEWS_DETAIL_LIMIT = 3;
+const MAX_RECENT_NEWS_DETAIL_LIMIT = 3;
+const RECENT_NEWS_DETAIL_MIN_CHARS = 320;
+const RECENT_NEWS_DETAIL_MIN_UNITS = 2;
+const DEFAULT_NEWS_TOPIC_DAYS = 30;
+const MAX_NEWS_TOPIC_DAYS = 30;
+const DEFAULT_NEWS_TOPIC_LIMIT = 8;
+const MAX_NEWS_TOPIC_LIMIT = 10;
+const DEFAULT_NEWS_TOPIC_FEED_SCOPE: ChangeRecentNewsFeedScope = 'community_announcements';
 const DEFAULT_PATTERN_LIMIT = 10;
 const MAX_PATTERN_LIMIT = 10;
 const DEFAULT_PATTERN_APP_TYPES: AppType[] = ['game'];
@@ -91,6 +104,22 @@ export interface GetRecentNewsDigestArgs {
   appids?: number[];
   days?: number;
   limit?: number;
+}
+
+export interface GetRecentNewsDetailArgs {
+  app_name?: string;
+  appid?: number;
+  days?: number;
+  limit?: number;
+}
+
+export interface SearchRecentNewsTopicsArgs {
+  query?: string;
+  days?: number;
+  limit?: number;
+  feed_scope?: ChangeRecentNewsFeedScope;
+  app_types?: AppType[];
+  appids?: number[];
 }
 
 export interface CompareChangeBeforeAfterArgs {
@@ -218,6 +247,52 @@ interface RawAppChangeFeedRow {
   response_7d: JsonValue;
   response_30d: JsonValue;
 }
+
+interface NewsTopicDefinition {
+  key: string;
+  canonicalQuery: string;
+  phrases: string[];
+  patterns: RegExp[];
+}
+
+const NEWS_TOPIC_DEFINITIONS: NewsTopicDefinition[] = [
+  {
+    key: 'developer_diary',
+    canonicalQuery: 'developer diary',
+    phrases: ['developer diary', 'developer diaries', 'dev diary', 'dev diaries', 'devlog', 'behind the scenes', 'development update'],
+    patterns: [
+      /\bdeveloper diar(?:y|ies)\b/i,
+      /\bdev diar(?:y|ies)\b/i,
+      /\bdevlog\b/i,
+      /\bbehind[- ]the[- ]scenes\b/i,
+      /\bdevelopment update\b/i,
+    ],
+  },
+  {
+    key: 'roadmap',
+    canonicalQuery: 'roadmap',
+    phrases: ['roadmap', "what's next", 'what is next', 'future plans'],
+    patterns: [/\broadmap\b/i, /\bwhat(?:'s| is) next\b/i, /\bfuture plans\b/i],
+  },
+  {
+    key: 'demo_playtest',
+    canonicalQuery: 'demo or playtest',
+    phrases: ['demo', 'demo available', 'playtest', 'public playtest'],
+    patterns: [/\bdemo\b/i, /\bplaytest\b/i, /\bpublic playtest\b/i],
+  },
+  {
+    key: 'patch_notes',
+    canonicalQuery: 'patch notes',
+    phrases: ['patch notes', 'update notes', 'release notes'],
+    patterns: [/\bpatch notes?\b/i, /\bupdate notes?\b/i, /\brelease notes?\b/i],
+  },
+  {
+    key: 'behind_the_scenes',
+    canonicalQuery: 'behind the scenes',
+    phrases: ['behind the scenes', 'behind-the-scenes', 'inside look', 'development insight'],
+    patterns: [/\bbehind[- ]the[- ]scenes\b/i, /\binside look\b/i, /\bdevelopment insight\b/i],
+  },
+];
 
 function clamp(value: number | undefined, fallback: number, min: number, max: number): number {
   const candidate = value ?? fallback;
@@ -662,9 +737,105 @@ function shouldUseAnnouncementWeakResponsePattern(userPrompt: string | undefined
   return mentionsAnnouncement && mentionsWeakResponse && mentionsOutcome;
 }
 
+function resolveNewsTopicDefinition(value: string | undefined): NewsTopicDefinition | null {
+  const normalized = normalizeSearch(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    NEWS_TOPIC_DEFINITIONS.find((definition) =>
+      definition.patterns.some((pattern) => pattern.test(normalized))
+    ) ?? null
+  );
+}
+
+function isCrossGameTopicPrompt(userPrompt: string | undefined): boolean {
+  const prompt = normalizeSearch(userPrompt)?.toLowerCase();
+  if (!prompt) {
+    return false;
+  }
+
+  return (
+    /\bwhat games\b/.test(prompt) ||
+    /\bwhich games\b/.test(prompt) ||
+    /\bacross all news\b/.test(prompt) ||
+    /\bacross games\b/.test(prompt) ||
+    /\blately\b/.test(prompt) ||
+    /\brecent(?:ly)?\b/.test(prompt)
+  );
+}
+
+function extractRecentNewsTopicQuery(
+  args?: Partial<QueryChangeActivityArgs & SearchRecentNewsTopicsArgs>,
+  userPrompt?: string
+): {
+  query: string;
+  aliases: string[];
+} | null {
+  const argsSearch = args?.search ? normalizeSearch(args.search) : null;
+  const argsQuery = args?.query ? normalizeSearch(args.query) : null;
+  const definition =
+    resolveNewsTopicDefinition(argsSearch ?? undefined) ??
+    resolveNewsTopicDefinition(argsQuery ?? undefined) ??
+    resolveNewsTopicDefinition(userPrompt);
+
+  if (definition) {
+    return {
+      query: definition.canonicalQuery,
+      aliases: definition.phrases,
+    };
+  }
+
+  const explicitQuery = argsSearch ?? argsQuery;
+  if (!explicitQuery) {
+    return null;
+  }
+
+  return {
+    query: explicitQuery,
+    aliases: [explicitQuery],
+  };
+}
+
+function shouldUseRecentNewsTopicSearch(
+  userPrompt: string | undefined,
+  args?: QueryChangeActivityArgs | SearchRecentNewsTopicsArgs
+): boolean {
+  if (!isCrossGameTopicPrompt(userPrompt)) {
+    return false;
+  }
+
+  return extractRecentNewsTopicQuery(args ?? {}, userPrompt) !== null;
+}
+
+function shouldUseRecentNewsDetail(userPrompt: string | undefined): boolean {
+  const prompt = normalizeSearch(userPrompt)?.toLowerCase();
+  if (!prompt) {
+    return false;
+  }
+
+  const mentionsNews = /\bnews\b/.test(prompt) || /\bannouncement\b/.test(prompt);
+  const mentionsDetailIntent =
+    /\bwhat actually changed\b/.test(prompt) ||
+    /\blatest\b/.test(prompt) ||
+    /\bnewest\b/.test(prompt) ||
+    /\bmost recent\b/.test(prompt);
+  const mentionsDigestIntent =
+    /\bsummar(?:y|ize)\b/.test(prompt) ||
+    /\bupdates?\b/.test(prompt) ||
+    /\brecent news\b/.test(prompt);
+
+  return mentionsNews && mentionsDetailIntent && !mentionsDigestIntent;
+}
+
 function shouldUseRecentNewsDigest(userPrompt: string | undefined): boolean {
   const prompt = normalizeSearch(userPrompt)?.toLowerCase();
   if (!prompt) {
+    return false;
+  }
+
+  if (shouldUseRecentNewsDetail(userPrompt) || shouldUseRecentNewsTopicSearch(userPrompt)) {
     return false;
   }
 
@@ -677,6 +848,31 @@ function shouldUseRecentNewsDigest(userPrompt: string | undefined): boolean {
     /\bwhat actually changed\b/.test(prompt);
 
   return mentionsNews && mentionsDigestIntent;
+}
+
+function countNewsDetailUnits(body: string | null): number {
+  const normalized = body?.trim() ?? null;
+  if (!normalized) {
+    return 0;
+  }
+
+  return normalized
+    .split(/(?:[.!?]+\s+)|(?:\s*[-*]\s+)|(?:\n+)/)
+    .map((unit) => unit.trim())
+    .filter((unit) => unit.length >= 24).length;
+}
+
+function shouldUseSingleItemNewsDetail(item: ChangeRecentNewsDigestItem | null | undefined): boolean {
+  if (!item) {
+    return false;
+  }
+
+  const body = item.bodyPreview ?? item.excerpt ?? null;
+  if (!body) {
+    return false;
+  }
+
+  return body.length >= RECENT_NEWS_DETAIL_MIN_CHARS || countNewsDetailUnits(body) >= RECENT_NEWS_DETAIL_MIN_UNITS;
 }
 
 function patternNeedsLiveMetrics(pattern: ChangePattern): boolean {
@@ -737,12 +933,56 @@ export async function normalizeChangeIntelToolCall(
   toolCall: ToolCall,
   userPrompt?: string
 ): Promise<ToolCall> {
+  if (toolCall.name === 'get_recent_news_digest' && shouldUseRecentNewsDetail(userPrompt)) {
+    const args = toolCall.arguments as GetRecentNewsDigestArgs;
+    const hasMultipleTargets = (args.appids?.length ?? 0) > 0 || (args.app_names?.length ?? 0) > 0;
+    if (!hasMultipleTargets) {
+      return {
+        ...toolCall,
+        name: 'get_recent_news_detail',
+        arguments: {
+          appid: args.appid,
+          app_name: args.app_name,
+          days: args.days,
+          limit: args.limit,
+        } as unknown as Record<string, unknown>,
+      };
+    }
+  }
+
   if (toolCall.name !== 'query_change_activity') {
     return toolCall;
   }
 
   const args = toolCall.arguments as QueryChangeActivityArgs;
+  const topicQuery = extractRecentNewsTopicQuery(args, userPrompt);
+  if (shouldUseRecentNewsTopicSearch(userPrompt, args) && topicQuery) {
+    return {
+      ...toolCall,
+      name: 'search_recent_news_topics',
+      arguments: {
+        query: topicQuery.query,
+        days: args.days,
+        limit: args.limit,
+        app_types: args.app_types,
+      } as unknown as Record<string, unknown>,
+    };
+  }
+
   const timelineArgs = await resolveSingleTitleTimelineArgs(args, userPrompt);
+  if (timelineArgs && shouldUseRecentNewsDetail(userPrompt)) {
+    return {
+      ...toolCall,
+      name: 'get_recent_news_detail',
+      arguments: {
+        appid: timelineArgs.appid,
+        app_name: timelineArgs.app_name,
+        days: args.days,
+        limit: args.limit,
+      } as unknown as Record<string, unknown>,
+    };
+  }
+
   if (timelineArgs && shouldUseRecentNewsDigest(userPrompt)) {
     return {
       ...toolCall,
@@ -1402,6 +1642,216 @@ export async function getRecentNewsDigest(args: GetRecentNewsDigestArgs) {
     meta: {
       days,
       limit,
+    },
+  };
+}
+
+export async function getRecentNewsDetail(args: GetRecentNewsDetailArgs) {
+  const resolved = await resolveAppReference({
+    appid: args.appid,
+    app_name: args.app_name,
+  });
+
+  if (!resolved.app) {
+    return {
+      success: false,
+      error: resolved.error ?? 'Unable to resolve the requested game for recent news.',
+      candidates: resolved.candidates ?? [],
+    };
+  }
+
+  const days = clamp(args.days, DEFAULT_RECENT_NEWS_DAYS, 1, MAX_RECENT_NEWS_DAYS);
+  const limit = clamp(args.limit, DEFAULT_RECENT_NEWS_DETAIL_LIMIT, 1, MAX_RECENT_NEWS_DETAIL_LIMIT);
+  const items = await fetchChatRecentNewsDigest({
+    appIds: [resolved.app.appid],
+    days,
+    limit,
+    perAppLimit: null,
+  });
+
+  if (items.length === 0) {
+    return {
+      success: true,
+      app: resolved.app,
+      scope: 'single_app' as const,
+      total_found: 0,
+      selected_change_surface: 'recent_news_detail',
+      no_match: true,
+      sufficient_to_answer: true,
+      sufficiency_reason: 'No recent Steam news items were found for the requested title in the checked window.',
+      required_answer_fields: ['checked time window', 'which title was checked', 'that no qualifying recent news was found'],
+      response_guidance: 'State the checked title and time window clearly. Do not imply there were recent news updates when none were found.',
+      items: [],
+      meta: {
+        days,
+        limit,
+        detailMode: 'no_match',
+      },
+    };
+  }
+
+  const latestItem = items[0];
+  const detailMode = shouldUseSingleItemNewsDetail(latestItem) ? 'latest_item' : 'fallback_digest';
+  const detailItems = detailMode === 'latest_item' ? [latestItem] : items.slice(0, Math.min(items.length, 3));
+
+  return {
+    success: true,
+    app: resolved.app,
+    scope: 'single_app' as const,
+    total_found: detailItems.length,
+    selected_change_surface: 'recent_news_detail',
+    sufficient_to_answer: true,
+    sufficiency_reason:
+      detailMode === 'latest_item'
+        ? 'The newest Steam news item is substantial enough to answer from the latest post alone.'
+        : 'The newest Steam news item is too thin on its own, so a short fallback digest gives the necessary context.',
+    required_answer_fields:
+      detailMode === 'latest_item'
+        ? ['date', 'latest news title', 'concrete changes from the latest news body']
+        : ['dates', 'news titles', 'concrete changes from the recent news copy'],
+    response_guidance:
+      detailMode === 'latest_item'
+        ? 'Use one short intro sentence and 2-5 bullets from the newest item only. Each bullet should summarize a concrete change or takeaway from the latest news body.'
+        : 'The newest item is too thin on its own. Use one short intro sentence and 2-4 bullets across the most recent 2-3 items, naming the timing and concrete update from each item.',
+    presentation_hints: {
+      format: 'recent_news_detail',
+      proof_field: 'items',
+    },
+    items: detailItems,
+    latestItem,
+    detail_mode: detailMode,
+    answer_payload: {
+      detailMode,
+      app: {
+        appid: resolved.app.appid,
+        name: resolved.app.name,
+      },
+      latestItem: {
+        appid: latestItem.appid,
+        appName: latestItem.appName,
+        title: latestItem.title,
+        publishedAt: latestItem.publishedAt,
+        firstSeenAt: latestItem.firstSeenAt,
+        excerpt: latestItem.excerpt,
+        bodyPreview: latestItem.bodyPreview,
+      },
+      items: detailItems.map((item) => ({
+        appid: item.appid,
+        appName: item.appName,
+        title: item.title,
+        publishedAt: item.publishedAt,
+        firstSeenAt: item.firstSeenAt,
+        excerpt: item.excerpt,
+        bodyPreview: item.bodyPreview,
+      })),
+    },
+    meta: {
+      days,
+      limit,
+      detailMode,
+    },
+  };
+}
+
+export async function searchRecentNewsTopics(args: SearchRecentNewsTopicsArgs) {
+  const topicQuery = extractRecentNewsTopicQuery(args);
+  if (!topicQuery) {
+    return {
+      success: false,
+      error: 'A recent-news topic query is required, such as developer diary, roadmap, demo, playtest, or patch notes.',
+    };
+  }
+
+  const days = clamp(args.days, DEFAULT_NEWS_TOPIC_DAYS, 1, MAX_NEWS_TOPIC_DAYS);
+  const limit = clamp(args.limit, DEFAULT_NEWS_TOPIC_LIMIT, 1, MAX_NEWS_TOPIC_LIMIT);
+  const appTypes = args.app_types && args.app_types.length > 0 ? args.app_types : DEFAULT_PATTERN_APP_TYPES;
+  const appIds = Array.from(new Set((args.appids ?? []).filter((value): value is number => Number.isInteger(value)))).slice(0, 10);
+  const feedScope = args.feed_scope ?? DEFAULT_NEWS_TOPIC_FEED_SCOPE;
+
+  let items: ChangeRecentNewsTopicMatchItem[];
+  try {
+    items = await fetchChatRecentNewsTopicSearch({
+      query: topicQuery.query,
+      aliases: topicQuery.aliases,
+      appIds: appIds.length > 0 ? appIds : null,
+      appTypes,
+      days,
+      limit,
+      feedScope,
+    });
+  } catch (error) {
+    if (error instanceof ChangeFeedUnavailableError) {
+      return {
+        success: false,
+        unavailable: true,
+        error: 'Recent news topic search is not available yet. Backfill the latest-news projection first.',
+      };
+    }
+
+    const classified = classifyChangeIntelError(error);
+    return {
+      success: false,
+      unavailable: classified.failureKind === 'projection_unavailable',
+      error: classified.userMessage,
+      failure_kind: classified.failureKind,
+    };
+  }
+
+  if (items.length === 0) {
+    return {
+      success: true,
+      total_found: 0,
+      selected_change_surface: 'recent_news_topic_search',
+      no_match: true,
+      sufficient_to_answer: true,
+      sufficiency_reason: 'No recent official Steam news items matched the requested topic in the checked window.',
+      required_answer_fields: ['checked time window', 'searched topic', 'that no qualifying recent news was found'],
+      response_guidance: 'State the searched topic, official-news scope, and time window clearly. Do not imply matches were found when none qualified.',
+      items: [],
+      meta: {
+        days,
+        limit,
+        query: topicQuery.query,
+        feedScope,
+        appTypes,
+      },
+    };
+  }
+
+  return {
+    success: true,
+    total_found: items.length,
+    selected_change_surface: 'recent_news_topic_search',
+    sufficient_to_answer: true,
+    sufficiency_reason: 'The result set is grounded in bounded recent official Steam news text that matched the requested topic.',
+    required_answer_fields: ['matched games', 'dates', 'matched topic evidence', 'why each result matched'],
+    response_guidance:
+      'Use one short intro sentence and 3-6 bullets. Each bullet should name the game, timing, the matching headline or excerpt, and why it matched the topic.',
+    presentation_hints: {
+      format: 'recent_news_topic_search',
+      proof_field: 'items',
+    },
+    items,
+    answer_payload: {
+      query: topicQuery.query,
+      aliases: topicQuery.aliases,
+      items: items.map((item) => ({
+        appid: item.appid,
+        appName: item.appName,
+        title: item.title,
+        publishedAt: item.publishedAt,
+        firstSeenAt: item.firstSeenAt,
+        excerpt: item.excerpt,
+        bodyPreview: item.bodyPreview,
+        matchReason: item.matchReason,
+      })),
+    },
+    meta: {
+      days,
+      limit,
+      query: topicQuery.query,
+      feedScope,
+      appTypes,
     },
   };
 }

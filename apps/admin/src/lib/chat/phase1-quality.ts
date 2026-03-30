@@ -86,7 +86,9 @@ function familyForTool(toolCall: ToolCall, result: Record<string, unknown>): str
     case 'query_change_activity':
     case 'get_change_activity_detail':
     case 'get_game_change_timeline':
+    case 'get_recent_news_detail':
     case 'get_recent_news_digest':
+    case 'search_recent_news_topics':
     case 'compare_change_before_after':
     case 'find_change_patterns':
       return 'change_intel';
@@ -137,8 +139,16 @@ function getRequiredAnswerFields(toolCall: ToolCall, result: Record<string, unkn
       return ['dates', 'concrete title-specific changes', 'before/after values when available'];
     }
 
+    if (toolCall.name === 'get_recent_news_detail') {
+      return ['date', 'latest news title', 'concrete changes from the latest news body'];
+    }
+
     if (toolCall.name === 'get_recent_news_digest') {
       return ['dates', 'news titles', 'concrete changes from the news copy'];
+    }
+
+    if (toolCall.name === 'search_recent_news_topics') {
+      return ['matched games', 'dates', 'matched topic evidence', 'why each result matched'];
     }
 
     return ['ranked candidates', 'evidence', 'timing', 'why it qualifies'];
@@ -171,8 +181,12 @@ function getSupportingEvidence(toolCall: ToolCall, result: Record<string, unknow
   if (family === 'change_intel') {
     if (toolCall.name === 'compare_change_before_after') {
       evidence.push('Use structured diffs plus baseline/response windows.');
+    } else if (toolCall.name === 'get_recent_news_detail') {
+      evidence.push('Lead with the newest stored news body and explain the concrete changes in that latest item.');
     } else if (toolCall.name === 'get_recent_news_digest') {
       evidence.push('Lead with the stored news copy, dates, and the concrete update from each item.');
+    } else if (toolCall.name === 'search_recent_news_topics') {
+      evidence.push('Lead with the matched recent news text, dates, and why each row matched the requested topic.');
     } else if (toolCall.name === 'query_change_activity' || toolCall.name === 'find_change_patterns') {
       evidence.push('Lead with exact change evidence, not generic pattern labels.');
     }
@@ -215,8 +229,16 @@ function getAnswerScaffold(toolCall: ToolCall, result: Record<string, unknown>, 
       return 'Lead with the most material title-specific changes and dates. Use before/after text when it exists.';
     }
 
+    if (toolCall.name === 'get_recent_news_detail') {
+      return 'If the latest item is substantial, answer from that newest post only. Otherwise say the newest item was thin and use a short 2-3 item fallback digest.';
+    }
+
     if (toolCall.name === 'get_recent_news_digest') {
       return 'Use a short intro sentence and 2-4 bullets. Each bullet should name the game, timing, and concrete update from the news body.';
+    }
+
+    if (toolCall.name === 'search_recent_news_topics') {
+      return 'Use a short intro sentence and 3-6 bullets. Each bullet should name the game, timing, matched headline or excerpt, and why it matched the topic.';
     }
   }
 
