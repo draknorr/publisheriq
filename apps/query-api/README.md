@@ -57,6 +57,37 @@ The chat runtime currently promotes only these prompt families to Tiger-owned vi
 
 News and change-intel can stay shadow-only while the live ingesting docs/events slice continues to drift.
 
+## Railway Preview Deployment
+
+For branch-preview testing, deploy `query-api` to Railway from the repo root.
+This repo now includes [`railway.toml`](../../railway.toml) pointing at
+[`apps/query-api/Dockerfile`](./Dockerfile).
+
+Recommended Railway env:
+
+- `TIGER_PRIMARY_URL`
+- `QUERY_API_BEARER_TOKEN`
+- `DATA_PLANE_STATEMENT_TIMEOUT_MS=10000`
+- `DATA_PLANE_MAX_POOL_SIZE=5`
+- `QUERY_API_HOST=0.0.0.0`
+
+`query-api` now falls back to Railway's injected `PORT` if `QUERY_API_PORT` is
+not set explicitly.
+
+After deploy, verify:
+
+- `GET /healthz`
+- `GET /readyz`
+- `GET /v1/contracts`
+
+Then point the Vercel preview at Railway with:
+
+- `QUERY_API_BASE_URL=<railway https url>`
+- `QUERY_API_BEARER_TOKEN=<same bearer token>`
+- `CHAT_TIGER_PRIMARY_MODE=all`
+- `CHAT_TIGER_SHADOW_MODE=off`
+- `NEXT_PUBLIC_CHAT_TIGER_DEBUG=true`
+
 ## Container Build
 
 Build from the repo root so workspace packages are available:

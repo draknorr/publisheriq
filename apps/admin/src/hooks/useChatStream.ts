@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { Message, ChatToolCall, ChatTiming } from '@/lib/llm/types';
 import type { SessionChatContext } from '@/lib/chat/chat-context-types';
 import type { StreamEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
+import type { TigerPrimaryInfo, TigerShadowInfo } from '@/lib/chat/tiger-shadow-types';
 
 export interface DisplayMessage {
   id: string;
@@ -12,6 +13,8 @@ export interface DisplayMessage {
   toolCalls?: ChatToolCall[];
   timing?: ChatTiming;
   debug?: StreamDebugInfo;
+  tigerPrimary?: TigerPrimaryInfo;
+  tigerShadow?: TigerShadowInfo;
   timestamp: Date;
 }
 
@@ -166,6 +169,8 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
                         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
                         timing: event.timing,
                         debug: event.debug,
+                        tigerPrimary: event.tigerPrimary,
+                        tigerShadow: event.tigerShadow,
                       }
                     : m
                 ));

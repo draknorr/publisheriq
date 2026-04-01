@@ -5,11 +5,14 @@ import { Card } from '@/components/ui/Card';
 import { ChevronDown, ChevronRight, Database, User, Bot } from 'lucide-react';
 import type { ChatToolCall, ChatTiming } from '@/lib/llm/types';
 import type { StreamDebugInfo } from '@/lib/llm/streaming-types';
+import type { TigerPrimaryInfo, TigerShadowInfo } from '@/lib/chat/tiger-shadow-types';
 import { Clock } from 'lucide-react';
 import { StreamingContent, CopyButton, CodeBlock } from './content';
 import { EntityLinkProvider } from './content/EntityLinkContext';
 import { SuggestionChips } from './SuggestionChips';
 import type { QuerySuggestion } from '@/lib/chat/query-templates';
+
+const CHAT_TIGER_DEBUG = process.env.NEXT_PUBLIC_CHAT_TIGER_DEBUG === 'true';
 
 interface DisplayMessage {
   id: string;
@@ -18,6 +21,8 @@ interface DisplayMessage {
   toolCalls?: ChatToolCall[];
   timing?: ChatTiming;
   debug?: StreamDebugInfo;
+  tigerPrimary?: TigerPrimaryInfo;
+  tigerShadow?: TigerShadowInfo;
   timestamp: Date;
 }
 
@@ -50,6 +55,65 @@ function summarizeToolResult(result: Record<string, unknown>): string {
   return 'completed';
 }
 
+function titleCaseIntent(intent: string | null | undefined): string | null {
+  if (!intent) {
+    return null;
+  }
+
+  return intent
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getTigerDebugBadge(message: DisplayMessage): {
+  detail?: string;
+  label: string;
+  tone: 'blue' | 'slate';
+} | null {
+  if (!CHAT_TIGER_DEBUG || message.role !== 'assistant') {
+    return null;
+  }
+
+  if (message.tigerPrimary?.route === 'primary_success') {
+    return {
+      label: 'Tiger primary',
+      detail: titleCaseIntent(message.tigerPrimary.matchedIntent) ?? undefined,
+      tone: 'blue',
+    };
+  }
+
+  if (message.tigerShadow?.route === 'shadow_success_legacy_answer') {
+    return {
+      label: 'Tiger shadow',
+      detail: titleCaseIntent(message.tigerShadow.matchedIntent) ?? undefined,
+      tone: 'blue',
+    };
+  }
+
+  if (message.tigerPrimary?.enabled && message.tigerPrimary.route !== 'disabled') {
+    return {
+      label: 'Legacy fallback',
+      detail:
+        titleCaseIntent(message.tigerPrimary.matchedIntent) ??
+        message.tigerPrimary.route.replaceAll('_', ' '),
+      tone: 'slate',
+    };
+  }
+
+  if (message.tigerShadow?.enabled && message.tigerShadow.route !== 'disabled') {
+    return {
+      label: 'Legacy path',
+      detail:
+        titleCaseIntent(message.tigerShadow.matchedIntent) ??
+        message.tigerShadow.route.replaceAll('_', ' '),
+      tone: 'slate',
+    };
+  }
+
+  return null;
+}
+
 interface ChatMessageProps {
   message: DisplayMessage;
   isStreaming?: boolean;
@@ -65,6 +129,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const [showQueries, setShowQueries] = useState(false);
   const isUser = message.role === 'user';
+  const tigerDebugBadge = getTigerDebugBadge(message);
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -106,6 +171,26 @@ export function ChatMessage({
               <EntityLinkProvider toolCalls={message.toolCalls}>
                 <StreamingContent content={message.content} isStreaming={isStreaming} />
               </EntityLinkProvider>
+            </div>
+          )}
+
+          {!isUser && tigerDebugBadge && (
+            <div className="mt-3">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-caption ${
+                  tigerDebugBadge.tone === 'blue'
+                    ? 'border-accent-blue/20 bg-accent-blue/10 text-accent-blue'
+                    : 'border-border-subtle bg-surface-overlay text-text-secondary'
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    tigerDebugBadge.tone === 'blue' ? 'bg-accent-blue' : 'bg-text-muted'
+                  }`}
+                />
+                <span>{tigerDebugBadge.label}</span>
+                {tigerDebugBadge.detail ? <span className="text-text-muted">· {tigerDebugBadge.detail}</span> : null}
+              </span>
             </div>
           )}
 

@@ -96,11 +96,12 @@ export function loadQueryApiConfig(
   env: NodeJS.ProcessEnv = process.env
 ): QueryApiConfig {
   const base = loadDataPlaneConfig(env);
+  const port = env.QUERY_API_PORT ?? env.PORT;
 
   return {
     ...base,
     bearerToken: env.QUERY_API_BEARER_TOKEN ?? null,
     host: env.QUERY_API_HOST ?? DEFAULT_QUERY_API_HOST,
-    port: readNumber(env.QUERY_API_PORT, DEFAULT_QUERY_API_PORT),
+    port: readNumber(port, DEFAULT_QUERY_API_PORT),
   };
 }
