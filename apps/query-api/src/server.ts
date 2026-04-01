@@ -47,18 +47,33 @@ function authorizeRequest(request: IncomingMessage, bearerToken: string | null):
   return header === `Bearer ${bearerToken}`;
 }
 
+function routeRequiresAuthorization(
+  request: IncomingMessage,
+  url: URL,
+  bearerToken: string | null,
+): boolean {
+  if (!bearerToken) {
+    return false;
+  }
+
+  return !(request.method === 'GET' && url.pathname === '/healthz');
+}
+
 async function main(): Promise<void> {
   const config = loadQueryApiConfig();
   const dataPlane = new DataPlaneService(config);
 
   const server = createServer(async (request, response) => {
     try {
-      if (!authorizeRequest(request, config.bearerToken)) {
+      const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+
+      if (
+        routeRequiresAuthorization(request, url, config.bearerToken) &&
+        !authorizeRequest(request, config.bearerToken)
+      ) {
         sendJson(response, 401, { error: 'Unauthorized' });
         return;
       }
-
-      const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 
       if (request.method === 'GET' && url.pathname === '/healthz') {
         const provenance = await dataPlane.healthCheck();

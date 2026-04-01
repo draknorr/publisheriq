@@ -1,6 +1,5 @@
 FROM node:22-slim
 
-ENV NODE_ENV=production
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
@@ -10,10 +9,12 @@ WORKDIR /app
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter @publisheriq/shared build
 RUN pnpm --filter @publisheriq/data-plane build
 RUN pnpm --filter @publisheriq/query-api build
+
+ENV NODE_ENV=production
 
 WORKDIR /app/apps/query-api
 
