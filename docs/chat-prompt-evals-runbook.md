@@ -57,6 +57,14 @@ pnpm chat-evals:full-blended-endpoint -- --max-prompts 3 --max-scenarios 1
 ```
 
 ```bash
+pnpm chat-evals:full-blended-endpoint -- \
+  --origin http://127.0.0.1:3021 \
+  --baseline-dir /tmp/publisheriq-chat-evals/full-blended-endpoint-2026-04-02T05-33-24-860Z \
+  --query-api-base-url http://127.0.0.1:4324 \
+  --query-api-source tiger
+```
+
+```bash
 pnpm chat-evals:full-blended-endpoint -- --manifest-only --out-dir /tmp/publisheriq-chat-evals/full-blended-manifest
 ```
 
@@ -83,6 +91,11 @@ Artifacts include:
 - `backend-usage-summary.json`
 - `migration-matrix.json`
 - `migration-matrix.md`
+- `prompt-baseline-comparison.json`
+- `scenario-baseline-comparison.json`
+- `prompt-baseline-comparison.md`
+- `non-tiger-prompts.json`
+- `migration-priority.json`
 
 This is now the default quality pass for ranking the old prompt inventory on the new chat stack.
 Keep using the older API/debug wrappers when you want lower-level transport, tool, or Tiger routing diagnostics.

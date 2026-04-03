@@ -7,6 +7,9 @@ import { tryTigerQueryAnalyticsCompat } from './query-analytics-tiger-compat';
 import { runTigerPrimaryEvaluation } from './tiger-shadow';
 import { lookupGames } from '@/lib/search/game-lookup';
 import { searchGames } from '@/lib/search/game-search';
+import { screenGames } from '@/lib/search/screen-games';
+import { discoverTrending } from '@/lib/search/trend-discovery';
+import { lookupTags } from '@/lib/search/tag-lookup';
 import { lookupPublishers } from '@/lib/search/publisher-lookup';
 
 function setScopedEnv(
@@ -197,6 +200,190 @@ test('searchGames uses Tiger search-catalog for supported discovery filters', as
   assert.ok(provenance.dataSources.includes('query_api:searchCatalog'));
 });
 
+test('screenGames uses Tiger discover-momentum for supported momentum filters', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  setScopedFetch(t, async (url) => {
+    assert.equal(url.pathname, '/v1/contracts/discover-momentum');
+    return jsonResponse({
+      filtersApplied: ['sort_by: ccu_peak', 'timeframe: current', 'is_free: true'],
+      items: [
+        {
+          appid: 730,
+          ccuPeak: 1500000,
+          developerName: 'Valve',
+          entityUid: 'steam:game:730',
+          isFree: true,
+          isSelfPublished: true,
+          momentumScore: 100,
+          name: 'Counter-Strike 2',
+          platformSupport: ['windows'],
+          publisherName: 'Valve',
+          supportLevel: 'high',
+          supportReasons: ['Peak CCU remains dominant.'],
+          totalReviews: 9000000,
+        },
+      ],
+      rankingDefinition: 'Peak CCU uses the latest 24-hour concurrent-player snapshot.',
+      rankingLabel: 'Peak CCU',
+      sufficientToAnswer: true,
+      timeframe: 'current',
+      timeframeLabel: 'Current snapshot',
+    });
+  });
+
+  const result = await screenGames({
+    filters: { is_free: true },
+    sort_by: 'ccu_peak',
+    timeframe: 'current',
+  });
+  const provenance = extractToolExecutionProvenance(result);
+
+  assert.equal(result.success, true);
+  assert.equal(result.results?.[0]?.appid, 730);
+  assert.equal(result.results?.[0]?.publisherName, 'Valve');
+  assert.ok(provenance?.dataSources.includes('query_api:discoverMomentum'));
+});
+
+test('screenGames folds verified_tags_any into Tiger momentum tag filters', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/discover-momentum');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body)) as {
+      filters?: {
+        tags?: string[];
+      };
+    };
+    assert.deepEqual(body.filters?.tags, ['Roguelite']);
+
+    return jsonResponse({
+      items: [
+        {
+          appid: 1145360,
+          isFree: false,
+          name: 'Hades',
+          totalReviews: 250000,
+        },
+      ],
+      sufficientToAnswer: true,
+      timeframe: '7d',
+      timeframeLabel: 'Last 7 days',
+    });
+  });
+
+  const result = await screenGames({
+    filters: { verified_tags_any: ['Roguelite'] },
+    sort_by: 'reviews_added_7d',
+    timeframe: '7d',
+  });
+  const provenance = extractToolExecutionProvenance(result);
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.results?.[0]?.matchedVerifiedTags, ['Roguelite']);
+  assert.ok(provenance?.dataSources.includes('query_api:discoverMomentum'));
+});
+
+test('discoverTrending uses Tiger discover-momentum for supported trend filters', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  setScopedFetch(t, async (url) => {
+    assert.equal(url.pathname, '/v1/contracts/discover-momentum');
+    return jsonResponse({
+      filtersApplied: ['sort_by: reviews_added_30d', 'timeframe: 30d', 'tags: Horror'],
+      items: [
+        {
+          appid: 123,
+          name: 'Rising Horror',
+          reviewPercentage: 89,
+          reviewsAdded30d: 120,
+          reviewsAdded7d: 40,
+          totalReviews: 1800,
+          velocity30d: 4,
+          velocity7d: 5.7,
+        },
+      ],
+      rankingDefinition: 'Breakout candidates are ranked by recent review pickup and supporting CCU acceleration while keeping the set constrained to smaller-but-rising titles.',
+      rankingLabel: 'Reviews Added (30d)',
+      sufficientToAnswer: true,
+      timeframe: '30d',
+      timeframeLabel: 'Last 30 days',
+    });
+  });
+
+  const result = await discoverTrending({
+    filters: { tags: ['Horror'] },
+    trend_type: 'breaking_out',
+    timeframe: '30d',
+  });
+  const provenance = extractToolExecutionProvenance(result);
+
+  assert.equal(result.success, true);
+  assert.equal(result.results?.[0]?.appid, 123);
+  assert.ok(provenance?.dataSources.includes('query_api:discoverMomentum'));
+});
+
+test('discoverTrending forwards max price filters to Tiger discover-momentum', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/discover-momentum');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body)) as {
+      filters?: {
+        maxPriceCents?: number;
+      };
+    };
+    assert.equal(body.filters?.maxPriceCents, 2500);
+
+    return jsonResponse({
+      items: [],
+      sufficientToAnswer: false,
+      timeframe: '30d',
+      timeframeLabel: 'Last 30 days',
+    });
+  });
+
+  const result = await discoverTrending({
+    filters: { max_price_cents: 2500 },
+    trend_type: 'breaking_out',
+    timeframe: '30d',
+  });
+
+  assert.equal(result.success, true);
+});
+
+test('lookupTags uses Tiger search-catalog facet lookup for taxonomy prompts', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/search-catalog');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body)) as {
+      facetQuery?: string;
+      includeFacets?: string[];
+    };
+    assert.equal(body.facetQuery, 'colony sim');
+    assert.deepEqual(body.includeFacets, ['tags']);
+
+    return jsonResponse({
+      facets: {
+        canonicalMatch: {
+          name: 'Colony Sim',
+          type: 'tags',
+        },
+        categories: [],
+        genres: [],
+        tags: ['Colony Sim', 'Base Building'],
+      },
+    });
+  });
+
+  const result = await lookupTags({ query: 'colony sim', type: 'tags' });
+  const provenance = extractToolExecutionProvenance(result);
+
+  assert.equal(result.success, true);
+  assert.equal(result.canonicalMatch?.type, 'tag');
+  assert.deepEqual(result.results.tags, ['Colony Sim', 'Base Building']);
+  assert.ok(provenance?.dataSources.includes('query_api:searchCatalog'));
+});
+
 test('getGameChangeTimeline uses Tiger explain-changes when the title resolves cleanly', async (t) => {
   setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
   let callCount = 0;
@@ -260,6 +447,69 @@ test('getGameChangeTimeline uses Tiger explain-changes when the title resolves c
   assert.equal(result.events?.[0]?.label, 'Media Gallery');
   assert.ok(provenance);
   assert.ok(provenance.dataSources.includes('query_api:explainChanges'));
+});
+
+test('getGameChangeTimeline uses Tiger get-entity-overview when only appid is provided', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  let callCount = 0;
+  setScopedFetch(t, async (url, init) => {
+    callCount += 1;
+
+    if (url.pathname === '/v1/contracts/get-entity-overview') {
+      assert.ok(init?.body);
+      const body = JSON.parse(String(init.body)) as {
+        entityKind?: string;
+        platformEntityId?: string;
+      };
+      assert.equal(body.entityKind, 'game');
+      assert.equal(body.platformEntityId, '1145360');
+      return jsonResponse({
+        entity: {
+          displayName: 'Hades',
+          entityKind: 'game',
+          entityUid: 'steam:game:1145360',
+          platformEntityId: '1145360',
+        },
+      });
+    }
+
+    if (url.pathname === '/v1/contracts/explain-changes') {
+      return jsonResponse({
+        entity: {
+          displayName: 'Hades',
+          entityUid: 'steam:game:1145360',
+          platformEntityId: '1145360',
+        },
+        moments: [
+          {
+            events: [
+              {
+                afterValue: 'New trailer',
+                beforeValue: null,
+                changeType: 'media_gallery',
+                context: null,
+                id: 'event-1',
+                occurredAt: '2026-03-15T12:00:00.000Z',
+                source: 'storefront',
+              },
+            ],
+          },
+        ],
+        sufficientToAnswer: true,
+      });
+    }
+
+    throw new Error(`Unexpected query-api path: ${url.pathname}`);
+  });
+
+  const result = await getGameChangeTimeline({ appid: 1145360, limit: 5 });
+  const provenance = extractToolExecutionProvenance(result);
+
+  assert.equal(callCount, 2);
+  assert.equal(result.success, true);
+  assert.equal(result.app?.appid, 1145360);
+  assert.equal(result.events?.length, 1);
+  assert.ok(provenance?.dataSources.includes('query_api:explainChanges'));
 });
 
 test('query_analytics uses Tiger get-entity-overview for developer metrics patterns', async (t) => {
@@ -337,9 +587,138 @@ test('query_analytics uses Tiger get-entity-overview for developer metrics patte
   assert.ok(provenance.dataSources.includes('query_api:getEntityOverview'));
 });
 
-test('Tiger primary treats marketing-push prompts as change discovery fallback, not semantic search', async (t) => {
+test('query_analytics uses Tiger search-catalog for DLC relation prompts', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  const paths: string[] = [];
+  setScopedFetch(t, async (url) => {
+    paths.push(url.pathname);
+
+    if (url.pathname === '/v1/contracts/get-entity-overview') {
+      return jsonResponse({
+        entity: {
+          displayName: 'ELDEN RING',
+        },
+      });
+    }
+
+    if (url.pathname === '/v1/contracts/search-catalog') {
+      return jsonResponse({
+        items: [
+          {
+            appType: 'dlc',
+            appid: 2778580,
+            name: 'ELDEN RING Shadow of the Erdtree',
+            releaseDate: '2024-06-20',
+            releaseState: 'released',
+          },
+        ],
+      });
+    }
+
+    throw new Error(`Unexpected query-api path: ${url.pathname}`);
+  });
+
+  const result = await tryTigerQueryAnalyticsCompat({
+    cube: 'DlcRelations',
+    dimensions: ['DlcRelations.parentAppid', 'DlcRelations.dlcAppid'],
+    filters: [
+      { member: 'DlcRelations.parentAppid', operator: 'equals', values: [1245620] },
+    ],
+    limit: 50,
+  });
+
+  assert.ok(result);
+  assert.equal(paths[0], '/v1/contracts/get-entity-overview');
+  assert.equal(paths[1], '/v1/contracts/search-catalog');
+  assert.equal(result?.success, true);
+  assert.equal(result?.data[0]?.parentName, 'ELDEN RING');
+  assert.equal(result?.data[0]?.dlcAppid, 2778580);
+});
+
+test('query_analytics uses Tiger rank-entities for company window ranking prompts', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/rank-entities');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+    assert.equal(body.entityKind, 'publisher');
+    assert.equal(body.metric, 'game_count');
+    assert.equal(body.releaseDays, 180);
+
+    return jsonResponse({
+      items: [
+        {
+          displayName: 'Devolver Digital',
+          metrics: {
+            gameCount: 6,
+            reviewScore: 88,
+            totalReviews: 55000,
+          },
+          platformEntityId: '501',
+        },
+      ],
+    });
+  });
+
+  const result = await tryTigerQueryAnalyticsCompat({
+    cube: 'PublisherChatWindowMetrics',
+    dimensions: ['PublisherChatWindowMetrics.publisherId'],
+    filters: [
+      {
+        member: 'PublisherChatWindowMetrics.meaningfulGamesReleasedLast6Months',
+        operator: 'gte',
+        values: [1],
+      },
+    ],
+    limit: 25,
+    order: {
+      'PublisherChatWindowMetrics.meaningfulGamesReleasedLast6Months': 'desc',
+    },
+    segments: ['PublisherChatWindowMetrics.last6Months'],
+  });
+
+  const provenance = result ? extractToolExecutionProvenance(result) : null;
+
+  assert.ok(result);
+  assert.equal(result?.success, true);
+  assert.equal(result?.data[0]?.publisherName, 'Devolver Digital');
+  assert.equal(result?.data[0]?.gamesReleasedLast6Months, 6);
+  assert.ok(provenance?.dataSources.includes('query_api:rankEntities'));
+});
+
+test('Tiger primary routes marketing-push prompts through Tiger change discovery', async (t) => {
   setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
   setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/discover-change-patterns');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+    assert.equal(body.pattern, 'marketing_push');
+    return jsonResponse({
+      interpretedFilters: {
+        days: 30,
+        pattern: 'marketing_push',
+        query: null,
+      },
+      items: [
+        {
+          activityIds: ['change:1'],
+          appid: 1145350,
+          confidence: 'high',
+          name: 'Hades II',
+          occurredAt: '2026-03-30T12:00:00.000Z',
+          primaryProof: {
+            headline: 'Store refresh paired with announcement activity',
+            summary: 'Tiger detected a coordinated store and announcement beat.',
+          },
+          reasons: ['Announcement activity landed alongside store-page updates.'],
+          signalFamilies: ['announcement', 'store-page'],
+        },
+      ],
+      sufficientToAnswer: true,
+    });
+  });
 
   const result = await runTigerPrimaryEvaluation({
     isEvalRequest: true,
@@ -350,8 +729,53 @@ test('Tiger primary treats marketing-push prompts as change discovery fallback, 
 
   assert.equal(result.info.enabled, true);
   assert.equal(result.info.matchedIntent, 'change_discovery');
-  assert.equal(result.info.route, 'fallback_to_legacy');
-  assert.equal(result.renderedText, null);
+  assert.equal(result.info.route, 'primary_success');
+  assert.match(result.renderedText ?? '', /Tiger change-pattern matches/);
+});
+
+test('Tiger primary routes developer-diary news prompts through Tiger search-documents', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/search-documents');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+    assert.equal(body.mode, 'topic_search');
+    assert.equal(body.query, 'developer diary');
+
+    return jsonResponse({
+      entity: null,
+      interpretedFilters: {
+        mode: 'topic_search',
+        query: 'developer diary',
+      },
+      items: [
+        {
+          appName: 'Hades II',
+          appid: 1145350,
+          feedLabel: 'Steam News',
+          feedScope: 'community_announcements',
+          publishedAt: '2026-03-30T12:00:00.000Z',
+          sortTime: '2026-03-30T12:00:00.000Z',
+          title: 'Developer Diary #7',
+          url: 'https://store.steampowered.com/news/app/1145350/view/1',
+        },
+      ],
+      sufficientToAnswer: true,
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'What games have released developer diaries lately?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'news_search');
+  assert.equal(result.info.route, 'primary_success');
+  assert.match(result.renderedText ?? '', /developer diary/i);
 });
 
 test('Tiger primary routes overview prompts through get-entity-overview', async (t) => {
@@ -885,6 +1309,116 @@ for (const prompt of [
     assert.match(result.renderedText ?? '', /Total Reviews/);
   });
 }
+
+test('Tiger primary routes compare follow-ups through compareEntities using the carried candidate set', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/compare-entities');
+    assert.ok(init?.body);
+    assert.deepEqual(JSON.parse(String(init.body)), {
+      entityUids: [
+        'd58d0f16-7f35-5ca8-b5f5-0f4d6e86e9e5',
+        '727bceb0-35f2-530c-8b9a-a6af5f7ae7a6',
+        '53f92ec8-c2a1-5f35-99d0-e6f1c309dd4f',
+      ],
+      metrics: ['total_reviews'],
+    });
+
+    return jsonResponse({
+      entityKind: 'game',
+      highlights: [
+        {
+          displayName: 'Hades',
+          entityUid: 'd58d0f16-7f35-5ca8-b5f5-0f4d6e86e9e5',
+          metric: 'total_reviews',
+          value: 250000,
+        },
+      ],
+      items: [
+        {
+          displayName: 'Hades',
+          entityKind: 'game',
+          entityUid: 'd58d0f16-7f35-5ca8-b5f5-0f4d6e86e9e5',
+          metrics: {
+            ccuPeak: 38000,
+            gameCount: null,
+            ownersMidpoint: 4500000,
+            reviewScore: 98,
+            totalReviews: 250000,
+          },
+          platform: 'steam',
+          platformEntityId: '1145360',
+        },
+        {
+          displayName: 'Dead Cells',
+          entityKind: 'game',
+          entityUid: '727bceb0-35f2-530c-8b9a-a6af5f7ae7a6',
+          metrics: {
+            ccuPeak: 12000,
+            gameCount: null,
+            ownersMidpoint: 3200000,
+            reviewScore: 97,
+            totalReviews: 140000,
+          },
+          platform: 'steam',
+          platformEntityId: '588650',
+        },
+        {
+          displayName: 'Risk of Rain 2',
+          entityKind: 'game',
+          entityUid: '53f92ec8-c2a1-5f35-99d0-e6f1c309dd4f',
+          metrics: {
+            ccuPeak: 54000,
+            gameCount: null,
+            ownersMidpoint: 5100000,
+            reviewScore: 94,
+            totalReviews: 180000,
+          },
+          platform: 'steam',
+          platformEntityId: '632360',
+        },
+      ],
+      metrics: ['total_reviews'],
+      platform: 'steam',
+      sufficientToAnswer: true,
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'Compare those by reviews',
+    sessionContext: {
+      version: 1,
+      entities: [],
+      constraints: [],
+      candidateSet: {
+        entityUids: [
+          'd58d0f16-7f35-5ca8-b5f5-0f4d6e86e9e5',
+          '727bceb0-35f2-530c-8b9a-a6af5f7ae7a6',
+          '53f92ec8-c2a1-5f35-99d0-e6f1c309dd4f',
+        ],
+        ids: [1145360, 588650, 632360],
+        kind: 'games',
+        names: ['Hades', 'Dead Cells', 'Risk of Rain 2'],
+        sourceTool: 'search_games',
+      },
+      lastAnswer: {
+        summary: 'Compared the carried game set.',
+      },
+      resultSet: null,
+      updatedAt: '2026-04-02T00:00:00.000Z',
+    },
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'entity_compare');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'compareEntities');
+  assert.match(result.renderedText ?? '', /Hades/);
+  assert.match(result.renderedText ?? '', /Total Reviews/);
+});
 
 test('Tiger primary routes derived catalog compare prompts through searchCatalog and compareEntities', async (t) => {
   setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');

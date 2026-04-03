@@ -6,7 +6,6 @@
 
 import {
   type ResolutionConfidence,
-  resolveCompanyReference,
   type CompanyEntityType,
   type CompanyResolutionCandidate,
 } from '@/lib/search/company-resolution';
@@ -105,6 +104,7 @@ export interface LookupPublishersResult {
   resolutionConfidence?: ResolutionConfidence;
   needsDisambiguation?: boolean;
   error?: string;
+  unavailable?: boolean;
 }
 
 /**
@@ -142,28 +142,7 @@ export interface LookupDevelopersResult {
   resolutionConfidence?: ResolutionConfidence;
   needsDisambiguation?: boolean;
   error?: string;
-}
-
-function summarizeCandidate(candidate?: CompanyResolutionCandidate): CanonicalCompanySummary | undefined {
-  if (!candidate) {
-    return undefined;
-  }
-
-  return {
-    gameCount: candidate.gameCount,
-    totalReviews: candidate.totalReviews,
-    avgReviewScore: candidate.avgReviewScore,
-    positiveReviews: candidate.positiveReviews,
-  };
-}
-
-function stripCandidate(candidate: CompanyResolutionCandidate): LookupCompanyCandidate {
-  return {
-    id: candidate.id,
-    name: candidate.name,
-    matchKind: candidate.matchKind,
-    resolutionScore: candidate.resolutionScore,
-  };
+  unavailable?: boolean;
 }
 
 function inferResolutionConfidence(score: number | undefined): ResolutionConfidence {
@@ -245,7 +224,18 @@ async function lookupCompanyViaTiger(
     .filter((candidate): candidate is TigerLookupCompanyCandidate => candidate != null);
 
   if (rawCandidates.length === 0) {
-    return null;
+    return attachToolExecutionProvenance(
+      {
+        result_shape: 'lookup' as const,
+        success: true,
+        entityType,
+        query,
+        results: [],
+        sufficient_to_answer: true,
+        sufficiency_reason: `No ${entityType} matches were found for "${query}".`,
+      },
+      TIGER_COMPANY_LOOKUP_PROVENANCE
+    );
   }
 
   const topCandidate = rawCandidates[0];
@@ -328,29 +318,16 @@ async function lookupCompany(
     if (tigerResult) {
       return tigerResult;
     }
-
-    const resolution = await resolveCompanyReference(entityType, query, limit);
-    const canonicalCandidate = resolution.canonicalResult
-      ? resolution.results.find((candidate) => candidate.id === resolution.canonicalResult?.id)
-      : undefined;
-
     return {
       result_shape: 'lookup',
-      success: resolution.success,
+      sufficient_to_answer: true,
+      sufficiency_reason: `Tiger company lookup is temporarily unavailable for "${query}".`,
+      success: false,
       entityType,
       query,
-      results: resolution.results.map(stripCandidate),
-      canonicalResult: resolution.canonicalResult,
-      summary: summarizeCandidate(canonicalCandidate),
-      resolutionConfidence: resolution.resolutionConfidence,
-      needsDisambiguation: resolution.needsDisambiguation,
-      sufficient_to_answer: resolution.needsDisambiguation || !resolution.success ? true : false,
-      sufficiency_reason: resolution.needsDisambiguation
-        ? resolution.error ?? `The ${entityType} name "${query}" is ambiguous and needs clarification.`
-        : resolution.success
-          ? 'Identity resolved only. For company counts, rankings, comparisons, or top-title answers, run one analytics query before responding.'
-          : resolution.error,
-      error: resolution.error,
+      results: [],
+      unavailable: true,
+      error: `Tiger company lookup is temporarily unavailable for "${query}".`,
     };
   } catch (error) {
     if (entityType === 'publisher') {

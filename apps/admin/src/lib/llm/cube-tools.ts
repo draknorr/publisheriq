@@ -1,8 +1,8 @@
 /**
- * Cube.dev-based LLM tools
+ * Chat LLM tools.
  *
- * These tools replace the raw SQL query_database tool with
- * safe, pre-defined Cube.dev semantic queries.
+ * The remaining tool surface is Tiger-backed or a Tiger-backed compatibility
+ * alias. Legacy Cube/Supabase answer-path tools are not exposed here.
  */
 
 import type { Tool } from './types';
@@ -461,7 +461,7 @@ Use this tool BEFORE querying for games by publisher to find the exact name:
 
 Returns ranked publisher candidates, a canonicalResult when resolution is confident, a compact summary object, and a needsDisambiguation flag when the name is ambiguous.
 
-Use lookup for identity resolution first. For company counts, rankings, comparisons, and top-title questions, follow lookup with one query_analytics call instead of answering from lookup alone.`,
+Use lookup only for identity resolution. If the user then asks for company counts, rankings, comparisons, or top titles, use the relevant Tiger-backed search, compare, or trend tool rather than answering from lookup alone.`,
     parameters: {
       type: 'object',
       properties: {
@@ -491,7 +491,7 @@ Use this tool BEFORE querying for games by developer to find the exact name:
 
 Returns ranked developer candidates, a canonicalResult when resolution is confident, a compact summary object, and a needsDisambiguation flag when the name is ambiguous.
 
-Use lookup for identity resolution first. For company counts, rankings, comparisons, and top-title questions, follow lookup with one query_analytics call instead of answering from lookup alone.`,
+Use lookup only for identity resolution. If the user then asks for company counts, rankings, comparisons, or top titles, use the relevant Tiger-backed search, compare, or trend tool rather than answering from lookup alone.`,
     parameters: {
       type: 'object',
       properties: {
@@ -860,7 +860,7 @@ Use this tool when users ask about a SPECIFIC game:
 - "Elden Ring" → lookup_games("Elden Ring") to find appid
 - "What's the review score for Hades?" → lookup first
 
-Returns matching games with appid and name. Use the appid in subsequent query_analytics calls.`,
+Returns matching games with appid and name. Use the resolved game in subsequent Tiger-backed discovery, compare, history, or change-intel calls.`,
     parameters: {
       type: 'object',
       properties: {
@@ -888,7 +888,6 @@ export const CUBE_TOOLS: Tool[] = [
   GET_CHANGE_ACTIVITY_DETAIL_TOOL,
   COMPARE_CHANGE_BEFORE_AFTER_TOOL,
   FIND_CHANGE_PATTERNS_TOOL,
-  QUERY_ANALYTICS_TOOL,
   FIND_SIMILAR_TOOL,
   SEARCH_BY_CONCEPT_TOOL,
   SEARCH_GAMES_TOOL,

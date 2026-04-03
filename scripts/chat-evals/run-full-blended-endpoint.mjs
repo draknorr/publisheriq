@@ -18,6 +18,7 @@ import {
   scorePromptResponse,
   scoreScenarioResult,
 } from './lib/blended-persona-scoring.mjs';
+import { buildBaselineComparisonArtifacts } from './lib/baseline-comparison.mjs';
 import { writeFullSuiteArtifacts } from './lib/full-suite-artifacts.mjs';
 import {
   buildFullSuiteManifest,
@@ -44,10 +45,18 @@ async function main() {
   const outDir = args.outDir || DEFAULT_OUT_DIR;
   const origin = args.origin || DEFAULT_ORIGIN;
   const runtimeConfig = {
+    baselineDir: args.baselineDir || '',
+    baselineLabel: args.baselineLabel || '',
     delayMs: args.delayMs ?? DEFAULT_DELAY_MS,
     maxPrompts: args.maxPrompts,
     maxScenarios: args.maxScenarios,
     origin,
+    queryApiBaseUrl: args.queryApiBaseUrl || process.env.QUERY_API_BASE_URL || '',
+    queryApiSource:
+      args.queryApiSource
+      || process.env.CHAT_EVAL_QUERY_API_SOURCE
+      || process.env.DATA_PLANE_SOURCE_KIND
+      || '',
     transport: 'endpoint',
     turnTimeoutMs: args.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS,
   };
@@ -142,8 +151,16 @@ async function main() {
     runtimeConfig,
     scenarioResults,
   });
+  const baselineComparison = await buildBaselineComparisonArtifacts({
+    baselineDir: runtimeConfig.baselineDir,
+    baselineLabel: runtimeConfig.baselineLabel,
+    promptResults,
+    runSummary,
+    scenarioResults,
+  });
 
   await writeFullSuiteArtifacts({
+    baselineComparison,
     outDir,
     promptResults,
     reportTitle: 'Full Blended-Persona Endpoint Chat Eval',
@@ -156,6 +173,8 @@ async function main() {
 
 function parseArgs(argv) {
   const args = {
+    baselineDir: '',
+    baselineLabel: '',
     delayMs: null,
     includeCritiqueIds: [],
     manifestOnly: false,
@@ -163,6 +182,8 @@ function parseArgs(argv) {
     maxScenarios: 0,
     origin: '',
     outDir: '',
+    queryApiBaseUrl: '',
+    queryApiSource: '',
     skipScenarios: false,
     turnTimeoutMs: null,
   };
@@ -178,6 +199,30 @@ function parseArgs(argv) {
 
     if (arg === '--out-dir') {
       args.outDir = argv[index + 1] || '';
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--baseline-dir') {
+      args.baselineDir = argv[index + 1] || '';
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--baseline-label') {
+      args.baselineLabel = argv[index + 1] || '';
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--query-api-base-url') {
+      args.queryApiBaseUrl = argv[index + 1] || '';
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--query-api-source') {
+      args.queryApiSource = argv[index + 1] || '';
       index += 1;
       continue;
     }
@@ -489,6 +534,8 @@ function buildRunSummary(params) {
   return {
     authEmail: auth.email,
     authMode: auth.authMode,
+    baselineDir: runtimeConfig.baselineDir || null,
+    baselineLabel: runtimeConfig.baselineLabel || null,
     blendedPersona: BLENDED_PERSONA,
     delayMs: runtimeConfig.delayMs,
     endpointOrigin: origin,
@@ -496,6 +543,8 @@ function buildRunSummary(params) {
     promptAverageScore: roundToTenth(promptAverage),
     promptCount: promptResults.length,
     promptFailures: promptResults.filter((result) => result.status !== 'success').length,
+    queryApiBaseUrl: runtimeConfig.queryApiBaseUrl || null,
+    queryApiSource: runtimeConfig.queryApiSource || null,
     runDurationMs: runEndedAt.getTime() - runStartedAt.getTime(),
     runEndedAt: runEndedAt.toISOString(),
     runStartedAt: runStartedAt.toISOString(),

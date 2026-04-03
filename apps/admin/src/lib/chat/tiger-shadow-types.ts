@@ -30,7 +30,9 @@ export type TigerShadowContractName =
   | 'rankEntities'
   | 'compareEntities'
   | 'searchCatalog'
+  | 'searchChangeActivity'
   | 'searchDocuments'
+  | 'discoverChangePatterns'
   | 'explainChanges'
   | 'semanticSearch'
   | 'traceMetricHistory';

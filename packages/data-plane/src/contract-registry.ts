@@ -55,6 +55,65 @@ export const CONTRACT_REGISTRY: QueryContractDescriptor[] = [
     ],
   },
   {
+    name: 'discoverMomentum',
+    endpoint: '/v1/contracts/discover-momentum',
+    status: 'ready',
+    requiredRelations: [
+      'apps',
+      'latest_daily_metrics',
+      'metrics_daily_metrics',
+      'app_publishers',
+      'publishers',
+      'app_developers',
+      'developers',
+    ],
+    description:
+      'Find games by current player strength, review-velocity momentum, and breakout-style trend signals with typed filters.',
+    naturalLanguageStrength: [
+      'what is gaining momentum',
+      'what has the most players right now',
+      'breaking out genre screens'
+    ],
+  },
+  {
+    name: 'searchChangeActivity',
+    endpoint: '/v1/contracts/search-change-activity',
+    status: 'ready',
+    requiredRelations: [
+      'apps',
+      'events_app_change_events',
+      'docs_steam_news_items',
+      'docs_steam_news_search_projection',
+    ],
+    description:
+      'Return a ranked cross-game stream of recent Steam change activity and related announcements.',
+    naturalLanguageStrength: [
+      'biggest page refreshes',
+      'release timing changes',
+      'cross-game change discovery'
+    ],
+  },
+  {
+    name: 'discoverChangePatterns',
+    endpoint: '/v1/contracts/discover-change-patterns',
+    status: 'ready',
+    requiredRelations: [
+      'apps',
+      'latest_daily_metrics',
+      'metrics_daily_metrics',
+      'events_app_change_events',
+      'docs_steam_news_items',
+      'docs_steam_news_search_projection',
+    ],
+    description:
+      'Find higher-level marketing, relaunch, teaser, and response patterns across recent Steam change activity.',
+    naturalLanguageStrength: [
+      'marketing push prompts',
+      'under-marketed or signable candidates',
+      'sustained or weak-response patterns'
+    ],
+  },
+  {
     name: 'rankEntities',
     endpoint: '/v1/contracts/rank-entities',
     status: 'ready',

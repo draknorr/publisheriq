@@ -1,9 +1,13 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { pathToFileURL } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   type CompareEntitiesRequest,
   ContractRuntimeUnavailableError,
+  type DiscoverChangePatternsRequest,
+  type DiscoverMomentumRequest,
   type ContinueResultSetRequest,
   DataPlaneService,
   type ExplainChangesRequest,
@@ -12,14 +16,66 @@ import {
   type RankEntitiesRequest,
   type ResolveEntitiesRequest,
   type SearchCatalogRequest,
+  type SearchChangeActivityRequest,
   type SearchDocumentsRequest,
   type SemanticSearchRequest,
   type TraceMetricHistoryRequest,
 } from '@publisheriq/data-plane';
 import { logger, PublisherIQError } from '@publisheriq/shared';
 
+let queryApiEnvLoaded = false;
+
+function loadQueryApiEnvFiles(): void {
+  if (queryApiEnvLoaded) {
+    return;
+  }
+
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const repoRoot = path.resolve(packageRoot, '..', '..');
+  const envFiles = [
+    path.join(repoRoot, '.env'),
+    path.join(repoRoot, '.env.tiger.local'),
+    path.join(packageRoot, '.env.local'),
+    path.join(repoRoot, 'apps', 'admin', '.env.local'),
+  ];
+
+  for (const envFile of envFiles) {
+    if (!existsSync(envFile)) {
+      continue;
+    }
+
+    const text = readFileSync(envFile, 'utf8');
+    for (const line of text.split(/\r?\n/)) {
+      if (!line || line.trim().startsWith('#') || !line.includes('=')) {
+        continue;
+      }
+
+      const separatorIndex = line.indexOf('=');
+      const key = line.slice(0, separatorIndex).trim();
+      let value = line.slice(separatorIndex + 1).trim();
+
+      if (!key || process.env[key] !== undefined) {
+        continue;
+      }
+
+      if (
+        (value.startsWith('"') && value.endsWith('"'))
+        || (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      process.env[key] = value;
+    }
+  }
+
+  queryApiEnvLoaded = true;
+}
+
 interface QueryApiService {
   compareEntities: DataPlaneService['compareEntities'];
+  discoverChangePatterns: DataPlaneService['discoverChangePatterns'];
+  discoverMomentum: DataPlaneService['discoverMomentum'];
   describeContracts: DataPlaneService['describeContracts'];
   continueResultSet: DataPlaneService['continueResultSet'];
   explainChanges: DataPlaneService['explainChanges'];
@@ -29,6 +85,7 @@ interface QueryApiService {
   readinessCheck: DataPlaneService['readinessCheck'];
   resolveEntities: DataPlaneService['resolveEntities'];
   searchCatalog: DataPlaneService['searchCatalog'];
+  searchChangeActivity: DataPlaneService['searchChangeActivity'];
   searchDocuments: DataPlaneService['searchDocuments'];
   semanticSearch: DataPlaneService['semanticSearch'];
   traceMetricHistory: DataPlaneService['traceMetricHistory'];
@@ -136,6 +193,27 @@ export function createQueryApiRequestHandler(params: {
         return;
       }
 
+      if (request.method === 'POST' && url.pathname === '/v1/contracts/discover-momentum') {
+        const body = await readJsonBody<DiscoverMomentumRequest>(request);
+        const result = await dataPlane.discoverMomentum(body);
+        sendJson(response, 200, result);
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/v1/contracts/search-change-activity') {
+        const body = await readJsonBody<SearchChangeActivityRequest>(request);
+        const result = await dataPlane.searchChangeActivity(body);
+        sendJson(response, 200, result);
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/v1/contracts/discover-change-patterns') {
+        const body = await readJsonBody<DiscoverChangePatternsRequest>(request);
+        const result = await dataPlane.discoverChangePatterns(body);
+        sendJson(response, 200, result);
+        return;
+      }
+
       if (request.method === 'POST' && url.pathname === '/v1/contracts/rank-entities') {
         const body = await readJsonBody<RankEntitiesRequest>(request);
         const result = await dataPlane.rankEntities(body);
@@ -224,6 +302,8 @@ export function createQueryApiServer(params?: {
   bearerToken?: string | null;
   dataPlane?: QueryApiService;
 }): ReturnType<typeof createServer> {
+  loadQueryApiEnvFiles();
+
   const config = params?.dataPlane && params?.bearerToken !== undefined
     ? null
     : loadQueryApiConfig();

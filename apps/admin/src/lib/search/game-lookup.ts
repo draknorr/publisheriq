@@ -10,7 +10,6 @@ import {
   type ChatExecutionProvenanceOverride,
 } from '@/lib/chat/execution-trace';
 import { postToQueryApi } from '@/lib/query-api-client';
-import { getServiceSupabase } from '@/lib/supabase-service';
 
 /**
  * Arguments for lookup_games tool
@@ -34,6 +33,7 @@ export interface LookupGamesResult {
     isExactMatch?: boolean;
   }>;
   error?: string;
+  unavailable?: boolean;
 }
 
 interface ResolveEntitiesResponse {
@@ -61,6 +61,16 @@ const TIGER_GAME_LOOKUP_PROVENANCE: ChatExecutionProvenanceOverride = {
     'lookup_games now uses the Tiger resolve-entities contract before falling back to legacy fuzzy lookup.',
   recommendedTigerContracts: ['resolveEntities'],
 };
+
+function buildTigerOnlyLookupFailure(query: string, reason: string): LookupGamesResult {
+  return {
+    success: false,
+    query,
+    results: [],
+    error: reason,
+    unavailable: true,
+  };
+}
 
 function parseAppId(value: string): number | null {
   if (!/^\d+$/.test(value.trim())) {
@@ -118,111 +128,24 @@ export async function lookupGames(args: LookupGamesArgs): Promise<LookupGamesRes
         })
         .filter((entity): entity is LookupGamesResult['results'][number] => entity != null);
 
-      if (tigerResults.length > 0) {
-        return attachToolExecutionProvenance(
-          {
-            success: true,
-            query,
-            results: tigerResults,
-          },
-          TIGER_GAME_LOOKUP_PROVENANCE
-        );
-      }
+      return attachToolExecutionProvenance(
+        {
+          success: true,
+          query,
+          results: tigerResults,
+        },
+        TIGER_GAME_LOOKUP_PROVENANCE
+      );
     }
 
-    const supabase = getServiceSupabase();
-
-    // Exact case-insensitive title matches should win immediately, even for
-    // delisted apps, so historical/news queries do not degrade into fuzzy ambiguity.
-    const { data: exactData, error: exactError } = await supabase
-      .from('apps')
-      .select('appid, name, release_date')
-      .eq('type', 'game')
-      .ilike('name', trimmedQuery)
-      .order('release_date', { ascending: false, nullsFirst: false })
-      .limit(maxResults);
-
-    if (!exactError && exactData && exactData.length > 0) {
-      return {
-        success: true,
-        query,
-        results: exactData.map((g) => ({
-          appid: g.appid,
-          name: g.name,
-          releaseYear: g.release_date ? new Date(g.release_date).getFullYear() : null,
-          similarityScore: 1,
-          isExactMatch: true,
-        })),
-      };
-    }
-
-    // Prefer the fuzzy search RPC so chat tolerates typos, spacing differences,
-    // and near matches on a very large catalog.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: fuzzyData, error: fuzzyError } = await (supabase as any).rpc('search_games_fuzzy', {
-      p_query: query,
-      p_limit: maxResults,
-    }) as {
-      data: Array<{
-        appid: number;
-        name: string;
-        release_date: string | null;
-        similarity_score: number | null;
-        is_exact_match: boolean | null;
-      }> | null;
-      error: { message: string } | null;
-    };
-
-    if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
-      return {
-        success: true,
-        query,
-        results: fuzzyData.map((g) => ({
-          appid: g.appid,
-          name: g.name,
-          releaseYear: g.release_date ? new Date(g.release_date).getFullYear() : null,
-          similarityScore: g.similarity_score ?? undefined,
-          isExactMatch: g.is_exact_match ?? undefined,
-        })),
-      };
-    }
-
-    // Direct ILIKE fallback if the RPC is unavailable.
-    const { data, error } = await supabase
-      .from('apps')
-      .select('appid, name, release_date')
-      .eq('type', 'game')
-      .eq('is_delisted', false)
-      .ilike('name', `%${trimmedQuery}%`)
-      .order('name')
-      .limit(maxResults);
-
-    if (error) {
-      console.error('Game lookup error:', error);
-      return {
-        success: false,
-        query,
-        results: [],
-        error: error.message,
-      };
-    }
-
-    return {
-      success: true,
+    return buildTigerOnlyLookupFailure(
       query,
-      results:
-        data?.map((g) => ({
-          appid: g.appid,
-          name: g.name,
-          releaseYear: g.release_date ? new Date(g.release_date).getFullYear() : null,
-        })) || [],
-    };
+      tigerResponse.reason ?? `No Tiger game match was found for "${trimmedQuery}".`
+    );
   } catch (error) {
-    return {
-      success: false,
+    return buildTigerOnlyLookupFailure(
       query,
-      results: [],
-      error: error instanceof Error ? error.message : 'Failed to lookup games',
-    };
+      error instanceof Error ? error.message : 'Failed to lookup games'
+    );
   }
 }

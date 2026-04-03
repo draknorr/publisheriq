@@ -2,6 +2,7 @@ import 'server-only';
 
 type TigerPrimaryRenderableIntent =
   | 'catalog_search'
+  | 'change_discovery'
   | 'change_explanation'
   | 'entity_compare'
   | 'entity_overview'
@@ -158,7 +159,10 @@ interface TigerPrimaryTraceMetricHistoryResponse {
 }
 
 interface TigerPrimarySearchDocumentItem {
+  appid?: number;
   appName: string;
+  bodyPreview?: string | null;
+  excerpt?: string | null;
   feedLabel: string | null;
   feedScope: string;
   publishedAt: string | null;
@@ -172,9 +176,44 @@ interface TigerPrimarySearchDocumentsResponse {
     displayName: string;
   } | null;
   interpretedFilters: {
-    query: string;
+    mode?: 'digest' | 'latest_item' | 'topic_search';
+    query: string | null;
   };
   items: TigerPrimarySearchDocumentItem[];
+}
+
+interface TigerPrimarySearchChangeActivityResponse {
+  interpretedFilters?: {
+    query?: string | null;
+    signalFamilies?: string[];
+    view?: string;
+  };
+  items: Array<{
+    activityId: string;
+    appid: number;
+    headline: string;
+    name: string;
+    occurredAt: string;
+    storyKind: string;
+    summary: string;
+  }>;
+}
+
+interface TigerPrimaryDiscoverChangePatternsResponse {
+  interpretedFilters?: {
+    pattern?: string;
+  };
+  items: Array<{
+    appid: number;
+    confidence: 'high' | 'medium';
+    name: string;
+    occurredAt: string;
+    primaryProof?: {
+      headline?: string;
+      summary?: string;
+    } | null;
+    reasons: string[];
+  }>;
 }
 
 interface TigerPrimarySemanticSearchResult {
@@ -575,9 +614,16 @@ function renderMetricHistory(response: TigerPrimaryTraceMetricHistoryResponse): 
 }
 
 function renderSearchDocuments(response: TigerPrimarySearchDocumentsResponse): string {
+  const uniqueGames = Array.from(new Set(response.items.map((item) => item.appName).filter(Boolean)));
+  const topic = response.interpretedFilters.query?.trim() ?? null;
+  const mode = response.interpretedFilters.mode ?? 'topic_search';
   const intro = response.entity
     ? `Here are the most relevant recent documents for **${response.entity.displayName}** from Tiger.`
-    : `Here are the most relevant recent documents for **${response.interpretedFilters.query}** from Tiger.`;
+    : mode === 'digest' && uniqueGames.length >= 2
+      ? `Here is the Tiger news digest across **${uniqueGames.slice(0, 3).join(', ')}**.`
+      : topic
+        ? `Here are the most relevant recent documents for **${topic}** from Tiger.`
+        : 'Here are the most relevant recent Tiger news documents.';
 
   const rows = response.items.slice(0, 8).map((item) => [
     formatDate(item.publishedAt || item.sortTime),
@@ -593,6 +639,42 @@ function renderSearchDocuments(response: TigerPrimarySearchDocumentsResponse): s
       ['Published', 'Title', 'Game', 'Source'],
       rows
     ),
+  ].join('\n');
+}
+
+function renderChangeDiscovery(
+  response: TigerPrimaryDiscoverChangePatternsResponse | TigerPrimarySearchChangeActivityResponse
+): string {
+  const isPatternResponse = response.items.some((item) => 'reasons' in item);
+
+  if (isPatternResponse) {
+    const patternResponse = response as TigerPrimaryDiscoverChangePatternsResponse;
+    const rows = patternResponse.items.slice(0, 8).map((item) => [
+      formatGameLink(item.name, item.appid),
+      item.confidence,
+      formatDate(item.occurredAt),
+      item.primaryProof?.headline ?? item.reasons[0] ?? 'Pattern evidence',
+    ]);
+
+    return [
+      'Here are the Tiger change-pattern matches.',
+      '',
+      buildMarkdownTable(['Game', 'Confidence', 'Date', 'Evidence'], rows),
+    ].join('\n');
+  }
+
+  const activityResponse = response as TigerPrimarySearchChangeActivityResponse;
+  const rows = activityResponse.items.slice(0, 8).map((item) => [
+    formatGameLink(item.name, item.appid),
+    item.storyKind,
+    formatDate(item.occurredAt),
+    item.summary || item.headline,
+  ]);
+
+  return [
+    'Here are the Tiger change-activity matches.',
+    '',
+    buildMarkdownTable(['Game', 'Change Type', 'Date', 'Details'], rows),
   ].join('\n');
 }
 
@@ -750,6 +832,12 @@ export function renderTigerPrimaryResult(params: {
   matchedIntent: TigerPrimaryRenderableIntent;
   response: unknown;
 }): string {
+  if (params.matchedIntent === 'change_discovery') {
+    return renderChangeDiscovery(
+      params.response as TigerPrimaryDiscoverChangePatternsResponse | TigerPrimarySearchChangeActivityResponse
+    );
+  }
+
   if (params.matchedIntent === 'catalog_search') {
     return renderCatalogSearch(params.response as TigerPrimaryCatalogResponse);
   }

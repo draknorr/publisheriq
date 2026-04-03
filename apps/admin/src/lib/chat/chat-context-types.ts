@@ -48,6 +48,7 @@ export interface SessionChatConstraint {
 }
 
 export interface SessionChatCandidateSet {
+  entityUids?: string[];
   kind: SessionCandidateKind;
   sourceTool: string;
   ids: Array<number | string>;

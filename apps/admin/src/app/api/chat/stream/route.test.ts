@@ -79,9 +79,7 @@ test('chat route returns 401 when the request is unauthenticated', async () => {
   });
 });
 
-test('chat route can return a Tiger primary deterministic answer with continuable session state', async (t) => {
-  setScopedEnv(t, 'CHAT_PHASE1_QUALITY_ENABLED', 'true');
-
+test('chat route can return a Tiger primary deterministic answer with continuable session state', async () => {
   const request = createJsonNextRequest({
     body: {
       messages: [{ role: 'user', content: 'games like Hades' }],
@@ -289,6 +287,69 @@ test('chat route includes execution trace metadata for eval requests', async (t)
   assert.equal(endEvent.executionTrace?.[1]?.migrationDisposition, 'already_tiger');
   assert.ok(endEvent.executionTrace?.[1]?.dataSources.includes('query_api:searchCatalog'));
   assert.ok(endEvent.executionTrace?.[2]?.dataSources.includes('query_api:searchCatalog'));
+  assertExhausted();
+});
+
+test('chat route includes execution trace metadata for local audit-trace requests without eval secret', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'compare hades and dead cells by reviews' }],
+    },
+    headers: {
+      'x-chat-eval-trace': '1',
+    },
+    url: 'http://localhost:3023/api/chat/stream',
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        response: {
+          contractResult: {
+            contractName: 'compareEntities',
+            request: {
+              entityUids: ['steam:game:1145360', 'steam:game:588650'],
+              metrics: ['total_reviews'],
+            },
+            response: {
+              entityKind: 'game',
+              highlights: ['Hades leads on total reviews.'],
+              items: [],
+              metrics: ['total_reviews'],
+              sufficientToAnswer: true,
+            },
+          },
+          info: {
+            attempts: [{ contractName: 'compareEntities', status: 'success', timingMs: 7 }],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'compare_entities',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'primary_success',
+          },
+          renderedText: 'Tiger compare answer',
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const endEvent = getEndEvent(events);
+
+  assert.ok(endEvent);
+  assert.equal(endEvent.tigerPrimary?.route, 'primary_success');
+  assert.deepEqual(
+    (endEvent.executionTrace ?? []).map((entry) => `${entry.stage}:${entry.name}:${entry.status}`),
+    ['tiger_primary:compareEntities:success']
+  );
+  assert.equal(endEvent.executionTrace?.[0]?.readOccurred, true);
+  assert.deepEqual(endEvent.executionTrace?.[0]?.backendKinds, ['tiger_query_api']);
   assertExhausted();
 });
 
@@ -618,7 +679,12 @@ for (const testCase of TIGER_PRIMARY_SUCCESS_CASES) {
     assert.ok(endEvent);
     assert.equal(endEvent.tigerPrimary?.route, 'primary_success');
     assert.equal(endEvent.tigerPrimary?.matchedIntent, testCase.matchedIntent);
-    assert.equal(endEvent.sessionContext, null);
+    if (testCase.contractResult?.contractName === 'compareEntities') {
+      assert.equal(endEvent.sessionContext?.candidateSet?.sourceTool, 'compareEntities');
+      assert.deepEqual(endEvent.sessionContext?.candidateSet?.names, ['Hades', 'Dead Cells']);
+    } else {
+      assert.equal(endEvent.sessionContext, null);
+    }
     assert.equal(trace.providerCalls.length, 0);
     assertExhausted();
   });

@@ -1,11 +1,33 @@
 /**
  * Trend Discovery Service
  *
- * Discovers games with trend momentum based on review activity using Cube.js.
+ * Discovers games with trend momentum through Tiger-backed query-api contracts.
  * Provides a simplified interface for trend-based queries.
  */
 
-import { executeCubeQuery } from '../cube-executor';
+import {
+  attachToolExecutionProvenance,
+  type ChatExecutionProvenanceOverride,
+} from '@/lib/chat/execution-trace';
+import { postToQueryApi } from '@/lib/query-api-client';
+
+const TIGER_DISCOVER_TRENDING_PROVENANCE: ChatExecutionProvenanceOverride = {
+  backendKinds: ['tiger_query_api'],
+  dataSources: [
+    'query_api:discoverMomentum',
+    'relation:apps',
+    'relation:latest_daily_metrics',
+    'relation:metrics_daily_metrics',
+    'relation:app_publishers',
+    'relation:publishers',
+    'relation:app_developers',
+    'relation:developers',
+  ],
+  migrationDisposition: 'already_tiger',
+  migrationNotes:
+    'Trend-discovery prompts now execute through the Tiger discover-momentum contract before falling back.',
+  recommendedTigerContracts: ['discoverMomentum'],
+};
 
 /**
  * Arguments for discover_trending tool
@@ -18,6 +40,7 @@ export interface DiscoverTrendingArgs {
     genres?: string[];
     platforms?: ('windows' | 'macos' | 'linux')[];
     steam_deck?: ('verified' | 'playable')[];
+    max_price_cents?: number;
     min_reviews?: number;
     max_reviews?: number;
     is_free?: boolean;
@@ -54,247 +77,145 @@ export interface DiscoverTrendingResult {
   total_found?: number;
   filters_applied?: string[];
   error?: string;
+  unavailable?: boolean;
+}
+
+interface TigerDiscoverMomentumResponse {
+  filtersApplied?: string[];
+  items?: Array<{
+    appid: number;
+    name: string;
+    reviewPercentage?: number | null;
+    reviewsAdded30d?: number | null;
+    reviewsAdded7d?: number | null;
+    totalReviews?: number | null;
+    velocity30d?: number | null;
+    velocity7d?: number | null;
+  }>;
+  rankingDefinition?: string;
+  rankingLabel?: string;
+  sufficientToAnswer?: boolean;
+  timeframe?: '7d' | '30d' | 'current';
+  timeframeLabel?: string;
 }
 
 // Maximum results to prevent expensive queries
 const MAX_RESULTS = 20;
 const DEFAULT_RESULTS = 10;
 
+function buildTigerDiscoverTrendingRequest(
+  args: DiscoverTrendingArgs,
+  limit: number
+): Record<string, unknown> {
+  const filters = args.filters ?? {};
+
+  return {
+    filters: {
+      ...(filters.tags?.length ? { tags: filters.tags } : {}),
+      ...(filters.genres?.length ? { genres: filters.genres } : {}),
+      ...(filters.platforms?.length ? { platforms: filters.platforms } : {}),
+      ...(filters.steam_deck?.length ? { steamDeck: filters.steam_deck } : {}),
+      ...(typeof filters.max_price_cents === 'number' ? { maxPriceCents: filters.max_price_cents } : {}),
+      ...(typeof filters.min_reviews === 'number' ? { minReviews: filters.min_reviews } : {}),
+      ...(typeof filters.max_reviews === 'number' ? { maxReviews: filters.max_reviews } : {}),
+      ...(typeof filters.is_free === 'boolean' ? { isFree: filters.is_free } : {}),
+      ...(filters.release_year
+        ? {
+            releaseYear: {
+              ...(typeof filters.release_year.gte === 'number' ? { gte: filters.release_year.gte } : {}),
+              ...(typeof filters.release_year.lte === 'number' ? { lte: filters.release_year.lte } : {}),
+            },
+          }
+        : {}),
+    },
+    limit,
+    sortBy:
+      args.trend_type === 'review_momentum'
+        ? 'velocity_7d'
+        : args.trend_type === 'accelerating'
+          ? 'velocity_acceleration'
+          : args.trend_type === 'breaking_out'
+            ? 'reviews_added_30d'
+            : 'velocity_acceleration',
+    sortDirection: args.trend_type === 'declining' ? 'asc' : 'desc',
+    timeframe: args.timeframe ?? '7d',
+    trendType: args.trend_type,
+  };
+}
+
+async function tryTigerDiscoverTrending(
+  args: DiscoverTrendingArgs
+): Promise<DiscoverTrendingResult | null> {
+  if (Array.isArray(args.excludeAppIds) && args.excludeAppIds.length > 0) {
+    return null;
+  }
+
+  const response = await postToQueryApi<TigerDiscoverMomentumResponse>(
+    '/v1/contracts/discover-momentum',
+    buildTigerDiscoverTrendingRequest(args, Math.min(args.limit ?? DEFAULT_RESULTS, MAX_RESULTS))
+  );
+
+  if (!response.ok || !response.data) {
+    return null;
+  }
+
+  return attachToolExecutionProvenance(
+    {
+      success: true,
+      trend_type: args.trend_type,
+      timeframe: response.data.timeframe ?? (args.timeframe ?? '7d'),
+      ranking_label: response.data.rankingLabel,
+      ranking_definition: response.data.rankingDefinition,
+      timeframe_label: response.data.timeframeLabel,
+      response_guidance:
+        'Use the returned titles as a ranked momentum set. Call out why each game is gaining traction or breaking out from the visible momentum evidence.',
+      sufficient_to_answer: response.data.sufficientToAnswer ?? (response.data.items?.length ?? 0) > 0,
+      sufficiency_reason:
+        (response.data.items?.length ?? 0) > 0
+          ? 'Tiger returned a ranked momentum set for the requested trend family.'
+          : 'No Tiger momentum results matched the requested trend family and filters.',
+      results: (response.data.items ?? []).map((item) => ({
+        appid: item.appid,
+        name: item.name,
+        velocity7d: item.velocity7d ?? null,
+        velocity30d: item.velocity30d ?? null,
+        velocityTier: null,
+        reviewsAdded7d: item.reviewsAdded7d ?? null,
+        reviewsAdded30d: item.reviewsAdded30d ?? null,
+        totalReviews: item.totalReviews ?? null,
+        reviewPercentage: item.reviewPercentage ?? null,
+      })),
+      total_found: response.data.items?.length ?? 0,
+      filters_applied: response.data.filtersApplied ?? [],
+    },
+    TIGER_DISCOVER_TRENDING_PROVENANCE
+  );
+}
+
 /**
  * Discover games with trend momentum
  */
 export async function discoverTrending(args: DiscoverTrendingArgs): Promise<DiscoverTrendingResult> {
-  const {
-    trend_type,
-    timeframe = '7d',
-    filters = {},
-    limit = DEFAULT_RESULTS,
-    excludeAppIds = [],
-  } = args;
-
-  const filtersApplied: string[] = [`trend_type: ${trend_type}`, `timeframe: ${timeframe}`];
-  const actualLimit = Math.min(limit, MAX_RESULTS);
-  const excludedIds = new Set(excludeAppIds);
-  const queryLimit = Math.min(actualLimit + excludedIds.size + 10, MAX_RESULTS + 40);
-  const timeframeLabel = timeframe === '7d' ? 'Last 7 days' : 'Last 30 days';
-
   try {
-    // Build Cube.js query
-    const cubeQuery: {
-      cube: string;
-      dimensions: string[];
-      filters: Array<{ member: string; operator: string; values?: (string | number | boolean)[] }>;
-      segments: string[];
-      order: Record<string, 'asc' | 'desc'>;
-      limit: number;
-    } = {
-      cube: 'Discovery',
-      dimensions: [
-        'Discovery.appid',
-        'Discovery.name',
-        'Discovery.velocity7d',
-        'Discovery.velocity30d',
-        'Discovery.velocityTier',
-        'Discovery.reviewsAdded7d',
-        'Discovery.reviewsAdded30d',
-        'Discovery.totalReviews',
-        'Discovery.reviewPercentage',
-      ],
-      filters: [
-        // Require velocity data to exist
-        { member: 'Discovery.velocity7d', operator: 'set' },
-      ],
-      segments: [],
-      order: {},
-      limit: queryLimit,
-    };
-
-    // Apply trend-type specific logic
-    switch (trend_type) {
-      case 'review_momentum':
-        // Games with highest review activity
-        cubeQuery.segments.push('Discovery.activelyReviewed');
-        cubeQuery.order = timeframe === '7d'
-          ? { 'Discovery.velocity7d': 'desc' }
-          : { 'Discovery.velocity30d': 'desc' };
-        break;
-
-      case 'accelerating':
-        // Games where review rate is increasing (7d > 30d × 1.2)
-        cubeQuery.segments.push('Discovery.acceleratingVelocity');
-        cubeQuery.order = { 'Discovery.velocity7d': 'desc' };
-        break;
-
-      case 'breaking_out':
-        // Hidden gems gaining attention: accelerating + moderate review count
-        cubeQuery.segments.push('Discovery.acceleratingVelocity');
-        cubeQuery.filters.push(
-          { member: 'Discovery.totalReviews', operator: 'gte', values: [100] },
-          { member: 'Discovery.totalReviews', operator: 'lt', values: [10000] }
-        );
-        cubeQuery.order = { 'Discovery.velocity7d': 'desc' };
-        filtersApplied.push('totalReviews: 100-10000 (hidden gems)');
-        break;
-
-      case 'declining':
-        // Games where review velocity is dropping (7d < 30d × 0.8)
-        cubeQuery.segments.push('Discovery.deceleratingVelocity');
-        cubeQuery.order = { 'Discovery.velocity30d': 'desc' };
-        break;
+    const tigerResult = await tryTigerDiscoverTrending(args);
+    if (tigerResult) {
+      return tigerResult;
     }
-
-    // Apply optional filters
-    if (filters.min_reviews !== undefined) {
-      cubeQuery.filters.push({
-        member: 'Discovery.totalReviews',
-        operator: 'gte',
-        values: [filters.min_reviews],
-      });
-      filtersApplied.push(`min_reviews: ${filters.min_reviews}`);
-    }
-
-    if (filters.max_reviews !== undefined) {
-      cubeQuery.filters.push({
-        member: 'Discovery.totalReviews',
-        operator: 'lte',
-        values: [filters.max_reviews],
-      });
-      filtersApplied.push(`max_reviews: ${filters.max_reviews}`);
-    }
-
-    if (filters.is_free !== undefined) {
-      cubeQuery.filters.push({
-        member: 'Discovery.isFree',
-        operator: 'equals',
-        values: [filters.is_free],
-      });
-      filtersApplied.push(`is_free: ${filters.is_free}`);
-    }
-
-    if (filters.release_year?.gte !== undefined) {
-      cubeQuery.filters.push({
-        member: 'Discovery.releaseYear',
-        operator: 'gte',
-        values: [filters.release_year.gte],
-      });
-      filtersApplied.push(`release_year >= ${filters.release_year.gte}`);
-    }
-
-    if (filters.release_year?.lte !== undefined) {
-      cubeQuery.filters.push({
-        member: 'Discovery.releaseYear',
-        operator: 'lte',
-        values: [filters.release_year.lte],
-      });
-      filtersApplied.push(`release_year <= ${filters.release_year.lte}`);
-    }
-
-    if (filters.platforms && filters.platforms.length > 0) {
-      // Use platform boolean dimensions
-      for (const platform of filters.platforms) {
-        const platformField = platform === 'windows' ? 'hasWindows' :
-                             platform === 'macos' ? 'hasMac' :
-                             platform === 'linux' ? 'hasLinux' : null;
-        if (platformField) {
-          cubeQuery.filters.push({
-            member: `Discovery.${platformField}`,
-            operator: 'equals',
-            values: [true],
-          });
-        }
-      }
-      filtersApplied.push(`platforms: ${filters.platforms.join(', ')}`);
-    }
-
-    if (filters.steam_deck && filters.steam_deck.length > 0) {
-      // Add Steam Deck segment based on requirements
-      if (filters.steam_deck.includes('verified')) {
-        cubeQuery.segments.push('Discovery.steamDeckVerified');
-      } else if (filters.steam_deck.includes('playable')) {
-        cubeQuery.segments.push('Discovery.steamDeckPlayable');
-      }
-      filtersApplied.push(`steam_deck: ${filters.steam_deck.join(', ')}`);
-    }
-
-    // Note: tags and genres filtering would require additional JOINs
-    // For simplicity, we'll log that these filters need the search_games tool
-    if (filters.tags && filters.tags.length > 0) {
-      console.log('[TrendDiscovery] Tags filter requested - suggest using search_games for tag filtering');
-      filtersApplied.push(`tags: ${filters.tags.join(', ')} (note: use search_games for full tag support)`);
-    }
-
-    if (filters.genres && filters.genres.length > 0) {
-      console.log('[TrendDiscovery] Genres filter requested - suggest using search_games for genre filtering');
-      filtersApplied.push(`genres: ${filters.genres.join(', ')} (note: use search_games for full genre support)`);
-    }
-
-    // Execute query
-    const result = await executeCubeQuery(cubeQuery);
-
-    if (!result.success) {
-      return {
-        success: false,
-        trend_type,
-        timeframe,
-        error: result.error,
-        filters_applied: filtersApplied,
-      };
-    }
-
-    // Map results to expected format
-    const results = result.data
-      .map((row) => ({
-        appid: row.appid as number,
-        name: row.name as string,
-        velocity7d: row.velocity7d as number | null,
-        velocity30d: row.velocity30d as number | null,
-        velocityTier: row.velocityTier as string | null,
-        reviewsAdded7d: row.reviewsAdded7d as number | null,
-        reviewsAdded30d: row.reviewsAdded30d as number | null,
-        totalReviews: row.totalReviews as number | null,
-        reviewPercentage: row.reviewPercentage as number | null,
-      }))
-      .filter((row) => !excludedIds.has(row.appid))
-      .slice(0, actualLimit);
 
     return {
-      success: true,
-      trend_type,
-      timeframe,
-      ranking_label:
-        trend_type === 'review_momentum'
-          ? timeframe === '7d'
-            ? 'Review Velocity (7d)'
-            : 'Review Velocity (30d)'
-          : trend_type === 'accelerating'
-            ? 'Acceleration'
-            : trend_type === 'breaking_out'
-              ? 'Breakout Momentum'
-              : 'Decline Signal',
-      ranking_definition:
-        trend_type === 'review_momentum'
-          ? 'Ranks games by recent review activity in the selected window.'
-          : trend_type === 'accelerating'
-            ? 'Ranks games whose recent review rate is rising versus the broader trailing window.'
-            : trend_type === 'breaking_out'
-              ? 'Ranks mid-scale games gaining attention fast rather than the largest games overall.'
-              : 'Ranks games whose recent review momentum is falling relative to the trailing window.',
-      timeframe_label: timeframeLabel,
-      response_guidance:
-        'Answer with the exact window, the ranking metric definition, supporting review metrics, and one short reason each row qualifies. Do not use vague "right now" wording.',
-      sufficient_to_answer: true,
-      sufficiency_reason: 'The trend rows are sufficient to answer directly when the response names the exact window and ranking definition.',
-      results,
-      total_found: results.length,
-      filters_applied: filtersApplied,
+      success: false,
+      trend_type: args.trend_type,
+      timeframe: args.timeframe ?? '7d',
+      error:
+        'Tiger discover-momentum could not serve this discover_trending request. Try a narrower momentum query or use screen_games with explicit filters.',
+      unavailable: true,
     };
   } catch (error) {
     return {
       success: false,
-      trend_type,
-      timeframe,
+      trend_type: args.trend_type,
+      timeframe: args.timeframe ?? '7d',
       error: error instanceof Error ? error.message : 'Trend discovery failed',
-      filters_applied: filtersApplied,
     };
   }
 }

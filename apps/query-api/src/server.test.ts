@@ -8,6 +8,8 @@ import { createQueryApiServer } from './server.js';
 function createDataPlaneStub(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     compareEntities: async () => ({ ok: true }),
+    discoverChangePatterns: async () => ({ ok: true }),
+    discoverMomentum: async () => ({ ok: true }),
     continueResultSet: async () => ({ ok: true }),
     describeContracts: async () => ({ contracts: [], source: 'tiger' }),
     explainChanges: async () => ({ ok: true }),
@@ -29,6 +31,7 @@ function createDataPlaneStub(overrides: Record<string, unknown> = {}): Record<st
     }),
     resolveEntities: async () => ({ ok: true }),
     searchCatalog: async () => ({ ok: true }),
+    searchChangeActivity: async () => ({ ok: true }),
     searchDocuments: async () => ({ ok: true }),
     semanticSearch: async () => ({ ok: true }),
     traceMetricHistory: async () => ({ ok: true }),
@@ -117,6 +120,222 @@ test('query-api routes semantic-search requests to the data-plane service', asyn
         results: [{ id: 367520, name: 'Hollow Knight', score: 0.94 }],
         sufficient_to_answer: true,
       });
+    }
+  );
+});
+
+test('query-api routes discover-momentum requests to the data-plane service', async () => {
+  let receivedBody: unknown = null;
+
+  await withServer(
+    createDataPlaneStub({
+      discoverMomentum: async (body: unknown) => {
+        receivedBody = body;
+        return {
+          filtersApplied: ['sort_by: ccu_peak', 'timeframe: current'],
+          items: [
+            {
+              appid: 730,
+              ccuPeak: 1500000,
+              entityUid: 'steam:game:730',
+              isFree: true,
+              matchedSteamDeck: null,
+              momentumScore: 100,
+              name: 'Counter-Strike 2',
+              platformSupport: ['windows'],
+              supportLevel: 'high',
+              supportReasons: ['Peak CCU remains dominant.'],
+            },
+          ],
+          provenance: {
+            capturedAt: '2026-04-02T00:00:00.000Z',
+            source: 'tiger',
+            tables: ['legacy.apps', 'legacy.latest_daily_metrics'],
+          },
+          rankingDefinition: 'Peak CCU uses the latest 24-hour concurrent-player snapshot.',
+          rankingLabel: 'Peak CCU',
+          sufficientToAnswer: true,
+          timeframe: 'current',
+          timeframeLabel: 'Current snapshot',
+        };
+      },
+    }),
+    null,
+    async (origin) => {
+      const response = await fetch(`${origin}/v1/contracts/discover-momentum`, {
+        body: JSON.stringify({
+          filters: { isFree: true },
+          sortBy: 'ccu_peak',
+          timeframe: 'current',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(receivedBody, {
+        filters: { isFree: true },
+        sortBy: 'ccu_peak',
+        timeframe: 'current',
+      });
+      const payload = await response.json() as { rankingLabel: string };
+      assert.equal(payload.rankingLabel, 'Peak CCU');
+    }
+  );
+});
+
+test('query-api routes search-change-activity requests to the data-plane service', async () => {
+  let receivedBody: unknown = null;
+
+  await withServer(
+    createDataPlaneStub({
+      searchChangeActivity: async (body: unknown) => {
+        receivedBody = body;
+        return {
+          continuationToken: null,
+          interpretedFilters: {
+            appTypes: ['game'],
+            days: 14,
+            mode: 'all',
+            query: 'refresh',
+            signalFamilies: ['media'],
+            sort: 'relevant',
+            view: 'store-refreshes',
+          },
+          items: [
+            {
+              activityId: 'change:730:1:2',
+              activityKind: 'change',
+              appType: 'game',
+              appid: 730,
+              externalUrl: null,
+              facts: ['2 tracked change events in this activity window.'],
+              hasBeforeAfter: true,
+              headline: 'Counter-Strike 2 refreshed its Steam page presentation.',
+              highlightLabels: ['store refresh', 'media'],
+              isReleased: true,
+              name: 'Counter-Strike 2',
+              occurredAt: '2026-04-02T00:00:00.000Z',
+              relatedAnnouncementCount: 0,
+              releaseDate: '2023-09-27',
+              signalFamilies: ['media'],
+              storyKind: 'store-refresh',
+              summary: 'Counter-Strike 2 showed media changes without a linked announcement.',
+            },
+          ],
+          provenance: {
+            capturedAt: '2026-04-02T00:00:00.000Z',
+            source: 'tiger',
+            tables: ['events.app_change_events'],
+          },
+          sufficientToAnswer: true,
+        };
+      },
+    }),
+    null,
+    async (origin) => {
+      const response = await fetch(`${origin}/v1/contracts/search-change-activity`, {
+        body: JSON.stringify({
+          appTypes: ['game'],
+          days: 14,
+          query: 'refresh',
+          signalFamilies: ['media'],
+          view: 'store-refreshes',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(receivedBody, {
+        appTypes: ['game'],
+        days: 14,
+        query: 'refresh',
+        signalFamilies: ['media'],
+        view: 'store-refreshes',
+      });
+      const payload = await response.json() as { items: Array<{ activityId: string }> };
+      assert.equal(payload.items[0]?.activityId, 'change:730:1:2');
+    }
+  );
+});
+
+test('query-api routes discover-change-patterns requests to the data-plane service', async () => {
+  let receivedBody: unknown = null;
+
+  await withServer(
+    createDataPlaneStub({
+      discoverChangePatterns: async (body: unknown) => {
+        receivedBody = body;
+        return {
+          continuationToken: null,
+          interpretedFilters: {
+            appTypes: ['game'],
+            days: 30,
+            pattern: 'marketing_push',
+            query: null,
+          },
+          items: [
+            {
+              activityIds: ['change:730:1:2'],
+              appType: 'game',
+              appid: 730,
+              confidence: 'high',
+              metrics: {
+                ccuPeak: 1500000,
+                ccuTrend7dPct: 8,
+                discountPercent: 0,
+                positivePercentage: 88,
+                priceCents: 0,
+                reviewVelocity30d: 1400,
+                reviewVelocity7d: 1285,
+                totalReviews: 9000000,
+                trend30dDirection: 'up',
+              },
+              name: 'Counter-Strike 2',
+              occurredAt: '2026-04-02T00:00:00.000Z',
+              primaryProof: {
+                activityId: 'change:730:1:2',
+                facts: ['Announcement activity landed in the same recent window.'],
+                headline: 'Counter-Strike 2 matched the marketing push pattern.',
+                occurredAt: '2026-04-02T00:00:00.000Z',
+                signalFamilies: ['announcement', 'media', 'pricing'],
+                summary: 'Counter-Strike 2 showed recent change activity that fits the marketing push pattern.',
+              },
+              reasons: ['Announcement activity landed in the same recent window.'],
+              signalFamilies: ['announcement', 'media', 'pricing'],
+              storyKinds: ['commercial-move'],
+            },
+          ],
+          provenance: {
+            capturedAt: '2026-04-02T00:00:00.000Z',
+            source: 'tiger',
+            tables: ['events.app_change_events', 'legacy.latest_daily_metrics'],
+          },
+          sufficientToAnswer: true,
+        };
+      },
+    }),
+    null,
+    async (origin) => {
+      const response = await fetch(`${origin}/v1/contracts/discover-change-patterns`, {
+        body: JSON.stringify({
+          appTypes: ['game'],
+          days: 30,
+          pattern: 'marketing_push',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(receivedBody, {
+        appTypes: ['game'],
+        days: 30,
+        pattern: 'marketing_push',
+      });
+      const payload = await response.json() as { items: Array<{ confidence: string }> };
+      assert.equal(payload.items[0]?.confidence, 'high');
     }
   );
 });

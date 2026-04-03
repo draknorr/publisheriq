@@ -7,19 +7,31 @@ import {
   type ResolvedReferenceEntity,
   type SemanticSearchDependencies,
 } from '@publisheriq/semantic-search';
+import { COLLECTIONS, EMBEDDING_CONFIG, getQdrantClient, type GamePayload } from '@publisheriq/qdrant';
 import { logger, PublisherIQError } from '@publisheriq/shared';
-import { EMBEDDING_CONFIG } from '@publisheriq/qdrant';
 
 import type {
+  CatalogFacetKind,
+  ChangeActivitySignalFamily,
+  ChangeActivitySort,
+  ChangeActivityStoryKind,
+  ChangeActivityView,
+  ChangePattern,
   CompareEntitiesRequest,
   CompareEntitiesResponse,
   CompareMetric,
   ComparedEntity,
+  DiscoverChangePatternsRequest,
+  DiscoverChangePatternsResponse,
+  DiscoverMomentumItem,
+  DiscoverMomentumRequest,
+  DiscoverMomentumResponse,
   ContinueResultSetRequest,
   ContinueResultSetResponse,
   DataPlaneReadiness,
   DataPlaneRelationKey,
   EntityKind,
+  ExplainChangeMetricsWindow,
   ExplainChangesLinkedNewsItem,
   ExplainChangesMoment,
   ExplainChangesRequest,
@@ -39,6 +51,9 @@ import type {
   SearchCatalogItem,
   SearchCatalogRequest,
   SearchCatalogResponse,
+  SearchChangeActivityRequest,
+  SearchChangeActivityItem,
+  SearchChangeActivityResponse,
   SearchDocumentItem,
   SearchDocumentsRequest,
   SearchDocumentsResponse,
@@ -170,6 +185,21 @@ interface ChangeEventRow extends QueryResultRow {
   source: string;
 }
 
+interface SearchChangeEventRow extends QueryResultRow {
+  after_value: unknown | null;
+  app_name: string;
+  app_type: string | null;
+  appid: number;
+  before_value: unknown | null;
+  change_type: string;
+  context: unknown;
+  is_released: boolean | null;
+  news_item_gid: string | null;
+  occurred_at: string;
+  release_date: string | null;
+  source: string;
+}
+
 interface SemanticGameReferenceRow extends QueryResultRow {
   appid: number;
   current_price_cents: number | null;
@@ -202,11 +232,15 @@ interface ExplainNewsRow extends QueryResultRow {
 interface SearchDocumentRow extends QueryResultRow {
   app_name: string;
   appid: number;
+  body_preview?: string | null;
+  content_preview?: string | null;
+  excerpt?: string | null;
   feed_scope: string;
   feedlabel: string | null;
   feedname: string | null;
   first_seen_at: string;
   gid: string;
+  match_reason?: string | null;
   published_at: string | null;
   rank: number;
   sort_time: string;
@@ -215,10 +249,135 @@ interface SearchDocumentRow extends QueryResultRow {
   url: string;
 }
 
+interface ChangeActivityContractRow extends QueryResultRow {
+  activity_id: string;
+  activity_kind: 'announcement' | 'change';
+  app_name: string;
+  app_type: string | null;
+  appid: number;
+  external_url: string | null;
+  facts: string[] | null;
+  has_before_after: boolean | null;
+  headline: string | null;
+  highlight_labels: string[] | null;
+  is_released: boolean | null;
+  occurred_at: string;
+  related_announcement_count: number | null;
+  release_date: string | null;
+  signal_families: string[] | null;
+  sort_score?: number | null;
+  story_kind: string | null;
+  summary: string | null;
+}
+
+interface ChangePatternCandidateRow extends QueryResultRow {
+  activity_ids: string[] | null;
+  announcement_count: number | null;
+  app_name: string;
+  app_type: string | null;
+  appid: number;
+  ccu_peak: number | null;
+  ccu_trend_7d_pct: number | null;
+  change_count: number | null;
+  discount_percent: number | null;
+  is_released: boolean | null;
+  latest_occurred_at: string;
+  positive_percentage: number | null;
+  price_cents: number | null;
+  release_date: string | null;
+  review_velocity_30d: number | null;
+  review_velocity_7d: number | null;
+  signal_families: string[] | null;
+  story_kinds: string[] | null;
+  total_reviews: number | null;
+  trend_30d_direction: string | null;
+}
+
+interface ChangeBurstDetailRow extends QueryResultRow {
+  app_name: string;
+  app_type: string | null;
+  appid: number;
+  burst_ended_at: string;
+  burst_id: string;
+  burst_started_at: string;
+  effective_at: string;
+  events: Array<{
+    after_value?: unknown | null;
+    before_value?: unknown | null;
+    change_type?: string | null;
+    occurred_at?: string | null;
+  }> | null;
+  headline_change_types: string[] | null;
+  impact: Record<string, unknown> | null;
+  is_released: boolean | null;
+  related_news: Array<{
+    title?: string | null;
+    url?: string | null;
+  }> | null;
+  release_date: string | null;
+}
+
+interface MomentumRow extends QueryResultRow {
+  appid: number;
+  ccu_growth_30d_percent: number | null;
+  ccu_growth_7d_percent: number | null;
+  ccu_peak: number | null;
+  developer_name: string | null;
+  discount_percent: number | null;
+  is_free: boolean;
+  is_self_published: boolean;
+  name: string;
+  owners_midpoint: number | null;
+  platforms: string | null;
+  positive_percentage: number | null;
+  price_cents: number | null;
+  publisher_name: string | null;
+  release_date: string | null;
+  release_year: number | null;
+  reviews_added_30d: number | null;
+  reviews_added_7d: number | null;
+  sentiment_delta: number | null;
+  total_reviews: number | null;
+  trend_direction: 'down' | 'stable' | 'up' | null;
+  velocity_30d: number | null;
+  velocity_7d: number | null;
+  velocity_acceleration: number | null;
+}
+
+interface ChangeWindowMetricRow extends QueryResultRow {
+  ccu_peak: number | null;
+  discount_percent: number | null;
+  negative_reviews: number | null;
+  positive_reviews: number | null;
+  price_cents: number | null;
+  review_score: number | null;
+  total_reviews: number | null;
+}
+
 interface ExplainMomentAccumulator {
   directNewsGids: Set<string>;
   events: ChangeEventRow[];
   linkedNews: ExplainChangesLinkedNewsItem[];
+  windowEnd: Date;
+  windowStart: Date;
+}
+
+interface SearchChangeMomentAccumulator {
+  appName: string;
+  appType: string | null;
+  appid: number;
+  directNewsGids: Set<string>;
+  events: SearchChangeEventRow[];
+  isReleased: boolean | null;
+  linkedNews: ExplainNewsRow[];
+  releaseDate: string | null;
+  windowEnd: Date;
+  windowStart: Date;
+}
+
+interface ParsedTigerActivityId {
+  activityKind: 'announcement' | 'change';
+  appid: number;
   windowEnd: Date;
   windowStart: Date;
 }
@@ -236,8 +395,12 @@ interface RelationLocation {
 const DEFAULT_ENTITY_LIMIT = 8;
 const DEFAULT_CATALOG_LIMIT = 25;
 const DEFAULT_ENTITY_GAMES_LIMIT = 10;
+const DEFAULT_MOMENTUM_LIMIT = 10;
 const DEFAULT_RANK_LIMIT = 10;
 const DEFAULT_CONTINUE_LIMIT = 5;
+const DEFAULT_CHANGE_ACTIVITY_DAYS = 30;
+const DEFAULT_CHANGE_ACTIVITY_LIMIT = 10;
+const DEFAULT_CHANGE_PATTERN_LIMIT = 10;
 const DEFAULT_COMPARE_METRICS: CompareMetric[] = [
   'review_score',
   'total_reviews',
@@ -253,8 +416,12 @@ const DEFAULT_DOCUMENT_LIMIT = 8;
 const MAX_ENTITY_LIMIT = 15;
 const MAX_CATALOG_LIMIT = 50;
 const MAX_ENTITY_GAMES_LIMIT = 25;
+const MAX_MOMENTUM_LIMIT = 20;
 const MAX_RANK_LIMIT = 25;
 const MAX_CONTINUE_LIMIT = 20;
+const MAX_CHANGE_ACTIVITY_DAYS = 180;
+const MAX_CHANGE_ACTIVITY_LIMIT = 25;
+const MAX_CHANGE_PATTERN_LIMIT = 10;
 const MAX_COMPARE_ENTITY_COUNT = 5;
 const MAX_TRACE_DAYS = 180;
 const MAX_TRACE_METRICS = 4;
@@ -269,6 +436,9 @@ const READINESS_GATE_CONTRACTS = new Set<
 >([
   'resolveEntities',
   'searchCatalog',
+  'searchChangeActivity',
+  'discoverMomentum',
+  'discoverChangePatterns',
   'getEntityOverview',
   'rankEntities',
   'semanticSearch',
@@ -302,6 +472,45 @@ const GAME_TYPE_PREDICATE: Record<DataPlaneConfig['source'], string> = {
   tiger: "a.type = 'game'",
   'supabase-postgres': "a.type = 'game'::public.app_type",
 };
+const CHANGE_TYPES_BY_SIGNAL_FAMILY: Record<ChangeActivitySignalFamily, readonly string[]> = {
+  announcement: ['news_published', 'news_edited'],
+  build: ['build_id_changed', 'last_content_update_changed'],
+  media: [
+    'capsule_url_changed',
+    'header_url_changed',
+    'background_url_changed',
+    'screenshot_added',
+    'screenshot_removed',
+    'screenshot_reordered',
+    'trailer_added',
+    'trailer_removed',
+    'trailer_reordered',
+    'trailer_thumbnail_changed',
+  ],
+  platform: ['languages_changed', 'platforms_changed', 'controller_support_changed', 'steam_deck_status_changed'],
+  pricing: [
+    'price_change',
+    'discount_start',
+    'discount_end',
+    'dlc_references_changed',
+    'package_references_changed',
+  ],
+  release: ['release_date_text_change'],
+  'store-page': ['description_rewrite', 'short_description_rewrite'],
+  taxonomy: [
+    'tags_added',
+    'tags_removed',
+    'genres_changed',
+    'categories_changed',
+    'publisher_association_changed',
+    'developer_association_changed',
+  ],
+};
+const CHANGE_TYPE_TO_SIGNAL_FAMILY = Object.fromEntries(
+  Object.entries(CHANGE_TYPES_BY_SIGNAL_FAMILY).flatMap(([family, changeTypes]) =>
+    changeTypes.map((changeType) => [changeType, family])
+  )
+) as Record<string, ChangeActivitySignalFamily>;
 let openaiClient: OpenAI | null = null;
 const RELATION_LOCATIONS: Record<
   DataPlaneConfig['source'],
@@ -346,6 +555,7 @@ const RELATION_LOCATIONS: Record<
       table: 'app_change_events',
     },
     publishers: { schema: 'public', sql: 'public.publishers', table: 'publishers' },
+    steam_categories: { schema: 'public', sql: 'public.steam_categories', table: 'steam_categories' },
     steam_genres: { schema: 'public', sql: 'public.steam_genres', table: 'steam_genres' },
     steam_tags: { schema: 'public', sql: 'public.steam_tags', table: 'steam_tags' },
   },
@@ -388,6 +598,7 @@ const RELATION_LOCATIONS: Record<
       table: 'app_change_events',
     },
     publishers: { schema: 'legacy', sql: 'legacy.publishers', table: 'publishers' },
+    steam_categories: { schema: 'legacy', sql: 'legacy.steam_categories', table: 'steam_categories' },
     steam_genres: { schema: 'legacy', sql: 'legacy.steam_genres', table: 'steam_genres' },
     steam_tags: { schema: 'legacy', sql: 'legacy.steam_tags', table: 'steam_tags' },
   },
@@ -441,6 +652,98 @@ function countBy(values: string[]): Record<string, number> {
     counts[value] = (counts[value] ?? 0) + 1;
     return counts;
   }, {});
+}
+
+function truncatePreview(value: string | null | undefined, maxLength = 220): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+function normalizeChangeSignalFamilies(value: unknown): ChangeActivitySignalFamily[] {
+  const families = toStringArray(value).filter(
+    (entry): entry is ChangeActivitySignalFamily =>
+      entry === 'announcement'
+      || entry === 'release'
+      || entry === 'pricing'
+      || entry === 'store-page'
+      || entry === 'media'
+      || entry === 'taxonomy'
+      || entry === 'platform'
+      || entry === 'build'
+  );
+
+  return [...new Set(families)];
+}
+
+function normalizeChangeStoryKinds(value: unknown): Array<
+  | 'announcement'
+  | 'commercial-move'
+  | 'launch-prep'
+  | 'store-refresh'
+  | 'taxonomy-shift'
+  | 'update-tease'
+  | 'change-roundup'
+> {
+  const storyKinds = toStringArray(value).filter(
+    (
+      entry
+    ): entry is
+      | 'announcement'
+      | 'commercial-move'
+      | 'launch-prep'
+      | 'store-refresh'
+      | 'taxonomy-shift'
+      | 'update-tease'
+      | 'change-roundup' =>
+      entry === 'announcement'
+      || entry === 'commercial-move'
+      || entry === 'launch-prep'
+      || entry === 'store-refresh'
+      || entry === 'taxonomy-shift'
+      || entry === 'update-tease'
+      || entry === 'change-roundup'
+  );
+
+  return [...new Set(storyKinds)];
+}
+
+function normalizeChangeStoryKind(value: string | null | undefined): ChangeActivityStoryKind {
+  const storyKinds = normalizeChangeStoryKinds(value ? [value] : []);
+  return storyKinds[0] ?? 'change-roundup';
+}
+
+function metricDelta(afterValue: number | null, beforeValue: number | null): number | null {
+  if (afterValue == null || beforeValue == null) {
+    return null;
+  }
+
+  return afterValue - beforeValue;
+}
+
+function percentLift(afterValue: number | null, beforeValue: number | null): number | null {
+  if (afterValue == null || beforeValue == null || beforeValue <= 0) {
+    return null;
+  }
+
+  return ((afterValue - beforeValue) / beforeValue) * 100;
 }
 
 function resolveOwnersMidpoint(row: DailyMetricHistoryRow): number | null {
@@ -850,6 +1153,8 @@ export class DataPlaneService {
 
     const limit = normalizeLimit(request.limit, DEFAULT_CATALOG_LIMIT, MAX_CATALOG_LIMIT);
     const { offset } = decodeContinuationToken(request.continuationToken);
+    const sortBy = request.sortBy ?? 'relevance';
+    const sortDirection = request.sortDirection ?? 'desc';
     const appsTable = this.relation('apps').sql;
     const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
     const appPublishersTable = this.relation('app_publishers').sql;
@@ -860,297 +1165,312 @@ export class DataPlaneService {
     const steamGenresTable = this.relation('steam_genres').sql;
     const appSteamTagsTable = this.relation('app_steam_tags').sql;
     const steamTagsTable = this.relation('steam_tags').sql;
+    const steamCategoriesTable = this.relation('steam_categories').sql;
+    const facets = await this.lookupCatalogFacets(request);
+    const shouldQueryItems = this.shouldQueryCatalogItems(request);
 
-    const params: unknown[] = [];
-    const conditions: string[] = [
-      "a.is_delisted = false",
-    ];
+    let continuationToken: string | null = null;
+    let items: SearchCatalogItem[] = [];
 
-    if (request.includeAppTypes?.length) {
-      params.push(request.includeAppTypes);
-      conditions.push(`a.type::text = ANY($${params.length}::text[])`);
-    } else {
-      conditions.push(GAME_TYPE_PREDICATE[this.config.source]);
-    }
+    if (shouldQueryItems) {
+      const params: unknown[] = [];
+      const conditions: string[] = [
+        "a.is_delisted = false",
+      ];
 
-    if (request.appids?.length) {
-      params.push(request.appids);
-      conditions.push(`a.appid = ANY($${params.length}::int[])`);
-    }
-
-    if (request.query?.trim()) {
-      params.push(normalizeLikeValue(request.query));
-      conditions.push(`lower(a.name) LIKE $${params.length}`);
-    }
-
-    if (request.publisherQuery?.trim()) {
-      params.push(normalizeLikeValue(request.publisherQuery));
-      conditions.push(
-        `EXISTS (
-          SELECT 1
-          FROM ${appPublishersTable} ap
-          JOIN ${publishersTable} p ON p.id = ap.publisher_id
-          WHERE ap.appid = a.appid
-            AND lower(p.name) LIKE $${params.length}
-        )`
-      );
-    }
-
-    if (request.publisherIds?.length) {
-      params.push(request.publisherIds);
-      conditions.push(
-        `EXISTS (
-          SELECT 1
-          FROM ${appPublishersTable} ap
-          WHERE ap.appid = a.appid
-            AND ap.publisher_id = ANY($${params.length}::int[])
-        )`
-      );
-    }
-
-    if (request.developerQuery?.trim()) {
-      params.push(normalizeLikeValue(request.developerQuery));
-      conditions.push(
-        `EXISTS (
-          SELECT 1
-          FROM ${appDevelopersTable} ad
-          JOIN ${developersTable} d ON d.id = ad.developer_id
-          WHERE ad.appid = a.appid
-            AND lower(d.name) LIKE $${params.length}
-        )`
-      );
-    }
-
-    if (request.developerIds?.length) {
-      params.push(request.developerIds);
-      conditions.push(
-        `EXISTS (
-          SELECT 1
-          FROM ${appDevelopersTable} ad
-          WHERE ad.appid = a.appid
-            AND ad.developer_id = ANY($${params.length}::int[])
-        )`
-      );
-    }
-
-    if (typeof request.isFree === 'boolean') {
-      params.push(request.isFree);
-      conditions.push(`a.is_free = $${params.length}`);
-    }
-
-    if (typeof request.isReleased === 'boolean') {
-      params.push(request.isReleased);
-      conditions.push(`a.is_released = $${params.length}`);
-    }
-
-    if (request.releaseYear?.gte) {
-      params.push(request.releaseYear.gte);
-      conditions.push(`EXTRACT(YEAR FROM a.release_date) >= $${params.length}`);
-    }
-
-    if (request.releaseYear?.lte) {
-      params.push(request.releaseYear.lte);
-      conditions.push(`EXTRACT(YEAR FROM a.release_date) <= $${params.length}`);
-    }
-
-    if (typeof request.minReviews === 'number') {
-      params.push(request.minReviews);
-      conditions.push(`COALESCE(ldm.total_reviews, 0) >= $${params.length}`);
-    }
-
-    if (typeof request.minReviewScore === 'number') {
-      params.push(request.minReviewScore);
-      conditions.push(
-        request.minReviewScore > 10
-          ? `COALESCE(ldm.positive_percentage, 0) >= $${params.length}`
-          : `COALESCE(ldm.review_score, 0) >= $${params.length}`
-      );
-    }
-
-    if (typeof request.minPriceCents === 'number') {
-      params.push(request.minPriceCents);
-      conditions.push(`COALESCE(a.current_price_cents, 0) >= $${params.length}`);
-    }
-
-    if (typeof request.maxPriceCents === 'number') {
-      params.push(request.maxPriceCents);
-      conditions.push(`COALESCE(a.current_price_cents, 0) <= $${params.length}`);
-    }
-
-    if (typeof request.onSale === 'boolean') {
-      conditions.push(
-        request.onSale
-          ? `COALESCE(a.current_discount_percent, 0) > 0`
-          : `COALESCE(a.current_discount_percent, 0) = 0`
-      );
-    }
-
-    if (typeof request.minDiscountPercent === 'number') {
-      params.push(request.minDiscountPercent);
-      conditions.push(`COALESCE(a.current_discount_percent, 0) >= $${params.length}`);
-    }
-
-    if (typeof request.minOwners === 'number') {
-      params.push(request.minOwners);
-      conditions.push(`COALESCE(ldm.owners_midpoint, 0) >= $${params.length}`);
-    }
-
-    if (typeof request.minCcu === 'number') {
-      params.push(request.minCcu);
-      conditions.push(`COALESCE(ldm.ccu_peak, 0) >= $${params.length}`);
-    }
-
-    if (request.platforms?.length) {
-      for (const platform of request.platforms) {
-        params.push(`%${platform.toLowerCase()}%`);
-        conditions.push(`lower(COALESCE(a.platforms, '')) LIKE $${params.length}`);
+      if (request.includeAppTypes?.length) {
+        params.push(request.includeAppTypes);
+        conditions.push(`a.type::text = ANY($${params.length}::text[])`);
+      } else {
+        conditions.push(GAME_TYPE_PREDICATE[this.config.source]);
       }
+
+      if (request.appids?.length) {
+        params.push(request.appids);
+        conditions.push(`a.appid = ANY($${params.length}::int[])`);
+      }
+
+      if (request.parentAppids?.length) {
+        params.push(request.parentAppids);
+        conditions.push(`a.parent_appid = ANY($${params.length}::int[])`);
+      }
+
+      if (request.query?.trim()) {
+        params.push(normalizeLikeValue(request.query));
+        conditions.push(`lower(a.name) LIKE $${params.length}`);
+      }
+
+      if (request.publisherQuery?.trim()) {
+        params.push(normalizeLikeValue(request.publisherQuery));
+        conditions.push(
+          `EXISTS (
+            SELECT 1
+            FROM ${appPublishersTable} ap
+            JOIN ${publishersTable} p ON p.id = ap.publisher_id
+            WHERE ap.appid = a.appid
+              AND lower(p.name) LIKE $${params.length}
+          )`
+        );
+      }
+
+      if (request.publisherIds?.length) {
+        params.push(request.publisherIds);
+        conditions.push(
+          `EXISTS (
+            SELECT 1
+            FROM ${appPublishersTable} ap
+            WHERE ap.appid = a.appid
+              AND ap.publisher_id = ANY($${params.length}::int[])
+          )`
+        );
+      }
+
+      if (request.developerQuery?.trim()) {
+        params.push(normalizeLikeValue(request.developerQuery));
+        conditions.push(
+          `EXISTS (
+            SELECT 1
+            FROM ${appDevelopersTable} ad
+            JOIN ${developersTable} d ON d.id = ad.developer_id
+            WHERE ad.appid = a.appid
+              AND lower(d.name) LIKE $${params.length}
+          )`
+        );
+      }
+
+      if (request.developerIds?.length) {
+        params.push(request.developerIds);
+        conditions.push(
+          `EXISTS (
+            SELECT 1
+            FROM ${appDevelopersTable} ad
+            WHERE ad.appid = a.appid
+              AND ad.developer_id = ANY($${params.length}::int[])
+          )`
+        );
+      }
+
+      if (typeof request.isFree === 'boolean') {
+        params.push(request.isFree);
+        conditions.push(`a.is_free = $${params.length}`);
+      }
+
+      if (typeof request.isReleased === 'boolean') {
+        params.push(request.isReleased);
+        conditions.push(`a.is_released = $${params.length}`);
+      }
+
+      if (request.releaseYear?.gte) {
+        params.push(request.releaseYear.gte);
+        conditions.push(`EXTRACT(YEAR FROM a.release_date) >= $${params.length}`);
+      }
+
+      if (request.releaseYear?.lte) {
+        params.push(request.releaseYear.lte);
+        conditions.push(`EXTRACT(YEAR FROM a.release_date) <= $${params.length}`);
+      }
+
+      if (typeof request.minReviews === 'number') {
+        params.push(request.minReviews);
+        conditions.push(`COALESCE(ldm.total_reviews, 0) >= $${params.length}`);
+      }
+
+      if (typeof request.minReviewScore === 'number') {
+        params.push(request.minReviewScore);
+        conditions.push(
+          request.minReviewScore > 10
+            ? `COALESCE(ldm.positive_percentage, 0) >= $${params.length}`
+            : `COALESCE(ldm.review_score, 0) >= $${params.length}`
+        );
+      }
+
+      if (typeof request.minPriceCents === 'number') {
+        params.push(request.minPriceCents);
+        conditions.push(`COALESCE(a.current_price_cents, 0) >= $${params.length}`);
+      }
+
+      if (typeof request.maxPriceCents === 'number') {
+        params.push(request.maxPriceCents);
+        conditions.push(`COALESCE(a.current_price_cents, 0) <= $${params.length}`);
+      }
+
+      if (typeof request.onSale === 'boolean') {
+        conditions.push(
+          request.onSale
+            ? `COALESCE(a.current_discount_percent, 0) > 0`
+            : `COALESCE(a.current_discount_percent, 0) = 0`
+        );
+      }
+
+      if (typeof request.minDiscountPercent === 'number') {
+        params.push(request.minDiscountPercent);
+        conditions.push(`COALESCE(a.current_discount_percent, 0) >= $${params.length}`);
+      }
+
+      if (typeof request.minOwners === 'number') {
+        params.push(request.minOwners);
+        conditions.push(`COALESCE(ldm.owners_midpoint, 0) >= $${params.length}`);
+      }
+
+      if (typeof request.minCcu === 'number') {
+        params.push(request.minCcu);
+        conditions.push(`COALESCE(ldm.ccu_peak, 0) >= $${params.length}`);
+      }
+
+      if (request.platforms?.length) {
+        for (const platform of request.platforms) {
+          params.push(`%${platform.toLowerCase()}%`);
+          conditions.push(`lower(COALESCE(a.platforms, '')) LIKE $${params.length}`);
+        }
+      }
+
+      if (request.genres?.length) {
+        params.push(request.genres.map((genre) => genre.toLowerCase()));
+        conditions.push(
+          `EXISTS (
+            SELECT 1
+            FROM ${appGenresTable} ag
+            JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+            WHERE ag.appid = a.appid
+              AND lower(sg.name) = ANY($${params.length}::text[])
+          )`
+        );
+      }
+
+      if (request.tags?.length) {
+        params.push(request.tags.map((tag) => tag.toLowerCase()));
+        conditions.push(
+          `EXISTS (
+            SELECT 1
+            FROM ${appSteamTagsTable} ast
+            JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+            WHERE ast.appid = a.appid
+              AND lower(st.name) = ANY($${params.length}::text[])
+          )`
+        );
+      }
+
+      const direction = sortDirection === 'asc' ? 'ASC' : 'DESC';
+
+      let orderClause = `COALESCE(ldm.total_reviews, 0) DESC, a.name ASC`;
+      if (sortBy === 'reviews') {
+        orderClause = `COALESCE(ldm.total_reviews, 0) ${direction}, a.name ASC`;
+      } else if (sortBy === 'owners') {
+        orderClause = `COALESCE(ldm.owners_midpoint, 0) ${direction}, a.name ASC`;
+      } else if (sortBy === 'release_date') {
+        orderClause = `a.release_date ${direction} NULLS LAST, a.name ASC`;
+      } else if (sortBy === 'ccu_peak') {
+        orderClause = `COALESCE(ldm.ccu_peak, 0) ${direction}, a.name ASC`;
+      } else if (request.query?.trim()) {
+        params.push(request.query.trim().toLowerCase());
+        params.push(`${request.query.trim().toLowerCase()}%`);
+        params.push(normalizeLikeValue(request.query));
+        orderClause = `CASE
+            WHEN lower(a.name) = $${params.length - 2} THEN 3
+            WHEN lower(a.name) LIKE $${params.length - 1} THEN 2
+            WHEN lower(a.name) LIKE $${params.length} THEN 1
+            ELSE 0
+          END DESC,
+          COALESCE(ldm.total_reviews, 0) DESC,
+          a.name ASC`;
+      }
+
+      params.push(limit + 1);
+      params.push(offset);
+
+      const sql = `
+        SELECT
+          a.appid,
+          a.type::text AS app_type,
+          a.name,
+          a.is_free,
+          a.is_released,
+          a.release_state,
+          a.parent_appid,
+          a.current_price_cents AS price_cents,
+          a.current_discount_percent AS discount_percent,
+          a.platforms,
+          a.release_date::text,
+          EXTRACT(YEAR FROM a.release_date)::int AS release_year,
+          ldm.total_reviews,
+          ldm.review_score,
+          ldm.owners_midpoint,
+          ldm.ccu_peak,
+          COALESCE((
+            SELECT array_agg(DISTINCT ap.publisher_id ORDER BY ap.publisher_id)
+            FROM ${appPublishersTable} ap
+            WHERE ap.appid = a.appid
+          ), ARRAY[]::int[]) AS publisher_ids,
+          COALESCE((
+            SELECT array_agg(DISTINCT p.name ORDER BY p.name)
+            FROM ${appPublishersTable} ap
+            JOIN ${publishersTable} p ON p.id = ap.publisher_id
+            WHERE ap.appid = a.appid
+          ), ARRAY[]::text[]) AS publishers,
+          COALESCE((
+            SELECT array_agg(DISTINCT ad.developer_id ORDER BY ad.developer_id)
+            FROM ${appDevelopersTable} ad
+            WHERE ad.appid = a.appid
+          ), ARRAY[]::int[]) AS developer_ids,
+          COALESCE((
+            SELECT array_agg(DISTINCT d.name ORDER BY d.name)
+            FROM ${appDevelopersTable} ad
+            JOIN ${developersTable} d ON d.id = ad.developer_id
+            WHERE ad.appid = a.appid
+          ), ARRAY[]::text[]) AS developers
+        FROM ${appsTable} a
+        LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+        WHERE ${conditions.join('\n        AND ')}
+        ORDER BY ${orderClause}
+        LIMIT $${params.length - 1}
+        OFFSET $${params.length}
+      `;
+
+      const result = await runQuery<CatalogRow>(sql, params, this.config);
+      const rows = result.rows;
+      const hasMore = rows.length > limit;
+      const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+      continuationToken = hasMore
+        ? encodeContinuationToken({ offset: offset + pageRows.length })
+        : null;
+      items = pageRows.map((row) => ({
+        appType: row.app_type,
+        appid: row.appid,
+        ccuPeak: row.ccu_peak,
+        developerIds: row.developer_ids ?? [],
+        developers: row.developers ?? [],
+        discountPercent: row.discount_percent,
+        entityUid: buildEntityUid('steam', 'game', String(row.appid)),
+        isFree: row.is_free,
+        isReleased: row.is_released,
+        name: row.name,
+        ownersMidpoint: row.owners_midpoint,
+        parentAppid: row.parent_appid,
+        platforms: row.platforms
+          ? row.platforms.split(',').map((platform) => platform.trim()).filter(Boolean)
+          : [],
+        priceCents: row.price_cents,
+        publisherIds: row.publisher_ids ?? [],
+        publishers: row.publishers ?? [],
+        releaseDate: row.release_date,
+        releaseState: row.release_state,
+        releaseYear: row.release_year,
+        reviewScore: row.review_score,
+        totalReviews: row.total_reviews,
+      }));
     }
-
-    if (request.genres?.length) {
-      params.push(request.genres.map((genre) => genre.toLowerCase()));
-      conditions.push(
-        `EXISTS (
-          SELECT 1
-          FROM ${appGenresTable} ag
-          JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
-          WHERE ag.appid = a.appid
-            AND lower(sg.name) = ANY($${params.length}::text[])
-        )`
-      );
-    }
-
-    if (request.tags?.length) {
-      params.push(request.tags.map((tag) => tag.toLowerCase()));
-      conditions.push(
-        `EXISTS (
-          SELECT 1
-          FROM ${appSteamTagsTable} ast
-          JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
-          WHERE ast.appid = a.appid
-            AND lower(st.name) = ANY($${params.length}::text[])
-        )`
-      );
-    }
-
-    const sortBy = request.sortBy ?? 'relevance';
-    const sortDirection = request.sortDirection ?? 'desc';
-    const direction = sortDirection === 'asc' ? 'ASC' : 'DESC';
-
-    let orderClause = `COALESCE(ldm.total_reviews, 0) DESC, a.name ASC`;
-    if (sortBy === 'reviews') {
-      orderClause = `COALESCE(ldm.total_reviews, 0) ${direction}, a.name ASC`;
-    } else if (sortBy === 'owners') {
-      orderClause = `COALESCE(ldm.owners_midpoint, 0) ${direction}, a.name ASC`;
-    } else if (sortBy === 'release_date') {
-      orderClause = `a.release_date ${direction} NULLS LAST, a.name ASC`;
-    } else if (sortBy === 'ccu_peak') {
-      orderClause = `COALESCE(ldm.ccu_peak, 0) ${direction}, a.name ASC`;
-    } else if (request.query?.trim()) {
-      params.push(request.query.trim().toLowerCase());
-      params.push(`${request.query.trim().toLowerCase()}%`);
-      params.push(normalizeLikeValue(request.query));
-      orderClause = `CASE
-          WHEN lower(a.name) = $${params.length - 2} THEN 3
-          WHEN lower(a.name) LIKE $${params.length - 1} THEN 2
-          WHEN lower(a.name) LIKE $${params.length} THEN 1
-          ELSE 0
-        END DESC,
-        COALESCE(ldm.total_reviews, 0) DESC,
-        a.name ASC`;
-    }
-
-    params.push(limit + 1);
-    params.push(offset);
-
-    const sql = `
-      SELECT
-        a.appid,
-        a.type::text AS app_type,
-        a.name,
-        a.is_free,
-        a.is_released,
-        a.release_state,
-        a.parent_appid,
-        a.current_price_cents AS price_cents,
-        a.current_discount_percent AS discount_percent,
-        a.platforms,
-        a.release_date::text,
-        EXTRACT(YEAR FROM a.release_date)::int AS release_year,
-        ldm.total_reviews,
-        ldm.review_score,
-        ldm.owners_midpoint,
-        ldm.ccu_peak,
-        COALESCE((
-          SELECT array_agg(DISTINCT ap.publisher_id ORDER BY ap.publisher_id)
-          FROM ${appPublishersTable} ap
-          WHERE ap.appid = a.appid
-        ), ARRAY[]::int[]) AS publisher_ids,
-        COALESCE((
-          SELECT array_agg(DISTINCT p.name ORDER BY p.name)
-          FROM ${appPublishersTable} ap
-          JOIN ${publishersTable} p ON p.id = ap.publisher_id
-          WHERE ap.appid = a.appid
-        ), ARRAY[]::text[]) AS publishers,
-        COALESCE((
-          SELECT array_agg(DISTINCT ad.developer_id ORDER BY ad.developer_id)
-          FROM ${appDevelopersTable} ad
-          WHERE ad.appid = a.appid
-        ), ARRAY[]::int[]) AS developer_ids,
-        COALESCE((
-          SELECT array_agg(DISTINCT d.name ORDER BY d.name)
-          FROM ${appDevelopersTable} ad
-          JOIN ${developersTable} d ON d.id = ad.developer_id
-          WHERE ad.appid = a.appid
-        ), ARRAY[]::text[]) AS developers
-      FROM ${appsTable} a
-      LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
-      WHERE ${conditions.join('\n        AND ')}
-      ORDER BY ${orderClause}
-      LIMIT $${params.length - 1}
-      OFFSET $${params.length}
-    `;
-
-    const result = await runQuery<CatalogRow>(sql, params, this.config);
-    const rows = result.rows;
-    const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
-
-    const items: SearchCatalogItem[] = pageRows.map((row) => ({
-      appType: row.app_type,
-      appid: row.appid,
-      ccuPeak: row.ccu_peak,
-      developerIds: row.developer_ids ?? [],
-      developers: row.developers ?? [],
-      discountPercent: row.discount_percent,
-      entityUid: buildEntityUid('steam', 'game', String(row.appid)),
-      isFree: row.is_free,
-      isReleased: row.is_released,
-      name: row.name,
-      ownersMidpoint: row.owners_midpoint,
-      parentAppid: row.parent_appid,
-      platforms: row.platforms
-        ? row.platforms.split(',').map((platform) => platform.trim()).filter(Boolean)
-        : [],
-      priceCents: row.price_cents,
-      publisherIds: row.publisher_ids ?? [],
-      publishers: row.publishers ?? [],
-      releaseDate: row.release_date,
-      releaseState: row.release_state,
-      releaseYear: row.release_year,
-      reviewScore: row.review_score,
-      totalReviews: row.total_reviews,
-    }));
 
     return {
-      continuationToken: hasMore
-        ? encodeContinuationToken({ offset: offset + items.length })
-        : null,
+      continuationToken,
+      facets,
       interpretedFilters: {
         appids: request.appids ?? [],
         developerIds: request.developerIds ?? [],
         developerQuery: request.developerQuery?.trim() ?? null,
+        facetQuery: request.facetQuery?.trim() ?? null,
         genres: request.genres ?? [],
+        includeFacets: request.includeFacets ?? [],
         includeAppTypes: request.includeAppTypes ?? [],
         isFree: request.isFree ?? null,
         isReleased: request.isReleased ?? null,
@@ -1161,6 +1481,7 @@ export class DataPlaneService {
         minReviewScore: request.minReviewScore ?? null,
         minReviews: request.minReviews ?? null,
         onSale: request.onSale ?? null,
+        parentAppids: request.parentAppids ?? [],
         platforms: request.platforms ?? [],
         publisherIds: request.publisherIds ?? [],
         publisherQuery: request.publisherQuery?.trim() ?? null,
@@ -1188,8 +1509,59 @@ export class DataPlaneService {
         steamGenresTable,
         appSteamTagsTable,
         steamTagsTable,
+        steamCategoriesTable,
       ]),
-      sufficientToAnswer: items.length > 0,
+      sufficientToAnswer:
+        items.length > 0
+        || Boolean(facets && (facets.tags.length || facets.genres.length || facets.categories.length)),
+    };
+  }
+
+  async discoverMomentum(
+    request: DiscoverMomentumRequest
+  ): Promise<DiscoverMomentumResponse> {
+    await this.assertContractRuntime('discoverMomentum');
+    await this.assertTigerMomentumFiltersSupported(request);
+
+    const limit = normalizeLimit(request.limit, DEFAULT_MOMENTUM_LIMIT, MAX_MOMENTUM_LIMIT);
+    const timeframe = this.normalizeMomentumTimeframe(request.timeframe, request.sortBy, request.trendType);
+    const qdrantFiltered = Boolean(request.filters?.steamDeck?.length);
+    const candidateLimit = qdrantFiltered ? Math.min(limit * 8, 120) : limit;
+    const rows = await this.queryMomentumRows({
+      filters: request.filters ?? null,
+      indieHeuristic: request.indieHeuristic ?? false,
+      limit: candidateLimit,
+      sortBy: request.sortBy,
+      sortDirection: request.sortDirection ?? 'desc',
+      timeframe,
+      trendType: request.trendType ?? null,
+    });
+    const filteredRows = await this.applyMomentumQdrantFilters(rows, request.filters ?? null);
+    const pageRows = filteredRows.slice(0, limit);
+    const includesQdrant = qdrantFiltered && pageRows.length > 0;
+
+    return {
+      filtersApplied: this.buildMomentumFiltersApplied(request, timeframe),
+      items: pageRows.map((row) => this.mapMomentumItem(row)),
+      provenance: buildProvenance(this.config.source, [
+        this.relation('apps').sql,
+        this.relation('latest_daily_metrics').sql,
+        this.relation('metrics_daily_metrics').sql,
+        this.relation('app_publishers').sql,
+        this.relation('publishers').sql,
+        this.relation('app_developers').sql,
+        this.relation('developers').sql,
+        this.relation('app_genres').sql,
+        this.relation('steam_genres').sql,
+        this.relation('app_steam_tags').sql,
+        this.relation('steam_tags').sql,
+        ...(includesQdrant ? ['qdrant:publisheriq_games'] : []),
+      ]),
+      rankingDefinition: this.describeMomentumRanking(request.sortBy, timeframe, request.trendType ?? null),
+      rankingLabel: this.labelMomentumRanking(request.sortBy),
+      sufficientToAnswer: pageRows.length > 0,
+      timeframe,
+      timeframeLabel: this.labelMomentumTimeframe(timeframe),
     };
   }
 
@@ -1218,7 +1590,7 @@ export class DataPlaneService {
             limit,
             direction
           )
-        : await this.queryRankedCompanies(entityKind, metric, query, limit, direction);
+        : await this.queryRankedCompanies(entityKind, request, limit, direction);
 
     return {
       entityKind,
@@ -1400,10 +1772,7 @@ export class DataPlaneService {
   async explainChanges(request: ExplainChangesRequest): Promise<ExplainChangesResponse> {
     await this.assertContractRuntime('explainChanges');
 
-    const { endTime, startTime } = this.normalizeExplainTimeWindow(
-      request.startTime ?? null,
-      request.endTime ?? null
-    );
+    const mode = request.mode ?? 'timeline';
     const limit = normalizeLimit(
       request.limit,
       DEFAULT_EXPLAIN_CHANGES_LIMIT,
@@ -1412,10 +1781,52 @@ export class DataPlaneService {
     const includeNews = request.includeNews ?? true;
     const sources = this.normalizeExplainFilters(request.sources);
     const changeTypes = this.normalizeExplainFilters(request.changeTypes);
-    const entity = await this.resolveCoreEntity(request.entityUid, {
-      invalidCode: 'INVALID_EXPLAIN_ENTITY_UID',
-      notFoundCode: 'EXPLAIN_ENTITY_NOT_FOUND',
-    });
+    const activityId = request.activityId?.trim() || null;
+
+    let startTime: string;
+    let endTime: string;
+    let entity: CoreEntityRow;
+
+    if (activityId) {
+      const burstDetail = await this.queryChangeBurstDetail(activityId);
+      if (!burstDetail) {
+        throw new PublisherIQError(
+          'explainChanges could not resolve the requested change activity.',
+          'EXPLAIN_ACTIVITY_NOT_FOUND',
+          {
+            activityId,
+          }
+        );
+      }
+
+      startTime = formatTimestamp(parseTimestamp(burstDetail.burst_started_at));
+      endTime = formatTimestamp(parseTimestamp(burstDetail.burst_ended_at));
+      entity = await this.resolveCoreEntity(
+        request.entityUid?.trim() || buildEntityUid('steam', 'game', String(burstDetail.appid)),
+        {
+          invalidCode: 'INVALID_EXPLAIN_ENTITY_UID',
+          notFoundCode: 'EXPLAIN_ENTITY_NOT_FOUND',
+        }
+      );
+    } else {
+      if (!request.entityUid?.trim()) {
+        throw new PublisherIQError(
+          'explainChanges requires either an entityUid or an activityId.',
+          'INVALID_EXPLAIN_INPUT'
+        );
+      }
+
+      const normalizedWindow = this.normalizeExplainTimeWindow(
+        request.startTime ?? null,
+        request.endTime ?? null
+      );
+      startTime = normalizedWindow.startTime;
+      endTime = normalizedWindow.endTime;
+      entity = await this.resolveCoreEntity(request.entityUid.trim(), {
+        invalidCode: 'INVALID_EXPLAIN_ENTITY_UID',
+        notFoundCode: 'EXPLAIN_ENTITY_NOT_FOUND',
+      });
+    }
 
     if (entity.entity_kind !== 'game' || entity.platform !== 'steam') {
       throw new PublisherIQError(
@@ -1477,8 +1888,17 @@ export class DataPlaneService {
 
     const responseEvents = responseMoments.flatMap((moment) => moment.events);
     const responseNews = responseMoments.flatMap((moment) => moment.linkedNews);
+    const selectedMoment = mode === 'before_after' ? responseMoments[0] ?? null : null;
+    const comparisonWindows = selectedMoment
+      ? await this.buildExplainComparisonWindows(
+          appid,
+          parseTimestamp(selectedMoment.windowStart),
+          parseTimestamp(selectedMoment.windowEnd)
+        )
+      : null;
 
     return {
+      comparisonWindows,
       entity: {
         displayName: entity.canonical_name,
         entityKind: entity.entity_kind,
@@ -1486,6 +1906,7 @@ export class DataPlaneService {
         platform: entity.platform,
         platformEntityId: entity.platform_entity_id,
       },
+      mode,
       moments: responseMoments,
       provenance: buildProvenance(
         this.config.source,
@@ -1498,6 +1919,7 @@ export class DataPlaneService {
             ]
           : [this.relation('core_entities').sql, this.relation('events_app_change_events').sql]
       ),
+      selectedMoment,
       sufficientToAnswer: true,
       summary: {
         countsByChangeType: countBy(responseEvents.map((event) => event.changeType)),
@@ -1510,6 +1932,154 @@ export class DataPlaneService {
         endTime,
         startTime,
       },
+    };
+  }
+
+  async searchChangeActivity(
+    request: SearchChangeActivityRequest
+  ): Promise<SearchChangeActivityResponse> {
+    await this.assertContractRuntime('searchChangeActivity');
+
+    const days = Math.max(
+      1,
+      Math.min(MAX_CHANGE_ACTIVITY_DAYS, Math.floor(request.days ?? DEFAULT_CHANGE_ACTIVITY_DAYS))
+    );
+    const limit = normalizeLimit(
+      request.limit,
+      DEFAULT_CHANGE_ACTIVITY_LIMIT,
+      MAX_CHANGE_ACTIVITY_LIMIT
+    );
+    const appTypes = this.normalizeExplainFilters(request.appTypes);
+    const signalFamilies = normalizeChangeSignalFamilies(request.signalFamilies);
+    const sort = request.sort ?? 'relevant';
+    const view = request.view ?? 'overview';
+    const mode = request.mode ?? 'all';
+    const query = request.query?.trim() || null;
+    const offset = decodeContinuationToken(request.continuationToken).offset;
+    const requestedCount = offset + limit + 1;
+    const excludedActivityIds = new Set(
+      (request.excludeActivityIds ?? []).filter(
+        (value): value is string => typeof value === 'string' && value.trim().length > 0
+      )
+    );
+
+    const rows = await this.querySearchChangeActivityRows({
+      appTypes,
+      days,
+      query,
+      signalFamilies,
+      view,
+    });
+
+    const filteredRows = rows.filter((row) => {
+      const item = this.mapSearchChangeActivityItem(row);
+      if (excludedActivityIds.has(item.activityId)) {
+        return false;
+      }
+
+      if (mode === 'changes') {
+        return item.activityKind === 'change';
+      }
+
+      if (mode === 'announcements') {
+        return item.relatedAnnouncementCount > 0;
+      }
+
+      return true;
+    });
+
+    const sortedRows = filteredRows.sort((left, right) =>
+      this.compareSearchChangeRows(left, right, sort)
+    );
+    const pageRows = sortedRows.slice(offset, requestedCount);
+    const items = pageRows.slice(0, limit).map((row) => this.mapSearchChangeActivityItem(row));
+
+    return {
+      continuationToken:
+        pageRows.length > limit
+          ? encodeContinuationToken({ offset: offset + limit })
+          : null,
+      interpretedFilters: {
+        appTypes,
+        days,
+        mode,
+        query,
+        signalFamilies,
+        sort,
+        view,
+      },
+      items,
+      provenance: buildProvenance(this.config.source, [
+        this.relation('apps').sql,
+        this.relation('events_app_change_events').sql,
+        this.relation('docs_steam_news_items').sql,
+        this.relation('docs_steam_news_search_projection').sql,
+      ]),
+      sufficientToAnswer: items.length > 0,
+    };
+  }
+
+  async discoverChangePatterns(
+    request: DiscoverChangePatternsRequest
+  ): Promise<DiscoverChangePatternsResponse> {
+    await this.assertContractRuntime('discoverChangePatterns');
+
+    const days = Math.max(
+      1,
+      Math.min(MAX_CHANGE_ACTIVITY_DAYS, Math.floor(request.days ?? DEFAULT_CHANGE_ACTIVITY_DAYS))
+    );
+    const limit = normalizeLimit(
+      request.limit,
+      DEFAULT_CHANGE_PATTERN_LIMIT,
+      MAX_CHANGE_PATTERN_LIMIT
+    );
+    const appTypes = this.normalizeExplainFilters(request.appTypes);
+    const query = request.query?.trim() || null;
+    const offset = decodeContinuationToken(request.continuationToken).offset;
+    const requestedCount = offset + limit + 1;
+    const excludedAppIds = new Set(
+      (request.excludeAppIds ?? []).filter(
+        (value): value is number => Number.isInteger(value) && value > 0
+      )
+    );
+
+    const candidates = await this.queryChangePatternCandidateRows({
+      appTypes,
+      days,
+      pattern: request.pattern,
+      query,
+    });
+    const filteredCandidates = candidates.filter((candidate) => !excludedAppIds.has(candidate.appid));
+    const items = await this.mapDiscoverChangePatternItems(
+      filteredCandidates,
+      request.pattern
+    );
+    const sortedItems = items.sort((left, right) =>
+      this.compareDiscoverChangePatternItems(left, right)
+    );
+    const pageItems = sortedItems.slice(offset, requestedCount);
+
+    return {
+      continuationToken:
+        pageItems.length > limit
+          ? encodeContinuationToken({ offset: offset + limit })
+          : null,
+      interpretedFilters: {
+        appTypes,
+        days,
+        pattern: request.pattern,
+        query,
+      },
+      items: pageItems.slice(0, limit),
+      provenance: buildProvenance(this.config.source, [
+        this.relation('apps').sql,
+        this.relation('latest_daily_metrics').sql,
+        this.relation('metrics_daily_metrics').sql,
+        this.relation('events_app_change_events').sql,
+        this.relation('docs_steam_news_items').sql,
+        this.relation('docs_steam_news_search_projection').sql,
+      ]),
+      sufficientToAnswer: pageItems.length > 0,
     };
   }
 
@@ -1530,8 +2100,9 @@ export class DataPlaneService {
       );
     }
 
-    const query = request.query.trim();
-    if (!query) {
+    const mode = request.mode ?? 'topic_search';
+    const query = request.query?.trim() ?? '';
+    if (mode === 'topic_search' && !query) {
       throw new PublisherIQError(
         'searchDocuments requires a non-empty query string.',
         'INVALID_DOCUMENT_QUERY'
@@ -1544,50 +2115,71 @@ export class DataPlaneService {
     );
     const limit = normalizeLimit(request.limit, DEFAULT_DOCUMENT_LIMIT, MAX_DOCUMENT_LIMIT);
     const feedScopes = this.normalizeFeedScopes(request.feedScopes);
-    const entity = request.entityUid?.trim()
-      ? await this.resolveCoreEntity(request.entityUid.trim(), {
+    const requestedEntityUids = [
+      ...(request.entityUid?.trim() ? [request.entityUid.trim()] : []),
+      ...((request.entityUids ?? []).filter(
+        (value): value is string => typeof value === 'string' && value.trim().length > 0
+      ).map((value) => value.trim())),
+    ];
+    const uniqueEntityUids = [...new Set(requestedEntityUids)];
+    const entities = await Promise.all(
+      uniqueEntityUids.map(async (entityUid) =>
+        this.resolveCoreEntity(entityUid, {
           invalidCode: 'INVALID_DOCUMENT_ENTITY_UID',
           notFoundCode: 'DOCUMENT_ENTITY_NOT_FOUND',
         })
-      : null;
+      )
+    );
 
-    let appidFilter: number | null = null;
-    if (entity) {
+    const appids = entities.map((entity) => {
       if (entity.entity_kind !== 'game' || entity.platform !== 'steam') {
         throw new PublisherIQError(
           'searchDocuments currently supports only Steam game entity filters.',
           'INVALID_DOCUMENT_ENTITY_KIND',
           {
             entityKind: entity.entity_kind,
-            entityUid: request.entityUid,
+            entityUid: entity.entity_uid,
             platform: entity.platform,
           }
         );
       }
 
-      appidFilter = Number(entity.platform_entity_id);
-      if (!Number.isInteger(appidFilter) || appidFilter <= 0) {
+      const appid = Number(entity.platform_entity_id);
+      if (!Number.isInteger(appid) || appid <= 0) {
         throw new PublisherIQError(
           'Resolved game entity does not have a valid Steam appid.',
           'INVALID_DOCUMENT_ENTITY_ID',
           {
-            entityUid: request.entityUid,
+            entityUid: entity.entity_uid,
             platformEntityId: entity.platform_entity_id,
           }
         );
       }
-    }
 
-    let rows = await this.querySearchDocumentRows({
-      appidFilter,
-      endTime,
-      feedScopes,
-      limit,
-      query,
-      startTime,
+      return appid;
     });
 
-    if (rows.length === 0 && appidFilter !== null) {
+    const appidFilter = appids.length === 1 ? appids[0]! : null;
+    let rows =
+      mode === 'topic_search'
+        ? await this.querySearchDocumentRows({
+            appidFilter,
+            appids: appids.length > 0 ? appids : null,
+            endTime,
+            feedScopes,
+            limit,
+            query,
+            startTime,
+          })
+        : await this.queryLatestNewsDocumentRows({
+            appids: appids.length > 0 ? appids : null,
+            endTime,
+            feedScopes,
+            limit: mode === 'latest_item' ? Math.max(limit, 3) : limit,
+            startTime,
+          });
+
+    if (rows.length === 0 && mode === 'topic_search' && appidFilter !== null) {
       rows = await this.queryLatestEntityDocumentRows({
         appidFilter,
         endTime,
@@ -1597,40 +2189,31 @@ export class DataPlaneService {
       });
     }
 
-    const items: SearchDocumentItem[] = rows.map((row) => ({
-      appid: row.appid,
-      appName: row.app_name,
-      entityUid: buildEntityUid('steam', 'game', String(row.appid)),
-      feedLabel: row.feedlabel,
-      feedName: row.feedname,
-      feedScope: row.feed_scope,
-      firstSeenAt: formatTimestamp(parseTimestamp(row.first_seen_at)),
-      gid: row.gid,
-      matchReason: row.title_phrase_hit ? 'matched_title_phrase' : 'matched_topic_terms',
-      publishedAt: row.published_at ? formatTimestamp(parseTimestamp(row.published_at)) : null,
-      rank: roundNumber(row.rank ?? 0, 4),
-      sortTime: formatTimestamp(parseTimestamp(row.sort_time)),
-      title: row.title,
-      url: row.url,
-    }));
+    const items: SearchDocumentItem[] = rows
+      .map((row) => this.mapSearchDocumentRow(row))
+      .slice(0, mode === 'latest_item' ? Math.max(limit, 3) : limit);
+    const latestItem = items[0] ?? null;
 
     return {
-      entity: entity
+      entity: entities[0]
         ? {
-            displayName: entity.canonical_name,
-            entityKind: entity.entity_kind,
-            entityUid: entity.entity_uid,
-            platform: entity.platform,
-            platformEntityId: entity.platform_entity_id,
+            displayName: entities[0].canonical_name,
+            entityKind: entities[0].entity_kind,
+            entityUid: entities[0].entity_uid,
+            platform: entities[0].platform,
+            platformEntityId: entities[0].platform_entity_id,
           }
         : null,
       interpretedFilters: {
         endTime,
+        entityUids: uniqueEntityUids,
         feedScopes,
+        mode,
         query,
         startTime,
       },
       items,
+      latestItem,
       provenance: buildProvenance(this.config.source, [
         this.relation('apps').sql,
         this.relation('docs_steam_news_items').sql,
@@ -2147,6 +2730,7 @@ export class DataPlaneService {
 
   private async querySearchDocumentRows(params: {
     appidFilter: number | null;
+    appids?: number[] | null;
     endTime: string;
     feedScopes: string[];
     limit: number;
@@ -2170,6 +2754,9 @@ export class DataPlaneService {
     if (params.appidFilter !== null) {
       sqlParams.push(params.appidFilter);
       conditions.push(`projection.appid = $${sqlParams.length}`);
+    } else if (params.appids && params.appids.length > 0) {
+      sqlParams.push(params.appids);
+      conditions.push(`projection.appid = ANY($${sqlParams.length}::int[])`);
     }
 
     sqlParams.push(normalizeLikeValue(params.query));
@@ -2193,7 +2780,11 @@ export class DataPlaneService {
             projection.search_document,
             websearch_to_tsquery('english', $1::text)
           )::double precision AS rank,
-          lower(COALESCE(projection.title, '')) LIKE $${sqlParams.length - 1} AS title_phrase_hit
+          lower(COALESCE(projection.title, '')) LIKE $${sqlParams.length - 1} AS title_phrase_hit,
+          NULL::text AS body_preview,
+          NULL::text AS content_preview,
+          NULL::text AS excerpt,
+          NULL::text AS match_reason
         FROM ${projectionTable} projection
         JOIN ${newsItemsTable} news ON news.gid = projection.gid
         JOIN ${appsTable} apps ON apps.appid = projection.appid
@@ -2250,7 +2841,11 @@ export class DataPlaneService {
           news.feedname,
           news.url,
           0::double precision AS rank,
-          false AS title_phrase_hit
+          false AS title_phrase_hit,
+          NULL::text AS body_preview,
+          NULL::text AS content_preview,
+          NULL::text AS excerpt,
+          'recent_entity_news'::text AS match_reason
         FROM ${projectionTable} projection
         JOIN ${newsItemsTable} news ON news.gid = projection.gid
         JOIN ${appsTable} apps ON apps.appid = projection.appid
@@ -2265,6 +2860,1180 @@ export class DataPlaneService {
     );
 
     return result.rows;
+  }
+
+  private buildTigerActivityId(
+    activityKind: 'announcement' | 'change',
+    appid: number,
+    windowStart: Date,
+    windowEnd: Date
+  ): string {
+    return `${activityKind}:${appid}:${windowStart.getTime()}:${windowEnd.getTime()}`;
+  }
+
+  private parseTigerActivityId(activityId: string): ParsedTigerActivityId | null {
+    const parts = activityId.trim().split(':');
+    if (parts.length !== 4) {
+      return null;
+    }
+
+    const [activityKind, appidRaw, windowStartRaw, windowEndRaw] = parts;
+    if (activityKind !== 'announcement' && activityKind !== 'change') {
+      return null;
+    }
+
+    const appid = Number.parseInt(appidRaw, 10);
+    const windowStartMs = Number.parseInt(windowStartRaw, 10);
+    const windowEndMs = Number.parseInt(windowEndRaw, 10);
+
+    if (
+      !Number.isInteger(appid) ||
+      appid <= 0 ||
+      !Number.isFinite(windowStartMs) ||
+      !Number.isFinite(windowEndMs) ||
+      windowEndMs < windowStartMs
+    ) {
+      return null;
+    }
+
+    return {
+      activityKind,
+      appid,
+      windowEnd: new Date(windowEndMs),
+      windowStart: new Date(windowStartMs),
+    };
+  }
+
+  private familyForChangeType(changeType: string): ChangeActivitySignalFamily {
+    return CHANGE_TYPE_TO_SIGNAL_FAMILY[changeType] ?? 'store-page';
+  }
+
+  private familyMatchesSearchFilter(
+    changeType: string,
+    signalFamilies: ChangeActivitySignalFamily[]
+  ): boolean {
+    return signalFamilies.length === 0 || signalFamilies.includes(this.familyForChangeType(changeType));
+  }
+
+  private changeTypesForSignalFamilies(
+    signalFamilies: ChangeActivitySignalFamily[]
+  ): string[] {
+    if (signalFamilies.length === 0) {
+      return [];
+    }
+
+    return [...new Set(signalFamilies.flatMap((family) => CHANGE_TYPES_BY_SIGNAL_FAMILY[family] ?? []))];
+  }
+
+  private defaultSignalFamiliesForSearchChangeView(
+    view: ChangeActivityView
+  ): ChangeActivitySignalFamily[] {
+    if (view === 'store-refreshes') {
+      return ['store-page', 'media'];
+    }
+
+    if (view === 'commercial-moves') {
+      return ['pricing', 'announcement', 'store-page', 'media'];
+    }
+
+    if (view === 'launch-watch') {
+      return ['release', 'platform', 'build', 'announcement'];
+    }
+
+    return [];
+  }
+
+  private signalFamiliesForChangePattern(
+    pattern: ChangePattern
+  ): ChangeActivitySignalFamily[] {
+    switch (pattern) {
+      case 'marketing_push':
+        return ['pricing', 'announcement', 'media', 'store-page'];
+      case 'relaunch_pattern':
+        return ['pricing', 'announcement', 'media', 'store-page', 'release', 'platform'];
+      case 'update_tease':
+        return ['announcement', 'media', 'store-page', 'build'];
+      case 'under_marketed':
+      case 'signable_candidate':
+        return ['build', 'announcement', 'media', 'store-page'];
+      case 'rescue_candidate':
+        return ['pricing', 'announcement', 'media', 'store-page'];
+      case 'sustained_response':
+        return ['pricing', 'media', 'store-page', 'build', 'release', 'platform', 'taxonomy'];
+      case 'announcement_weak_response':
+        return ['announcement', 'pricing', 'media', 'store-page'];
+      default:
+        return [];
+    }
+  }
+
+  private matchesSearchChangeView(
+    families: ChangeActivitySignalFamily[],
+    isReleased: boolean | null,
+    view: ChangeActivityView
+  ): boolean {
+    if (view === 'all-activity' || view === 'overview') {
+      return true;
+    }
+
+    if (view === 'store-refreshes') {
+      return families.includes('media') || families.includes('store-page');
+    }
+
+    if (view === 'commercial-moves') {
+      return (
+        families.includes('pricing') ||
+        families.includes('announcement') ||
+        families.includes('media') ||
+        families.includes('store-page')
+      );
+    }
+
+    return (
+      isReleased === false ||
+      families.includes('release') ||
+      families.includes('platform') ||
+      families.includes('build')
+    );
+  }
+
+  private classifySearchChangeStoryKind(params: {
+    activityKind: 'announcement' | 'change';
+    families: ChangeActivitySignalFamily[];
+    isReleased: boolean | null;
+    relatedAnnouncementCount: number;
+  }): ChangeActivityStoryKind {
+    const { activityKind, families, isReleased, relatedAnnouncementCount } = params;
+
+    if (activityKind === 'announcement' && families.length === 1 && families[0] === 'announcement') {
+      return 'announcement';
+    }
+
+    if (
+      isReleased === false ||
+      families.includes('release') ||
+      families.includes('platform')
+    ) {
+      return 'launch-prep';
+    }
+
+    if (families.includes('taxonomy')) {
+      return 'taxonomy-shift';
+    }
+
+    if (families.includes('build')) {
+      return 'update-tease';
+    }
+
+    if (families.includes('pricing') && relatedAnnouncementCount > 0) {
+      return 'commercial-move';
+    }
+
+    if (families.includes('media') || families.includes('store-page')) {
+      return 'store-refresh';
+    }
+
+    return 'change-roundup';
+  }
+
+  private buildSearchChangeHeadline(params: {
+    activityKind: 'announcement' | 'change';
+    appName: string;
+    directNews: ExplainNewsRow[];
+    families: ChangeActivitySignalFamily[];
+    storyKind: ChangeActivityStoryKind;
+  }): string {
+    if (params.activityKind === 'announcement' && params.directNews[0]?.title) {
+      return params.directNews[0].title;
+    }
+
+    if (params.storyKind === 'launch-prep') {
+      return `${params.appName} showed launch-adjacent Steam changes.`;
+    }
+
+    if (params.storyKind === 'commercial-move') {
+      return `${params.appName} showed a commercial or marketing move on Steam.`;
+    }
+
+    if (params.storyKind === 'store-refresh') {
+      return `${params.appName} refreshed its Steam page presentation.`;
+    }
+
+    if (params.storyKind === 'taxonomy-shift') {
+      return `${params.appName} changed tags, genres, or platform positioning.`;
+    }
+
+    if (params.storyKind === 'update-tease') {
+      return `${params.appName} showed update-adjacent Steam activity.`;
+    }
+
+    if (params.families.includes('announcement')) {
+      return `${params.appName} mixed announcement activity with Steam page changes.`;
+    }
+
+    return `${params.appName} showed recent Steam change activity.`;
+  }
+
+  private buildSearchChangeFacts(params: {
+    directNews: ExplainNewsRow[];
+    eventCount: number;
+    families: ChangeActivitySignalFamily[];
+    hasBeforeAfter: boolean;
+    relatedAnnouncementCount: number;
+    windowEnd: Date;
+    windowStart: Date;
+  }): string[] {
+    const facts: string[] = [
+      `${params.eventCount} tracked change event${params.eventCount === 1 ? '' : 's'} in this activity window.`,
+      `Window: ${formatTimestamp(params.windowStart)} to ${formatTimestamp(params.windowEnd)}.`,
+    ];
+
+    if (params.families.length > 0) {
+      facts.push(`Signals: ${params.families.join(', ')}.`);
+    }
+    if (params.relatedAnnouncementCount > 0) {
+      facts.push(`${params.relatedAnnouncementCount} related announcement${params.relatedAnnouncementCount === 1 ? '' : 's'} linked to the same window.`);
+    }
+    if (params.hasBeforeAfter) {
+      facts.push('Structured before/after values are available for drilldown.');
+    }
+    if (params.directNews[0]?.title) {
+      facts.push(`Headline evidence: ${params.directNews[0].title}.`);
+    }
+
+    return facts.slice(0, 4);
+  }
+
+  private buildSearchChangeSummary(params: {
+    activityKind: 'announcement' | 'change';
+    appName: string;
+    directNews: ExplainNewsRow[];
+    families: ChangeActivitySignalFamily[];
+    relatedAnnouncementCount: number;
+  }): string {
+    if (params.activityKind === 'announcement' && params.directNews[0]?.title) {
+      return `${params.appName} has recent Steam announcement activity led by "${params.directNews[0].title}".`;
+    }
+
+    const signalLabel =
+      params.families.length > 0 ? params.families.join(', ') : 'general Steam page';
+    const announcementClause =
+      params.relatedAnnouncementCount > 0
+        ? ` with ${params.relatedAnnouncementCount} linked announcement${params.relatedAnnouncementCount === 1 ? '' : 's'}`
+        : ' without a linked announcement';
+
+    return `${params.appName} showed ${signalLabel} changes${announcementClause}.`;
+  }
+
+  private buildSearchChangeHighlightLabels(params: {
+    families: ChangeActivitySignalFamily[];
+    relatedAnnouncementCount: number;
+    storyKind: ChangeActivityStoryKind;
+  }): string[] {
+    const labels = new Set<string>();
+    labels.add(params.storyKind.replace(/-/g, ' '));
+
+    for (const family of params.families) {
+      labels.add(family.replace(/-/g, ' '));
+    }
+
+    if (params.relatedAnnouncementCount > 0) {
+      labels.add('announcement linked');
+    }
+
+    return [...labels].slice(0, 4);
+  }
+
+  private scoreSearchChangeActivityRow(
+    row: ChangeActivityContractRow,
+    sort: ChangeActivitySort
+  ): number {
+    const families = normalizeChangeSignalFamilies(row.signal_families);
+    const occurredAtMs = parseTimestamp(row.occurred_at).getTime();
+    const freshnessScore = occurredAtMs / 1_000_000_000_000;
+    const commercialScore =
+      (families.includes('pricing') ? 3 : 0)
+      + (families.includes('media') || families.includes('store-page') ? 2 : 0)
+      + Math.min(row.related_announcement_count ?? 0, 2);
+    const launchScore =
+      (families.includes('release') ? 3 : 0)
+      + (families.includes('platform') ? 2 : 0)
+      + (families.includes('build') ? 1 : 0)
+      + (row.is_released === false ? 1 : 0);
+    const impactScore =
+      families.length
+      + (row.has_before_after ? 1 : 0)
+      + Math.min(row.related_announcement_count ?? 0, 2);
+
+    switch (sort) {
+      case 'newest':
+        return freshnessScore;
+      case 'biggest-change':
+        return impactScore * 10 + freshnessScore;
+      case 'most-commercial':
+        return commercialScore * 10 + freshnessScore;
+      case 'most-launch-relevant':
+        return launchScore * 10 + freshnessScore;
+      case 'relevant':
+      default:
+        return (impactScore + commercialScore + launchScore) * 5 + freshnessScore;
+    }
+  }
+
+  private compareSearchChangeRows(
+    left: ChangeActivityContractRow,
+    right: ChangeActivityContractRow,
+    sort: ChangeActivitySort
+  ): number {
+    const rightScore = this.scoreSearchChangeActivityRow(right, sort);
+    const leftScore = this.scoreSearchChangeActivityRow(left, sort);
+
+    if (rightScore !== leftScore) {
+      return rightScore - leftScore;
+    }
+
+    return (
+      parseTimestamp(right.occurred_at).getTime() - parseTimestamp(left.occurred_at).getTime()
+      || left.app_name.localeCompare(right.app_name)
+    );
+  }
+
+  private async querySearchChangeEventRows(params: {
+    appTypes: string[];
+    changeTypes?: string[];
+    days?: number;
+    limit?: number;
+    query: string | null;
+    startTime?: string;
+    endTime?: string;
+    appid?: number;
+  }): Promise<SearchChangeEventRow[]> {
+    const eventsTable = this.relation('events_app_change_events').sql;
+    const appsTable = this.relation('apps').sql;
+    const sqlParams: unknown[] = [];
+    const conditions: string[] = [];
+
+    if (params.appid != null) {
+      sqlParams.push(params.appid);
+      conditions.push(`e.appid = $${sqlParams.length}`);
+    }
+
+    if (params.startTime && params.endTime) {
+      sqlParams.push(params.startTime);
+      sqlParams.push(params.endTime);
+      conditions.push(`e.occurred_at BETWEEN $${sqlParams.length - 1}::timestamptz AND $${sqlParams.length}::timestamptz`);
+    } else {
+      sqlParams.push(Math.max(1, Math.trunc(params.days ?? DEFAULT_CHANGE_ACTIVITY_DAYS)));
+      conditions.push(`e.occurred_at >= NOW() - ($${sqlParams.length}::int * INTERVAL '1 day')`);
+    }
+
+    if (params.query) {
+      sqlParams.push(normalizeLikeValue(params.query));
+      conditions.push(`lower(a.name) LIKE $${sqlParams.length}`);
+    }
+
+    if (params.appTypes.length > 0) {
+      sqlParams.push(params.appTypes);
+      if (this.config.source === 'supabase-postgres') {
+        conditions.push(`a.type = ANY($${sqlParams.length}::public.app_type[])`);
+      } else {
+        conditions.push(`a.type::text = ANY($${sqlParams.length}::text[])`);
+      }
+    }
+
+    if (params.changeTypes && params.changeTypes.length > 0) {
+      sqlParams.push(params.changeTypes);
+      if (this.config.source === 'supabase-postgres') {
+        conditions.push(`e.change_type = ANY($${sqlParams.length}::public.app_change_type[])`);
+      } else {
+        conditions.push(`e.change_type::text = ANY($${sqlParams.length}::text[])`);
+      }
+    }
+
+    sqlParams.push(params.limit ?? 800);
+
+    const result = await runQuery<SearchChangeEventRow>(
+      `
+        SELECT
+          e.appid,
+          a.name AS app_name,
+          a.type::text AS app_type,
+          a.is_released,
+          a.release_date::text AS release_date,
+          e.source::text AS source,
+          e.change_type::text AS change_type,
+          e.occurred_at::text,
+          e.news_item_gid,
+          e.before_value,
+          e.after_value,
+          e.context
+        FROM ${eventsTable} e
+        JOIN ${appsTable} a ON a.appid = e.appid
+        WHERE ${conditions.join('\n          AND ')}
+        ORDER BY e.occurred_at DESC, e.id DESC
+        LIMIT $${sqlParams.length}
+      `,
+      sqlParams,
+      this.config
+    );
+
+    return result.rows;
+  }
+
+  private async queryNewsRowsByGids(gids: string[]): Promise<ExplainNewsRow[]> {
+    if (gids.length === 0) {
+      return [];
+    }
+
+    const newsItemsTable = this.relation('docs_steam_news_items').sql;
+    const newsProjectionTable = this.relation('docs_steam_news_search_projection').sql;
+    const result = await runQuery<ExplainNewsRow>(
+      `
+        SELECT
+          n.gid,
+          n.url,
+          n.feedlabel,
+          n.feedname,
+          n.published_at::text,
+          n.first_seen_at::text,
+          COALESCE(p.sort_time, COALESCE(n.published_at, n.first_seen_at))::text AS sort_time,
+          p.feed_scope,
+          p.title
+        FROM ${newsItemsTable} n
+        LEFT JOIN ${newsProjectionTable} p ON p.gid = n.gid
+        WHERE n.gid = ANY($1::text[])
+        ORDER BY COALESCE(p.sort_time, COALESCE(n.published_at, n.first_seen_at)) DESC, n.gid DESC
+      `,
+      [gids],
+      this.config
+    );
+
+    return result.rows;
+  }
+
+  private buildSearchChangeMoments(
+    rows: SearchChangeEventRow[]
+  ): SearchChangeMomentAccumulator[] {
+    const grouped = new Map<number, SearchChangeMomentAccumulator[]>();
+
+    for (const row of rows) {
+      const occurredAt = parseTimestamp(row.occurred_at);
+      const appMoments = grouped.get(row.appid) ?? [];
+      const currentMoment = appMoments.at(-1);
+
+      if (
+        currentMoment &&
+        currentMoment.windowStart.getTime() - occurredAt.getTime() <= EXPLAIN_CHANGE_MOMENT_GAP_MS
+      ) {
+        currentMoment.events.push(row);
+        currentMoment.windowStart = occurredAt;
+        if (row.news_item_gid) {
+          currentMoment.directNewsGids.add(row.news_item_gid);
+        }
+      } else {
+        appMoments.push({
+          appName: row.app_name,
+          appType: row.app_type,
+          appid: row.appid,
+          directNewsGids: new Set(row.news_item_gid ? [row.news_item_gid] : []),
+          events: [row],
+          isReleased: row.is_released,
+          linkedNews: [],
+          releaseDate: row.release_date,
+          windowEnd: occurredAt,
+          windowStart: occurredAt,
+        });
+      }
+
+      grouped.set(row.appid, appMoments);
+    }
+
+    return [...grouped.values()].flat();
+  }
+
+  private mapSearchChangeActivityItem(row: ChangeActivityContractRow): SearchChangeActivityItem {
+    return {
+      activityId: row.activity_id,
+      activityKind: row.activity_kind,
+      appType: row.app_type,
+      appid: row.appid,
+      externalUrl: row.external_url,
+      facts: row.facts ?? [],
+      hasBeforeAfter: row.has_before_after ?? false,
+      headline: row.headline ?? `${row.app_name} showed recent Steam change activity.`,
+      highlightLabels: row.highlight_labels ?? [],
+      isReleased: row.is_released,
+      name: row.app_name,
+      occurredAt: formatTimestamp(parseTimestamp(row.occurred_at)),
+      relatedAnnouncementCount: row.related_announcement_count ?? 0,
+      releaseDate: row.release_date,
+      signalFamilies: normalizeChangeSignalFamilies(row.signal_families),
+      storyKind: normalizeChangeStoryKind(row.story_kind),
+      summary: row.summary ?? `${row.app_name} showed recent Steam change activity.`,
+    };
+  }
+
+  private async querySearchChangeActivityRows(params: {
+    activityId?: string | null;
+    appTypes: string[];
+    days: number;
+    query: string | null;
+    signalFamilies: ChangeActivitySignalFamily[];
+    view: ChangeActivityView;
+  }): Promise<ChangeActivityContractRow[]> {
+    const parsedActivityId = params.activityId ? this.parseTigerActivityId(params.activityId) : null;
+    const changeTypes = this.changeTypesForSignalFamilies(
+      params.signalFamilies.length > 0
+        ? params.signalFamilies
+        : this.defaultSignalFamiliesForSearchChangeView(params.view)
+    );
+    const rawRows = parsedActivityId
+      ? await this.querySearchChangeEventRows({
+          appTypes: params.appTypes,
+          appid: parsedActivityId.appid,
+          changeTypes,
+          endTime: formatTimestamp(parsedActivityId.windowEnd),
+          limit: 200,
+          query: null,
+          startTime: formatTimestamp(parsedActivityId.windowStart),
+        })
+      : await this.querySearchChangeEventRows({
+          appTypes: params.appTypes,
+          changeTypes,
+          days: params.days,
+          limit: 800,
+          query: params.query,
+        });
+
+    const filteredRows = rawRows.filter((row) =>
+      this.familyMatchesSearchFilter(row.change_type, params.signalFamilies)
+    );
+    const moments = this.buildSearchChangeMoments(filteredRows);
+    const newsRows = await this.queryNewsRowsByGids(
+      [...new Set(moments.flatMap((moment) => [...moment.directNewsGids]))]
+    );
+    const newsByGid = new Map(newsRows.map((row) => [row.gid, row]));
+
+    const rows: ChangeActivityContractRow[] = [];
+
+    for (const moment of moments) {
+      const directNews = [...moment.directNewsGids]
+        .map((gid) => newsByGid.get(gid))
+        .filter((row): row is ExplainNewsRow => Boolean(row))
+        .sort(
+          (left, right) =>
+            parseTimestamp(right.sort_time).getTime() - parseTimestamp(left.sort_time).getTime()
+        );
+      const families = [...new Set(
+        moment.events.map((event) => this.familyForChangeType(event.change_type))
+      )].sort();
+
+      if (!this.matchesSearchChangeView(families, moment.isReleased, params.view)) {
+        continue;
+      }
+
+      const relatedAnnouncementCount = directNews.length;
+      const activityKind: 'announcement' | 'change' =
+        parsedActivityId?.activityKind
+        ?? (families.every((family) => family === 'announcement') ? 'announcement' : 'change');
+      const storyKind = this.classifySearchChangeStoryKind({
+        activityKind,
+        families,
+        isReleased: moment.isReleased,
+        relatedAnnouncementCount,
+      });
+      const activityId = parsedActivityId
+        ? params.activityId!
+        : this.buildTigerActivityId(activityKind, moment.appid, moment.windowStart, moment.windowEnd);
+      const hasBeforeAfter = moment.events.some(
+        (event) => event.before_value != null || event.after_value != null
+      );
+      const headline = this.buildSearchChangeHeadline({
+        activityKind,
+        appName: moment.appName,
+        directNews,
+        families,
+        storyKind,
+      });
+      const summary = this.buildSearchChangeSummary({
+        activityKind,
+        appName: moment.appName,
+        directNews,
+        families,
+        relatedAnnouncementCount,
+      });
+      const facts = this.buildSearchChangeFacts({
+        directNews,
+        eventCount: moment.events.length,
+        families,
+        hasBeforeAfter,
+        relatedAnnouncementCount,
+        windowEnd: moment.windowEnd,
+        windowStart: moment.windowStart,
+      });
+      const highlightLabels = this.buildSearchChangeHighlightLabels({
+        families,
+        relatedAnnouncementCount,
+        storyKind,
+      });
+      const contractRow: ChangeActivityContractRow = {
+        activity_id: activityId,
+        activity_kind: activityKind,
+        app_name: moment.appName,
+        app_type: moment.appType,
+        appid: moment.appid,
+        external_url: directNews[0]?.url ?? null,
+        facts,
+        has_before_after: hasBeforeAfter,
+        headline,
+        highlight_labels: highlightLabels,
+        is_released: moment.isReleased,
+        occurred_at: formatTimestamp(moment.windowEnd),
+        related_announcement_count: relatedAnnouncementCount,
+        release_date: moment.releaseDate,
+        signal_families: families,
+        sort_score: null,
+        story_kind: storyKind,
+        summary,
+      };
+      contractRow.sort_score = this.scoreSearchChangeActivityRow(contractRow, 'relevant');
+      rows.push(contractRow);
+    }
+
+    return rows;
+  }
+
+  private async queryChangeBurstDetail(activityId: string): Promise<ChangeBurstDetailRow | null> {
+    const parsed = this.parseTigerActivityId(activityId);
+    if (!parsed) {
+      return null;
+    }
+
+    const appsTable = this.relation('apps').sql;
+    const appResult = await runQuery<{
+      app_name: string;
+      app_type: string | null;
+      appid: number;
+      is_released: boolean | null;
+      release_date: string | null;
+    }>(
+      `
+        SELECT
+          appid,
+          name AS app_name,
+          type::text AS app_type,
+          is_released,
+          release_date::text AS release_date
+        FROM ${appsTable}
+        WHERE appid = $1
+        LIMIT 1
+      `,
+      [parsed.appid],
+      this.config
+    );
+
+    const app = appResult.rows[0];
+    if (!app) {
+      return null;
+    }
+
+    const events = await this.querySearchChangeEventRows({
+      appTypes: [],
+      appid: parsed.appid,
+      endTime: formatTimestamp(parsed.windowEnd),
+      limit: 200,
+      query: null,
+      startTime: formatTimestamp(parsed.windowStart),
+    });
+    const newsRows = await this.queryNewsRowsByGids(
+      [...new Set(events.map((event) => event.news_item_gid).filter((gid): gid is string => Boolean(gid)))]
+    );
+
+    return {
+      app_name: app.app_name,
+      app_type: app.app_type,
+      appid: app.appid,
+      burst_ended_at: formatTimestamp(parsed.windowEnd),
+      burst_id: activityId,
+      burst_started_at: formatTimestamp(parsed.windowStart),
+      effective_at: formatTimestamp(parsed.windowEnd),
+      events: events.map((event) => ({
+        after_value: event.after_value,
+        before_value: event.before_value,
+        change_type: event.change_type,
+        occurred_at: event.occurred_at,
+      })),
+      headline_change_types: [...new Set(events.map((event) => event.change_type))],
+      impact: null,
+      is_released: app.is_released,
+      related_news: newsRows.map((row) => ({
+        title: row.title,
+        url: row.url,
+      })),
+      release_date: app.release_date,
+    };
+  }
+
+  private async queryLatestNewsDocumentRows(params: {
+    appids: number[] | null;
+    endTime: string;
+    feedScopes: string[];
+    limit: number;
+    startTime: string;
+  }): Promise<SearchDocumentRow[]> {
+    const projectionTable = this.relation('docs_steam_news_search_projection').sql;
+    const newsItemsTable = this.relation('docs_steam_news_items').sql;
+    const appsTable = this.relation('apps').sql;
+    const sqlParams: unknown[] = [params.startTime, params.endTime];
+    const conditions = ['projection.sort_time BETWEEN $1::timestamptz AND $2::timestamptz'];
+
+    if (params.feedScopes.length > 0) {
+      sqlParams.push(params.feedScopes);
+      conditions.push(`lower(projection.feed_scope) = ANY($${sqlParams.length}::text[])`);
+    }
+
+    if (params.appids && params.appids.length > 0) {
+      sqlParams.push(params.appids);
+      conditions.push(`projection.appid = ANY($${sqlParams.length}::int[])`);
+    }
+
+    sqlParams.push(params.limit);
+
+    const result = await runQuery<SearchDocumentRow>(
+      `
+        SELECT
+          projection.gid,
+          projection.appid,
+          apps.name AS app_name,
+          projection.published_at::text,
+          projection.first_seen_at::text,
+          projection.sort_time::text,
+          projection.feed_scope,
+          projection.title,
+          news.feedlabel,
+          news.feedname,
+          news.url,
+          0::double precision AS rank,
+          false AS title_phrase_hit,
+          NULL::text AS body_preview,
+          NULL::text AS content_preview,
+          NULL::text AS excerpt,
+          'recent_entity_news'::text AS match_reason
+        FROM ${projectionTable} projection
+        JOIN ${newsItemsTable} news ON news.gid = projection.gid
+        JOIN ${appsTable} apps ON apps.appid = projection.appid
+        WHERE ${conditions.join('\n          AND ')}
+        ORDER BY projection.sort_time DESC, projection.gid DESC
+        LIMIT $${sqlParams.length}
+      `,
+      sqlParams,
+      this.config
+    );
+
+    return result.rows;
+  }
+
+  private mapSearchDocumentRow(row: SearchDocumentRow): SearchDocumentItem {
+    const preview =
+      truncatePreview(row.body_preview ?? row.content_preview ?? row.excerpt ?? row.title ?? null, 260);
+    const excerpt =
+      truncatePreview(row.excerpt ?? row.body_preview ?? row.content_preview ?? row.title ?? null, 180);
+    const explicitMatchReason =
+      row.match_reason === 'recent_entity_news'
+        ? 'recent_entity_news'
+        : row.title_phrase_hit
+          ? 'matched_title_phrase'
+          : 'matched_topic_terms';
+
+    return {
+      appName: row.app_name,
+      appid: row.appid,
+      bodyPreview: preview,
+      entityUid: buildEntityUid('steam', 'game', String(row.appid)),
+      excerpt,
+      feedLabel: row.feedlabel,
+      feedName: row.feedname,
+      feedScope: row.feed_scope,
+      firstSeenAt: formatTimestamp(parseTimestamp(row.first_seen_at)),
+      gid: row.gid,
+      matchReason: explicitMatchReason,
+      publishedAt: row.published_at ? formatTimestamp(parseTimestamp(row.published_at)) : null,
+      rank: row.rank,
+      sortTime: formatTimestamp(parseTimestamp(row.sort_time)),
+      title: row.title,
+      url: row.url,
+    };
+  }
+
+  private async queryChangePatternCandidateRows(params: {
+    appTypes: string[];
+    days: number;
+    pattern: ChangePattern;
+    query: string | null;
+  }): Promise<ChangePatternCandidateRow[]> {
+    const activityRows = (
+      await this.querySearchChangeActivityRows({
+      appTypes: params.appTypes,
+      days: params.days,
+      query: params.query,
+      signalFamilies: this.signalFamiliesForChangePattern(params.pattern),
+      view: 'all-activity',
+      })
+    ).map((row) => this.mapSearchChangeActivityItem(row));
+
+    const aggregates = new Map<number, {
+      activityIds: string[];
+      announcementCount: number;
+      appName: string;
+      appType: string | null;
+      appid: number;
+      changeCount: number;
+      isReleased: boolean | null;
+      latestOccurredAt: string;
+      releaseDate: string | null;
+      signalFamilies: Set<ChangeActivitySignalFamily>;
+      storyKinds: Set<ChangeActivityStoryKind>;
+    }>();
+
+    for (const item of activityRows) {
+      const aggregate: {
+        activityIds: string[];
+        announcementCount: number;
+        appName: string;
+        appType: string | null;
+        appid: number;
+        changeCount: number;
+        isReleased: boolean | null;
+        latestOccurredAt: string;
+        releaseDate: string | null;
+        signalFamilies: Set<ChangeActivitySignalFamily>;
+        storyKinds: Set<ChangeActivityStoryKind>;
+      } = aggregates.get(item.appid) ?? {
+        activityIds: [],
+        announcementCount: 0,
+        appName: item.name,
+        appType: item.appType,
+        appid: item.appid,
+        changeCount: 0,
+        isReleased: item.isReleased,
+        latestOccurredAt: item.occurredAt,
+        releaseDate: item.releaseDate,
+        signalFamilies: new Set<ChangeActivitySignalFamily>(),
+        storyKinds: new Set<ChangeActivityStoryKind>(),
+      };
+
+      aggregate.activityIds.push(item.activityId);
+      aggregate.changeCount += 1;
+      aggregate.announcementCount += item.relatedAnnouncementCount;
+      if (item.occurredAt > aggregate.latestOccurredAt) {
+        aggregate.latestOccurredAt = item.occurredAt;
+      }
+      for (const family of item.signalFamilies) {
+        aggregate.signalFamilies.add(family);
+      }
+      aggregate.storyKinds.add(item.storyKind);
+      aggregates.set(item.appid, aggregate);
+    }
+
+    const metricsByApp = await this.queryChangePatternMetricsByApp([...aggregates.keys()]);
+
+    return [...aggregates.values()].map((aggregate) => {
+      const metrics = metricsByApp.get(aggregate.appid);
+      return {
+        activity_ids: aggregate.activityIds.slice(0, 5),
+        announcement_count: aggregate.announcementCount,
+        app_name: aggregate.appName,
+        app_type: aggregate.appType,
+        appid: aggregate.appid,
+        ccu_peak: metrics?.ccu_peak ?? null,
+        ccu_trend_7d_pct: metrics?.ccu_trend_7d_pct ?? null,
+        change_count: aggregate.changeCount,
+        discount_percent: metrics?.discount_percent ?? null,
+        is_released: aggregate.isReleased,
+        latest_occurred_at: aggregate.latestOccurredAt,
+        positive_percentage: metrics?.positive_percentage ?? null,
+        price_cents: metrics?.price_cents ?? null,
+        release_date: aggregate.releaseDate,
+        review_velocity_30d: metrics?.review_velocity_30d ?? null,
+        review_velocity_7d: metrics?.review_velocity_7d ?? null,
+        signal_families: [...aggregate.signalFamilies],
+        story_kinds: [...aggregate.storyKinds],
+        total_reviews: metrics?.total_reviews ?? null,
+        trend_30d_direction: metrics?.trend_30d_direction ?? null,
+      };
+    });
+  }
+
+  private async queryChangePatternMetricsByApp(appids: number[]): Promise<Map<number, {
+    ccu_peak: number | null;
+    ccu_trend_7d_pct: number | null;
+    discount_percent: number | null;
+    positive_percentage: number | null;
+    price_cents: number | null;
+    review_velocity_30d: number | null;
+    review_velocity_7d: number | null;
+    total_reviews: number | null;
+    trend_30d_direction: string | null;
+  }>> {
+    if (appids.length === 0) {
+      return new Map();
+    }
+
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const metricsDailyMetricsTable = this.relation('metrics_daily_metrics').sql;
+    const result = await runQuery<{
+      appid: number;
+      ccu_peak: number | null;
+      ccu_trend_7d_pct: number | null;
+      discount_percent: number | null;
+      positive_percentage: number | null;
+      price_cents: number | null;
+      review_velocity_30d: number | null;
+      review_velocity_7d: number | null;
+      total_reviews: number | null;
+      trend_30d_direction: string | null;
+    }>(
+      `
+        WITH baseline7 AS (
+          SELECT DISTINCT ON (dm.appid)
+            dm.appid,
+            dm.total_reviews,
+            dm.ccu_peak
+          FROM ${metricsDailyMetricsTable} dm
+          WHERE dm.appid = ANY($1::int[])
+            AND dm.metric_date <= CURRENT_DATE - INTERVAL '7 days'
+          ORDER BY dm.appid, dm.metric_date DESC
+        ),
+        baseline30 AS (
+          SELECT DISTINCT ON (dm.appid)
+            dm.appid,
+            dm.total_reviews,
+            dm.ccu_peak
+          FROM ${metricsDailyMetricsTable} dm
+          WHERE dm.appid = ANY($1::int[])
+            AND dm.metric_date <= CURRENT_DATE - INTERVAL '30 days'
+          ORDER BY dm.appid, dm.metric_date DESC
+        )
+        SELECT
+          a.appid,
+          ldm.ccu_peak,
+          CASE
+            WHEN COALESCE(baseline7.ccu_peak, 0) > 0
+              THEN ROUND((((COALESCE(ldm.ccu_peak, 0) - baseline7.ccu_peak)::numeric / baseline7.ccu_peak::numeric) * 100), 2)::double precision
+            ELSE NULL
+          END AS ccu_trend_7d_pct,
+          a.current_discount_percent AS discount_percent,
+          ldm.positive_percentage,
+          a.current_price_cents AS price_cents,
+          ROUND((GREATEST(COALESCE(ldm.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(ldm.total_reviews, 0)), 0)::numeric / 30), 2)::double precision AS review_velocity_30d,
+          ROUND((GREATEST(COALESCE(ldm.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(ldm.total_reviews, 0)), 0)::numeric / 7), 2)::double precision AS review_velocity_7d,
+          ldm.total_reviews,
+          CASE
+            WHEN COALESCE(baseline30.ccu_peak, 0) > 0 AND COALESCE(ldm.ccu_peak, 0) > baseline30.ccu_peak * 1.1 THEN 'up'
+            WHEN COALESCE(baseline30.ccu_peak, 0) > 0 AND COALESCE(ldm.ccu_peak, 0) < baseline30.ccu_peak * 0.9 THEN 'down'
+            ELSE 'stable'
+          END AS trend_30d_direction
+        FROM ${appsTable} a
+        LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+        LEFT JOIN baseline7 ON baseline7.appid = a.appid
+        LEFT JOIN baseline30 ON baseline30.appid = a.appid
+        WHERE a.appid = ANY($1::int[])
+      `,
+      [appids],
+      this.config
+    );
+
+    return new Map(result.rows.map((row) => [row.appid, row]));
+  }
+
+  private async mapDiscoverChangePatternItems(
+    candidates: ChangePatternCandidateRow[],
+    pattern: ChangePattern
+  ): Promise<DiscoverChangePatternsResponse['items']> {
+    const items: DiscoverChangePatternsResponse['items'] = [];
+
+    for (const candidate of candidates) {
+      const families = normalizeChangeSignalFamilies(candidate.signal_families);
+      const storyKinds = normalizeChangeStoryKinds(candidate.story_kinds);
+      const metrics = {
+        ccuPeak: candidate.ccu_peak,
+        ccuTrend7dPct: candidate.ccu_trend_7d_pct,
+        discountPercent: candidate.discount_percent,
+        positivePercentage: candidate.positive_percentage,
+        priceCents: candidate.price_cents,
+        reviewVelocity30d: candidate.review_velocity_30d,
+        reviewVelocity7d: candidate.review_velocity_7d,
+        totalReviews: candidate.total_reviews,
+        trend30dDirection: candidate.trend_30d_direction,
+      };
+
+      let reasons: string[] = [];
+      let confidence: 'high' | 'medium' | null = null;
+
+      if (pattern === 'marketing_push') {
+        if (
+          (candidate.announcement_count ?? 0) > 0 &&
+          families.includes('pricing') &&
+          (families.includes('media') || families.includes('store-page'))
+        ) {
+          confidence = 'high';
+          reasons = [
+            'Announcement activity landed in the same recent window.',
+            'Pricing or discount movement is visible.',
+            'Store-page or media refresh activity is visible.',
+          ];
+        }
+      } else if (pattern === 'relaunch_pattern') {
+        if (
+          families.includes('pricing') &&
+          (families.includes('media') || families.includes('store-page')) &&
+          ((candidate.announcement_count ?? 0) > 0 || storyKinds.includes('launch-prep'))
+        ) {
+          confidence = 'high';
+          reasons = [
+            'Pricing changed in the same window as presentation changes.',
+            'Store-page or media refresh suggests a packaged beat.',
+            'Launch-adjacent or announcement activity supports a relaunch interpretation.',
+          ];
+        }
+      } else if (pattern === 'update_tease') {
+        if (
+          (candidate.announcement_count ?? 0) > 0 &&
+          (families.includes('media') || families.includes('store-page')) &&
+          !families.includes('build')
+        ) {
+          confidence = 'medium';
+          reasons = [
+            'Announcements are present without matching build activity yet.',
+            'Presentation changes suggest setup or teasing behavior.',
+          ];
+        }
+      } else if (pattern === 'under_marketed') {
+        if (
+          (metrics.positivePercentage ?? 0) >= 80 &&
+          (metrics.totalReviews ?? 0) >= 200 &&
+          ((metrics.reviewVelocity30d ?? 0) >= 1 || families.includes('build')) &&
+          (candidate.announcement_count ?? 0) === 0 &&
+          !families.includes('media') &&
+          !families.includes('store-page')
+        ) {
+          confidence = 'medium';
+          reasons = [
+            `Review quality is ${Math.round(metrics.positivePercentage ?? 0)}% positive on ${Math.round(metrics.totalReviews ?? 0).toLocaleString()} reviews.`,
+            'Recent build or review-velocity evidence suggests active product work.',
+            'There is little recent announcement or storefront-refresh evidence.',
+          ];
+        }
+      } else if (pattern === 'signable_candidate') {
+        if (
+          (metrics.positivePercentage ?? 0) >= 85 &&
+          (metrics.totalReviews ?? 0) >= 300 &&
+          ((metrics.reviewVelocity30d ?? 0) >= 1 || families.includes('build')) &&
+          !families.includes('media') &&
+          !families.includes('store-page')
+        ) {
+          confidence = 'medium';
+          reasons = [
+            `Review quality is ${Math.round(metrics.positivePercentage ?? 0)}% positive with ${Math.round(metrics.totalReviews ?? 0).toLocaleString()} reviews.`,
+            'Recent activity suggests the product is still moving.',
+            'Public marketing execution looks lighter than product quality would justify.',
+          ];
+        }
+      } else if (pattern === 'rescue_candidate') {
+        if (
+          (metrics.positivePercentage ?? 0) >= 70 &&
+          (metrics.totalReviews ?? 0) >= 100 &&
+          families.includes('pricing') &&
+          (metrics.trend30dDirection === 'down' || (metrics.ccuTrend7dPct ?? 0) < 0)
+        ) {
+          confidence = 'medium';
+          reasons = [
+            `Sentiment remains ${Math.round(metrics.positivePercentage ?? 0)}% positive on ${Math.round(metrics.totalReviews ?? 0).toLocaleString()} reviews.`,
+            'Recent pricing or discount activity is visible.',
+            'Trend data points to softening demand or momentum.',
+          ];
+        }
+      } else if (pattern === 'sustained_response') {
+        if ((metrics.reviewVelocity7d ?? 0) >= 1.5 || (metrics.ccuTrend7dPct ?? 0) >= 15) {
+          confidence = (metrics.reviewVelocity7d ?? 0) >= 3 || (metrics.ccuTrend7dPct ?? 0) >= 30 ? 'high' : 'medium';
+          reasons = [
+            `7-day review velocity is ${roundNumber(metrics.reviewVelocity7d ?? 0, 2)} reviews/day after the change window.`,
+            `7-day CCU trend is ${roundNumber(metrics.ccuTrend7dPct ?? 0, 1)}%.`,
+          ];
+        }
+      } else if (pattern === 'announcement_weak_response') {
+        if (
+          (candidate.announcement_count ?? 0) > 0 &&
+          ((metrics.reviewVelocity7d ?? 0) < 0.75 || (metrics.ccuTrend7dPct ?? 0) < 5)
+        ) {
+          confidence =
+            (metrics.reviewVelocity7d ?? 0) < 0.4 && (metrics.ccuTrend7dPct ?? 0) < 2
+              ? 'high'
+              : 'medium';
+          reasons = [
+            'A recent announcement is attached to the same change window.',
+            `7-day review velocity is only ${roundNumber(metrics.reviewVelocity7d ?? 0, 2)} reviews/day.`,
+            `7-day CCU trend is ${roundNumber(metrics.ccuTrend7dPct ?? 0, 1)}%.`,
+          ];
+        }
+      }
+
+      if (!confidence) {
+        continue;
+      }
+
+      const primaryProof =
+        candidate.activity_ids?.[0]
+          ? {
+              activityId: candidate.activity_ids[0],
+              facts: [
+                `${candidate.change_count ?? 0} qualifying activity windows in scope.`,
+                ...(candidate.announcement_count ?? 0) > 0
+                  ? [`${candidate.announcement_count} linked announcements.`]
+                  : [],
+                ...(families.length > 0 ? [`Signals: ${families.join(', ')}.`] : []),
+              ].slice(0, 3),
+              headline: `${candidate.app_name} matched the ${pattern.replace(/_/g, ' ')} pattern.`,
+              occurredAt: candidate.latest_occurred_at,
+              signalFamilies: families,
+              summary: `${candidate.app_name} showed recent change activity that fits the ${pattern.replace(/_/g, ' ')} pattern.`,
+            }
+          : null;
+
+      items.push({
+        activityIds: candidate.activity_ids ?? [],
+        appType: candidate.app_type,
+        appid: candidate.appid,
+        confidence,
+        metrics,
+        name: candidate.app_name,
+        occurredAt: candidate.latest_occurred_at,
+        primaryProof,
+        reasons,
+        signalFamilies: families,
+        storyKinds,
+      });
+    }
+
+    return items;
+  }
+
+  private compareDiscoverChangePatternItems(
+    left: DiscoverChangePatternsResponse['items'][number],
+    right: DiscoverChangePatternsResponse['items'][number]
+  ): number {
+    if (left.confidence !== right.confidence) {
+      return left.confidence === 'high' ? -1 : 1;
+    }
+
+    const rightReviews = right.metrics?.totalReviews ?? 0;
+    const leftReviews = left.metrics?.totalReviews ?? 0;
+    if (rightReviews !== leftReviews) {
+      return rightReviews - leftReviews;
+    }
+
+    return right.occurredAt.localeCompare(left.occurredAt) || left.name.localeCompare(right.name);
   }
 
   private async queryCompanies(
@@ -2515,8 +4284,7 @@ export class DataPlaneService {
 
   private async queryRankedCompanies(
     entityKind: Extract<EntityKind, 'publisher' | 'developer'>,
-    metric: RankMetric,
-    query: string,
+    request: RankEntitiesRequest,
     limit: number,
     direction: 'ASC' | 'DESC'
   ): Promise<RankRow[]> {
@@ -2527,17 +4295,170 @@ export class DataPlaneService {
     const relationColumn = entityKind === 'publisher' ? 'publisher_id' : 'developer_id';
     const appsTable = this.relation('apps').sql;
     const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const appGenresTable = this.relation('app_genres').sql;
+    const steamGenresTable = this.relation('steam_genres').sql;
+    const appSteamTagsTable = this.relation('app_steam_tags').sql;
+    const steamTagsTable = this.relation('steam_tags').sql;
+    const metric = request.metric;
+    const query = request.query?.trim() ?? '';
+    const filters = request.catalogFilters ?? null;
+    const aggregateFilters = request.aggregateFilters ?? null;
     const params: unknown[] = [];
-    const conditions: string[] = [];
+    const conditions: string[] = [
+      'a.is_delisted = false',
+      GAME_TYPE_PREDICATE[this.config.source],
+    ];
 
     if (query) {
       params.push(normalizeLikeValue(query));
       conditions.push(`lower(c.name) LIKE $${params.length}`);
     }
 
+    if (filters?.includeAppTypes?.length) {
+      params.push(filters.includeAppTypes);
+      conditions.push(`a.type::text = ANY($${params.length}::text[])`);
+    }
+
+    if (filters?.publisherIds?.length) {
+      params.push(filters.publisherIds);
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${this.relation('app_publishers').sql} ap_filter
+          WHERE ap_filter.appid = a.appid
+            AND ap_filter.publisher_id = ANY($${params.length}::int[])
+        )`
+      );
+    }
+
+    if (filters?.developerIds?.length) {
+      params.push(filters.developerIds);
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${this.relation('app_developers').sql} ad_filter
+          WHERE ad_filter.appid = a.appid
+            AND ad_filter.developer_id = ANY($${params.length}::int[])
+        )`
+      );
+    }
+
+    if (filters?.parentAppids?.length) {
+      params.push(filters.parentAppids);
+      conditions.push(`a.parent_appid = ANY($${params.length}::int[])`);
+    }
+
+    if (typeof filters?.isFree === 'boolean') {
+      params.push(filters.isFree);
+      conditions.push(`a.is_free = $${params.length}`);
+    }
+
+    if (filters?.releaseYear?.gte) {
+      params.push(filters.releaseYear.gte);
+      conditions.push(`EXTRACT(YEAR FROM a.release_date) >= $${params.length}`);
+    }
+
+    if (filters?.releaseYear?.lte) {
+      params.push(filters.releaseYear.lte);
+      conditions.push(`EXTRACT(YEAR FROM a.release_date) <= $${params.length}`);
+    }
+
+    if (typeof request.releaseDays === 'number' && Number.isFinite(request.releaseDays) && request.releaseDays > 0) {
+      params.push(Math.trunc(request.releaseDays));
+      conditions.push(`a.release_date >= CURRENT_DATE - ($${params.length}::int * INTERVAL '1 day')`);
+    }
+
+    if (typeof filters?.minReviews === 'number') {
+      params.push(filters.minReviews);
+      conditions.push(`COALESCE(ldm.total_reviews, 0) >= $${params.length}`);
+    }
+
+    if (typeof filters?.minReviewScore === 'number') {
+      params.push(filters.minReviewScore);
+      conditions.push(`COALESCE(ldm.positive_percentage, 0) >= $${params.length}`);
+    }
+
+    if (typeof filters?.minPriceCents === 'number') {
+      params.push(filters.minPriceCents);
+      conditions.push(`COALESCE(a.current_price_cents, 0) >= $${params.length}`);
+    }
+
+    if (typeof filters?.maxPriceCents === 'number') {
+      params.push(filters.maxPriceCents);
+      conditions.push(`COALESCE(a.current_price_cents, 0) <= $${params.length}`);
+    }
+
+    if (typeof filters?.onSale === 'boolean') {
+      conditions.push(
+        filters.onSale
+          ? 'COALESCE(a.current_discount_percent, 0) > 0'
+          : 'COALESCE(a.current_discount_percent, 0) = 0'
+      );
+    }
+
+    if (filters?.platforms?.length) {
+      for (const platform of filters.platforms) {
+        params.push(`%${platform.toLowerCase()}%`);
+        conditions.push(`lower(COALESCE(a.platforms, '')) LIKE $${params.length}`);
+      }
+    }
+
+    if (filters?.genres?.length) {
+      params.push(filters.genres.map((genre) => genre.toLowerCase()));
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appGenresTable} ag
+          JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+          WHERE ag.appid = a.appid
+            AND lower(sg.name) = ANY($${params.length}::text[])
+        )`
+      );
+    }
+
+    if (filters?.tags?.length) {
+      params.push(filters.tags.map((tag) => tag.toLowerCase()));
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamTagsTable} ast
+          JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+          WHERE ast.appid = a.appid
+            AND lower(st.name) = ANY($${params.length}::text[])
+        )`
+      );
+    }
+
+    const averageReviewExpression = `CASE
+      WHEN SUM(COALESCE(ldm.total_reviews, 0)) > 0
+        THEN ROUND(
+          (
+            SUM(COALESCE(ldm.review_score, 0) * COALESCE(ldm.total_reviews, 0))::numeric
+            / NULLIF(SUM(COALESCE(ldm.total_reviews, 0)), 0)
+          ),
+          2
+        )::double precision
+      ELSE NULL
+    END`;
+    const havingConditions: string[] = ['COUNT(DISTINCT a.appid) > 0'];
+
+    if (typeof aggregateFilters?.minGameCount === 'number') {
+      params.push(aggregateFilters.minGameCount);
+      havingConditions.push(`COUNT(DISTINCT a.appid) >= $${params.length}`);
+    }
+
+    if (typeof aggregateFilters?.minAverageReviewScore === 'number') {
+      params.push(aggregateFilters.minAverageReviewScore);
+      havingConditions.push(`${averageReviewExpression} >= $${params.length}`);
+    }
+
+    if (typeof aggregateFilters?.minMinimumReviewScore === 'number') {
+      params.push(aggregateFilters.minMinimumReviewScore);
+      havingConditions.push(`MIN(COALESCE(ldm.review_score, 0)) >= $${params.length}`);
+    }
+
     params.push(limit);
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join('\n        AND ')}` : '';
     const sql = `
       SELECT
         c.id AS entity_id,
@@ -2547,27 +4468,14 @@ export class DataPlaneService {
         SUM(COALESCE(ldm.total_reviews, 0))::double precision AS total_reviews,
         SUM(COALESCE(ldm.owners_midpoint, 0))::double precision AS owners_midpoint,
         MAX(COALESCE(ldm.ccu_peak, 0))::double precision AS ccu_peak,
-        CASE
-          WHEN SUM(COALESCE(ldm.total_reviews, 0)) > 0
-            THEN ROUND(
-              (
-                SUM(COALESCE(ldm.review_score, 0) * COALESCE(ldm.total_reviews, 0))::numeric
-                / NULLIF(SUM(COALESCE(ldm.total_reviews, 0)), 0)
-              ),
-              2
-            )::double precision
-          ELSE NULL
-        END AS review_score
+        ${averageReviewExpression} AS review_score
       FROM ${companyTable} c
-      LEFT JOIN ${relationTable} rel ON rel.${relationColumn} = c.id
-      LEFT JOIN ${appsTable} a
-        ON a.appid = rel.appid
-        AND a.is_delisted = false
-        AND ${GAME_TYPE_PREDICATE[this.config.source]}
+      JOIN ${relationTable} rel ON rel.${relationColumn} = c.id
+      JOIN ${appsTable} a ON a.appid = rel.appid
       LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
-      ${whereClause}
+      WHERE ${conditions.join('\n        AND ')}
       GROUP BY c.id, c.name
-      HAVING COUNT(DISTINCT a.appid) > 0
+      HAVING ${havingConditions.join('\n        AND ')}
       ORDER BY COALESCE(${metric}, 0) ${direction}, total_reviews DESC, c.name ASC
       LIMIT $${params.length}
     `;
@@ -2688,6 +4596,786 @@ export class DataPlaneService {
     );
 
     return new Map(result.rows.map((row) => [row.entity_id, row]));
+  }
+
+  private normalizeMomentumTimeframe(
+    timeframe: DiscoverMomentumRequest['timeframe'],
+    sortBy: DiscoverMomentumRequest['sortBy'],
+    trendType: DiscoverMomentumRequest['trendType']
+  ): '7d' | '30d' | 'current' {
+    if (timeframe === 'current' || timeframe === '7d' || timeframe === '30d') {
+      return timeframe;
+    }
+
+    if (sortBy === 'ccu_peak') {
+      return 'current';
+    }
+
+    if (sortBy === 'reviews_added_30d' || trendType === 'breaking_out') {
+      return '30d';
+    }
+
+    return '7d';
+  }
+
+  private labelMomentumRanking(sortBy: DiscoverMomentumRequest['sortBy']): string {
+    switch (sortBy) {
+      case 'ccu_peak':
+        return 'Peak CCU';
+      case 'momentum_score':
+        return 'Momentum Score';
+      case 'review_score':
+        return 'Review Percentage';
+      case 'reviews_added_30d':
+        return 'Reviews Added (30d)';
+      case 'reviews_added_7d':
+        return 'Reviews Added (7d)';
+      case 'sentiment_delta':
+        return 'Sentiment Delta';
+      case 'total_reviews':
+        return 'Total Reviews';
+      case 'velocity_acceleration':
+        return 'Review Velocity Acceleration';
+      case 'velocity_7d':
+        return 'Review Velocity (7d)';
+      default:
+        return 'Momentum';
+    }
+  }
+
+  private describeMomentumRanking(
+    sortBy: DiscoverMomentumRequest['sortBy'],
+    timeframe: '7d' | '30d' | 'current',
+    trendType: DiscoverMomentumRequest['trendType']
+  ): string {
+    if (trendType === 'breaking_out') {
+      return 'Breakout candidates are ranked by recent review pickup and supporting CCU acceleration while keeping the set constrained to smaller-but-rising titles.';
+    }
+
+    if (trendType === 'accelerating') {
+      return 'Acceleration ranks titles whose recent review pace is out-running their trailing baseline.';
+    }
+
+    if (trendType === 'declining') {
+      return 'Declining screens rank titles by the sharpest negative change in review or player momentum.';
+    }
+
+    switch (sortBy) {
+      case 'ccu_peak':
+        return 'Peak CCU uses the latest 24-hour concurrent-player snapshot.';
+      case 'momentum_score':
+        return `Momentum blends review pickup, velocity acceleration, and player growth over the ${timeframe} window.`;
+      case 'review_score':
+        return 'Review percentage uses the latest positive-review rate.';
+      case 'reviews_added_30d':
+        return 'Reviews added (30d) counts net new reviews in the last 30 days.';
+      case 'reviews_added_7d':
+        return 'Reviews added (7d) counts net new reviews in the last 7 days.';
+      case 'sentiment_delta':
+        return 'Sentiment delta measures the change in positive-review rate versus the trailing 30-day baseline.';
+      case 'total_reviews':
+        return 'Total reviews ranks titles by lifetime Steam review volume.';
+      case 'velocity_acceleration':
+        return 'Velocity acceleration compares recent review velocity against the trailing 30-day baseline.';
+      case 'velocity_7d':
+        return 'Velocity (7d) ranks titles by recent reviews per day.';
+      default:
+        return 'Momentum is ranked from Tiger current-state and recent-history metrics.';
+    }
+  }
+
+  private labelMomentumTimeframe(timeframe: '7d' | '30d' | 'current'): string {
+    switch (timeframe) {
+      case 'current':
+        return 'Current snapshot';
+      case '30d':
+        return 'Last 30 days';
+      case '7d':
+      default:
+        return 'Last 7 days';
+    }
+  }
+
+  private buildMomentumFiltersApplied(
+    request: DiscoverMomentumRequest,
+    timeframe: '7d' | '30d' | 'current'
+  ): string[] {
+    const filters = request.filters ?? {};
+    const applied: string[] = [
+      `sort_by: ${request.sortBy}`,
+      `timeframe: ${timeframe}`,
+    ];
+
+    if (request.trendType) {
+      applied.push(`trend_type: ${request.trendType}`);
+    }
+    if (request.indieHeuristic) {
+      applied.push('indie_heuristic: true');
+    }
+    if (filters.tags?.length) {
+      applied.push(`tags: ${filters.tags.join(', ')}`);
+    }
+    if (filters.genres?.length) {
+      applied.push(`genres: ${filters.genres.join(', ')}`);
+    }
+    if (filters.platforms?.length) {
+      applied.push(`platforms: ${filters.platforms.join(', ')}`);
+    }
+    if (filters.steamDeck?.length) {
+      applied.push(`steam_deck: ${filters.steamDeck.join(', ')}`);
+    }
+    if (typeof filters.isFree === 'boolean') {
+      applied.push(`is_free: ${filters.isFree}`);
+    }
+    if (typeof filters.minReviews === 'number') {
+      applied.push(`min_reviews: ${filters.minReviews}`);
+    }
+    if (typeof filters.maxReviews === 'number') {
+      applied.push(`max_reviews: ${filters.maxReviews}`);
+    }
+    if (typeof filters.minReviewScore === 'number') {
+      applied.push(`min_review_score: ${filters.minReviewScore}`);
+    }
+    if (typeof filters.maxPriceCents === 'number') {
+      applied.push(`max_price_cents: ${filters.maxPriceCents}`);
+    }
+    if (typeof filters.minCcu === 'number') {
+      applied.push(`min_ccu: ${filters.minCcu}`);
+    }
+    if (typeof filters.minReviewsAdded7d === 'number') {
+      applied.push(`min_reviews_added_7d: ${filters.minReviewsAdded7d}`);
+    }
+    if (typeof filters.minReviewsAdded30d === 'number') {
+      applied.push(`min_reviews_added_30d: ${filters.minReviewsAdded30d}`);
+    }
+    if (filters.releaseYear?.gte != null) {
+      applied.push(`release_year >= ${filters.releaseYear.gte}`);
+    }
+    if (filters.releaseYear?.lte != null) {
+      applied.push(`release_year <= ${filters.releaseYear.lte}`);
+    }
+
+    return applied;
+  }
+
+  private mapMomentumItem(row: MomentumRow): DiscoverMomentumItem {
+    const supportReasons: string[] = [];
+
+    if ((row.reviews_added_7d ?? 0) >= 25) {
+      supportReasons.push(`${Math.round(row.reviews_added_7d ?? 0).toLocaleString()} reviews added over 7d.`);
+    }
+    if ((row.velocity_acceleration ?? 0) >= 25) {
+      supportReasons.push(`Review velocity is up ${Math.round(row.velocity_acceleration ?? 0)}% versus the trailing baseline.`);
+    }
+    if ((row.ccu_growth_7d_percent ?? 0) >= 20) {
+      supportReasons.push(`Peak CCU is up ${Math.round(row.ccu_growth_7d_percent ?? 0)}% over 7d.`);
+    }
+    if ((row.sentiment_delta ?? 0) >= 2) {
+      supportReasons.push(`Sentiment improved by ${roundNumber(row.sentiment_delta ?? 0, 1)} points.`);
+    }
+
+    const supportLevel: DiscoverMomentumItem['supportLevel'] =
+      supportReasons.length >= 3 ? 'high' : supportReasons.length >= 2 ? 'medium' : 'low';
+    const momentumScore = roundNumber(
+      (row.reviews_added_7d ?? 0)
+      + Math.max(row.ccu_growth_7d_percent ?? 0, 0) / 10
+      + Math.max(row.sentiment_delta ?? 0, 0) * 2
+      + Math.max(row.velocity_acceleration ?? 0, 0) / 5,
+      2
+    );
+
+    return {
+      appid: row.appid,
+      ccuGrowth30dPercent: row.ccu_growth_30d_percent,
+      ccuGrowth7dPercent: row.ccu_growth_7d_percent,
+      ccuPeak: row.ccu_peak,
+      developerName: row.developer_name,
+      discountPercent: row.discount_percent,
+      entityUid: buildEntityUid('steam', 'game', String(row.appid)),
+      isFree: row.is_free,
+      isSelfPublished: row.is_self_published,
+      matchedSteamDeck: null,
+      momentumScore,
+      name: row.name,
+      platformSupport: row.platforms
+        ? row.platforms.split(',').map((platform) => platform.trim()).filter(Boolean)
+        : [],
+      priceCents: row.price_cents,
+      publisherName: row.publisher_name,
+      releaseDate: row.release_date,
+      releaseYear: row.release_year,
+      reviewPercentage: row.positive_percentage,
+      reviewsAdded30d: row.reviews_added_30d,
+      reviewsAdded7d: row.reviews_added_7d,
+      sentimentDelta: row.sentiment_delta,
+      steamDeckCategory: null,
+      supportLevel,
+      supportReasons: supportReasons.length > 0 ? supportReasons : ['Current-state momentum evidence is limited.'],
+      totalReviews: row.total_reviews,
+      trendDirection: row.trend_direction,
+      velocity30d: row.velocity_30d,
+      velocity7d: row.velocity_7d,
+      velocityAcceleration: row.velocity_acceleration,
+    };
+  }
+
+  private async applyMomentumQdrantFilters(
+    rows: MomentumRow[],
+    filters: DiscoverMomentumRequest['filters'] | null
+  ): Promise<MomentumRow[]> {
+    if (!filters?.steamDeck?.length || rows.length === 0) {
+      return rows;
+    }
+
+    const client = getQdrantClient();
+    const points = await client.retrieve(COLLECTIONS.GAMES, {
+      ids: rows.map((row) => row.appid),
+      with_payload: true,
+      with_vector: false,
+    });
+    const payloadById = new Map<number, GamePayload>();
+
+    for (const point of points) {
+      const pointId = typeof point.id === 'number' ? point.id : Number(point.id);
+      if (Number.isInteger(pointId) && point.payload) {
+        payloadById.set(pointId, point.payload as unknown as GamePayload);
+      }
+    }
+
+    return rows.filter((row) => {
+      const payload = payloadById.get(row.appid);
+      if (!payload) {
+        return false;
+      }
+
+      if (payload.steam_deck !== 'verified' && payload.steam_deck !== 'playable') {
+        return false;
+      }
+
+      return filters.steamDeck?.includes(payload.steam_deck) ?? false;
+    }).map((row) => {
+      const payload = payloadById.get(row.appid);
+      return {
+        ...row,
+        platforms: payload?.platforms?.join(',') ?? row.platforms,
+      };
+    });
+  }
+
+  private async queryMomentumRows(params: {
+    filters: DiscoverMomentumRequest['filters'] | null;
+    indieHeuristic: boolean;
+    limit: number;
+    sortBy: DiscoverMomentumRequest['sortBy'];
+    sortDirection: NonNullable<DiscoverMomentumRequest['sortDirection']>;
+    timeframe: '7d' | '30d' | 'current';
+    trendType: DiscoverMomentumRequest['trendType'];
+  }): Promise<MomentumRow[]> {
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const metricsDailyMetricsTable = this.relation('metrics_daily_metrics').sql;
+    const appPublishersTable = this.relation('app_publishers').sql;
+    const publishersTable = this.relation('publishers').sql;
+    const appDevelopersTable = this.relation('app_developers').sql;
+    const developersTable = this.relation('developers').sql;
+    const appGenresTable = this.relation('app_genres').sql;
+    const steamGenresTable = this.relation('steam_genres').sql;
+    const appSteamTagsTable = this.relation('app_steam_tags').sql;
+    const steamTagsTable = this.relation('steam_tags').sql;
+    const paramsList: unknown[] = [];
+    const candidateConditions: string[] = [
+      'a.is_delisted = false',
+      GAME_TYPE_PREDICATE[this.config.source],
+    ];
+    const postConditions: string[] = [];
+    const filters = params.filters;
+    const needsBaseline7 = this.requiresMomentumBaseline7(params);
+    const needsBaseline30 = this.requiresMomentumBaseline30(params);
+
+    if (filters?.tags?.length) {
+      paramsList.push(filters.tags.map((tag) => tag.toLowerCase()));
+      candidateConditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamTagsTable} ast
+          JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+          WHERE ast.appid = a.appid
+            AND lower(st.name) = ANY($${paramsList.length}::text[])
+        )`
+      );
+    }
+
+    if (filters?.genres?.length) {
+      paramsList.push(filters.genres.map((genre) => genre.toLowerCase()));
+      candidateConditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appGenresTable} ag
+          JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+          WHERE ag.appid = a.appid
+            AND lower(sg.name) = ANY($${paramsList.length}::text[])
+        )`
+      );
+    }
+
+    if (filters?.platforms?.length) {
+      for (const platform of filters.platforms) {
+        paramsList.push(`%${platform.toLowerCase()}%`);
+        candidateConditions.push(`lower(COALESCE(a.platforms, '')) LIKE $${paramsList.length}`);
+      }
+    }
+
+    if (typeof filters?.isFree === 'boolean') {
+      paramsList.push(filters.isFree);
+      candidateConditions.push(`a.is_free = $${paramsList.length}`);
+    }
+
+    if (typeof filters?.minReviews === 'number') {
+      paramsList.push(filters.minReviews);
+      candidateConditions.push(`COALESCE(ldm.total_reviews, 0) >= $${paramsList.length}`);
+    }
+
+    if (typeof filters?.maxReviews === 'number') {
+      paramsList.push(filters.maxReviews);
+      candidateConditions.push(`COALESCE(ldm.total_reviews, 0) <= $${paramsList.length}`);
+    }
+
+    if (typeof filters?.minReviewScore === 'number') {
+      paramsList.push(filters.minReviewScore);
+      candidateConditions.push(`COALESCE(ldm.positive_percentage, 0) >= $${paramsList.length}`);
+    }
+
+    if (typeof filters?.maxPriceCents === 'number') {
+      paramsList.push(filters.maxPriceCents);
+      candidateConditions.push(`COALESCE(a.current_price_cents, 0) <= $${paramsList.length}`);
+    }
+
+    if (typeof filters?.minCcu === 'number') {
+      paramsList.push(filters.minCcu);
+      candidateConditions.push(`COALESCE(ldm.ccu_peak, 0) >= $${paramsList.length}`);
+    }
+
+    if (filters?.releaseYear?.gte != null) {
+      paramsList.push(filters.releaseYear.gte);
+      candidateConditions.push(`EXTRACT(YEAR FROM a.release_date) >= $${paramsList.length}`);
+    }
+
+    if (filters?.releaseYear?.lte != null) {
+      paramsList.push(filters.releaseYear.lte);
+      candidateConditions.push(`EXTRACT(YEAR FROM a.release_date) <= $${paramsList.length}`);
+    }
+
+    if (params.indieHeuristic) {
+      candidateConditions.push(`COALESCE(primary_publisher.portfolio_game_count, 0) <= 25`);
+    }
+
+    if (typeof filters?.minReviewsAdded7d === 'number') {
+      paramsList.push(filters.minReviewsAdded7d);
+      postConditions.push(`GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) >= $${paramsList.length}`);
+    }
+
+    if (typeof filters?.minReviewsAdded30d === 'number') {
+      paramsList.push(filters.minReviewsAdded30d);
+      postConditions.push(`GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) >= $${paramsList.length}`);
+    }
+
+    if (params.trendType === 'accelerating') {
+      postConditions.push(`(
+        CASE
+          WHEN GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) > 0
+            THEN (
+              (
+                GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) / 7.0
+              ) - (
+                GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) / 30.0
+              )
+            ) / NULLIF(GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) / 30.0, 0) * 100
+          ELSE NULL
+        END
+      ) >= 10`);
+    } else if (params.trendType === 'breaking_out') {
+      postConditions.push(`GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) >= 25`);
+      if (typeof filters?.maxReviews !== 'number') {
+        candidateConditions.push(`COALESCE(ldm.total_reviews, 0) <= 20000`);
+      }
+      if (typeof filters?.minReviews !== 'number') {
+        candidateConditions.push(`COALESCE(ldm.total_reviews, 0) >= 100`);
+      }
+    } else if (params.trendType === 'declining') {
+      postConditions.push(`(
+        CASE
+          WHEN COALESCE(baseline7.ccu_peak, 0) > 0
+            THEN ((COALESCE(candidate.ccu_peak, 0) - baseline7.ccu_peak)::double precision / baseline7.ccu_peak::double precision) * 100
+          ELSE NULL
+        END
+      ) <= -5`);
+    }
+
+    const sortDirection = params.sortDirection === 'asc' ? 'ASC' : 'DESC';
+    const sortExpression = this.resolveMomentumSortExpression(params.sortBy, 'candidate');
+    paramsList.push(params.limit);
+    const baseline7Join = this.buildMomentumBaselineJoin({
+      alias: 'baseline7',
+      metricsDailyMetricsTable,
+      required: needsBaseline7,
+      windowDays: 7,
+    });
+    const baseline30Join = this.buildMomentumBaselineJoin({
+      alias: 'baseline30',
+      metricsDailyMetricsTable,
+      required: needsBaseline30,
+      windowDays: 30,
+    });
+
+    const sql = `
+      WITH publisher_portfolio_counts AS (
+        SELECT publisher_id, COUNT(DISTINCT appid)::int AS portfolio_game_count
+        FROM ${appPublishersTable}
+        GROUP BY publisher_id
+      ),
+      primary_publisher AS (
+        SELECT DISTINCT ON (ap.appid)
+          ap.appid,
+          ap.publisher_id,
+          p.name AS publisher_name,
+          COALESCE(ppc.portfolio_game_count, 0) AS portfolio_game_count
+        FROM ${appPublishersTable} ap
+        JOIN ${publishersTable} p ON p.id = ap.publisher_id
+        LEFT JOIN publisher_portfolio_counts ppc ON ppc.publisher_id = ap.publisher_id
+        ORDER BY ap.appid, COALESCE(ppc.portfolio_game_count, 0) ASC, p.name ASC
+      ),
+      primary_developer AS (
+        SELECT DISTINCT ON (ad.appid)
+          ad.appid,
+          ad.developer_id,
+          d.name AS developer_name
+        FROM ${appDevelopersTable} ad
+        JOIN ${developersTable} d ON d.id = ad.developer_id
+        ORDER BY ad.appid, d.name ASC
+      ),
+      candidate_apps AS (
+        SELECT
+          a.appid,
+          a.name,
+          a.is_free,
+          a.current_price_cents AS price_cents,
+          a.current_discount_percent AS discount_percent,
+          a.platforms,
+          a.release_date::text AS release_date,
+          EXTRACT(YEAR FROM a.release_date)::int AS release_year,
+          ldm.total_reviews,
+          ldm.positive_percentage,
+          ldm.owners_midpoint,
+          ldm.ccu_peak,
+          primary_publisher.publisher_name,
+          primary_publisher.portfolio_game_count,
+          primary_developer.developer_name,
+          CASE
+            WHEN primary_publisher.publisher_name IS NOT NULL
+              AND primary_developer.developer_name IS NOT NULL
+              AND lower(primary_publisher.publisher_name) = lower(primary_developer.developer_name)
+              THEN true
+            ELSE false
+          END AS is_self_published
+        FROM ${appsTable} a
+        LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+        LEFT JOIN primary_publisher ON primary_publisher.appid = a.appid
+        LEFT JOIN primary_developer ON primary_developer.appid = a.appid
+        WHERE ${candidateConditions.join('\n          AND ')}
+      )
+      SELECT
+        candidate.appid,
+        candidate.name,
+        candidate.is_free,
+        candidate.price_cents,
+        candidate.discount_percent,
+        candidate.platforms,
+        candidate.release_date,
+        candidate.release_year,
+        candidate.total_reviews,
+        candidate.positive_percentage,
+        candidate.owners_midpoint,
+        candidate.ccu_peak,
+        GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(candidate.total_reviews, 0)), 0)::double precision AS reviews_added_7d,
+        GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0)::double precision AS reviews_added_30d,
+        ROUND((GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(candidate.total_reviews, 0)), 0)::numeric / 7), 2)::double precision AS velocity_7d,
+        ROUND((GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0)::numeric / 30), 2)::double precision AS velocity_30d,
+        CASE
+          WHEN GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0) > 0
+            THEN ROUND(
+              (
+                (
+                  GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(candidate.total_reviews, 0)), 0)::numeric / 7
+                ) - (
+                  GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0)::numeric / 30
+                )
+              ) / NULLIF((GREATEST(COALESCE(candidate.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(candidate.total_reviews, 0)), 0)::numeric / 30), 0) * 100,
+              2
+            )::double precision
+          ELSE NULL
+        END AS velocity_acceleration,
+        CASE
+          WHEN COALESCE(baseline30.positive_reviews, 0) + COALESCE(baseline30.negative_reviews, 0) > 0
+            THEN ROUND(
+              COALESCE(candidate.positive_percentage, 0)
+              - (
+                COALESCE(baseline30.positive_reviews, 0)::numeric
+                / NULLIF(COALESCE(baseline30.positive_reviews, 0) + COALESCE(baseline30.negative_reviews, 0), 0)::numeric
+              ) * 100,
+              2
+            )::double precision
+          ELSE NULL
+        END AS sentiment_delta,
+        CASE
+          WHEN COALESCE(baseline7.ccu_peak, 0) > 0
+            THEN ROUND((((COALESCE(candidate.ccu_peak, 0) - baseline7.ccu_peak)::numeric / baseline7.ccu_peak::numeric) * 100), 2)::double precision
+          ELSE NULL
+        END AS ccu_growth_7d_percent,
+        CASE
+          WHEN COALESCE(baseline30.ccu_peak, 0) > 0
+            THEN ROUND((((COALESCE(candidate.ccu_peak, 0) - baseline30.ccu_peak)::numeric / baseline30.ccu_peak::numeric) * 100), 2)::double precision
+          ELSE NULL
+        END AS ccu_growth_30d_percent,
+        CASE
+          WHEN COALESCE(baseline30.ccu_peak, 0) > 0 AND COALESCE(candidate.ccu_peak, 0) > baseline30.ccu_peak * 1.1 THEN 'up'
+          WHEN COALESCE(baseline30.ccu_peak, 0) > 0 AND COALESCE(candidate.ccu_peak, 0) < baseline30.ccu_peak * 0.9 THEN 'down'
+          ELSE 'stable'
+        END AS trend_direction,
+        candidate.publisher_name,
+        candidate.developer_name,
+        candidate.is_self_published
+      FROM candidate_apps candidate
+      ${baseline7Join}
+      ${baseline30Join}
+      ${postConditions.length > 0 ? `WHERE ${postConditions.join('\n        AND ')}` : ''}
+      ORDER BY ${sortExpression} ${sortDirection}, COALESCE(candidate.total_reviews, 0) DESC, candidate.name ASC
+      LIMIT $${paramsList.length}
+    `;
+
+    const result = await runQuery<MomentumRow>(sql, paramsList, this.config);
+    return result.rows;
+  }
+
+  private resolveMomentumSortExpression(
+    sortBy: DiscoverMomentumRequest['sortBy'],
+    baseAlias = 'ldm'
+  ): string {
+    switch (sortBy) {
+      case 'ccu_peak':
+        return `COALESCE(${baseAlias}.ccu_peak, 0)`;
+      case 'review_score':
+        return `COALESCE(${baseAlias}.positive_percentage, 0)`;
+      case 'reviews_added_30d':
+        return `GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0)`;
+      case 'reviews_added_7d':
+        return `GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0)`;
+      case 'sentiment_delta':
+        return `CASE
+          WHEN COALESCE(baseline30.positive_reviews, 0) + COALESCE(baseline30.negative_reviews, 0) > 0
+            THEN COALESCE(${baseAlias}.positive_percentage, 0) - (
+              COALESCE(baseline30.positive_reviews, 0)::numeric
+              / NULLIF(COALESCE(baseline30.positive_reviews, 0) + COALESCE(baseline30.negative_reviews, 0), 0)::numeric
+            ) * 100
+          ELSE 0
+        END`;
+      case 'total_reviews':
+        return `COALESCE(${baseAlias}.total_reviews, 0)`;
+      case 'velocity_acceleration':
+        return `CASE
+          WHEN GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0) > 0
+            THEN (
+              (
+                GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0)::numeric / 7
+              ) - (
+                GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0)::numeric / 30
+              )
+            ) / NULLIF((GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline30.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0)::numeric / 30), 0) * 100
+          ELSE 0
+        END`;
+      case 'velocity_7d':
+        return `GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0)::numeric / 7`;
+      case 'momentum_score':
+      default:
+        return `(
+          GREATEST(COALESCE(${baseAlias}.total_reviews, 0) - COALESCE(baseline7.total_reviews, COALESCE(${baseAlias}.total_reviews, 0)), 0)
+          + GREATEST(COALESCE(${baseAlias}.ccu_peak, 0) - COALESCE(baseline7.ccu_peak, COALESCE(${baseAlias}.ccu_peak, 0)), 0) / 10.0
+          + GREATEST(
+              COALESCE(${baseAlias}.positive_percentage, 0) - (
+                CASE
+                  WHEN COALESCE(baseline30.positive_reviews, 0) + COALESCE(baseline30.negative_reviews, 0) > 0
+                    THEN (
+                      COALESCE(baseline30.positive_reviews, 0)::numeric
+                      / NULLIF(COALESCE(baseline30.positive_reviews, 0) + COALESCE(baseline30.negative_reviews, 0), 0)::numeric
+                    ) * 100
+                  ELSE COALESCE(${baseAlias}.positive_percentage, 0)
+                END
+              ),
+              0
+            ) * 2
+        )`;
+    }
+  }
+
+  private requiresMomentumBaseline7(params: {
+    filters: DiscoverMomentumRequest['filters'] | null;
+    sortBy: DiscoverMomentumRequest['sortBy'];
+    trendType: DiscoverMomentumRequest['trendType'];
+  }): boolean {
+    if (
+      params.sortBy === 'momentum_score'
+      || params.sortBy === 'velocity_7d'
+      || params.sortBy === 'velocity_acceleration'
+      || params.sortBy === 'reviews_added_7d'
+      || params.trendType === 'accelerating'
+      || params.trendType === 'declining'
+    ) {
+      return true;
+    }
+
+    return typeof params.filters?.minReviewsAdded7d === 'number';
+  }
+
+  private requiresMomentumBaseline30(params: {
+    filters: DiscoverMomentumRequest['filters'] | null;
+    sortBy: DiscoverMomentumRequest['sortBy'];
+    trendType: DiscoverMomentumRequest['trendType'];
+  }): boolean {
+    if (
+      params.sortBy === 'momentum_score'
+      || params.sortBy === 'reviews_added_30d'
+      || params.sortBy === 'sentiment_delta'
+      || params.sortBy === 'velocity_acceleration'
+      || params.trendType === 'accelerating'
+      || params.trendType === 'breaking_out'
+    ) {
+      return true;
+    }
+
+    return typeof params.filters?.minReviewsAdded30d === 'number';
+  }
+
+  private buildMomentumBaselineJoin(params: {
+    alias: 'baseline7' | 'baseline30';
+    metricsDailyMetricsTable: string;
+    required: boolean;
+    windowDays: 7 | 30;
+  }): string {
+    if (!params.required) {
+      return `
+      LEFT JOIN LATERAL (
+        SELECT
+          NULL::int AS appid,
+          NULL::double precision AS total_reviews,
+          NULL::double precision AS positive_reviews,
+          NULL::double precision AS negative_reviews,
+          NULL::double precision AS ccu_peak
+      ) ${params.alias} ON true`;
+    }
+
+    return `
+      LEFT JOIN LATERAL (
+        SELECT
+          dm.total_reviews::double precision AS total_reviews,
+          dm.positive_reviews::double precision AS positive_reviews,
+          dm.negative_reviews::double precision AS negative_reviews,
+          dm.ccu_peak::double precision AS ccu_peak
+        FROM ${params.metricsDailyMetricsTable} dm
+        WHERE dm.appid = candidate.appid
+          AND dm.metric_date <= CURRENT_DATE - INTERVAL '${params.windowDays} days'
+        ORDER BY dm.metric_date DESC
+        LIMIT 1
+      ) ${params.alias} ON true`;
+  }
+
+  private async queryExplainWindowMetrics(
+    appid: number,
+    start: Date,
+    end: Date
+  ): Promise<ExplainChangeMetricsWindow | null> {
+    if (start >= end) {
+      return null;
+    }
+
+    const result = await runQuery<ChangeWindowMetricRow>(
+      `
+        SELECT
+          MAX(dm.ccu_peak)::double precision AS ccu_peak,
+          MAX(dm.price_cents)::int AS price_cents,
+          MAX(dm.discount_percent)::int AS discount_percent,
+          MAX(dm.total_reviews)::double precision AS total_reviews,
+          MAX(dm.positive_reviews)::double precision AS positive_reviews,
+          MAX(dm.negative_reviews)::double precision AS negative_reviews,
+          CASE
+            WHEN MAX(COALESCE(dm.positive_reviews, 0) + COALESCE(dm.negative_reviews, 0)) > 0
+              THEN ROUND(
+                (
+                  MAX(COALESCE(dm.positive_reviews, 0))::numeric
+                  / NULLIF(MAX(COALESCE(dm.positive_reviews, 0) + COALESCE(dm.negative_reviews, 0)), 0)
+                ) * 100,
+                2
+              )::double precision
+            ELSE NULL
+          END AS review_score
+        FROM ${this.relation('metrics_daily_metrics').sql} dm
+        WHERE dm.appid = $1
+          AND dm.metric_date >= $2::date
+          AND dm.metric_date < $3::date
+      `,
+      [appid, formatDateOnly(start), formatDateOnly(end)],
+      this.config
+    );
+
+    const row = result.rows[0];
+    if (!row || row.total_reviews == null && row.ccu_peak == null && row.review_score == null) {
+      return null;
+    }
+
+    return {
+      ccuPeak: row.ccu_peak,
+      discountPercent: row.discount_percent,
+      negativeReviews: row.negative_reviews,
+      positiveReviews: row.positive_reviews,
+      priceCents: row.price_cents,
+      reviewScore: row.review_score,
+      reviewScoreLabel: this.describeReviewScore(row.review_score),
+      totalReviews: row.total_reviews,
+    };
+  }
+
+  private async buildExplainComparisonWindows(
+    appid: number,
+    momentStart: Date,
+    momentEnd: Date
+  ): Promise<ExplainChangesResponse['comparisonWindows']> {
+    return {
+      baseline7d: await this.queryExplainWindowMetrics(appid, addUtcDays(momentStart, -7), momentStart),
+      baseline30d: await this.queryExplainWindowMetrics(appid, addUtcDays(momentStart, -30), momentStart),
+      response1d: await this.queryExplainWindowMetrics(appid, momentEnd, addUtcDays(momentEnd, 1)),
+      response7d: await this.queryExplainWindowMetrics(appid, momentEnd, addUtcDays(momentEnd, 7)),
+      response30d: await this.queryExplainWindowMetrics(appid, momentEnd, addUtcDays(momentEnd, 30)),
+    };
+  }
+
+  private describeReviewScore(value: number | null): string | null {
+    if (value == null) {
+      return null;
+    }
+    if (value >= 95) {
+      return 'Overwhelmingly Positive';
+    }
+    if (value >= 90) {
+      return 'Very Positive';
+    }
+    if (value >= 80) {
+      return 'Positive';
+    }
+    if (value >= 70) {
+      return 'Mostly Positive';
+    }
+    if (value >= 40) {
+      return 'Mixed';
+    }
+    return 'Mostly Negative';
   }
 
   private applyContinuationDeltaToSemanticSearchArgs(
@@ -3055,6 +5743,19 @@ export class DataPlaneService {
       requiredRelations.add('steam_tags');
     }
 
+    for (const facetKind of request.includeFacets ?? []) {
+      if (facetKind === 'tags') {
+        unsupportedFilters.push('includeFacets.tags');
+        requiredRelations.add('steam_tags');
+      } else if (facetKind === 'genres') {
+        unsupportedFilters.push('includeFacets.genres');
+        requiredRelations.add('steam_genres');
+      } else if (facetKind === 'categories') {
+        unsupportedFilters.push('includeFacets.categories');
+        requiredRelations.add('steam_categories');
+      }
+    }
+
     if (requiredRelations.size === 0) {
       return;
     }
@@ -3069,6 +5770,172 @@ export class DataPlaneService {
         { unsupportedFilters }
       );
     }
+  }
+
+  private async assertTigerMomentumFiltersSupported(
+    request: DiscoverMomentumRequest
+  ): Promise<void> {
+    if (this.config.source !== 'tiger') {
+      return;
+    }
+
+    const filters = request.filters ?? null;
+    if (!filters) {
+      return;
+    }
+
+    const requiredRelations = new Set<DataPlaneRelationKey>();
+    const unsupportedFilters: string[] = [];
+
+    if (filters.genres?.length) {
+      unsupportedFilters.push('genres');
+      requiredRelations.add('app_genres');
+      requiredRelations.add('steam_genres');
+    }
+
+    if (filters.tags?.length) {
+      unsupportedFilters.push('tags');
+      requiredRelations.add('app_steam_tags');
+      requiredRelations.add('steam_tags');
+    }
+
+    if (requiredRelations.size === 0) {
+      return;
+    }
+
+    const blockingTables = await this.getBlockingTables([...requiredRelations]);
+
+    if (blockingTables.length > 0) {
+      throw new ContractRuntimeUnavailableError(
+        `Tiger discoverMomentum does not support ${unsupportedFilters.join(', ')} filters until those legacy tables are backfilled.`,
+        'discoverMomentum',
+        blockingTables,
+        { unsupportedFilters }
+      );
+    }
+  }
+
+  private shouldQueryCatalogItems(request: SearchCatalogRequest): boolean {
+    if (request.appids?.length || request.parentAppids?.length) {
+      return true;
+    }
+
+    if (request.query?.trim() || request.publisherQuery?.trim() || request.developerQuery?.trim()) {
+      return true;
+    }
+
+    if (request.publisherIds?.length || request.developerIds?.length) {
+      return true;
+    }
+
+    if (request.includeAppTypes?.length || request.platforms?.length) {
+      return true;
+    }
+
+    if (request.tags?.length || request.genres?.length) {
+      return true;
+    }
+
+    if (
+      typeof request.isFree === 'boolean'
+      || typeof request.isReleased === 'boolean'
+      || typeof request.onSale === 'boolean'
+      || typeof request.minReviews === 'number'
+      || typeof request.minReviewScore === 'number'
+      || typeof request.minPriceCents === 'number'
+      || typeof request.maxPriceCents === 'number'
+      || typeof request.minDiscountPercent === 'number'
+      || typeof request.minOwners === 'number'
+      || typeof request.minCcu === 'number'
+    ) {
+      return true;
+    }
+
+    if (request.releaseYear?.gte != null || request.releaseYear?.lte != null) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private async lookupCatalogFacets(
+    request: SearchCatalogRequest
+  ): Promise<SearchCatalogResponse['facets']> {
+    const includeFacets = [...new Set(request.includeFacets ?? [])];
+    const facetQuery = request.facetQuery?.trim() ?? request.query?.trim() ?? '';
+
+    if (includeFacets.length === 0 || !facetQuery) {
+      return null;
+    }
+
+    const limit = normalizeLimit(request.limit, 10, 20);
+    const normalizedQuery = facetQuery.toLowerCase();
+    const likeQuery = normalizeLikeValue(facetQuery);
+    const prefixQuery = `${normalizedQuery}%`;
+
+    const facetRows = await Promise.all(
+      includeFacets.map(async (facetKind) => {
+        const relationKey =
+          facetKind === 'tags'
+            ? 'steam_tags'
+            : facetKind === 'genres'
+              ? 'steam_genres'
+              : 'steam_categories';
+        const table = this.relation(relationKey).sql;
+        const result = await runQuery<{ name: string }>(
+          `
+            SELECT facet_matches.name
+            FROM (
+              SELECT DISTINCT
+                name,
+                CASE
+                  WHEN lower(name) = $1 THEN 2
+                  WHEN lower(name) LIKE $3 THEN 1
+                  ELSE 0
+                END AS match_rank
+              FROM ${table}
+              WHERE lower(name) = $1
+                 OR lower(name) LIKE $2
+            ) facet_matches
+            ORDER BY
+              facet_matches.match_rank DESC,
+              facet_matches.name ASC
+            LIMIT $4
+          `,
+          [normalizedQuery, likeQuery, prefixQuery, limit],
+          this.config
+        );
+
+        return {
+          facetKind,
+          names: result.rows
+            .map((row) => row.name)
+            .filter((name, index, values) => values.indexOf(name) === index),
+        };
+      })
+    );
+
+    const categories = facetRows.find((row) => row.facetKind === 'categories')?.names ?? [];
+    const genres = facetRows.find((row) => row.facetKind === 'genres')?.names ?? [];
+    const tags = facetRows.find((row) => row.facetKind === 'tags')?.names ?? [];
+    const canonicalMatchRow = facetRows.find((row) =>
+      row.names.some((name) => name.trim().toLowerCase() === normalizedQuery)
+    );
+    const canonicalMatchName = canonicalMatchRow?.names.find(
+      (name) => name.trim().toLowerCase() === normalizedQuery
+    ) ?? null;
+
+    return {
+      canonicalMatch: canonicalMatchName && canonicalMatchRow
+        ? {
+            name: canonicalMatchName,
+            type: canonicalMatchRow.facetKind,
+          }
+        : null,
+      categories,
+      genres,
+      tags,
+    };
   }
 
   private async assertContractRuntime(

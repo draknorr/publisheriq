@@ -115,6 +115,195 @@ test('continueResultSet narrows semantic game continuations with bounded deltas'
   assert.equal(result.exhausted, true);
 });
 
+test('discoverMomentum returns Tiger momentum rows as typed items', async () => {
+  const service = createService();
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).queryMomentumRows = async () => [
+    {
+      appid: 730,
+      ccu_growth_30d_percent: 12,
+      ccu_growth_7d_percent: 8,
+      ccu_peak: 1500000,
+      developer_name: 'Valve',
+      discount_percent: 0,
+      is_free: true,
+      is_self_published: true,
+      name: 'Counter-Strike 2',
+      owners_midpoint: 100000000,
+      platforms: 'windows',
+      positive_percentage: 88,
+      price_cents: 0,
+      publisher_name: 'Valve',
+      release_date: '2023-09-27',
+      release_year: 2023,
+      reviews_added_30d: 42000,
+      reviews_added_7d: 9000,
+      sentiment_delta: 1.4,
+      total_reviews: 9000000,
+      trend_direction: 'up',
+      velocity_30d: 1400,
+      velocity_7d: 1285,
+      velocity_acceleration: 12,
+    },
+  ];
+  (service as any).applyMomentumQdrantFilters = async (rows: unknown[]) => rows;
+
+  const result = await service.discoverMomentum({
+    filters: { isFree: true },
+    sortBy: 'ccu_peak',
+    timeframe: 'current',
+  });
+
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.appid, 730);
+  assert.equal(result.items[0]?.momentumScore, 9006);
+  assert.equal(result.rankingLabel, 'Peak CCU');
+  assert.equal(result.timeframe, 'current');
+});
+
+test('searchCatalog can answer facet-only taxonomy lookups without querying items', async () => {
+  const service = createService();
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).assertTigerSearchFiltersSupported = async () => undefined;
+  (service as any).lookupCatalogFacets = async () => ({
+    canonicalMatch: {
+      name: 'Colony Sim',
+      type: 'tags',
+    },
+    categories: [],
+    genres: [],
+    tags: ['Colony Sim', 'Base Building'],
+  });
+
+  const result = await service.searchCatalog({
+    facetQuery: 'colony sim',
+    includeFacets: ['tags'],
+    limit: 5,
+  });
+
+  assert.equal(result.items.length, 0);
+  assert.equal(result.facets?.tags[0], 'Colony Sim');
+  assert.equal(result.interpretedFilters.facetQuery, 'colony sim');
+  assert.deepEqual(result.interpretedFilters.includeFacets, ['tags']);
+  assert.equal(result.sufficientToAnswer, true);
+});
+
+test('discoverMomentum only checks Tiger tag backfill when tag filters are requested', async () => {
+  const service = createService();
+  let requiredRelations: string[] | null = null;
+
+  (service as any).getBlockingTables = async (relations: string[]) => {
+    requiredRelations = relations;
+    return [];
+  };
+
+  await (service as any).assertTigerMomentumFiltersSupported({
+    filters: { isFree: true },
+    sortBy: 'ccu_peak',
+  });
+  assert.equal(requiredRelations, null);
+
+  await (service as any).assertTigerMomentumFiltersSupported({
+    filters: { tags: ['Horror'] },
+    sortBy: 'reviews_added_30d',
+  });
+  assert.deepEqual(requiredRelations, ['app_steam_tags', 'steam_tags']);
+});
+
+test('searchChangeActivity narrows raw event queries by requested signal families', async () => {
+  const service = createService();
+  let receivedParams: Record<string, unknown> | null = null;
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).querySearchChangeEventRows = async (params: Record<string, unknown>) => {
+    receivedParams = params;
+    return [];
+  };
+  (service as any).queryNewsRowsByGids = async () => [];
+
+  const result = await service.searchChangeActivity({
+    appTypes: ['game'],
+    days: 30,
+    signalFamilies: ['store-page', 'media'],
+    sort: 'biggest-change',
+    view: 'store-refreshes',
+  });
+
+  assert.deepEqual(receivedParams, {
+    appTypes: ['game'],
+    changeTypes: [
+      'description_rewrite',
+      'short_description_rewrite',
+      'capsule_url_changed',
+      'header_url_changed',
+      'background_url_changed',
+      'screenshot_added',
+      'screenshot_removed',
+      'screenshot_reordered',
+      'trailer_added',
+      'trailer_removed',
+      'trailer_reordered',
+      'trailer_thumbnail_changed',
+    ],
+    days: 30,
+    limit: 800,
+    query: null,
+  });
+  assert.equal(result.items.length, 0);
+  assert.equal(result.sufficientToAnswer, false);
+});
+
+test('discoverChangePatterns narrows candidate activity reads to pattern-relevant signal families', async () => {
+  const service = createService();
+  let receivedParams: Record<string, unknown> | null = null;
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).querySearchChangeEventRows = async (params: Record<string, unknown>) => {
+    receivedParams = params;
+    return [];
+  };
+  (service as any).queryNewsRowsByGids = async () => [];
+
+  const result = await service.discoverChangePatterns({
+    appTypes: ['game'],
+    days: 30,
+    limit: 8,
+    pattern: 'marketing_push',
+  });
+
+  assert.deepEqual(receivedParams, {
+    appTypes: ['game'],
+    changeTypes: [
+      'price_change',
+      'discount_start',
+      'discount_end',
+      'dlc_references_changed',
+      'package_references_changed',
+      'news_published',
+      'news_edited',
+      'capsule_url_changed',
+      'header_url_changed',
+      'background_url_changed',
+      'screenshot_added',
+      'screenshot_removed',
+      'screenshot_reordered',
+      'trailer_added',
+      'trailer_removed',
+      'trailer_reordered',
+      'trailer_thumbnail_changed',
+      'description_rewrite',
+      'short_description_rewrite',
+    ],
+    days: 30,
+    limit: 800,
+    query: null,
+  });
+  assert.equal(result.items.length, 0);
+  assert.equal(result.sufficientToAnswer, false);
+});
+
 test('compareEntities rejects fewer than two unique entities', async () => {
   const service = createService();
   (service as any).assertContractRuntime = async () => undefined;
@@ -126,6 +315,55 @@ test('compareEntities rejects fewer than two unique entities', async () => {
       }),
     /between 2 and 5 unique entityUids/
   );
+});
+
+test('rankEntities forwards expanded company ranking requests to the company ranking query', async () => {
+  const service = createService();
+  let receivedRequest: unknown = null;
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).queryRankedCompanies = async (
+    entityKind: string,
+    request: unknown,
+    limit: number,
+    direction: string
+  ) => {
+    receivedRequest = { direction, entityKind, limit, request };
+    return [];
+  };
+
+  await service.rankEntities({
+    aggregateFilters: {
+      minAverageReviewScore: 85,
+      minGameCount: 5,
+    },
+    catalogFilters: {
+      onSale: true,
+      tags: ['Roguelike'],
+    },
+    entityKind: 'publisher',
+    metric: 'game_count',
+    releaseDays: 180,
+  });
+
+  assert.deepEqual(receivedRequest, {
+    direction: 'DESC',
+    entityKind: 'publisher',
+    limit: 10,
+    request: {
+      aggregateFilters: {
+        minAverageReviewScore: 85,
+        minGameCount: 5,
+      },
+      catalogFilters: {
+        onSale: true,
+        tags: ['Roguelike'],
+      },
+      entityKind: 'publisher',
+      metric: 'game_count',
+      releaseDays: 180,
+    },
+  });
 });
 
 test('compareEntities rejects more than five unique entities', async () => {
@@ -315,4 +553,66 @@ test('getEntityOverview returns company metrics and related games', async () => 
   assert.equal(result.entity.metrics.gameCount, 7);
   assert.equal(result.games.length, 1);
   assert.equal(result.games[0]?.name, 'ELDEN RING');
+});
+
+test('explainChanges before_after mode includes the selected moment and comparison windows', async () => {
+  const service = createService();
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).resolveCoreEntity = async () => ({
+    canonical_name: 'Hades',
+    entity_kind: 'game',
+    entity_uid: 'steam:game:1145360',
+    platform: 'steam',
+    platform_entity_id: '1145360',
+  });
+  (service as any).queryChangeEvents = async () => [
+    {
+      after_value: 'New trailer',
+      before_value: null,
+      change_type: 'trailer_added',
+      context: null,
+      id: 'event-1',
+      news_item_gid: null,
+      occurred_at: '2026-03-20T12:00:00.000Z',
+      source: 'storefront',
+    },
+  ];
+  (service as any).buildExplainMoments = () => [
+    {
+      directNewsGids: new Set<string>(),
+      events: [
+        {
+          after_value: 'New trailer',
+          before_value: null,
+          change_type: 'trailer_added',
+          context: null,
+          id: 'event-1',
+          news_item_gid: null,
+          occurred_at: '2026-03-20T12:00:00.000Z',
+          source: 'storefront',
+        },
+      ],
+      linkedNews: [],
+      windowEnd: new Date('2026-03-20T18:00:00.000Z'),
+      windowStart: new Date('2026-03-20T12:00:00.000Z'),
+    },
+  ];
+  (service as any).buildExplainComparisonWindows = async () => ({
+    baseline30d: { ccuPeak: 100, discountPercent: 0, negativeReviews: 10, positiveReviews: 90, priceCents: 1999, reviewScore: 90, reviewScoreLabel: 'Very Positive', totalReviews: 100 },
+    baseline7d: null,
+    response1d: null,
+    response30d: null,
+    response7d: null,
+  });
+
+  const result = await service.explainChanges({
+    entityUid: 'steam:game:1145360',
+    includeNews: false,
+    mode: 'before_after',
+  });
+
+  assert.equal(result.mode, 'before_after');
+  assert.equal(result.selectedMoment?.eventCount, 1);
+  assert.equal(result.comparisonWindows?.baseline30d?.reviewScoreLabel, 'Very Positive');
 });

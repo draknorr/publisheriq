@@ -1,24 +1,34 @@
-import { getServiceSupabase } from '@/lib/supabase-service';
+import {
+  attachToolExecutionProvenance,
+  type ChatExecutionProvenanceOverride,
+} from '@/lib/chat/execution-trace';
 import type { ToolSufficiencyMetadata } from '@/lib/llm/types';
-import { searchByConcept, type SearchByConceptArgs } from '@/lib/qdrant/search-service';
+import { postToQueryApi } from '@/lib/query-api-client';
 
 const MAX_RESULTS = 20;
 const DEFAULT_RESULTS = 10;
-const PREFETCH_MIN = 50;
-const PREFETCH_MAX = 200;
 const SMALL_CATALOG_MAX = 10;
-const INDIE_TAG_TERM = 'Indie';
-const DEFAULT_MOMENTUM_MIN_REVIEWS_ADDED_7D = 3;
-const DEFAULT_REVIEW_ACTIVITY_MIN_REVIEWS_ADDED_7D = 10;
-const DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D = 5;
-const SATURATED_SENTIMENT_MIN_REVIEWS_ADDED_30D = 10;
-const SEMANTIC_CONTENT_VALIDATION_LIMIT = 20;
 
-type ServiceSupabase = ReturnType<typeof getServiceSupabase>;
-type IdLookupTable = 'steam_tags' | 'steam_genres' | 'steam_categories';
-type IdLookupColumn = 'tag_id' | 'genre_id' | 'category_id';
 type SupportLevel = 'low' | 'medium' | 'high';
 type TrendProfile = 'market_leaders' | 'breakout_watchlist';
+
+const TIGER_SCREEN_GAMES_PROVENANCE: ChatExecutionProvenanceOverride = {
+  backendKinds: ['tiger_query_api'],
+  dataSources: [
+    'query_api:discoverMomentum',
+    'relation:apps',
+    'relation:latest_daily_metrics',
+    'relation:metrics_daily_metrics',
+    'relation:app_publishers',
+    'relation:publishers',
+    'relation:app_developers',
+    'relation:developers',
+  ],
+  migrationDisposition: 'already_tiger',
+  migrationNotes:
+    'Momentum and screening prompts now execute only through the Tiger discover-momentum contract.',
+  recommendedTigerContracts: ['discoverMomentum'],
+};
 
 export interface ScreenGamesArgs {
   sort_by:
@@ -58,44 +68,6 @@ export interface ScreenGamesArgs {
   };
   limit?: number;
   excludeAppIds?: number[];
-}
-
-interface RpcAppRow {
-  appid: number;
-  name: string;
-  is_free: boolean;
-  ccu_peak: number | null;
-  total_reviews: number | null;
-  positive_percentage: number | null;
-  review_score: number | null;
-  price_cents: number | null;
-  current_discount_percent: number | null;
-  ccu_growth_7d_percent: number | null;
-  ccu_growth_30d_percent: number | null;
-  velocity_7d: number | null;
-  velocity_30d: number | null;
-  velocity_acceleration: number | null;
-  sentiment_delta: number | null;
-  momentum_score: number | null;
-  release_date: string | null;
-  metric_date: string | null;
-  publisher_id: number | null;
-  publisher_name: string | null;
-  publisher_game_count: number | null;
-  developer_id: number | null;
-  developer_name: string | null;
-}
-
-interface ReviewVelocityRow {
-  appid: number;
-  reviews_added_7d: number | null;
-  reviews_added_30d: number | null;
-  last_delta_date: string | null;
-}
-
-interface ExactTagEntry {
-  id: number;
-  name: string;
 }
 
 export interface ScreenedGameResult {
@@ -148,6 +120,41 @@ export interface ScreenGamesResult extends ToolSufficiencyMetadata {
   results?: ScreenedGameResult[];
   total_found?: number;
   error?: string;
+  unavailable?: boolean;
+}
+
+interface TigerDiscoverMomentumResponse {
+  filtersApplied?: string[];
+  items?: Array<{
+    appid: number;
+    ccuGrowth30dPercent?: number | null;
+    ccuGrowth7dPercent?: number | null;
+    ccuPeak?: number | null;
+    developerName?: string | null;
+    discountPercent?: number | null;
+    isFree: boolean;
+    isSelfPublished?: boolean;
+    momentumScore?: number | null;
+    name: string;
+    priceCents?: number | null;
+    publisherName?: string | null;
+    releaseDate?: string | null;
+    reviewPercentage?: number | null;
+    reviewsAdded30d?: number | null;
+    reviewsAdded7d?: number | null;
+    sentimentDelta?: number | null;
+    supportLevel?: SupportLevel;
+    supportReasons?: string[];
+    totalReviews?: number | null;
+    velocity30d?: number | null;
+    velocity7d?: number | null;
+    velocityAcceleration?: number | null;
+  }>;
+  rankingDefinition?: string;
+  rankingLabel?: string;
+  sufficientToAnswer?: boolean;
+  timeframe?: 'current' | '7d' | '30d';
+  timeframeLabel?: string;
 }
 
 function clampLimit(limit?: number): number {
@@ -155,34 +162,6 @@ function clampLimit(limit?: number): number {
     return DEFAULT_RESULTS;
   }
   return Math.max(1, Math.min(limit, MAX_RESULTS));
-}
-
-function buildPrefetchLimit(limit: number): number {
-  return Math.min(Math.max(limit * 8, PREFETCH_MIN), PREFETCH_MAX);
-}
-
-function normalizeRpcSortField(sortBy: ScreenGamesArgs['sort_by']): string {
-  switch (sortBy) {
-    case 'ccu_peak':
-      return 'ccu_peak';
-    case 'momentum_score':
-      return 'momentum_score';
-    case 'velocity_7d':
-      return 'velocity_7d';
-    case 'velocity_acceleration':
-      return 'velocity_acceleration';
-    case 'reviews_added_7d':
-    case 'reviews_added_30d':
-      return 'velocity_7d';
-    case 'sentiment_delta':
-      return 'sentiment_delta';
-    case 'total_reviews':
-      return 'total_reviews';
-    case 'review_score':
-      return 'review_score';
-    default:
-      return 'momentum_score';
-  }
 }
 
 function getRankingLabel(sortBy: ScreenGamesArgs['sort_by']): string {
@@ -225,7 +204,7 @@ function getRankingDefinition(sortBy: ScreenGamesArgs['sort_by']): string {
     case 'reviews_added_30d':
       return 'Total new reviews added over the last 30 days.';
     case 'sentiment_delta':
-      return 'Change in positive review percentage between the recent review window and the prior baseline. Positive means improving sentiment; negative means worsening sentiment.';
+      return 'Change in positive review percentage between the recent review window and the prior baseline.';
     case 'total_reviews':
       return 'Lifetime Steam review count.';
     case 'review_score':
@@ -241,7 +220,9 @@ function formatFiltersApplied(args: ScreenGamesArgs): string[] {
 
   if (args.trend_profile) applied.push(`trend_profile: ${args.trend_profile}`);
   if (filters.tags?.length) applied.push(`tags: ${filters.tags.join(', ')}`);
-  if (filters.verified_tags_any?.length) applied.push(`verified_tags_any: ${filters.verified_tags_any.join(', ')}`);
+  if (filters.verified_tags_any?.length) {
+    applied.push(`verified_tags_any: ${filters.verified_tags_any.join(', ')}`);
+  }
   if (filters.genres?.length) applied.push(`genres: ${filters.genres.join(', ')}`);
   if (filters.categories?.length) applied.push(`categories: ${filters.categories.join(', ')}`);
   if (filters.platforms?.length) applied.push(`platforms: ${filters.platforms.join(', ')}`);
@@ -249,53 +230,38 @@ function formatFiltersApplied(args: ScreenGamesArgs): string[] {
   if (typeof filters.is_free === 'boolean') applied.push(`is_free: ${filters.is_free}`);
   if (typeof filters.min_reviews === 'number') applied.push(`min_reviews: ${filters.min_reviews}`);
   if (typeof filters.max_reviews === 'number') applied.push(`max_reviews: ${filters.max_reviews}`);
-  if (typeof filters.min_reviews_added_7d === 'number') applied.push(`min_reviews_added_7d: ${filters.min_reviews_added_7d}`);
-  if (typeof filters.min_reviews_added_30d === 'number') applied.push(`min_reviews_added_30d: ${filters.min_reviews_added_30d}`);
+  if (typeof filters.min_reviews_added_7d === 'number') {
+    applied.push(`min_reviews_added_7d: ${filters.min_reviews_added_7d}`);
+  }
+  if (typeof filters.min_reviews_added_30d === 'number') {
+    applied.push(`min_reviews_added_30d: ${filters.min_reviews_added_30d}`);
+  }
   if (typeof filters.min_score === 'number') applied.push(`min_score: ${filters.min_score}`);
   if (typeof filters.max_score === 'number') applied.push(`max_score: ${filters.max_score}`);
   if (typeof filters.min_ccu === 'number') applied.push(`min_ccu: ${filters.min_ccu}`);
-  if (typeof filters.min_sentiment_delta === 'number') applied.push(`min_sentiment_delta: ${filters.min_sentiment_delta}`);
-  if (typeof filters.max_sentiment_delta === 'number') applied.push(`max_sentiment_delta: ${filters.max_sentiment_delta}`);
-  if (typeof filters.self_published === 'boolean') applied.push(`self_published: ${filters.self_published}`);
+  if (typeof filters.min_sentiment_delta === 'number') {
+    applied.push(`min_sentiment_delta: ${filters.min_sentiment_delta}`);
+  }
+  if (typeof filters.max_sentiment_delta === 'number') {
+    applied.push(`max_sentiment_delta: ${filters.max_sentiment_delta}`);
+  }
+  if (typeof filters.self_published === 'boolean') {
+    applied.push(`self_published: ${filters.self_published}`);
+  }
   if (filters.publisher_size) applied.push(`publisher_size: ${filters.publisher_size}`);
-  if (filters.release_year?.gte !== undefined) applied.push(`release_year >= ${filters.release_year.gte}`);
-  if (filters.release_year?.lte !== undefined) applied.push(`release_year <= ${filters.release_year.lte}`);
+  if (filters.release_year?.gte !== undefined) {
+    applied.push(`release_year >= ${filters.release_year.gte}`);
+  }
+  if (filters.release_year?.lte !== undefined) {
+    applied.push(`release_year <= ${filters.release_year.lte}`);
+  }
   if (args.indie_heuristic) {
-    applied.push('indie heuristic: <=10-game publisher catalogs, self-published preferred, Steam Indie tag support only');
+    applied.push(
+      `indie heuristic: <=${SMALL_CATALOG_MAX}-game publisher catalogs, self-published preferred, Steam Indie tag support only`
+    );
   }
 
   return applied;
-}
-
-function normalizeCompanyName(value: string | null): string {
-  return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? '';
-}
-
-function isSelfPublishedRow(row: Pick<RpcAppRow, 'publisher_name' | 'developer_name'>): boolean {
-  const publisherName = normalizeCompanyName(row.publisher_name);
-  const developerName = normalizeCompanyName(row.developer_name);
-
-  return publisherName.length > 0 && publisherName === developerName;
-}
-
-function buildIndieSignals(
-  publisherGameCount: number | null,
-  isSelfPublished: boolean,
-  hasIndieTag: boolean
-): string[] {
-  const signals: string[] = [];
-
-  if (publisherGameCount !== null && publisherGameCount <= SMALL_CATALOG_MAX) {
-    signals.push(`publisher catalog <= ${SMALL_CATALOG_MAX} games`);
-  }
-  if (isSelfPublished) {
-    signals.push('self-published on Steam');
-  }
-  if (hasIndieTag) {
-    signals.push('Steam Indie tag');
-  }
-
-  return signals;
 }
 
 function getIndieDefinition(): string {
@@ -308,10 +274,9 @@ function getRecommendedColumns(
 ): string[] {
   switch (sortBy) {
     case 'momentum_score':
-      if (trendProfile === 'market_leaders') {
-        return ['Game', 'Momentum Score', 'Reviews Added (7d)', 'CCU Peak', 'Total Reviews', 'Review %'];
-      }
-      return ['Game', 'Momentum Score', 'Reviews Added (7d)', 'CCU Peak', 'Review %'];
+      return trendProfile === 'market_leaders'
+        ? ['Game', 'Momentum Score', 'Reviews Added (7d)', 'CCU Peak', 'Total Reviews', 'Review %']
+        : ['Game', 'Momentum Score', 'Reviews Added (7d)', 'CCU Peak', 'Review %'];
     case 'sentiment_delta':
       return ['Game', 'Sentiment Delta', 'Reviews Added (30d)', 'Review %', 'Reviews'];
     case 'velocity_acceleration':
@@ -335,12 +300,11 @@ function getResponseGuidance(
 ): string {
   switch (sortBy) {
     case 'momentum_score':
-      if (trendProfile === 'market_leaders') {
-        return 'Name the ranking metric as Momentum Score, use the exact timeframe anchor, include Reviews Added (7d), CCU Peak, and Total Reviews, and explain rows as scaled market leaders rather than small breakout candidates.';
-      }
-      return 'Name the ranking metric as Momentum Score, use the exact timeframe anchor, include Reviews Added (7d) and CCU Peak, and explain rows with numeric support rather than generic momentum prose.';
+      return trendProfile === 'market_leaders'
+        ? 'Name the ranking metric as Momentum Score, use the exact timeframe anchor, include Reviews Added (7d), CCU Peak, and Total Reviews, and explain rows as scaled market leaders rather than small breakout candidates.'
+        : 'Name the ranking metric as Momentum Score, use the exact timeframe anchor, include Reviews Added (7d) and CCU Peak, and explain rows with numeric support rather than generic momentum prose.';
     case 'sentiment_delta':
-      return 'Name the ranking metric as Sentiment Delta, use the exact timeframe anchor, include Reviews Added (30d), and do not paraphrase the deltas as generic 100% improvement or complete decline language.';
+      return 'Name the ranking metric as Sentiment Delta, use the exact timeframe anchor, include Reviews Added (30d), and do not paraphrase the deltas as generic improvement or decline language.';
     case 'velocity_7d':
     case 'velocity_acceleration':
     case 'reviews_added_7d':
@@ -351,965 +315,172 @@ function getResponseGuidance(
   }
 }
 
-function toPriceDollars(priceCents: number | null): number | null {
-  if (priceCents === null || priceCents === undefined) {
-    return null;
-  }
-  return Number((priceCents / 100).toFixed(2));
-}
-
-function parseIsoDate(value: string | null): number {
-  if (!value) {
-    return 0;
-  }
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function formatDateOnly(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function formatSignedPercent(value: number | null): string | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  const rounded = Number(value.toFixed(2));
-  return `${rounded > 0 ? '+' : ''}${rounded}%`;
-}
-
-function getContentValidationTerms(filters: ScreenGamesArgs['filters']): string[] {
-  const terms = [
-    ...(filters?.tags ?? []),
-    ...(filters?.genres ?? []),
-    ...(filters?.categories ?? []),
-  ].map((value) => value.trim()).filter((value) => value.length > 0);
-
-  return terms.filter((value, index) => terms.indexOf(value) === index);
-}
-
-function shouldApplySemanticContentValidation(args: ScreenGamesArgs): boolean {
-  const contentTerms = getContentValidationTerms(args.filters);
-
-  if (contentTerms.length === 0) {
-    return false;
-  }
-
-  return (
-    args.sort_by === 'momentum_score' ||
-    args.sort_by === 'sentiment_delta' ||
-    args.sort_by === 'velocity_7d' ||
-    args.sort_by === 'velocity_acceleration' ||
-    args.sort_by === 'reviews_added_7d' ||
-    args.sort_by === 'reviews_added_30d'
-  );
-}
-
-function buildSemanticContentValidationFilters(
-  filters: ScreenGamesArgs['filters']
-): SearchByConceptArgs['filters'] {
-  if (!filters) {
-    return undefined;
-  }
-
-  const reviewPercentage =
-    typeof filters.min_score === 'number' || typeof filters.max_score === 'number'
-      ? {
-          gte: filters.min_score,
-          lte: filters.max_score,
-        }
-      : undefined;
-
-  return {
-    is_free: filters.is_free,
-    platforms: filters.platforms,
-    steam_deck: filters.steam_deck,
-    min_reviews: filters.min_reviews,
-    max_reviews: filters.max_reviews,
-    release_year: filters.release_year,
-    review_percentage: reviewPercentage,
-  };
-}
-
-function buildTimeframeMetadata(
+function buildTimeframeLabel(
   timeframe: NonNullable<ScreenGamesArgs['timeframe']>,
-  results: ScreenedGameResult[]
-): Pick<ScreenGamesResult, 'timeframe_label' | 'window_start' | 'window_end'> {
-  const dateCandidates = results
-    .map((result) => timeframe === 'current' ? result.metricDate : (result.lastDeltaDate ?? result.metricDate))
-    .filter((value): value is string => typeof value === 'string' && value.length > 0);
-
-  if (dateCandidates.length === 0) {
-    if (timeframe === 'current') {
-      return { timeframe_label: 'latest available metrics snapshot' };
-    }
-
-    const days = timeframe === '30d' ? 30 : 7;
-    return { timeframe_label: `${days}-day rolling window` };
+  responseLabel?: string
+): string {
+  if (responseLabel) {
+    return responseLabel;
   }
 
-  const windowEndRaw = dateCandidates.reduce((latest, value) =>
-    parseIsoDate(value) > parseIsoDate(latest) ? value : latest
-  );
-  const windowEndDate = new Date(windowEndRaw);
-  const windowEnd = formatDateOnly(windowEndDate);
-
-  if (timeframe === 'current') {
-    return {
-      timeframe_label: `latest metrics snapshot as of ${windowEnd}`,
-      window_end: windowEnd,
-    };
-  }
-
-  const windowDays = timeframe === '30d' ? 30 : 7;
-  const windowStartDate = new Date(windowEndDate);
-  windowStartDate.setUTCDate(windowStartDate.getUTCDate() - (windowDays - 1));
-
-  return {
-    timeframe_label: `${windowDays}-day window ending ${windowEnd}`,
-    window_start: formatDateOnly(windowStartDate),
-    window_end: windowEnd,
-  };
+  return timeframe === 'current'
+    ? 'latest available metrics snapshot'
+    : `${timeframe} rolling window`;
 }
 
-function getSortValue(result: ScreenedGameResult, sortBy: ScreenGamesArgs['sort_by']): number | null {
-  switch (sortBy) {
-    case 'ccu_peak':
-      return result.ccuPeak;
-    case 'momentum_score':
-      return result.momentumScore;
-    case 'velocity_7d':
-      return result.velocity7d;
-    case 'velocity_acceleration':
-      return result.velocityAcceleration;
-    case 'reviews_added_7d':
-      return result.reviewsAdded7d;
-    case 'reviews_added_30d':
-      return result.reviewsAdded30d;
-    case 'sentiment_delta':
-      return result.sentimentDelta;
-    case 'total_reviews':
-      return result.totalReviews;
-    case 'review_score':
-      return result.reviewPercentage;
-    default:
-      return null;
-  }
-}
-
-function compareSupportSignals(
-  left: ScreenedGameResult,
-  right: ScreenedGameResult,
-  sortBy: ScreenGamesArgs['sort_by']
-): number {
-  switch (sortBy) {
-    case 'momentum_score': {
-      const reviewComparison = (right.reviewsAdded7d ?? Number.NEGATIVE_INFINITY) - (left.reviewsAdded7d ?? Number.NEGATIVE_INFINITY);
-      if (reviewComparison !== 0) {
-        return reviewComparison;
-      }
-
-      const ccuComparison = (right.ccuPeak ?? Number.NEGATIVE_INFINITY) - (left.ccuPeak ?? Number.NEGATIVE_INFINITY);
-      if (ccuComparison !== 0) {
-        return ccuComparison;
-      }
-
-      return (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
-    }
-    case 'sentiment_delta': {
-      const reviewComparison = (right.reviewsAdded30d ?? Number.NEGATIVE_INFINITY) - (left.reviewsAdded30d ?? Number.NEGATIVE_INFINITY);
-      if (reviewComparison !== 0) {
-        return reviewComparison;
-      }
-
-      const totalReviewComparison = (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
-      if (totalReviewComparison !== 0) {
-        return totalReviewComparison;
-      }
-
-      return (right.ccuPeak ?? Number.NEGATIVE_INFINITY) - (left.ccuPeak ?? Number.NEGATIVE_INFINITY);
-    }
-    case 'velocity_7d':
-    case 'velocity_acceleration': {
-      const reviewComparison = (right.reviewsAdded7d ?? Number.NEGATIVE_INFINITY) - (left.reviewsAdded7d ?? Number.NEGATIVE_INFINITY);
-      if (reviewComparison !== 0) {
-        return reviewComparison;
-      }
-
-      const totalReviewComparison = (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
-      if (totalReviewComparison !== 0) {
-        return totalReviewComparison;
-      }
-
-      return (right.ccuPeak ?? Number.NEGATIVE_INFINITY) - (left.ccuPeak ?? Number.NEGATIVE_INFINITY);
-    }
-    case 'reviews_added_7d': {
-      const velocityComparison = (right.velocity7d ?? Number.NEGATIVE_INFINITY) - (left.velocity7d ?? Number.NEGATIVE_INFINITY);
-      if (velocityComparison !== 0) {
-        return velocityComparison;
-      }
-
-      const totalReviewComparison = (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
-      if (totalReviewComparison !== 0) {
-        return totalReviewComparison;
-      }
-
-      return (right.ccuPeak ?? Number.NEGATIVE_INFINITY) - (left.ccuPeak ?? Number.NEGATIVE_INFINITY);
-    }
-    case 'reviews_added_30d':
-      return (right.totalReviews ?? Number.NEGATIVE_INFINITY) - (left.totalReviews ?? Number.NEGATIVE_INFINITY);
-    default:
-      return 0;
-  }
-}
-
-function compareResultsByMetric(
-  left: ScreenedGameResult,
-  right: ScreenedGameResult,
-  sortBy: ScreenGamesArgs['sort_by'],
-  sortOrder: NonNullable<ScreenGamesArgs['sort_order']>
-): number {
-  const leftMetric = getSortValue(left, sortBy);
-  const rightMetric = getSortValue(right, sortBy);
-  const leftMissing = leftMetric === null || leftMetric === undefined;
-  const rightMissing = rightMetric === null || rightMetric === undefined;
-
-  if (leftMissing !== rightMissing) {
-    return leftMissing ? 1 : -1;
-  }
-
-  const metricComparison = leftMissing || rightMissing ? 0 : (leftMetric - rightMetric);
-  if (metricComparison !== 0) {
-    return sortOrder === 'asc' ? metricComparison : -metricComparison;
-  }
-
-  const supportComparison = compareSupportSignals(left, right, sortBy);
-  if (supportComparison !== 0) {
-    return supportComparison;
-  }
-
-  const leftReviews = left.totalReviews ?? Number.NEGATIVE_INFINITY;
-  const rightReviews = right.totalReviews ?? Number.NEGATIVE_INFINITY;
-  const reviewComparison = leftReviews - rightReviews;
-  if (reviewComparison !== 0) {
-    return -reviewComparison;
-  }
-
-  return left.name.localeCompare(right.name);
-}
-
-function sortResults(
-  results: ScreenedGameResult[],
-  sortBy: ScreenGamesArgs['sort_by'],
-  sortOrder: NonNullable<ScreenGamesArgs['sort_order']>
-): ScreenedGameResult[] {
-  return [...results].sort((left, right) =>
-    compareResultsByMetric(left, right, sortBy, sortOrder)
-  );
-}
-
-function getIndieSignalWeight(result: ScreenedGameResult): number {
-  let weight = 0;
-
-  if (result.publisherGameCount !== null && result.publisherGameCount <= SMALL_CATALOG_MAX) {
-    weight += 2;
-  }
-  if (result.isSelfPublished) {
-    weight += 2;
-  }
-  if (result.hasIndieTag) {
-    weight += 1;
-  }
-
-  return weight;
-}
-
-function buildSupportMetadata(
-  result: ScreenedGameResult,
-  sortBy: ScreenGamesArgs['sort_by']
-): Pick<ScreenedGameResult, 'supportLevel' | 'supportReasons'> {
-  const reasons: string[] = [];
-  let score = 0;
-
-  if (sortBy === 'momentum_score') {
-    const reviewsAdded7d = result.reviewsAdded7d ?? 0;
-    const ccuPeak = result.ccuPeak ?? 0;
-    if (reviewsAdded7d >= 10) {
-      score += 2;
-      reasons.push(`${reviewsAdded7d} reviews added in the last 7 days`);
-    } else if (reviewsAdded7d >= DEFAULT_MOMENTUM_MIN_REVIEWS_ADDED_7D) {
-      score += 1;
-      reasons.push(`${reviewsAdded7d} reviews added in the last 7 days`);
-    }
-
-    if (ccuPeak >= 100) {
-      score += 2;
-      reasons.push(`Peak CCU ${ccuPeak.toLocaleString()}`);
-    } else if (ccuPeak >= 5) {
-      score += 1;
-      reasons.push(`Peak CCU ${ccuPeak.toLocaleString()}`);
-    }
-
-    const ccuGrowth = formatSignedPercent(result.ccuGrowth7dPercent);
-    if (ccuGrowth) {
-      reasons.push(`CCU growth ${ccuGrowth} over 7 days`);
-    }
-  }
-
-  if (sortBy === 'sentiment_delta') {
-    const reviewsAdded30d = result.reviewsAdded30d ?? 0;
-    const sentimentDelta = formatSignedPercent(result.sentimentDelta);
-    if (reviewsAdded30d >= SATURATED_SENTIMENT_MIN_REVIEWS_ADDED_30D) {
-      score += 2;
-      reasons.push(`${reviewsAdded30d} reviews added in the last 30 days`);
-    } else if (reviewsAdded30d >= DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D) {
-      score += 1;
-      reasons.push(`${reviewsAdded30d} reviews added in the last 30 days`);
-    }
-
-    if (sentimentDelta) {
-      reasons.push(`Sentiment delta ${sentimentDelta}`);
-    }
-  }
-
-  if (
-    sortBy === 'velocity_7d' ||
-    sortBy === 'velocity_acceleration' ||
-    sortBy === 'reviews_added_7d'
-  ) {
-    const reviewsAdded7d = result.reviewsAdded7d ?? 0;
-    if (reviewsAdded7d >= 25) {
-      score += 2;
-      reasons.push(`${reviewsAdded7d} reviews added in the last 7 days`);
-    } else if (reviewsAdded7d >= DEFAULT_REVIEW_ACTIVITY_MIN_REVIEWS_ADDED_7D) {
-      score += 1;
-      reasons.push(`${reviewsAdded7d} reviews added in the last 7 days`);
-    }
-
-    if (result.velocity7d !== null && result.velocity7d !== undefined) {
-      reasons.push(`Review velocity ${Number(result.velocity7d.toFixed(2))}/day over 7 days`);
-    }
-  }
-
-  if (sortBy === 'reviews_added_30d') {
-    const reviewsAdded30d = result.reviewsAdded30d ?? 0;
-    if (reviewsAdded30d >= 25) {
-      score += 2;
-      reasons.push(`${reviewsAdded30d} reviews added in the last 30 days`);
-    } else if (reviewsAdded30d >= DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D) {
-      score += 1;
-      reasons.push(`${reviewsAdded30d} reviews added in the last 30 days`);
-    }
-  }
-
-  const totalReviews = result.totalReviews ?? 0;
-  if (totalReviews >= 10000) {
-    score += 2;
-    reasons.push(`${totalReviews.toLocaleString()} total reviews`);
-  } else if (totalReviews >= 1000) {
-    score += 1;
-    reasons.push(`${totalReviews.toLocaleString()} total reviews`);
-  }
-
-  if (result.matchedVerifiedTags.length > 0) {
-    reasons.push(`Verified tags: ${result.matchedVerifiedTags.join(', ')}`);
-  }
-
-  let supportLevel: SupportLevel = 'low';
-  if (score >= 4) {
-    supportLevel = 'high';
-  } else if (score >= 2) {
-    supportLevel = 'medium';
-  }
-
-  return {
-    supportLevel,
-    supportReasons: reasons,
-  };
-}
-
-function applySupportFilters(
-  results: ScreenedGameResult[],
-  args: ScreenGamesArgs
-): ScreenedGameResult[] {
-  const filters = args.filters ?? {};
-  const minReviewsAdded7d = typeof filters.min_reviews_added_7d === 'number'
-    ? filters.min_reviews_added_7d
-    : args.sort_by === 'momentum_score'
-      ? DEFAULT_MOMENTUM_MIN_REVIEWS_ADDED_7D
-      : undefined;
-  const minReviewsAdded30d = typeof filters.min_reviews_added_30d === 'number'
-    ? filters.min_reviews_added_30d
-    : args.sort_by === 'sentiment_delta'
-      ? DEFAULT_SENTIMENT_MIN_REVIEWS_ADDED_30D
-      : undefined;
-
-  return results.filter((result) => {
-    if (
-      typeof minReviewsAdded7d === 'number' &&
-      (result.reviewsAdded7d ?? 0) < minReviewsAdded7d
-    ) {
-      return false;
-    }
-
-    if (
-      typeof minReviewsAdded30d === 'number' &&
-      (result.reviewsAdded30d ?? 0) < minReviewsAdded30d
-    ) {
-      return false;
-    }
-
-    if (
-      filters.verified_tags_any?.length &&
-      result.matchedVerifiedTags.length === 0
-    ) {
-      return false;
-    }
-
-    if (
-      args.sort_by === 'sentiment_delta' &&
-      Math.abs(result.sentimentDelta ?? 0) === 100 &&
-      (result.reviewsAdded30d ?? 0) < SATURATED_SENTIMENT_MIN_REVIEWS_ADDED_30D
-    ) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
-function applyTrendProfileFilters(
-  results: ScreenedGameResult[],
-  args: ScreenGamesArgs
-): ScreenedGameResult[] {
-  if (args.trend_profile !== 'market_leaders') {
-    return results;
-  }
-
-  return results.filter((result) => result.supportLevel !== 'low');
-}
-
-function applyIndieHeuristic(
-  results: ScreenedGameResult[],
-  sortBy: ScreenGamesArgs['sort_by'],
-  sortOrder: NonNullable<ScreenGamesArgs['sort_order']>
-): ScreenedGameResult[] {
-  return [...results]
-    .filter((result) =>
-      result.publisherGameCount !== null &&
-      result.publisherGameCount <= SMALL_CATALOG_MAX &&
-      (result.isSelfPublished || result.hasIndieTag)
-    )
-    .sort((left, right) => {
-      const signalComparison = getIndieSignalWeight(right) - getIndieSignalWeight(left);
-      if (signalComparison !== 0) {
-        return signalComparison;
-      }
-
-      return compareResultsByMetric(left, right, sortBy, sortOrder);
-    });
-}
-
-async function resolveMatchingIds(
-  supabase: ServiceSupabase,
-  table: IdLookupTable,
-  idColumn: IdLookupColumn,
-  terms?: string[]
-): Promise<number[] | undefined> {
-  if (!terms || terms.length === 0) {
-    return undefined;
-  }
-
-  const resolvedIds = new Set<number>();
-
-  for (const term of terms) {
-    const { data, error } = await supabase
-      .from(table)
-      .select(idColumn)
-      .ilike('name', `%${term}%`);
-
-    if (error) {
-      throw new Error(`Failed to resolve ${table} for "${term}": ${error.message}`);
-    }
-
-    const rows = (data ?? []) as unknown as Array<Record<string, number | null>>;
-    const matchingIds = rows
-      .map((row) => row[idColumn])
-      .filter((value): value is number => typeof value === 'number');
-
-    if (matchingIds.length === 0) {
-      return [];
-    }
-
-    for (const id of matchingIds) {
-      resolvedIds.add(id);
-    }
-  }
-
-  return [...resolvedIds];
-}
-
-async function resolveExactTagEntries(
-  supabase: ServiceSupabase,
-  tagNames: string[]
-): Promise<ExactTagEntry[] | undefined> {
-  if (tagNames.length === 0) {
-    return undefined;
-  }
-
-  const resolvedEntries = new Map<number, string>();
-
-  for (const tagName of tagNames) {
-    const { data, error } = await supabase
-      .from('steam_tags')
-      .select('tag_id, name')
-      .ilike('name', tagName);
-
-    if (error) {
-      throw new Error(`Failed to resolve exact Steam tag "${tagName}": ${error.message}`);
-    }
-
-    const rows = (data ?? []) as Array<{ tag_id: number | null; name: string | null }>;
-    const matchingEntries = rows
-      .filter((row): row is { tag_id: number; name: string } =>
-        typeof row.tag_id === 'number' &&
-        typeof row.name === 'string' &&
-        row.name.length > 0
-      );
-
-    if (matchingEntries.length === 0) {
-      return [];
-    }
-
-    for (const entry of matchingEntries) {
-      resolvedEntries.set(entry.tag_id, entry.name);
-    }
-  }
-
-  return [...resolvedEntries.entries()].map(([id, name]) => ({ id, name }));
-}
-
-async function fetchVelocityRows(
-  supabase: ServiceSupabase,
-  appids: number[]
-): Promise<Map<number, ReviewVelocityRow>> {
-  if (appids.length === 0) {
-    return new Map();
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from('review_velocity_stats')
-    .select('appid, reviews_added_7d, reviews_added_30d, last_delta_date')
-    .in('appid', appids);
-
-  if (error) {
-    throw new Error(`Failed to fetch review velocity data: ${error.message}`);
-  }
-
-  const rows = (data ?? []) as ReviewVelocityRow[];
-  return new Map(rows.map((row) => [row.appid, row]));
-}
-
-async function fetchTagMembership(
-  supabase: ServiceSupabase,
-  appids: number[],
-  tagEntries: ExactTagEntry[]
-): Promise<Map<number, string[]>> {
-  if (appids.length === 0 || tagEntries.length === 0) {
-    return new Map();
-  }
-
-  const tagIds = tagEntries.map((entry) => entry.id);
-  const tagNamesById = new Map(tagEntries.map((entry) => [entry.id, entry.name]));
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from('app_steam_tags')
-    .select('appid, tag_id')
-    .in('appid', appids)
-    .in('tag_id', tagIds);
-
-  if (error) {
-    throw new Error(`Failed to fetch app tag membership: ${error.message}`);
-  }
-
-  const rows = (data ?? []) as Array<{ appid: number | null; tag_id: number | null }>;
-  const membership = new Map<number, string[]>();
-
-  for (const row of rows) {
-    if (typeof row.appid !== 'number' || typeof row.tag_id !== 'number') {
-      continue;
-    }
-
-    const tagName = tagNamesById.get(row.tag_id);
-    if (!tagName) {
-      continue;
-    }
-
-    const existingTags = membership.get(row.appid) ?? [];
-    if (!existingTags.includes(tagName)) {
-      existingTags.push(tagName);
-      membership.set(row.appid, existingTags);
-    }
-  }
-
-  return membership;
-}
-
-async function fetchSemanticContentValidationAppids(
-  args: ScreenGamesArgs
-): Promise<{ description: string; appids: Set<number> } | null> {
-  if (!shouldApplySemanticContentValidation(args)) {
-    return null;
-  }
-
-  const contentTerms = getContentValidationTerms(args.filters);
-  if (contentTerms.length === 0) {
-    return null;
-  }
-
-  const description = `${contentTerms.join(' ')} game`;
-  const conceptResult = await searchByConcept({
-    description,
-    filters: buildSemanticContentValidationFilters(args.filters),
-    limit: SEMANTIC_CONTENT_VALIDATION_LIMIT,
-  });
-
-  if (!conceptResult.success || !conceptResult.results?.length) {
-    return null;
-  }
-
-  const appids = new Set(
-    conceptResult.results
-      .map((result) => result.id)
-      .filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
-  );
-
-  return appids.size > 0 ? { description, appids } : null;
-}
-
-async function fetchScreenedApps(
-  supabase: ServiceSupabase,
+function buildTigerDiscoverMomentumRequest(
   args: ScreenGamesArgs,
-  resolvedTagIds?: number[],
-  resolvedGenreIds?: number[],
-  resolvedCategoryIds?: number[]
-): Promise<RpcAppRow[]> {
+  limit: number
+): Record<string, unknown> | null {
   const filters = args.filters ?? {};
-  const sortOrder = args.sort_order ?? 'desc';
-  const excludedAppIds = Array.isArray(args.excludeAppIds)
-    ? args.excludeAppIds.filter((value): value is number => typeof value === 'number')
-    : [];
-  const excludedAppIdSet = new Set(excludedAppIds);
-  const limit = buildPrefetchLimit(clampLimit(args.limit) + excludedAppIds.length);
-  const steamDeck = filters.steam_deck?.length ? filters.steam_deck.join(',') : undefined;
+  const combinedTags = [...(filters.tags ?? []), ...(filters.verified_tags_any ?? [])].filter(
+    (value, index, values) => values.indexOf(value) === index
+  );
+  const unsupported: string[] = [];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)('get_apps_with_filters', {
-    p_type: 'game',
-    p_sort_field: normalizeRpcSortField(args.sort_by),
-    p_sort_order: sortOrder,
-    p_limit: limit,
-    p_offset: 0,
-    p_search: undefined,
-    p_min_ccu: filters.min_ccu,
-    p_max_ccu: undefined,
-    p_min_owners: undefined,
-    p_max_owners: undefined,
-    p_min_reviews: filters.min_reviews,
-    p_max_reviews: filters.max_reviews,
-    p_min_score: filters.min_score,
-    p_max_score: filters.max_score,
-    p_min_price: undefined,
-    p_max_price: undefined,
-    p_min_playtime: undefined,
-    p_max_playtime: undefined,
-    p_min_growth_7d: undefined,
-    p_max_growth_7d: undefined,
-    p_min_growth_30d: undefined,
-    p_max_growth_30d: undefined,
-    p_min_momentum: undefined,
-    p_max_momentum: undefined,
-    p_min_sentiment_delta: filters.min_sentiment_delta,
-    p_max_sentiment_delta: filters.max_sentiment_delta,
-    p_velocity_tier: undefined,
-    p_min_active_pct: undefined,
-    p_min_review_rate: undefined,
-    p_min_value_score: undefined,
-    p_genres: resolvedGenreIds,
-    p_genre_mode: resolvedGenreIds?.length ? 'all' : 'any',
-    p_tags: resolvedTagIds,
-    p_tag_mode: resolvedTagIds?.length ? 'all' : 'any',
-    p_categories: resolvedCategoryIds,
-    p_has_workshop: undefined,
-    p_platforms: filters.platforms,
-    p_platform_mode: filters.platforms?.length ? 'all' : 'any',
-    p_steam_deck: steamDeck,
-    p_controller: undefined,
-    p_min_age: undefined,
-    p_max_age: undefined,
-    p_release_year: filters.release_year?.gte === filters.release_year?.lte
-      ? filters.release_year?.gte
-      : undefined,
-    p_early_access: undefined,
-    p_min_hype: undefined,
-    p_max_hype: undefined,
-    p_publisher_search: undefined,
-    p_developer_search: undefined,
-    p_self_published: filters.self_published,
-    p_min_vs_publisher: undefined,
-    p_publisher_size: filters.publisher_size,
-    p_ccu_tier: undefined,
-    p_is_free: filters.is_free,
-    p_min_discount: undefined,
-  });
+  if (filters.categories?.length) unsupported.push('categories');
+  if (typeof filters.max_score === 'number') unsupported.push('max_score');
+  if (typeof filters.min_sentiment_delta === 'number') unsupported.push('min_sentiment_delta');
+  if (typeof filters.max_sentiment_delta === 'number') unsupported.push('max_sentiment_delta');
+  if (typeof filters.self_published === 'boolean') unsupported.push('self_published');
+  if (filters.publisher_size) unsupported.push('publisher_size');
+  if (Array.isArray(args.excludeAppIds) && args.excludeAppIds.length > 0) unsupported.push('excludeAppIds');
 
-  if (error) {
-    throw new Error(`Failed to fetch screened games: ${error.message}`);
+  if (unsupported.length > 0) {
+    return null;
   }
-
-  let rows = (data ?? []) as RpcAppRow[];
-
-  if (excludedAppIdSet.size > 0) {
-    rows = rows.filter((row) => !excludedAppIdSet.has(row.appid));
-  }
-
-  if (filters.release_year?.gte !== undefined || filters.release_year?.lte !== undefined) {
-    rows = rows.filter((row) => {
-      if (!row.release_date) {
-        return false;
-      }
-      const year = new Date(row.release_date).getUTCFullYear();
-      if (filters.release_year?.gte !== undefined && year < filters.release_year.gte) {
-        return false;
-      }
-      if (filters.release_year?.lte !== undefined && year > filters.release_year.lte) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  return rows;
-}
-
-function mapScreenedResult(row: RpcAppRow, velocityRow?: ReviewVelocityRow): ScreenedGameResult {
-  const isSelfPublished = isSelfPublishedRow(row);
 
   return {
-    appid: row.appid,
-    name: row.name,
-    isFree: row.is_free,
-    ccuPeak: row.ccu_peak,
-    totalReviews: row.total_reviews,
-    reviewPercentage: row.positive_percentage ?? row.review_score,
-    priceDollars: toPriceDollars(row.price_cents),
-    discountPercent: row.current_discount_percent,
-    ccuGrowth7dPercent: row.ccu_growth_7d_percent,
-    ccuGrowth30dPercent: row.ccu_growth_30d_percent,
-    velocity7d: row.velocity_7d,
-    velocity30d: row.velocity_30d,
-    velocityAcceleration: row.velocity_acceleration,
-    sentimentDelta: row.sentiment_delta,
-    momentumScore: row.momentum_score,
-    reviewsAdded7d: velocityRow?.reviews_added_7d ?? null,
-    reviewsAdded30d: velocityRow?.reviews_added_30d ?? null,
-    metricDate: row.metric_date,
-    lastDeltaDate: velocityRow?.last_delta_date ?? null,
-    releaseDate: row.release_date,
-    publisherId: row.publisher_id,
-    publisherName: row.publisher_name,
-    publisherGameCount: row.publisher_game_count,
-    developerId: row.developer_id,
-    developerName: row.developer_name,
-    isSelfPublished,
+    filters: {
+      ...(combinedTags.length ? { tags: combinedTags } : {}),
+      ...(filters.genres?.length ? { genres: filters.genres } : {}),
+      ...(filters.platforms?.length ? { platforms: filters.platforms } : {}),
+      ...(filters.steam_deck?.length ? { steamDeck: filters.steam_deck } : {}),
+      ...(typeof filters.is_free === 'boolean' ? { isFree: filters.is_free } : {}),
+      ...(typeof filters.min_reviews === 'number' ? { minReviews: filters.min_reviews } : {}),
+      ...(typeof filters.max_reviews === 'number' ? { maxReviews: filters.max_reviews } : {}),
+      ...(typeof filters.min_reviews_added_7d === 'number'
+        ? { minReviewsAdded7d: filters.min_reviews_added_7d }
+        : {}),
+      ...(typeof filters.min_reviews_added_30d === 'number'
+        ? { minReviewsAdded30d: filters.min_reviews_added_30d }
+        : {}),
+      ...(typeof filters.min_score === 'number' ? { minReviewScore: filters.min_score } : {}),
+      ...(typeof filters.min_ccu === 'number' ? { minCcu: filters.min_ccu } : {}),
+      ...(filters.release_year
+        ? {
+            releaseYear: {
+              ...(typeof filters.release_year.gte === 'number' ? { gte: filters.release_year.gte } : {}),
+              ...(typeof filters.release_year.lte === 'number' ? { lte: filters.release_year.lte } : {}),
+            },
+          }
+        : {}),
+    },
+    indieHeuristic: args.indie_heuristic ?? false,
+    limit,
+    sortBy: args.sort_by,
+    sortDirection: args.sort_order ?? 'desc',
+    timeframe: args.timeframe ?? '7d',
+  };
+}
+
+async function tryTigerScreenGames(
+  args: ScreenGamesArgs,
+  limit: number
+): Promise<ScreenGamesResult | null> {
+  const request = buildTigerDiscoverMomentumRequest(args, limit);
+  if (!request) {
+    return null;
+  }
+
+  const response = await postToQueryApi<TigerDiscoverMomentumResponse>(
+    '/v1/contracts/discover-momentum',
+    request
+  );
+
+  if (!response.ok || !response.data) {
+    return null;
+  }
+
+  const matchedVerifiedTags = [...new Set(args.filters?.verified_tags_any ?? [])];
+  const results: ScreenedGameResult[] = (response.data.items ?? []).map((item) => ({
+    appid: item.appid,
+    ccuGrowth30dPercent: item.ccuGrowth30dPercent ?? null,
+    ccuGrowth7dPercent: item.ccuGrowth7dPercent ?? null,
+    ccuPeak: item.ccuPeak ?? null,
+    developerId: null,
+    developerName: item.developerName ?? null,
+    discountPercent: item.discountPercent ?? null,
     hasIndieTag: false,
-    matchedVerifiedTags: [],
-    indieSignals: buildIndieSignals(row.publisher_game_count, isSelfPublished, false),
-    supportLevel: 'low',
-    supportReasons: [],
-  };
-}
+    indieSignals: item.isSelfPublished ? ['self_published'] : [],
+    isFree: item.isFree,
+    isSelfPublished: item.isSelfPublished ?? false,
+    lastDeltaDate: null,
+    matchedVerifiedTags,
+    metricDate: null,
+    momentumScore: item.momentumScore ?? null,
+    name: item.name,
+    priceDollars: typeof item.priceCents === 'number' ? Number((item.priceCents / 100).toFixed(2)) : null,
+    publisherGameCount: null,
+    publisherId: null,
+    publisherName: item.publisherName ?? null,
+    releaseDate: item.releaseDate ?? null,
+    reviewPercentage: item.reviewPercentage ?? null,
+    reviewsAdded30d: item.reviewsAdded30d ?? null,
+    reviewsAdded7d: item.reviewsAdded7d ?? null,
+    sentimentDelta: item.sentimentDelta ?? null,
+    supportLevel: item.supportLevel ?? 'medium',
+    supportReasons: item.supportReasons ?? [],
+    totalReviews: item.totalReviews ?? null,
+    velocity30d: item.velocity30d ?? null,
+    velocity7d: item.velocity7d ?? null,
+    velocityAcceleration: item.velocityAcceleration ?? null,
+  }));
 
-function buildSufficiency(results: ScreenedGameResult[]): ToolSufficiencyMetadata {
-  if (results.length === 0) {
-    return {
-      result_shape: 'broad_discovery',
-      sufficient_to_answer: true,
-      sufficiency_reason: 'No qualifying games matched the current screen. Respond directly and keep the hard filters intact.',
-    };
-  }
-
-  if (results.length <= 5) {
-    return {
-      result_shape: 'broad_discovery',
-      sufficient_to_answer: true,
-      sufficiency_reason: 'Returned a sparse but precise screened result. Respond directly and say the qualifying set is limited if helpful.',
-    };
-  }
-
-  return {
-    result_shape: 'broad_discovery',
-    sufficient_to_answer: true,
-    sufficiency_reason: 'Returned a precise screened ranking. Respond directly from these rows.',
-  };
+  return attachToolExecutionProvenance(
+    {
+      success: true,
+      ranking_metric: args.sort_by,
+      ranking_label: response.data.rankingLabel ?? getRankingLabel(args.sort_by),
+      ranking_definition: response.data.rankingDefinition ?? getRankingDefinition(args.sort_by),
+      timeframe: response.data.timeframe ?? (args.timeframe ?? '7d'),
+      timeframe_label: buildTimeframeLabel(args.timeframe ?? '7d', response.data.timeframeLabel),
+      filters_applied: response.data.filtersApplied ?? formatFiltersApplied(args),
+      indie_definition: args.indie_heuristic ? getIndieDefinition() : undefined,
+      recommended_columns: getRecommendedColumns(args.sort_by, args.trend_profile),
+      response_guidance: getResponseGuidance(args.sort_by, args.trend_profile),
+      results,
+      total_found: results.length,
+      sufficient_to_answer: response.data.sufficientToAnswer ?? results.length > 0,
+      sufficiency_reason:
+        results.length > 0
+          ? 'Tiger momentum results are sufficient to answer directly.'
+          : 'No Tiger momentum candidates matched the requested filters.',
+    },
+    TIGER_SCREEN_GAMES_PROVENANCE
+  );
 }
 
 export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesResult> {
-  const supabase = getServiceSupabase();
-  const timeframe = args.timeframe ?? '7d';
-  const sortOrder = args.sort_order ?? 'desc';
-  const baseFiltersApplied = formatFiltersApplied(args);
-  const recommendedColumns = getRecommendedColumns(args.sort_by, args.trend_profile);
-  const responseGuidance = getResponseGuidance(args.sort_by, args.trend_profile);
-
   try {
-    const [
-      resolvedTagIds,
-      resolvedGenreIds,
-      resolvedCategoryIds,
-      resolvedVerifiedTagEntries,
-      resolvedIndieTagEntries,
-    ] = await Promise.all([
-      resolveMatchingIds(supabase, 'steam_tags', 'tag_id', args.filters?.tags),
-      resolveMatchingIds(supabase, 'steam_genres', 'genre_id', args.filters?.genres),
-      resolveMatchingIds(supabase, 'steam_categories', 'category_id', args.filters?.categories),
-      resolveExactTagEntries(supabase, args.filters?.verified_tags_any ?? []),
-      args.indie_heuristic
-        ? resolveExactTagEntries(supabase, [INDIE_TAG_TERM])
-        : Promise.resolve(undefined),
-    ]);
-
-    if (
-      resolvedTagIds?.length === 0 ||
-      resolvedGenreIds?.length === 0 ||
-      resolvedCategoryIds?.length === 0 ||
-      resolvedVerifiedTagEntries?.length === 0
-    ) {
-      const emptyResults: ScreenedGameResult[] = [];
-      return {
-        success: true,
-        ranking_metric: args.sort_by,
-        ranking_label: getRankingLabel(args.sort_by),
-        ranking_definition: getRankingDefinition(args.sort_by),
-        timeframe,
-        timeframe_label: timeframe === 'current' ? 'latest available metrics snapshot' : `${timeframe} rolling window`,
-        recommended_columns: recommendedColumns,
-        response_guidance: responseGuidance,
-        filters_applied: baseFiltersApplied,
-        indie_definition: args.indie_heuristic
-          ? getIndieDefinition()
-          : undefined,
-        results: emptyResults,
-        total_found: 0,
-        ...buildSufficiency(emptyResults),
-      };
+    const tigerResult = await tryTigerScreenGames(args, clampLimit(args.limit));
+    if (tigerResult) {
+      return tigerResult;
     }
-
-    let appRows: RpcAppRow[];
-    if (args.indie_heuristic) {
-      const candidateArgs = ['indie', 'mid'].map((publisherSize) => ({
-        ...args,
-        filters: {
-          ...args.filters,
-          self_published: undefined,
-          publisher_size: publisherSize as 'indie' | 'mid',
-        },
-      }));
-
-      const appRowsByBucket = await Promise.all(
-        candidateArgs.map((candidateArgsForBucket) =>
-          fetchScreenedApps(
-            supabase,
-            candidateArgsForBucket,
-            resolvedTagIds,
-            resolvedGenreIds,
-            resolvedCategoryIds
-          )
-        )
-      );
-
-      appRows = [...new Map(
-        appRowsByBucket
-          .flat()
-          .map((row) => [row.appid, row])
-      ).values()];
-    } else {
-      appRows = await fetchScreenedApps(
-        supabase,
-        args,
-        resolvedTagIds,
-        resolvedGenreIds,
-        resolvedCategoryIds
-      );
-    }
-
-    const appids = appRows.map((row) => row.appid);
-    const [velocityRows, verifiedTagMembership, indieTagMembership, semanticContentValidation] = await Promise.all([
-      fetchVelocityRows(supabase, appids),
-      resolvedVerifiedTagEntries?.length
-        ? fetchTagMembership(supabase, appids, resolvedVerifiedTagEntries)
-        : Promise.resolve(new Map<number, string[]>()),
-      args.indie_heuristic && resolvedIndieTagEntries?.length
-        ? fetchTagMembership(supabase, appids, resolvedIndieTagEntries)
-        : Promise.resolve(new Map<number, string[]>()),
-      fetchSemanticContentValidationAppids(args),
-    ]);
-
-    const mappedResults = appRows.map((row) => {
-      const baseResult = mapScreenedResult(row, velocityRows.get(row.appid));
-      const matchedVerifiedTags = verifiedTagMembership.get(row.appid) ?? [];
-      const hasIndieTag = (indieTagMembership.get(row.appid)?.length ?? 0) > 0;
-
-      return {
-        ...baseResult,
-        hasIndieTag,
-        matchedVerifiedTags,
-        indieSignals: buildIndieSignals(
-          row.publisher_game_count,
-          baseResult.isSelfPublished,
-          hasIndieTag
-        ),
-      };
-    });
-    const contentValidatedResults =
-      semanticContentValidation?.appids.size
-        ? mappedResults.filter((result) => semanticContentValidation.appids.has(result.appid))
-        : mappedResults;
-    const supportedResults = applySupportFilters(contentValidatedResults, args).map((result) => ({
-      ...result,
-      ...buildSupportMetadata(result, args.sort_by),
-    }));
-    const profileFilteredResults = applyTrendProfileFilters(supportedResults, args);
-    const rankedResults = args.indie_heuristic
-      ? applyIndieHeuristic(profileFilteredResults, args.sort_by, sortOrder)
-      : sortResults(profileFilteredResults, args.sort_by, sortOrder);
-    const sortedResults = rankedResults.slice(0, clampLimit(args.limit));
-    const timeframeMetadata = buildTimeframeMetadata(timeframe, sortedResults);
-    const filtersApplied = semanticContentValidation
-      ? [...baseFiltersApplied, `semantic content validation: ${semanticContentValidation.description}`]
-      : baseFiltersApplied;
 
     return {
-      success: true,
+      success: false,
       ranking_metric: args.sort_by,
       ranking_label: getRankingLabel(args.sort_by),
       ranking_definition: getRankingDefinition(args.sort_by),
-      timeframe,
-      timeframe_label: timeframeMetadata.timeframe_label,
-      window_start: timeframeMetadata.window_start,
-      window_end: timeframeMetadata.window_end,
-      recommended_columns: recommendedColumns,
-      response_guidance: responseGuidance,
-      filters_applied: filtersApplied,
-      indie_definition: args.indie_heuristic
-        ? getIndieDefinition()
-        : undefined,
-      results: sortedResults,
-      total_found: rankedResults.length,
-      ...buildSufficiency(sortedResults),
+      timeframe: args.timeframe ?? '7d',
+      timeframe_label: buildTimeframeLabel(args.timeframe ?? '7d'),
+      filters_applied: formatFiltersApplied(args),
+      recommended_columns: getRecommendedColumns(args.sort_by, args.trend_profile),
+      response_guidance: getResponseGuidance(args.sort_by, args.trend_profile),
+      error:
+        'Tiger discover-momentum could not serve this screen_games request. Rephrase with supported momentum filters or a narrower leaderboard prompt.',
+      unavailable: true,
     };
   } catch (error) {
     return {
@@ -1317,14 +488,12 @@ export async function screenGames(args: ScreenGamesArgs): Promise<ScreenGamesRes
       ranking_metric: args.sort_by,
       ranking_label: getRankingLabel(args.sort_by),
       ranking_definition: getRankingDefinition(args.sort_by),
-      timeframe,
-      timeframe_label: timeframe === 'current' ? 'latest available metrics snapshot' : `${timeframe} rolling window`,
-      recommended_columns: recommendedColumns,
-      response_guidance: responseGuidance,
-      filters_applied: baseFiltersApplied,
-      indie_definition: args.indie_heuristic
-        ? getIndieDefinition()
-        : undefined,
+      timeframe: args.timeframe ?? '7d',
+      timeframe_label: buildTimeframeLabel(args.timeframe ?? '7d'),
+      recommended_columns: getRecommendedColumns(args.sort_by, args.trend_profile),
+      response_guidance: getResponseGuidance(args.sort_by, args.trend_profile),
+      filters_applied: formatFiltersApplied(args),
+      indie_definition: args.indie_heuristic ? getIndieDefinition() : undefined,
       error: error instanceof Error ? error.message : 'Failed to screen games',
     };
   }

@@ -1,21 +1,12 @@
 import 'server-only';
 
+import { createHash } from 'node:crypto';
 import type { Database } from '@publisheriq/database';
 import {
   buildDiffPreview,
   ChangeFeedUnavailableError,
-  fetchChangeFeedActivityDetail,
-  fetchChangeFeedBurstDetail,
-  fetchChatRecentNewsTopicSearch,
-  fetchChatRecentNewsDigest,
-  fetchChatChangeActivityResponse,
-  fetchChatChangePatternCandidates,
   formatChangeLabel,
-  parseActivityId,
-  type ChatChangePatternCandidateRow,
-  type ChangeActivityDetail,
   type ChangeActivityMode,
-  type ChangeActivityRow,
   type ChangeRecentNewsFeedScope,
   type ChangeRecentNewsDigestItem,
   type ChangeRecentNewsTopicMatchItem,
@@ -24,7 +15,6 @@ import {
   type ChangeActivitySort,
   type ChangeActivityView,
   type ChangeActivityStoryKind,
-  type ChangeDetailEvent,
   type JsonValue,
 } from '@/app/(main)/changes/lib';
 import type { ToolCall } from '@/lib/llm/types';
@@ -67,6 +57,7 @@ const HIGH_CONFIDENCE_SIMILARITY = 0.72;
 const MINIMUM_CONFIDENCE_SIMILARITY = 0.45;
 const CLEAR_CONFIDENCE_MARGIN = 0.08;
 const MAX_AMBIGUITY_CANDIDATES = 3;
+const ENTITY_NAMESPACE = '8b8600d2-2b09-4f74-b95c-77f95fdf00f4';
 
 export type ChangePattern =
   | 'marketing_push'
@@ -212,47 +203,6 @@ interface PatternProofPacket {
   }>;
 }
 
-interface PatternCandidate {
-  appid: number;
-  name: string;
-  occurredAt: string;
-  confidence: 'high' | 'medium';
-  reasons: string[];
-  signalFamilies: ChangeActivitySignalFamily[];
-  storyKinds: string[];
-  activityIds: string[];
-  metrics: AppMetrics | null;
-  primaryProof: PatternProofPacket | null;
-}
-
-interface PatternAggregate {
-  appid: number;
-  name: string;
-  latestOccurredAt: string;
-  activityIds: string[];
-  signalFamilies: Set<ChangeActivitySignalFamily>;
-  storyKinds: Set<ChangeActivityStoryKind>;
-  announcementCount: number;
-  changeCount: number;
-}
-
-interface RawAppChangeFeedRow {
-  event_id: number;
-  appid: number;
-  app_name: string;
-  source: string;
-  change_type: Database['public']['Enums']['app_change_type'];
-  occurred_at: string;
-  before_value: JsonValue;
-  after_value: JsonValue;
-  context: JsonValue;
-  baseline_7d: JsonValue;
-  baseline_30d: JsonValue;
-  response_1d: JsonValue;
-  response_7d: JsonValue;
-  response_30d: JsonValue;
-}
-
 interface NewsTopicDefinition {
   key: string;
   canonicalQuery: string;
@@ -279,12 +229,28 @@ interface TigerResolveEntitiesResponse {
   }>;
 }
 
+interface TigerGetEntityOverviewResponse {
+  entity?: {
+    displayName: string;
+    entityKind: 'developer' | 'game' | 'publisher';
+    entityUid: string;
+    platformEntityId: string;
+  } | null;
+}
+
 interface TigerExplainChangesResponse {
   entity: {
     displayName: string;
     entityUid: string;
     platformEntityId: string;
   };
+  comparisonWindows?: {
+    baseline30d?: MetricsWindow | null;
+    baseline7d?: MetricsWindow | null;
+    response1d?: MetricsWindow | null;
+    response30d?: MetricsWindow | null;
+    response7d?: MetricsWindow | null;
+  } | null;
   moments?: Array<{
     events?: Array<{
       afterValue: unknown | null;
@@ -295,6 +261,112 @@ interface TigerExplainChangesResponse {
       occurredAt: string;
       source: string;
     }>;
+    linkedNews?: Array<{
+      feedLabel: string | null;
+      feedName: string | null;
+      publishedAt: string | null;
+      title: string | null;
+      url: string;
+    }>;
+    windowEnd?: string;
+    windowStart?: string;
+  }>;
+  sufficientToAnswer: boolean;
+  selectedMoment?: {
+    linkedNews?: Array<{
+      feedLabel: string | null;
+      feedName: string | null;
+      publishedAt: string | null;
+      title: string | null;
+      url: string;
+    }>;
+    sources?: string[];
+    windowEnd: string;
+    windowStart: string;
+  } | null;
+}
+
+interface TigerSearchChangeActivityResponse {
+  interpretedFilters?: {
+    appTypes?: string[];
+    days?: number;
+    mode?: string;
+    query?: string | null;
+    signalFamilies?: string[];
+    sort?: string;
+    view?: string;
+  };
+  items?: Array<{
+    activityId: string;
+    activityKind: 'announcement' | 'change';
+    appType: string | null;
+    appid: number;
+    externalUrl: string | null;
+    facts: string[];
+    hasBeforeAfter: boolean;
+    headline: string;
+    highlightLabels: string[];
+    isReleased: boolean | null;
+    name: string;
+    occurredAt: string;
+    relatedAnnouncementCount: number;
+    releaseDate: string | null;
+    signalFamilies: ChangeActivitySignalFamily[];
+    storyKind: ChangeActivityStoryKind;
+    summary: string;
+  }>;
+  sufficientToAnswer: boolean;
+}
+
+interface TigerSearchDocumentsResponse {
+  interpretedFilters?: {
+    endTime?: string;
+    entityUids?: string[];
+    feedScopes?: string[];
+    mode?: 'digest' | 'latest_item' | 'topic_search';
+    query?: string | null;
+    startTime?: string;
+  };
+  items?: Array<{
+    appName: string;
+    appid: number;
+    bodyPreview?: string | null;
+    entityUid: string;
+    excerpt?: string | null;
+    feedLabel: string | null;
+    feedName: string | null;
+    feedScope: string;
+    firstSeenAt: string;
+    gid: string;
+    matchReason: string | null;
+    publishedAt: string | null;
+    sortTime: string;
+    title: string | null;
+    url: string;
+  }>;
+  latestItem?: NonNullable<TigerSearchDocumentsResponse['items']>[number] | null;
+  sufficientToAnswer: boolean;
+}
+
+interface TigerDiscoverChangePatternsResponse {
+  interpretedFilters?: {
+    appTypes?: string[];
+    days?: number;
+    pattern?: ChangePattern;
+    query?: string | null;
+  };
+  items?: Array<{
+    activityIds: string[];
+    appType: string | null;
+    appid: number;
+    confidence: 'high' | 'medium';
+    metrics: AppMetrics | null;
+    name: string;
+    occurredAt: string;
+    primaryProof: PatternProofPacket | null;
+    reasons: string[];
+    signalFamilies: ChangeActivitySignalFamily[];
+    storyKinds: ChangeActivityStoryKind[];
   }>;
   sufficientToAnswer: boolean;
 }
@@ -313,6 +385,67 @@ const TIGER_GAME_TIMELINE_PROVENANCE: ChatExecutionProvenanceOverride = {
   migrationNotes:
     'get_game_change_timeline now uses Tiger resolve-entities plus explain-changes when the request can be mapped safely.',
   recommendedTigerContracts: ['resolveEntities', 'explainChanges'],
+};
+
+const TIGER_CHANGE_ACTIVITY_PROVENANCE: ChatExecutionProvenanceOverride = {
+  backendKinds: ['tiger_query_api'],
+  dataSources: [
+    'query_api:searchChangeActivity',
+    'relation:apps',
+    'relation:events_app_change_events',
+    'relation:docs_steam_news_items',
+    'relation:docs_steam_news_search_projection',
+  ],
+  migrationDisposition: 'already_tiger',
+  migrationNotes:
+    'Cross-game change discovery now runs through Tiger search-change-activity instead of the legacy change projection RPCs.',
+  recommendedTigerContracts: ['searchChangeActivity'],
+};
+
+const TIGER_CHANGE_PATTERNS_PROVENANCE: ChatExecutionProvenanceOverride = {
+  backendKinds: ['tiger_query_api'],
+  dataSources: [
+    'query_api:discoverChangePatterns',
+    'relation:apps',
+    'relation:latest_daily_metrics',
+    'relation:metrics_daily_metrics',
+    'relation:events_app_change_events',
+    'relation:docs_steam_news_items',
+    'relation:docs_steam_news_search_projection',
+  ],
+  migrationDisposition: 'already_tiger',
+  migrationNotes:
+    'Cross-game change-pattern discovery now runs through Tiger discover-change-patterns.',
+  recommendedTigerContracts: ['discoverChangePatterns'],
+};
+
+const TIGER_NEWS_DOCUMENTS_PROVENANCE: ChatExecutionProvenanceOverride = {
+  backendKinds: ['tiger_query_api'],
+  dataSources: [
+    'query_api:searchDocuments',
+    'relation:docs_steam_news_items',
+    'relation:docs_steam_news_search_projection',
+    'relation:apps',
+  ],
+  migrationDisposition: 'already_tiger',
+  migrationNotes:
+    'Recent-news digest, detail, and topic-search prompts now run through Tiger search-documents.',
+  recommendedTigerContracts: ['searchDocuments'],
+};
+
+const TIGER_CHANGE_DETAIL_PROVENANCE: ChatExecutionProvenanceOverride = {
+  backendKinds: ['tiger_query_api'],
+  dataSources: [
+    'query_api:explainChanges',
+    'relation:core_entities',
+    'relation:events_app_change_events',
+    'relation:docs_steam_news_items',
+    'relation:docs_steam_news_search_projection',
+  ],
+  migrationDisposition: 'already_tiger',
+  migrationNotes:
+    'Change drilldown and before/after detail now run through Tiger explain-changes.',
+  recommendedTigerContracts: ['explainChanges'],
 };
 
 const NEWS_TOPIC_DEFINITIONS: NewsTopicDefinition[] = [
@@ -539,76 +672,6 @@ function familyForChangeType(changeType: string): ChangeActivitySignalFamily {
     default:
       return 'store-page';
   }
-}
-
-function toChangeDetailEvent(row: RawAppChangeFeedRow): ChangeDetailEvent {
-  return {
-    eventId: row.event_id,
-    appid: row.appid,
-    source: row.source as 'storefront' | 'pics' | 'media',
-    changeType: row.change_type,
-    occurredAt: row.occurred_at,
-    beforeValue: row.before_value,
-    afterValue: row.after_value,
-    context:
-      row.context && typeof row.context === 'object' && !Array.isArray(row.context)
-        ? (row.context as Record<string, JsonValue | undefined>)
-        : {},
-  };
-}
-
-function normalizeMetricsWindow(value: JsonValue): MetricsWindow | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-
-  const payload = value as {
-    daily_metrics?: {
-      avg_price_cents?: number | null;
-      avg_discount_percent?: number | null;
-      max_total_reviews?: number | null;
-      avg_review_score?: number | null;
-      max_ccu_peak?: number | null;
-      max_positive_reviews?: number | null;
-      max_negative_reviews?: number | null;
-      review_score_desc?: string | null;
-    } | null;
-    ccu?: {
-      max_player_count?: number | null;
-    } | null;
-  };
-
-  const dailyMetrics = payload.daily_metrics ?? null;
-  const ccu = payload.ccu ?? null;
-
-  const normalized: MetricsWindow = {
-    ccuPeak: ccu?.max_player_count ?? dailyMetrics?.max_ccu_peak ?? null,
-    totalReviews: dailyMetrics?.max_total_reviews ?? null,
-    positiveReviews: dailyMetrics?.max_positive_reviews ?? null,
-    negativeReviews: dailyMetrics?.max_negative_reviews ?? null,
-    reviewScore: dailyMetrics?.avg_review_score ?? null,
-    reviewScoreLabel: dailyMetrics?.review_score_desc ?? null,
-    priceCents: dailyMetrics?.avg_price_cents ?? null,
-    discountPercent: dailyMetrics?.avg_discount_percent ?? null,
-  };
-
-  return Object.values(normalized).some((field) => field !== null) ? normalized : null;
-}
-
-function metricDelta(afterValue: number | null, beforeValue: number | null): number | null {
-  if (afterValue == null || beforeValue == null) {
-    return null;
-  }
-
-  return afterValue - beforeValue;
-}
-
-function percentLift(afterValue: number | null, beforeValue: number | null): number | null {
-  if (afterValue == null || beforeValue == null || beforeValue <= 0) {
-    return null;
-  }
-
-  return ((afterValue - beforeValue) / beforeValue) * 100;
 }
 
 async function resolveAppReference(args: {
@@ -1024,6 +1087,85 @@ function buildRecentNewsDateMeta(days: number): { days: number } & CheckedDateWi
   };
 }
 
+function uuidToBytes(uuid: string): Uint8Array {
+  const normalized = uuid.replace(/-/g, '');
+  return Uint8Array.from(
+    normalized.match(/.{1,2}/g)?.map((pair) => Number.parseInt(pair, 16)) ?? []
+  );
+}
+
+function bytesToUuid(bytes: Uint8Array): string {
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
+
+function uuidV5(namespace: string, value: string): string {
+  const namespaceBytes = uuidToBytes(namespace);
+  const valueBytes = Buffer.from(value, 'utf8');
+  const hash = createHash('sha1')
+    .update(namespaceBytes)
+    .update(valueBytes)
+    .digest();
+
+  const bytes = Uint8Array.from(hash.subarray(0, 16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  return bytesToUuid(bytes);
+}
+
+function buildTigerGameEntityUid(appid: number): string {
+  return uuidV5(ENTITY_NAMESPACE, `steam:game:${appid}`);
+}
+
+function mapTigerSearchDocumentItemToDigestItem(
+  item: NonNullable<TigerSearchDocumentsResponse['items']>[number]
+): ChangeRecentNewsDigestItem {
+  return {
+    appName: item.appName,
+    appType: 'game',
+    appid: item.appid,
+    bodyPreview: item.bodyPreview ?? null,
+    excerpt: item.excerpt ?? null,
+    feedLabel: item.feedLabel,
+    feedName: item.feedName,
+    firstSeenAt: item.firstSeenAt,
+    gid: item.gid,
+    publishedAt: item.publishedAt,
+    title: item.title,
+    url: item.url,
+  };
+}
+
+function mapTigerSearchDocumentItemToTopicItem(
+  item: NonNullable<TigerSearchDocumentsResponse['items']>[number]
+): ChangeRecentNewsTopicMatchItem {
+  return {
+    appName: item.appName,
+    appType: 'game',
+    appid: item.appid,
+    bodyPreview: item.bodyPreview ?? null,
+    excerpt: item.excerpt ?? null,
+    feedLabel: item.feedLabel,
+    feedName: item.feedName,
+    feedScope:
+      item.feedScope === 'external_coverage' ? 'external_coverage' : 'community_announcements',
+    firstSeenAt: item.firstSeenAt,
+    gid: item.gid,
+    matchReason: item.matchReason,
+    publishedAt: item.publishedAt,
+    sortTime: item.sortTime,
+    title: item.title,
+    url: item.url,
+  };
+}
+
 function countNewsDetailUnits(body: string | null): number {
   const normalized = body?.trim() ?? null;
   if (!normalized) {
@@ -1047,18 +1189,6 @@ function shouldUseSingleItemNewsDetail(item: ChangeRecentNewsDigestItem | null |
   }
 
   return body.length >= RECENT_NEWS_DETAIL_MIN_CHARS || countNewsDetailUnits(body) >= RECENT_NEWS_DETAIL_MIN_UNITS;
-}
-
-function patternNeedsLiveMetrics(pattern: ChangePattern): boolean {
-  return pattern === 'under_marketed' || pattern === 'signable_candidate' || pattern === 'rescue_candidate';
-}
-
-function isResponsePattern(pattern: ChangePattern): pattern is 'sustained_response' | 'announcement_weak_response' {
-  return pattern === 'sustained_response' || pattern === 'announcement_weak_response';
-}
-
-function getPatternRpcLimit(limit: number): number {
-  return Math.min(Math.max(limit * 2, 20), 30);
 }
 
 function getPatternShortlistWindowDays(days: number): number {
@@ -1306,37 +1436,67 @@ async function tryTigerGameChangeTimeline(
     return null;
   }
 
-  const query = normalizeSearch(args.app_name);
-  if (!query) {
-    return null;
-  }
-
   const days = clamp(args.days, DEFAULT_TIMELINE_DAYS, 1, MAX_TIMELINE_DAYS);
   const limit = clamp(args.limit, DEFAULT_TIMELINE_LIMIT, 1, MAX_TIMELINE_LIMIT);
-  const resolveResponse = await postToQueryApi<TigerResolveEntitiesResponse>(
-    '/v1/contracts/resolve-entities',
-    {
-      entityKinds: ['game'],
-      limit: 5,
-      query,
-    }
-  );
 
-  if (!resolveResponse.ok || !resolveResponse.data) {
-    return null;
+  let resolvedEntity:
+    | {
+        displayName: string;
+        entityUid: string;
+        matchQuality?: 'exact' | 'prefix' | 'substring';
+        platformEntityId: string;
+      }
+    | undefined;
+
+  if (typeof args.appid === 'number' && Number.isInteger(args.appid) && args.appid > 0) {
+    const overviewResponse = await postToQueryApi<TigerGetEntityOverviewResponse>(
+      '/v1/contracts/get-entity-overview',
+      {
+        entityKind: 'game',
+        platformEntityId: String(args.appid),
+      }
+    );
+
+    if (overviewResponse.ok && overviewResponse.data?.entity?.entityKind === 'game') {
+      resolvedEntity = {
+        displayName: overviewResponse.data.entity.displayName,
+        entityUid: overviewResponse.data.entity.entityUid,
+        platformEntityId: overviewResponse.data.entity.platformEntityId,
+      };
+    }
   }
 
-  const entities = (resolveResponse.data.entities ?? []).filter(
-    (entity) => entity.entityKind === 'game'
-  );
+  if (!resolvedEntity) {
+    const query = normalizeSearch(args.app_name);
+    if (!query) {
+      return null;
+    }
 
-  const resolvedEntity =
-    (typeof args.appid === 'number'
-      ? entities.find((entity) => parseTigerAppId(entity.platformEntityId) === args.appid)
-      : undefined) ?? entities[0];
+    const resolveResponse = await postToQueryApi<TigerResolveEntitiesResponse>(
+      '/v1/contracts/resolve-entities',
+      {
+        entityKinds: ['game'],
+        limit: 5,
+        query,
+      }
+    );
 
-  if (!resolvedEntity || resolveResponse.data.ambiguity?.requiresClarification === true) {
-    return null;
+    if (!resolveResponse.ok || !resolveResponse.data) {
+      return null;
+    }
+
+    const entities = (resolveResponse.data.entities ?? []).filter(
+      (entity) => entity.entityKind === 'game'
+    );
+
+    resolvedEntity =
+      (typeof args.appid === 'number'
+        ? entities.find((entity) => parseTigerAppId(entity.platformEntityId) === args.appid)
+        : undefined) ?? entities[0];
+
+    if (!resolvedEntity || resolveResponse.data.ambiguity?.requiresClarification === true) {
+      return null;
+    }
   }
 
   const appid = parseTigerAppId(resolvedEntity.platformEntityId);
@@ -1390,7 +1550,7 @@ async function tryTigerGameChangeTimeline(
   const app = {
     appType: 'game',
     appid,
-    isExactMatch: resolvedEntity.matchQuality === 'exact',
+    isExactMatch: resolvedEntity.matchQuality ? resolvedEntity.matchQuality === 'exact' : true,
     name: explainResponse.data.entity.displayName,
     releaseYear: null,
     similarityScore: 1,
@@ -1450,151 +1610,15 @@ async function tryTigerGameChangeTimeline(
   return attachToolExecutionProvenance(result, TIGER_GAME_TIMELINE_PROVENANCE);
 }
 
-async function fetchWindowMetrics(
-  appid: number,
-  start: string,
-  end: string
-): Promise<MetricsWindow | null> {
-  const supabase = getServiceSupabase();
-
-  // Generated DB types lag migrations for some of the change-intel surfaces.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any).rpc('get_change_window_metrics', {
-    p_appid: appid,
-    p_start: start,
-    p_end: end,
-  }) as { data: JsonValue; error: { message: string } | null };
-
-  if (error) {
-    throw new Error(`Failed to fetch change window metrics: ${error.message}`);
-  }
-
-  return normalizeMetricsWindow(data);
-}
-
-async function fetchAppMetrics(appIds: number[]): Promise<Map<number, AppMetrics>> {
-  if (appIds.length === 0) {
-    return new Map();
-  }
-
-  const supabase = getServiceSupabase();
-  const uniqueAppIds = Array.from(new Set(appIds));
-
-  const [latestMetricsResult, trendResult] = await Promise.all([
-    supabase
-      .from('latest_daily_metrics')
-      .select('appid, positive_percentage, total_reviews, ccu_peak, price_cents, discount_percent')
-      .in('appid', uniqueAppIds),
-    supabase
-      .from('app_trends')
-      .select('appid, review_velocity_7d, review_velocity_30d, trend_30d_direction, ccu_trend_7d_pct')
-      .in('appid', uniqueAppIds),
-  ]);
-
-  const metricsByApp = new Map<number, AppMetrics>();
-
-  for (const row of latestMetricsResult.data ?? []) {
-    if (row.appid == null) {
-      continue;
-    }
-
-    metricsByApp.set(row.appid, {
-      appid: row.appid,
-      positivePercentage: row.positive_percentage,
-      totalReviews: row.total_reviews,
-      ccuPeak: row.ccu_peak,
-      priceCents: row.price_cents,
-      discountPercent: row.discount_percent,
-      reviewVelocity7d: null,
-      reviewVelocity30d: null,
-      trend30dDirection: null,
-      ccuTrend7dPct: null,
-    });
-  }
-
-  for (const row of trendResult.data ?? []) {
-    const existing = metricsByApp.get(row.appid) ?? {
-      appid: row.appid,
-      positivePercentage: null,
-      totalReviews: null,
-      ccuPeak: null,
-      priceCents: null,
-      discountPercent: null,
-      reviewVelocity7d: null,
-      reviewVelocity30d: null,
-      trend30dDirection: null,
-      ccuTrend7dPct: null,
-    };
-
-    existing.reviewVelocity7d = row.review_velocity_7d;
-    existing.reviewVelocity30d = row.review_velocity_30d;
-    existing.trend30dDirection = row.trend_30d_direction;
-    existing.ccuTrend7dPct = row.ccu_trend_7d_pct;
-    metricsByApp.set(row.appid, existing);
-  }
-
-  return metricsByApp;
-}
-
-function candidateHasEmbeddedMetrics(candidate: ChatChangePatternCandidateRow): boolean {
-  return (
-    candidate.positivePercentage != null ||
-    candidate.totalReviews != null ||
-    candidate.reviewVelocity30d != null ||
-    candidate.reviewVelocity7d != null ||
-    candidate.ccuTrend7dPct != null
-  );
-}
-
-function hydratePatternMetrics(
-  candidates: ChatChangePatternCandidateRow[],
-  fallbackMetrics: Map<number, AppMetrics>
-): Array<ChatChangePatternCandidateRow & { metrics: AppMetrics | null }> {
-  return candidates.map((candidate) => {
-    const existingMetrics = candidateHasEmbeddedMetrics(candidate)
-      ? {
-          appid: candidate.appid,
-          positivePercentage: candidate.positivePercentage,
-          totalReviews: candidate.totalReviews,
-          ccuPeak: candidate.ccuPeak,
-          priceCents: candidate.priceCents,
-          discountPercent: candidate.discountPercent,
-          reviewVelocity7d: candidate.reviewVelocity7d,
-          reviewVelocity30d: candidate.reviewVelocity30d,
-          trend30dDirection: candidate.trend30dDirection,
-          ccuTrend7dPct: candidate.ccuTrend7dPct,
-        }
-      : null;
-
-    return {
-      ...candidate,
-      metrics: existingMetrics ?? fallbackMetrics.get(candidate.appid) ?? null,
-    };
-  });
-}
-
-function buildPatternAggregates(
-  candidates: Array<ChatChangePatternCandidateRow & { metrics: AppMetrics | null }>
-): PatternAggregate[] {
-  return candidates.map((candidate) => ({
-    appid: candidate.appid,
-    name: candidate.appName,
-    latestOccurredAt: candidate.latestOccurredAt,
-    activityIds: candidate.activityIds.slice(0, 3),
-    signalFamilies: new Set(candidate.signalFamilies),
-    storyKinds: new Set(candidate.storyKinds),
-    announcementCount: candidate.announcementCount,
-    changeCount: candidate.changeCount,
-  }));
-}
-
-function mapActivityRow(row: ChangeActivityRow) {
+function mapTigerActivityRow(
+  row: NonNullable<TigerSearchChangeActivityResponse['items']>[number]
+) {
   return {
     activityId: row.activityId,
     activityKind: row.activityKind,
     storyKind: row.storyKind,
     appid: row.appid,
-    name: row.appName,
+    name: row.name,
     appType: row.appType,
     isReleased: row.isReleased,
     releaseDate: row.releaseDate,
@@ -1607,138 +1631,6 @@ function mapActivityRow(row: ChangeActivityRow) {
     relatedAnnouncementCount: row.relatedAnnouncementCount,
     externalUrl: row.externalUrl,
   };
-}
-
-function buildResponsePatternCandidate(
-  pattern: Extract<ChangePattern, 'sustained_response' | 'announcement_weak_response'>,
-  detail: ChangeActivityDetail
-) {
-  if (!detail.aftermath) {
-    return null;
-  }
-
-  const reviewDelta = metricDelta(
-    detail.aftermath.response7d?.totalReviews ?? null,
-    detail.aftermath.baseline7d?.totalReviews ?? null
-  );
-  const ccuLift = percentLift(
-    detail.aftermath.response7d?.ccuPeak ?? null,
-    detail.aftermath.baseline7d?.ccuPeak ?? null
-  );
-
-  if (pattern === 'sustained_response') {
-    if ((reviewDelta ?? 0) < 25 && (ccuLift ?? 0) < 15) {
-      return null;
-    }
-
-    const reasons: string[] = [];
-    if (reviewDelta != null && reviewDelta >= 25) {
-      reasons.push(`7-day review total rose by ${reviewDelta.toLocaleString()} after the change window.`);
-    }
-    if (ccuLift != null && ccuLift >= 15) {
-      reasons.push(`7-day CCU peak was ${ccuLift.toFixed(0)}% above the baseline window.`);
-    }
-
-    return {
-      appid: detail.appid,
-      name: detail.appName,
-      occurredAt: detail.occurredAt,
-      confidence: reviewDelta != null && reviewDelta >= 50 ? 'high' : 'medium',
-      activityId: detail.activityId,
-      headline: detail.headline,
-      reasons,
-      signalFamilies: detail.signalFamilies,
-      aftermath: detail.aftermath,
-      primaryProof: buildPatternProofPacket(detail),
-    };
-  }
-
-  const hasRelatedAnnouncement = detail.relatedAnnouncements.length > 0 || detail.signalFamilies.includes('announcement');
-  const weakReviewResponse = reviewDelta == null || reviewDelta < 10;
-  const weakCcuResponse = ccuLift == null || ccuLift < 5;
-
-  if (!hasRelatedAnnouncement || (!weakReviewResponse && !weakCcuResponse)) {
-    return null;
-  }
-
-  const reasons: string[] = ['A recent announcement is attached to the same change window.'];
-  if (reviewDelta != null) {
-    reasons.push(`7-day review total moved by only ${reviewDelta.toLocaleString()} after the announcement window.`);
-  } else {
-    reasons.push('Review totals did not show a clear 7-day lift after the announcement window.');
-  }
-  if (ccuLift != null) {
-    reasons.push(`7-day CCU peak was only ${ccuLift.toFixed(0)}% above the baseline window.`);
-  } else {
-    reasons.push('CCU did not show a clear post-announcement lift.');
-  }
-
-  return {
-    appid: detail.appid,
-    name: detail.appName,
-    occurredAt: detail.occurredAt,
-    confidence: weakReviewResponse && weakCcuResponse ? 'high' : 'medium',
-    activityId: detail.activityId,
-    headline: detail.headline,
-    reasons,
-    signalFamilies: detail.signalFamilies,
-    aftermath: detail.aftermath,
-    primaryProof: buildPatternProofPacket(detail),
-  };
-}
-
-function buildPatternProofPacket(detail: ChangeActivityDetail | null): PatternProofPacket | null {
-  if (!detail) {
-    return null;
-  }
-
-  return {
-    activityId: detail.activityId,
-    occurredAt: detail.occurredAt,
-    headline: detail.headline,
-    summary: detail.summary,
-    facts: detail.facts.slice(0, 3),
-    signalFamilies: detail.signalFamilies.slice(0, 3),
-    diffs: detail.diffs.slice(0, 2).map((diff) => ({
-      label: diff.label,
-      beforeText: diff.beforeText,
-      afterText: diff.afterText,
-      note: diff.note,
-      added: diff.added.slice(0, 3),
-      removed: diff.removed.slice(0, 3),
-    })),
-  };
-}
-
-async function hydratePatternProofPackets(
-  candidates: PatternCandidate[],
-  maxProofs: number
-): Promise<PatternCandidate[]> {
-  const shortlist = candidates.slice(0, maxProofs);
-  const hydrated: PatternCandidate[] = [];
-  const batchSize = 4;
-
-  for (let index = 0; index < shortlist.length; index += batchSize) {
-    const batch = shortlist.slice(index, index + batchSize);
-    const batchProofs = await Promise.all(
-      batch.map(async (candidate) => {
-        const activityId = candidate.activityIds[0];
-        if (!activityId) {
-          return { ...candidate, primaryProof: null };
-        }
-
-        const detail = await fetchChangeFeedActivityDetail(activityId).catch(() => null);
-        return {
-          ...candidate,
-          primaryProof: buildPatternProofPacket(detail),
-        };
-      })
-    );
-
-    hydrated.push(...batchProofs);
-  }
-
-  return hydrated;
 }
 
 export async function queryChangeActivity(args: QueryChangeActivityArgs) {
@@ -1762,45 +1654,56 @@ export async function queryChangeActivity(args: QueryChangeActivityArgs) {
   }
 
   try {
-    const response = await fetchChatChangeActivityResponse({
-      days,
-      view: args.view ?? 'overview',
-      mode: args.mode ?? 'all',
-      sort: args.sort ?? 'relevant',
-      appTypes: args.app_types ?? null,
-      signalFamilies: args.signal_families ?? null,
-      search: normalizeSearch(args.search),
-      cursor: null,
-      limit,
-      excludeActivityIds,
-    });
+    const response = await postToQueryApi<TigerSearchChangeActivityResponse>(
+      '/v1/contracts/search-change-activity',
+      {
+        appTypes: args.app_types ?? [],
+        days,
+        excludeActivityIds,
+        limit,
+        mode: args.mode ?? 'all',
+        query: normalizeSearch(args.search),
+        signalFamilies: args.signal_families ?? [],
+        sort: args.sort ?? 'relevant',
+        view: args.view ?? 'overview',
+      }
+    );
 
-    if (response.items.length === 0) {
-      return {
-        success: true,
-        results: [],
-        total_found: 0,
-        selected_change_surface: 'projection',
-        no_match: true,
-        sufficient_to_answer: true,
-        sufficiency_reason: 'No cross-game change activity matched the requested constraints and time window.',
-        required_answer_fields: ['what was checked', 'time window', 'why there was no qualifying match'],
-        response_guidance: 'State the checked window and constraints explicitly. Do not invent a ranked list when nothing matched.',
-        meta: response.meta,
-      };
+    if (!response.ok || !response.data) {
+      throw new Error(response.reason ?? 'Tiger search-change-activity failed');
     }
 
-    const results = response.items.map(mapActivityRow);
-
-    return {
+    const data = response.data;
+    const items = data.items ?? [];
+    const result = items.length === 0 ? {
       success: true,
-      results,
-      total_found: response.items.length,
+      results: [],
+      total_found: 0,
       selected_change_surface: 'projection',
-      sparse_result: response.items.length < Math.min(limit, 3),
-      sufficient_to_answer: response.items.length < 3,
+      no_match: true,
+      sufficient_to_answer: true,
+      sufficiency_reason: 'No cross-game change activity matched the requested constraints and time window.',
+      required_answer_fields: ['what was checked', 'time window', 'why there was no qualifying match'],
+      response_guidance: 'State the checked window and constraints explicitly. Do not invent a ranked list when nothing matched.',
+      meta: {
+        appTypes: args.app_types ?? null,
+        days,
+        limit,
+        mode: args.mode ?? 'all',
+        search: normalizeSearch(args.search),
+        signalFamilies: args.signal_families ?? null,
+        sort: args.sort ?? 'relevant',
+        view: args.view ?? 'overview',
+      },
+    } : {
+      success: true,
+      results: items.map(mapTigerActivityRow),
+      total_found: items.length,
+      selected_change_surface: 'projection',
+      sparse_result: items.length < Math.min(limit, 3),
+      sufficient_to_answer: items.length < 3,
       sufficiency_reason:
-        response.items.length < 3
+        items.length < 3
           ? 'Returned a small but directly answerable change-activity set. Keep the answer constrained and say the set is limited.'
           : 'A ranked change-activity set is available. Fetch one supporting detail only if the answer needs a concrete proof example.',
       required_answer_fields: ['what changed', 'when it changed', 'why it matters', 'evidence quality'],
@@ -1810,7 +1713,7 @@ export async function queryChangeActivity(args: QueryChangeActivityArgs) {
         proof_field: 'facts',
       },
       answer_payload: {
-        rows: results.map((row) => ({
+        rows: items.map((row) => ({
           activityId: row.activityId,
           appid: row.appid,
           name: row.name,
@@ -1821,8 +1724,19 @@ export async function queryChangeActivity(args: QueryChangeActivityArgs) {
           storyKind: row.storyKind,
         })),
       },
-      meta: response.meta,
+      meta: {
+        appTypes: args.app_types ?? null,
+        days,
+        limit,
+        mode: args.mode ?? 'all',
+        search: normalizeSearch(args.search),
+        signalFamilies: args.signal_families ?? null,
+        sort: args.sort ?? 'relevant',
+        view: args.view ?? 'overview',
+      },
     };
+
+    return attachToolExecutionProvenance(result, TIGER_CHANGE_ACTIVITY_PROVENANCE);
   } catch (error) {
     const classification = classifyChangeIntelError(error);
     return {
@@ -1844,127 +1758,14 @@ export async function getGameChangeTimeline(args: GetGameChangeTimelineArgs) {
     return tigerResult;
   }
 
-  const days = clamp(args.days, DEFAULT_TIMELINE_DAYS, 1, MAX_TIMELINE_DAYS);
-  const limit = clamp(args.limit, DEFAULT_TIMELINE_LIMIT, 1, MAX_TIMELINE_LIMIT);
-  const resolved = await resolveAppReference({
-    appid: args.appid,
-    app_name: args.app_name,
-  });
-  const app = resolved.app;
-
-  if (!app) {
-    return {
-      success: false,
-      error: resolved.error ?? 'Unable to resolve the requested game. Use the closest Steam app name or appid.',
-      candidates: resolved.candidates ?? [],
-    };
-  }
-
-  const supabase = getServiceSupabase();
-  const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const to = new Date().toISOString();
-
-  // Generated DB types lag migrations for some of the change-intel surfaces.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any).rpc('get_app_change_feed', {
-    p_appid: app.appid,
-    p_from: from,
-    p_to: to,
-    p_limit: limit,
-  }) as { data: RawAppChangeFeedRow[] | null; error: { message: string } | null };
-
-  if (error) {
-    return {
-      success: false,
-      error: `Failed to load app change feed: ${error.message}`,
-    };
-  }
-
-  const events = (data ?? [])
-    .map((row) => {
-      const detailEvent = toChangeDetailEvent(row);
-      const diff = buildDiffPreview(detailEvent);
-      return {
-        eventId: row.event_id,
-        occurredAt: row.occurred_at,
-        source: row.source,
-        changeType: row.change_type,
-        signalFamily: familyForChangeType(row.change_type),
-        label: diff?.label ?? formatChangeLabel(row.change_type),
-        kind: diff?.kind ?? 'note',
-        beforeText: diff?.beforeText ?? null,
-        afterText: diff?.afterText ?? null,
-        added: diff?.added ?? [],
-        removed: diff?.removed ?? [],
-        beforeImageUrl: diff?.beforeImageUrl ?? null,
-        afterImageUrl: diff?.afterImageUrl ?? null,
-        note: diff?.note ?? null,
-        baseline7d: normalizeMetricsWindow(row.baseline_7d),
-        baseline30d: normalizeMetricsWindow(row.baseline_30d),
-        response1d: normalizeMetricsWindow(row.response_1d),
-        response7d: normalizeMetricsWindow(row.response_7d),
-        response30d: normalizeMetricsWindow(row.response_30d),
-      };
-    })
-    .filter((event) => {
-      if (!args.signal_families || args.signal_families.length === 0) {
-        return true;
-      }
-
-      return args.signal_families.includes(event.signalFamily);
-    });
-
-  if (events.length === 0) {
-    return {
-      success: true,
-      app,
-      total_found: 0,
-      selected_change_surface: 'per_app_timeline',
-      no_match: true,
-      sufficient_to_answer: true,
-      sufficiency_reason: 'No title-specific change events were found in the requested window.',
-      required_answer_fields: ['what window was checked', 'why no qualifying title-specific changes were found'],
-      response_guidance: 'State the checked title and time window. Do not imply changes happened when no events were found.',
-      events: [],
-      meta: {
-        days,
-        limit,
-        signalFamilies: args.signal_families ?? null,
-      },
-    };
-  }
-
   return {
-    success: true,
-    app,
-    total_found: events.length,
+    success: false,
+    unavailable: true,
     selected_change_surface: 'per_app_timeline',
-    sufficient_to_answer: true,
-    sufficiency_reason: 'The timeline events are sufficient to answer directly when you stay grounded in concrete changes and dates.',
-    required_answer_fields: ['dates', 'concrete changes', 'before/after values when available'],
-    response_guidance: 'Lead with the most material title-specific changes and dates. Use before/after text when it exists.',
-    events,
-    presentation_hints: {
-      format: 'game_change_timeline',
-      proof_field: 'events',
-    },
-    answer_payload: {
-      app,
-      events: events.map((event) => ({
-        occurredAt: event.occurredAt,
-        label: event.label,
-        beforeText: event.beforeText,
-        afterText: event.afterText,
-        added: event.added.slice(0, 3),
-        removed: event.removed.slice(0, 3),
-        note: event.note,
-      })),
-    },
-    meta: {
-      days,
-      limit,
-      signalFamilies: args.signal_families ?? null,
-    },
+    error:
+      'Tiger explain-changes could not serve this get_game_change_timeline request. Try a specific title with a standard recent-change window.',
+    sufficient_to_answer: false,
+    fallback_allowed: false,
   };
 }
 
@@ -2013,35 +1814,48 @@ export async function getRecentNewsDigest(args: GetRecentNewsDigestArgs) {
     1,
     MAX_RECENT_NEWS_LIMIT
   );
-  const items = await fetchChatRecentNewsDigest({
-    appIds: resolvedApps.map((app) => app.appid),
-    days,
-    limit,
-    perAppLimit: scope === 'multi_app' ? 2 : null,
-  });
+  const endTime = new Date().toISOString();
+  const startTime = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const response = await postToQueryApi<TigerSearchDocumentsResponse>(
+    '/v1/contracts/search-documents',
+    {
+      endTime,
+      entityUids: resolvedApps.map((app) => buildTigerGameEntityUid(app.appid)),
+      limit,
+      mode: 'digest',
+      startTime,
+    }
+  );
 
-  if (items.length === 0) {
+  if (!response.ok || !response.data) {
     return {
-      success: true,
-      app: scope === 'single_app' ? resolvedApps[0] : undefined,
-      apps: resolvedApps,
-      scope,
-      total_found: 0,
-      selected_change_surface: 'recent_news_digest',
-      no_match: true,
-      sufficient_to_answer: true,
-      sufficiency_reason: 'No recent Steam news items were found in the requested window.',
-      required_answer_fields: ['checked time window', 'which titles were checked', 'that no qualifying recent news was found'],
-      response_guidance: 'State the checked titles and exact checked window from meta.windowStart to meta.windowEnd. Do not imply there were recent news updates when none were found.',
-      items: [],
-      meta: {
-        ...checkedWindow,
-        limit,
-      },
+      success: false,
+      unavailable: true,
+      error: response.reason ?? 'Unable to load recent Steam news right now.',
     };
   }
 
-  return {
+  const data = response.data;
+  const items = (data.items ?? []).map(mapTigerSearchDocumentItemToDigestItem);
+
+  const result = items.length === 0 ? {
+    success: true,
+    app: scope === 'single_app' ? resolvedApps[0] : undefined,
+    apps: resolvedApps,
+    scope,
+    total_found: 0,
+    selected_change_surface: 'recent_news_digest',
+    no_match: true,
+    sufficient_to_answer: true,
+    sufficiency_reason: 'No recent Steam news items were found in the requested window.',
+    required_answer_fields: ['checked time window', 'which titles were checked', 'that no qualifying recent news was found'],
+    response_guidance: 'State the checked titles and exact checked window from meta.windowStart to meta.windowEnd. Do not imply there were recent news updates when none were found.',
+    items: [],
+    meta: {
+      ...checkedWindow,
+      limit,
+    },
+  } : {
     success: true,
     app: scope === 'single_app' ? resolvedApps[0] : undefined,
     apps: resolvedApps,
@@ -2079,6 +1893,8 @@ export async function getRecentNewsDigest(args: GetRecentNewsDigestArgs) {
       limit,
     },
   };
+
+  return attachToolExecutionProvenance(result, TIGER_NEWS_DOCUMENTS_PROVENANCE);
 }
 
 export async function getRecentNewsDetail(args: GetRecentNewsDetailArgs) {
@@ -2098,95 +1914,112 @@ export async function getRecentNewsDetail(args: GetRecentNewsDetailArgs) {
   const days = clamp(args.days, DEFAULT_RECENT_NEWS_DAYS, 1, MAX_RECENT_NEWS_DAYS);
   const checkedWindow = buildRecentNewsDateMeta(days);
   const limit = clamp(args.limit, DEFAULT_RECENT_NEWS_DETAIL_LIMIT, 1, MAX_RECENT_NEWS_DETAIL_LIMIT);
-  const items = await fetchChatRecentNewsDigest({
-    appIds: [resolved.app.appid],
-    days,
-    limit,
-    perAppLimit: null,
-  });
+  const endTime = new Date().toISOString();
+  const startTime = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const response = await postToQueryApi<TigerSearchDocumentsResponse>(
+    '/v1/contracts/search-documents',
+    {
+      endTime,
+      entityUid: buildTigerGameEntityUid(resolved.app.appid),
+      limit: Math.max(limit, 3),
+      mode: 'latest_item',
+      startTime,
+    }
+  );
 
-  if (items.length === 0) {
+  if (!response.ok || !response.data) {
+    return {
+      success: false,
+      unavailable: true,
+      error: response.reason ?? 'Unable to load recent Steam news right now.',
+    };
+  }
+
+  const data = response.data;
+  const items = (data.items ?? []).map(mapTigerSearchDocumentItemToDigestItem);
+
+  const result = items.length === 0 ? {
+    success: true,
+    app: resolved.app,
+    scope: 'single_app' as const,
+    total_found: 0,
+    selected_change_surface: 'recent_news_detail',
+    no_match: true,
+    sufficient_to_answer: true,
+    sufficiency_reason: 'No recent Steam news items were found for the requested title in the checked window.',
+    required_answer_fields: ['checked time window', 'which title was checked', 'that no qualifying recent news was found'],
+    response_guidance: 'State the checked title and exact checked window from meta.windowStart to meta.windowEnd. Do not imply there were recent news updates when none were found.',
+    items: [],
+    meta: {
+      ...checkedWindow,
+      limit,
+      detailMode: 'no_match',
+    },
+  } : (() => {
+    const latestItem = items[0];
+    const detailMode = shouldUseSingleItemNewsDetail(latestItem) ? 'latest_item' : 'fallback_digest';
+    const detailItems = detailMode === 'latest_item' ? [latestItem] : items.slice(0, Math.min(items.length, 3));
+
     return {
       success: true,
       app: resolved.app,
       scope: 'single_app' as const,
-      total_found: 0,
+      total_found: detailItems.length,
       selected_change_surface: 'recent_news_detail',
-      no_match: true,
       sufficient_to_answer: true,
-      sufficiency_reason: 'No recent Steam news items were found for the requested title in the checked window.',
-      required_answer_fields: ['checked time window', 'which title was checked', 'that no qualifying recent news was found'],
-      response_guidance: 'State the checked title and exact checked window from meta.windowStart to meta.windowEnd. Do not imply there were recent news updates when none were found.',
-      items: [],
+      sufficiency_reason:
+        detailMode === 'latest_item'
+          ? 'The newest Steam news item is substantial enough to answer from the latest post alone.'
+          : 'The newest Steam news item is too thin on its own, so a short fallback digest gives the necessary context.',
+      required_answer_fields:
+        detailMode === 'latest_item'
+          ? ['date', 'latest news title', 'concrete changes from the latest news body']
+          : ['dates', 'news titles', 'concrete changes from the recent news copy'],
+      response_guidance:
+        detailMode === 'latest_item'
+          ? 'Use one short intro sentence and 2-5 bullets from the newest item only. Each bullet should summarize a concrete change or takeaway from the latest news body and include the exact date.'
+          : 'The newest item is too thin on its own. Use one short intro sentence and 2-4 bullets across the most recent 2-3 items, naming the exact date and concrete update from each item.',
+      presentation_hints: {
+        format: 'recent_news_detail',
+        proof_field: 'items',
+      },
+      items: detailItems,
+      latestItem,
+      detail_mode: detailMode,
+      answer_payload: {
+        detailMode,
+        app: {
+          appid: resolved.app.appid,
+          name: resolved.app.name,
+        },
+        latestItem: {
+          appid: latestItem?.appid,
+          appName: latestItem?.appName,
+          title: latestItem?.title,
+          publishedAt: latestItem?.publishedAt,
+          firstSeenAt: latestItem?.firstSeenAt,
+          excerpt: latestItem?.excerpt,
+          bodyPreview: latestItem?.bodyPreview,
+        },
+        items: detailItems.map((item) => ({
+          appid: item.appid,
+          appName: item.appName,
+          title: item.title,
+          publishedAt: item.publishedAt,
+          firstSeenAt: item.firstSeenAt,
+          excerpt: item.excerpt,
+          bodyPreview: item.bodyPreview,
+        })),
+      },
       meta: {
         ...checkedWindow,
         limit,
-        detailMode: 'no_match',
+        detailMode,
       },
     };
-  }
+  })();
 
-  const latestItem = items[0];
-  const detailMode = shouldUseSingleItemNewsDetail(latestItem) ? 'latest_item' : 'fallback_digest';
-  const detailItems = detailMode === 'latest_item' ? [latestItem] : items.slice(0, Math.min(items.length, 3));
-
-  return {
-    success: true,
-    app: resolved.app,
-    scope: 'single_app' as const,
-    total_found: detailItems.length,
-    selected_change_surface: 'recent_news_detail',
-    sufficient_to_answer: true,
-    sufficiency_reason:
-      detailMode === 'latest_item'
-        ? 'The newest Steam news item is substantial enough to answer from the latest post alone.'
-        : 'The newest Steam news item is too thin on its own, so a short fallback digest gives the necessary context.',
-    required_answer_fields:
-      detailMode === 'latest_item'
-        ? ['date', 'latest news title', 'concrete changes from the latest news body']
-        : ['dates', 'news titles', 'concrete changes from the recent news copy'],
-    response_guidance:
-      detailMode === 'latest_item'
-        ? 'Use one short intro sentence and 2-5 bullets from the newest item only. Each bullet should summarize a concrete change or takeaway from the latest news body and include the exact date.'
-        : 'The newest item is too thin on its own. Use one short intro sentence and 2-4 bullets across the most recent 2-3 items, naming the exact date and concrete update from each item.',
-    presentation_hints: {
-      format: 'recent_news_detail',
-      proof_field: 'items',
-    },
-    items: detailItems,
-    latestItem,
-    detail_mode: detailMode,
-    answer_payload: {
-      detailMode,
-      app: {
-        appid: resolved.app.appid,
-        name: resolved.app.name,
-      },
-      latestItem: {
-        appid: latestItem.appid,
-        appName: latestItem.appName,
-        title: latestItem.title,
-        publishedAt: latestItem.publishedAt,
-        firstSeenAt: latestItem.firstSeenAt,
-        excerpt: latestItem.excerpt,
-        bodyPreview: latestItem.bodyPreview,
-      },
-      items: detailItems.map((item) => ({
-        appid: item.appid,
-        appName: item.appName,
-        title: item.title,
-        publishedAt: item.publishedAt,
-        firstSeenAt: item.firstSeenAt,
-        excerpt: item.excerpt,
-        bodyPreview: item.bodyPreview,
-      })),
-    },
-    meta: {
-      ...checkedWindow,
-      limit,
-      detailMode,
-    },
-  };
+  return attachToolExecutionProvenance(result, TIGER_NEWS_DOCUMENTS_PROVENANCE);
 }
 
 export async function searchRecentNewsTopics(args: SearchRecentNewsTopicsArgs) {
@@ -2205,17 +2038,84 @@ export async function searchRecentNewsTopics(args: SearchRecentNewsTopicsArgs) {
   const appIds = Array.from(new Set((args.appids ?? []).filter((value): value is number => Number.isInteger(value)))).slice(0, 10);
   const feedScope = args.feed_scope ?? DEFAULT_NEWS_TOPIC_FEED_SCOPE;
 
-  let items: ChangeRecentNewsTopicMatchItem[];
   try {
-    items = await fetchChatRecentNewsTopicSearch({
-      query: topicQuery.query,
-      aliases: topicQuery.aliases,
-      appIds: appIds.length > 0 ? appIds : null,
-      appTypes,
-      days,
-      limit,
-      feedScope,
-    });
+    const response = await postToQueryApi<TigerSearchDocumentsResponse>(
+      '/v1/contracts/search-documents',
+      {
+        endTime: new Date().toISOString(),
+        entityUids: appIds.map((appid) => buildTigerGameEntityUid(appid)),
+        feedScopes: feedScope === 'all' ? [] : [feedScope],
+        limit,
+        mode: 'topic_search',
+        query: topicQuery.query,
+        startTime: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+      }
+    );
+
+    if (!response.ok || !response.data) {
+      throw new Error(response.reason ?? 'Tiger search-documents failed');
+    }
+
+    const data = response.data;
+    const items = (data.items ?? []).map(mapTigerSearchDocumentItemToTopicItem);
+
+    if (items.length === 0) {
+      return attachToolExecutionProvenance({
+        success: true,
+        total_found: 0,
+        selected_change_surface: 'recent_news_topic_search',
+        no_match: true,
+        sufficient_to_answer: true,
+        sufficiency_reason: 'No recent official Steam news items matched the requested topic in the checked window.',
+        required_answer_fields: ['checked time window', 'searched topic', 'that no qualifying recent news was found'],
+        response_guidance: 'State the searched topic, official-news scope, and exact checked window from meta.windowStart to meta.windowEnd. Do not imply matches were found when none qualified.',
+        items: [],
+        meta: {
+          ...checkedWindow,
+          limit,
+          query: topicQuery.query,
+          feedScope,
+          appTypes,
+        },
+      }, TIGER_NEWS_DOCUMENTS_PROVENANCE);
+    }
+
+    return attachToolExecutionProvenance({
+      success: true,
+      total_found: items.length,
+      selected_change_surface: 'recent_news_topic_search',
+      sufficient_to_answer: true,
+      sufficiency_reason: 'The result set is grounded in bounded recent official Steam news text that matched the requested topic.',
+      required_answer_fields: ['matched games', 'dates', 'matched topic evidence', 'why each result matched'],
+      response_guidance:
+        'Use one short intro sentence and 3-6 bullets. Each bullet should name the game, the exact date, the matching headline or excerpt, and why it matched the topic.',
+      presentation_hints: {
+        format: 'recent_news_topic_search',
+        proof_field: 'items',
+      },
+      items,
+      answer_payload: {
+        query: topicQuery.query,
+        aliases: topicQuery.aliases,
+        items: items.map((item) => ({
+          appid: item.appid,
+          appName: item.appName,
+          title: item.title,
+          publishedAt: item.publishedAt,
+          firstSeenAt: item.firstSeenAt,
+          excerpt: item.excerpt,
+          bodyPreview: item.bodyPreview,
+          matchReason: item.matchReason,
+        })),
+      },
+      meta: {
+        ...checkedWindow,
+        limit,
+        query: topicQuery.query,
+        feedScope,
+        appTypes,
+      },
+    }, TIGER_NEWS_DOCUMENTS_PROVENANCE);
   } catch (error) {
     if (error instanceof ChangeFeedUnavailableError) {
       return {
@@ -2240,77 +2140,54 @@ export async function searchRecentNewsTopics(args: SearchRecentNewsTopicsArgs) {
       },
     };
   }
-
-  if (items.length === 0) {
-    return {
-      success: true,
-      total_found: 0,
-      selected_change_surface: 'recent_news_topic_search',
-      no_match: true,
-      sufficient_to_answer: true,
-      sufficiency_reason: 'No recent official Steam news items matched the requested topic in the checked window.',
-      required_answer_fields: ['checked time window', 'searched topic', 'that no qualifying recent news was found'],
-      response_guidance: 'State the searched topic, official-news scope, and exact checked window from meta.windowStart to meta.windowEnd. Do not imply matches were found when none qualified.',
-      items: [],
-      meta: {
-        ...checkedWindow,
-        limit,
-        query: topicQuery.query,
-        feedScope,
-        appTypes,
-      },
-    };
-  }
-
-  return {
-    success: true,
-    total_found: items.length,
-    selected_change_surface: 'recent_news_topic_search',
-    sufficient_to_answer: true,
-    sufficiency_reason: 'The result set is grounded in bounded recent official Steam news text that matched the requested topic.',
-    required_answer_fields: ['matched games', 'dates', 'matched topic evidence', 'why each result matched'],
-    response_guidance:
-      'Use one short intro sentence and 3-6 bullets. Each bullet should name the game, the exact date, the matching headline or excerpt, and why it matched the topic.',
-    presentation_hints: {
-      format: 'recent_news_topic_search',
-      proof_field: 'items',
-    },
-    items,
-    answer_payload: {
-      query: topicQuery.query,
-      aliases: topicQuery.aliases,
-      items: items.map((item) => ({
-        appid: item.appid,
-        appName: item.appName,
-        title: item.title,
-        publishedAt: item.publishedAt,
-        firstSeenAt: item.firstSeenAt,
-        excerpt: item.excerpt,
-        bodyPreview: item.bodyPreview,
-        matchReason: item.matchReason,
-      })),
-    },
-    meta: {
-      ...checkedWindow,
-      limit,
-      query: topicQuery.query,
-      feedScope,
-      appTypes,
-    },
-  };
 }
 
 export async function getChangeActivityDetail(args: GetChangeActivityDetailArgs) {
-  const detail = await fetchChangeFeedActivityDetail(args.activity_id);
+  const response = await postToQueryApi<TigerExplainChangesResponse>(
+    '/v1/contracts/explain-changes',
+    {
+      activityId: args.activity_id,
+      includeNews: true,
+      limit: 1,
+      mode: 'before_after',
+    }
+  );
 
-  if (!detail) {
+  if (!response.ok || !response.data) {
+    return {
+      success: false,
+      error: response.reason ?? 'Change activity not found.',
+    };
+  }
+
+  const data = response.data;
+  const moment = data.selectedMoment ?? data.moments?.[0] ?? null;
+  if (!moment) {
     return {
       success: false,
       error: 'Change activity not found.',
     };
   }
 
-  return {
+  const events = (data.moments?.[0]?.events ?? []).map((event) => ({
+    eventId: 0,
+    appid: Number.parseInt(data.entity.platformEntityId, 10),
+    source: (event.source as 'media' | 'pics' | 'storefront') ?? 'storefront',
+    changeType: event.changeType,
+    occurredAt: event.occurredAt,
+    beforeValue: event.beforeValue as JsonValue,
+    afterValue: event.afterValue as JsonValue,
+    context:
+      event.context && typeof event.context === 'object' && !Array.isArray(event.context)
+        ? (event.context as Record<string, JsonValue | undefined>)
+        : {},
+  }));
+  const diffs = events
+    .map((event) => buildDiffPreview(event))
+    .filter((diff): diff is NonNullable<typeof diff> => Boolean(diff));
+  const signalFamilies = Array.from(new Set(events.map((event) => familyForChangeType(event.changeType))));
+
+  return attachToolExecutionProvenance({
     success: true,
     selected_change_surface: 'burst_detail',
     sufficient_to_answer: true,
@@ -2318,329 +2195,185 @@ export async function getChangeActivityDetail(args: GetChangeActivityDetailArgs)
     required_answer_fields: ['headline', 'concrete diffs', 'why it matters'],
     response_guidance: 'Use the concrete structured diffs and related announcements. Avoid generic summary filler.',
     detail: {
-      activityId: detail.activityId,
-      activityKind: detail.activityKind,
-      storyKind: detail.storyKind,
-      appid: detail.appid,
-      name: detail.appName,
-      appType: detail.appType,
-      occurredAt: detail.occurredAt,
-      headline: detail.headline,
-      summary: detail.summary,
-      facts: detail.facts,
-      highlightLabels: detail.highlightLabels,
-      signalFamilies: detail.signalFamilies,
-      diffs: detail.diffs,
-      relatedAnnouncements: detail.relatedAnnouncements,
-      aftermath: detail.aftermath,
-      externalUrl: detail.externalUrl,
-      body: detail.body,
-    },
-  };
-}
-
-async function resolveComparisonBurst(
-  args: CompareChangeBeforeAfterArgs
-): Promise<{
-  app: ResolvedApp | null;
-  error?: string;
-  candidates?: ResolvedApp['alternatives'];
-  detail: ChangeActivityDetail | null;
-  burstDetail: Awaited<ReturnType<typeof fetchChangeFeedBurstDetail>> | null;
-  activityId: string | null;
-}> {
-  if (args.activity_id) {
-    const parsed = parseActivityId(args.activity_id);
-    if (!parsed) {
-      return {
-        app: null,
-        detail: null,
-        burstDetail: null,
-        activityId: null,
-      };
-    }
-
-    if (parsed.kind !== 'change') {
-      throw new Error('compare_change_before_after only supports change activities, not announcement-only cards.');
-    }
-
-    const [detail, burstDetail] = await Promise.all([
-      fetchChangeFeedActivityDetail(args.activity_id),
-      fetchChangeFeedBurstDetail(parsed.value),
-    ]);
-
-    return {
-      app: detail
+      activityId: args.activity_id,
+      activityKind: 'change',
+      storyKind: signalFamilies.includes('pricing')
+        ? 'commercial-move'
+        : signalFamilies.includes('media') || signalFamilies.includes('store-page')
+          ? 'store-refresh'
+          : 'general-update',
+      appid: Number.parseInt(data.entity.platformEntityId, 10),
+      name: data.entity.displayName,
+      appType: 'game',
+      occurredAt: moment.windowEnd ?? events[0]?.occurredAt ?? new Date().toISOString(),
+      headline:
+        diffs[0]?.label
+          ? `${data.entity.displayName} changed ${diffs[0].label.toLowerCase()}.`
+          : `${data.entity.displayName} showed recent Steam changes.`,
+      summary:
+        diffs[0]?.afterText ?? diffs[0]?.note ?? `${data.entity.displayName} showed recent Steam changes.`,
+      facts: diffs.slice(0, 3).map((diff) => diff.label),
+      highlightLabels: signalFamilies,
+      signalFamilies,
+      diffs,
+      relatedAnnouncements: (moment.linkedNews ?? []).map((item) => ({
+        excerpt: null,
+        feedLabel: item.feedLabel,
+        feedName: item.feedName,
+        firstSeenAt: item.publishedAt,
+        gid: `${data.entity.platformEntityId}:${item.url}`,
+        publishedAt: item.publishedAt,
+        title: item.title,
+        url: item.url,
+      })),
+      aftermath: data.comparisonWindows
         ? {
-            appid: detail.appid,
-            name: detail.appName,
-            appType: detail.appType ?? 'game',
-            releaseYear: detail.releaseDate ? new Date(detail.releaseDate).getFullYear() : null,
-            alternatives: [],
+            baseline7d: data.comparisonWindows.baseline7d ?? null,
+            response1d: data.comparisonWindows.response1d ?? null,
+            response7d: data.comparisonWindows.response7d ?? null,
           }
         : null,
-      detail,
-      burstDetail,
-      activityId: args.activity_id,
-    };
-  }
-
-  const resolvedApp = await resolveAppReference({
-    appid: args.appid,
-    app_name: args.app_name,
-  });
-  const app = resolvedApp.app;
-
-  if (!app) {
-    return {
-      app: null,
-      error: resolvedApp.error,
-      candidates: resolvedApp.candidates,
-      detail: null,
-      burstDetail: null,
-      activityId: null,
-    };
-  }
-
-  const response = await fetchChatChangeActivityResponse({
-    days: clamp(args.days, DEFAULT_TIMELINE_DAYS, 1, MAX_TIMELINE_DAYS),
-    view: 'all-activity',
-    mode: 'changes',
-    sort: 'newest',
-    appTypes: app.appType ? [app.appType] : null,
-    signalFamilies: null,
-    search: app.name,
-    cursor: null,
-    limit: 25,
-  });
-
-  const matchedActivity = response.items
-    .filter((item) => item.appid === app.appid && item.activityKind === 'change')
-    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
-
-  if (!matchedActivity) {
-    return {
-      app,
-      detail: null,
-      burstDetail: null,
-      activityId: null,
-    };
-  }
-
-  const parsed = parseActivityId(matchedActivity.activityId);
-  if (!parsed || parsed.kind !== 'change') {
-    return {
-      app,
-      detail: null,
-      burstDetail: null,
-      activityId: matchedActivity.activityId,
-    };
-  }
-
-  const [detail, burstDetail] = await Promise.all([
-    fetchChangeFeedActivityDetail(matchedActivity.activityId),
-    fetchChangeFeedBurstDetail(parsed.value),
-  ]);
-
-  return {
-    app,
-    detail,
-    burstDetail,
-    activityId: matchedActivity.activityId,
-  };
+      externalUrl: moment.linkedNews?.[0]?.url ?? null,
+      body: null,
+    },
+  }, TIGER_CHANGE_DETAIL_PROVENANCE);
 }
 
 export async function compareChangeBeforeAfter(args: CompareChangeBeforeAfterArgs) {
-  const resolved = await resolveComparisonBurst(args);
+  let entityUid: string | undefined;
+  let app: ResolvedApp | null = null;
 
-  if (!resolved.app) {
+  if (!args.activity_id) {
+    const resolved = await resolveAppReference({
+      appid: args.appid,
+      app_name: args.app_name,
+    });
+    if (!resolved.app) {
+      return {
+        success: false,
+        error: resolved.error ?? 'Unable to resolve the requested game or activity.',
+        candidates: resolved.candidates ?? [],
+      };
+    }
+    app = resolved.app;
+    entityUid = buildTigerGameEntityUid(resolved.app.appid);
+  }
+
+  const response = await postToQueryApi<TigerExplainChangesResponse>(
+    '/v1/contracts/explain-changes',
+    {
+      activityId: args.activity_id ?? null,
+      entityUid,
+      includeNews: true,
+      limit: 1,
+      mode: 'before_after',
+    }
+  );
+
+  if (!response.ok || !response.data) {
     return {
       success: false,
-      error: resolved.error ?? 'Unable to resolve the requested game or activity.',
-      candidates: resolved.candidates ?? [],
+      error: response.reason ?? 'Unable to resolve the requested game or activity.',
     };
   }
 
-  if (!resolved.detail || !resolved.burstDetail || !resolved.activityId) {
+  const data = response.data;
+  const selectedMoment = data.selectedMoment ?? data.moments?.[0] ?? null;
+  const momentEvents = data.moments?.[0]?.events ?? [];
+  if (!selectedMoment || momentEvents.length === 0) {
     return {
       success: false,
-      error: `I didn't find a recent change burst for ${resolved.app.name} in the requested window.`,
+      error: `I didn't find a recent change burst for ${app?.name ?? data.entity.displayName} in the requested window.`,
     };
   }
 
-  const baseline30d = await fetchWindowMetrics(
-    resolved.app.appid,
-    new Date(Date.parse(resolved.burstDetail.burstStartedAt) - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    resolved.burstDetail.burstStartedAt
-  );
+  const diffs = momentEvents
+    .map((event) =>
+      buildDiffPreview({
+        eventId: 0,
+        appid: Number.parseInt(data.entity.platformEntityId, 10),
+        source: (event.source as 'media' | 'pics' | 'storefront') ?? 'storefront',
+        changeType: event.changeType,
+        occurredAt: event.occurredAt,
+        beforeValue: event.beforeValue as JsonValue,
+        afterValue: event.afterValue as JsonValue,
+        context:
+          event.context && typeof event.context === 'object' && !Array.isArray(event.context)
+            ? (event.context as Record<string, JsonValue | undefined>)
+            : {},
+      })
+    )
+    .filter((diff): diff is NonNullable<typeof diff> => Boolean(diff));
 
-  const response30d = await fetchWindowMetrics(
-    resolved.app.appid,
-    resolved.burstDetail.burstEndedAt,
-    new Date(Date.parse(resolved.burstDetail.burstEndedAt) + 30 * 24 * 60 * 60 * 1000).toISOString()
-  );
-
-  return {
+  return attachToolExecutionProvenance({
     success: true,
-    app: resolved.app,
-    activityId: resolved.activityId,
+    app: app ?? {
+      appType: 'game',
+      appid: Number.parseInt(data.entity.platformEntityId, 10),
+      name: data.entity.displayName,
+      releaseYear: null,
+      alternatives: [],
+    },
+    activityId: args.activity_id ?? `change:${data.entity.platformEntityId}`,
     selected_change_surface: 'before_after',
     sufficient_to_answer: true,
     sufficiency_reason: 'The before/after comparison is sufficient to answer directly when you structure the response around before state, after state, and impact.',
     required_answer_fields: ['what changed', 'before state', 'after state', 'why it matters', 'confidence'],
     response_guidance: 'Use sections in this order: What changed, Before, After, Why it matters, Confidence.',
     selectedActivity: {
-      headline: resolved.detail.headline,
-      summary: resolved.detail.summary,
-      occurredAt: resolved.detail.occurredAt,
-      signalFamilies: resolved.detail.signalFamilies,
-      storyKind: resolved.detail.storyKind,
+      headline:
+        diffs[0]?.label
+          ? `${data.entity.displayName} changed ${diffs[0].label.toLowerCase()}.`
+          : `${data.entity.displayName} showed recent Steam changes.`,
+      summary:
+        diffs[0]?.afterText ?? diffs[0]?.note ?? `${data.entity.displayName} showed recent Steam changes.`,
+      occurredAt: selectedMoment.windowEnd ?? momentEvents[0]?.occurredAt ?? new Date().toISOString(),
+      signalFamilies: Array.from(new Set(momentEvents.map((event) => familyForChangeType(event.changeType)))),
+      storyKind: 'change-roundup',
     },
-    diffs: resolved.detail.diffs,
-    relatedAnnouncements: resolved.detail.relatedAnnouncements,
+    diffs,
+    relatedAnnouncements: (selectedMoment.linkedNews ?? []).map((item) => ({
+      excerpt: null,
+      feedLabel: item.feedLabel,
+      feedName: item.feedName,
+      firstSeenAt: item.publishedAt,
+      gid: `${data.entity.platformEntityId}:${item.url}`,
+      publishedAt: item.publishedAt,
+      title: item.title,
+      url: item.url,
+    })),
     presentation_hints: {
       format: 'before_after_change',
       proof_field: 'diffs',
     },
     answer_payload: {
-      app: resolved.app,
-      selectedActivity: {
-        headline: resolved.detail.headline,
-        summary: resolved.detail.summary,
-        occurredAt: resolved.detail.occurredAt,
+      app: app ?? {
+        appid: Number.parseInt(data.entity.platformEntityId, 10),
+        name: data.entity.displayName,
       },
-      diffs: resolved.detail.diffs.slice(0, 3),
+      selectedActivity: {
+        headline:
+          diffs[0]?.label
+            ? `${data.entity.displayName} changed ${diffs[0].label.toLowerCase()}.`
+            : `${data.entity.displayName} showed recent Steam changes.`,
+        summary:
+          diffs[0]?.afterText ?? diffs[0]?.note ?? `${data.entity.displayName} showed recent Steam changes.`,
+        occurredAt: selectedMoment.windowEnd ?? momentEvents[0]?.occurredAt ?? new Date().toISOString(),
+      },
+      diffs: diffs.slice(0, 3),
       windows: {
-        baseline30d,
-        response30d,
+        baseline30d: data.comparisonWindows?.baseline30d ?? null,
+        response30d: data.comparisonWindows?.response30d ?? null,
       },
     },
     windows: {
-      baseline7d: resolved.detail.aftermath?.baseline7d ?? null,
-      baseline30d,
-      response1d: resolved.detail.aftermath?.response1d ?? null,
-      response7d: resolved.detail.aftermath?.response7d ?? null,
-      response30d,
+      baseline7d: data.comparisonWindows?.baseline7d ?? null,
+      baseline30d: data.comparisonWindows?.baseline30d ?? null,
+      response1d: data.comparisonWindows?.response1d ?? null,
+      response7d: data.comparisonWindows?.response7d ?? null,
+      response30d: data.comparisonWindows?.response30d ?? null,
     },
-  };
-}
-
-function buildReasons(
-  pattern: ChangePattern,
-  aggregate: Pick<PatternAggregate, 'signalFamilies' | 'storyKinds' | 'announcementCount' | 'changeCount'>,
-  metrics: AppMetrics | null
-): { confidence: 'high' | 'medium'; reasons: string[] } | null {
-  const reasons: string[] = [];
-
-  switch (pattern) {
-    case 'marketing_push': {
-      const hasPricing = aggregate.signalFamilies.has('pricing');
-      const hasMerch = aggregate.signalFamilies.has('media') || aggregate.signalFamilies.has('store-page');
-      const hasAnnouncement = aggregate.announcementCount > 0;
-
-      if (!(hasPricing && hasMerch && hasAnnouncement)) {
-        return null;
-      }
-
-      reasons.push('Announcement activity landed in the same window.');
-      reasons.push('Pricing or discount movement is visible.');
-      reasons.push('Store-page or media refresh activity is visible.');
-      return { confidence: 'high', reasons };
-    }
-
-    case 'relaunch_pattern': {
-      const hasPricing = aggregate.signalFamilies.has('pricing');
-      const hasRefresh = aggregate.signalFamilies.has('media') || aggregate.signalFamilies.has('store-page');
-      const hasLaunchSignal =
-        aggregate.storyKinds.has('release-prep') || aggregate.announcementCount > 0;
-
-      if (!(hasPricing && hasRefresh && hasLaunchSignal)) {
-        return null;
-      }
-
-      reasons.push('Pricing changed in the same window as presentation changes.');
-      reasons.push('Store-page or media refresh suggests a packaged beat.');
-      reasons.push('Launch-adjacent or announcement activity supports a relaunch interpretation.');
-      return { confidence: 'high', reasons };
-    }
-
-    case 'update_tease': {
-      const hasAnnouncement = aggregate.announcementCount > 0;
-      const hasRefresh = aggregate.signalFamilies.has('media') || aggregate.signalFamilies.has('store-page');
-      const hasBuild = aggregate.signalFamilies.has('build');
-
-      if (!(hasAnnouncement && hasRefresh) || hasBuild) {
-        return null;
-      }
-
-      reasons.push('Announcements are present without matching build activity yet.');
-      reasons.push('Presentation changes suggest setup or teasing behavior.');
-      return { confidence: 'medium', reasons };
-    }
-
-    case 'under_marketed': {
-      if (
-        !metrics ||
-        (metrics.positivePercentage ?? 0) < 80 ||
-        (metrics.totalReviews ?? 0) < 200 ||
-        ((metrics.reviewVelocity30d ?? 0) < 1 && !aggregate.signalFamilies.has('build')) ||
-        aggregate.announcementCount > 0 ||
-        aggregate.signalFamilies.has('media') ||
-        aggregate.signalFamilies.has('store-page')
-      ) {
-        return null;
-      }
-
-      reasons.push(`Review quality is ${metrics.positivePercentage}% positive on ${(metrics.totalReviews ?? 0).toLocaleString()} reviews.`);
-      reasons.push('Recent build or review-velocity evidence suggests active product work.');
-      reasons.push('There is little recent announcement or storefront-refresh evidence.');
-      return { confidence: 'medium', reasons };
-    }
-
-    case 'signable_candidate': {
-      if (
-        !metrics ||
-        (metrics.positivePercentage ?? 0) < 85 ||
-        (metrics.totalReviews ?? 0) < 300 ||
-        ((metrics.reviewVelocity30d ?? 0) < 1 && !aggregate.signalFamilies.has('build')) ||
-        aggregate.signalFamilies.has('media') ||
-        aggregate.signalFamilies.has('store-page')
-      ) {
-        return null;
-      }
-
-      reasons.push(`Review quality is ${metrics.positivePercentage}% positive with ${(metrics.totalReviews ?? 0).toLocaleString()} reviews.`);
-      reasons.push('Recent activity suggests the product is still moving.');
-      reasons.push('Public marketing execution looks lighter than product quality would justify.');
-      return { confidence: 'medium', reasons };
-    }
-
-    case 'rescue_candidate': {
-      const hasPricing = aggregate.signalFamilies.has('pricing');
-      const declining =
-        metrics?.trend30dDirection === 'down' ||
-        (metrics?.ccuTrend7dPct ?? 0) < 0;
-
-      if (
-        !metrics ||
-        (metrics.positivePercentage ?? 0) < 70 ||
-        (metrics.totalReviews ?? 0) < 100 ||
-        !hasPricing ||
-        !declining
-      ) {
-        return null;
-      }
-
-      reasons.push(`Sentiment remains ${metrics.positivePercentage}% positive on ${(metrics.totalReviews ?? 0).toLocaleString()} reviews.`);
-      reasons.push('Recent pricing or discount activity is visible.');
-      reasons.push('Trend data points to softening demand or momentum.');
-      return { confidence: 'medium', reasons };
-    }
-
-    case 'sustained_response':
-    case 'announcement_weak_response':
-      return null;
-  }
+  }, TIGER_CHANGE_DETAIL_PROVENANCE);
 }
 
 export async function findChangePatterns(args: FindChangePatternsArgs) {
@@ -2652,65 +2385,36 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
   const excludeAppIds = Array.isArray(args.excludeAppIds)
     ? args.excludeAppIds.filter((value): value is number => typeof value === 'number')
     : [];
-  let rawCandidates: ChatChangePatternCandidateRow[];
   try {
-    rawCandidates = await fetchChatChangePatternCandidates({
-      pattern: args.pattern,
-      days,
-      appTypes,
-      search,
-      limit: Math.min(Math.max(limit + excludeAppIds.length + 10, getPatternRpcLimit(limit)), 80),
-    });
-  } catch (error) {
-    const classification = classifyChangeIntelError(error);
-    return {
-      success: false,
-      unavailable: true,
-      selected_change_surface: 'projection_pattern',
-      failure_kind: classification.failureKind,
-      error: `Unable to load change-pattern candidates right now. ${classification.userMessage}`,
-      sufficient_to_answer: false,
-      fallback_allowed: false,
-      response_guidance:
-        'Say the change-pattern surface is temporarily unavailable and suggest a narrower follow-up such as a specific title, recent store-page changes, or release-timing changes.',
-    };
-  }
-  const meta = {
-    days,
-    limit,
-    search,
-    evaluatedDays: days,
-    shortlistWindowDays,
-    shortlistCount: rawCandidates.length,
-    excludedAppCount: excludeAppIds.length,
-  };
-  const filteredRawCandidates =
-    excludeAppIds.length > 0
-      ? rawCandidates.filter((candidate) => !excludeAppIds.includes(candidate.appid))
-      : rawCandidates;
-
-  if (isResponsePattern(args.pattern)) {
-    const responsePattern = args.pattern;
-    const details = await Promise.all(
-      filteredRawCandidates.slice(0, Math.min(limit * 2, 8)).map(async (candidate) => {
-        const activityId = candidate.activityIds[0];
-        if (!activityId) {
-          return null;
-        }
-
-        const detail = await fetchChangeFeedActivityDetail(activityId).catch(() => null);
-        if (!detail) {
-          return null;
-        }
-
-        return buildResponsePatternCandidate(responsePattern, detail);
-      })
+    const response = await postToQueryApi<TigerDiscoverChangePatternsResponse>(
+      '/v1/contracts/discover-change-patterns',
+      {
+        appTypes,
+        days,
+        excludeAppIds,
+        limit,
+        pattern: args.pattern,
+        query: search,
+      }
     );
 
-    const results = details.filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, limit);
+    if (!response.ok || !response.data) {
+      throw new Error(response.reason ?? 'Tiger discover-change-patterns failed');
+    }
+    const data = response.data;
+    const results = (data.items ?? []).filter((item) => !excludeAppIds.includes(item.appid));
+    const meta = {
+      days,
+      limit,
+      search,
+      evaluatedDays: days,
+      shortlistWindowDays,
+      shortlistCount: results.length,
+      excludedAppCount: excludeAppIds.length,
+    };
 
     if (results.length === 0) {
-      return {
+      return attachToolExecutionProvenance({
         success: true,
         pattern: args.pattern,
         results: [],
@@ -2718,35 +2422,35 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
         selected_change_surface: 'projection_pattern',
         no_match: true,
         sufficient_to_answer: true,
-        sufficiency_reason:
-          args.pattern === 'announcement_weak_response'
-            ? 'No recent announcement windows showed a clearly weak downstream response in the requested timeframe.'
-            : 'No sustained-response candidates met the evidence threshold in the requested window.',
-        required_answer_fields: ['what was checked', 'why the evidence was insufficient'],
-        response_guidance:
-          args.pattern === 'announcement_weak_response'
-            ? 'Explain that the query looked for announcement-linked change windows with weak follow-through and that no candidates cleared the threshold.'
-            : 'Explain the checked response threshold and say no candidates cleared it.',
+        sufficiency_reason: 'No change-pattern candidates matched the requested evidence threshold.',
+        required_answer_fields: ['what was checked', 'time window', 'why no candidate qualified'],
+        response_guidance: 'State the requested pattern and why no candidate cleared the evidence threshold.',
         meta,
-      };
+      }, TIGER_CHANGE_PATTERNS_PROVENANCE);
     }
 
-    return {
+    return attachToolExecutionProvenance({
       success: true,
       pattern: args.pattern,
-      results,
+      results: results.map((item) => ({
+        activityIds: item.activityIds,
+        confidence: item.confidence,
+        metrics: item.metrics,
+        name: item.name,
+        appid: item.appid,
+        occurredAt: item.occurredAt,
+        primaryProof: item.primaryProof,
+        reasons: item.reasons,
+        signalFamilies: item.signalFamilies,
+        storyKinds: item.storyKinds,
+      })),
       total_found: results.length,
       selected_change_surface: 'projection_pattern',
+      sparse_result: results.length < Math.min(limit, 3),
       sufficient_to_answer: true,
-      sufficiency_reason:
-        args.pattern === 'announcement_weak_response'
-          ? 'A ranked announcement-response set with proof packets is available and can be answered directly.'
-          : 'A ranked sustained-response set with proof packets is available and can be answered directly.',
+      sufficiency_reason: 'A ranked pattern set with supporting proof packets is available and can be answered directly.',
       required_answer_fields: ['ranked candidates', 'evidence', 'timing', 'why it qualifies'],
-      response_guidance:
-        args.pattern === 'announcement_weak_response'
-          ? 'For each row, cite the attached announcement evidence and the weak downstream response window. Avoid generic “low engagement” filler.'
-          : 'For each row, cite the concrete response signal and the post-change window. Avoid canned repeated reasons.',
+      response_guidance: 'For each row, state the exact evidence behind the pattern and why it matters. Do not reuse identical canned reasons.',
       presentation_hints: {
         format: 'ranked_change_patterns',
         proof_field: 'primaryProof',
@@ -2764,105 +2468,19 @@ export async function findChangePatterns(args: FindChangePatternsArgs) {
         })),
       },
       meta,
-    };
-  }
-
-  const fallbackMetrics = patternNeedsLiveMetrics(args.pattern)
-    ? await fetchAppMetrics(
-        filteredRawCandidates
-          .filter((candidate) => !candidateHasEmbeddedMetrics(candidate))
-          .map((candidate) => candidate.appid)
-      )
-    : new Map<number, AppMetrics>();
-  const hydratedCandidates = hydratePatternMetrics(filteredRawCandidates, fallbackMetrics);
-
-  const aggregates = buildPatternAggregates(hydratedCandidates);
-  const candidates: PatternCandidate[] = [];
-
-  for (const aggregate of aggregates) {
-    const metrics =
-      hydratedCandidates.find((candidate) => candidate.appid === aggregate.appid)?.metrics ?? null;
-    const decision = buildReasons(args.pattern, aggregate, metrics);
-
-    if (!decision) {
-      continue;
-    }
-
-    candidates.push({
-      appid: aggregate.appid,
-      name: aggregate.name,
-      occurredAt: aggregate.latestOccurredAt,
-      confidence: decision.confidence,
-      reasons: decision.reasons,
-      signalFamilies: Array.from(aggregate.signalFamilies),
-      storyKinds: Array.from(aggregate.storyKinds),
-      activityIds: aggregate.activityIds,
-      metrics,
-      primaryProof: null,
-    });
-  }
-
-  candidates.sort((left, right) => {
-    if (left.confidence !== right.confidence) {
-      return left.confidence === 'high' ? -1 : 1;
-    }
-
-    const rightReviews = right.metrics?.totalReviews ?? 0;
-    const leftReviews = left.metrics?.totalReviews ?? 0;
-    if (rightReviews !== leftReviews) {
-      return rightReviews - leftReviews;
-    }
-
-    return right.occurredAt.localeCompare(left.occurredAt);
-  });
-
-  const rankedResults = candidates.slice(0, limit);
-
-  if (rankedResults.length === 0) {
+    }, TIGER_CHANGE_PATTERNS_PROVENANCE);
+  } catch (error) {
+    const classification = classifyChangeIntelError(error);
     return {
-      success: true,
-      pattern: args.pattern,
-      results: [],
-      total_found: 0,
+      success: false,
+      unavailable: true,
       selected_change_surface: 'projection_pattern',
-      no_match: true,
-      sufficient_to_answer: true,
-      sufficiency_reason: 'No change-pattern candidates matched the requested evidence threshold.',
-      required_answer_fields: ['what was checked', 'time window', 'why no candidate qualified'],
-      response_guidance: 'State the requested pattern and why no candidate cleared the evidence threshold.',
-      meta,
+      failure_kind: classification.failureKind,
+      error: `Unable to load change-pattern candidates right now. ${classification.userMessage}`,
+      sufficient_to_answer: false,
+      fallback_allowed: false,
+      response_guidance:
+        'Say the change-pattern surface is temporarily unavailable and suggest a narrower follow-up such as a specific title, recent store-page changes, or release-timing changes.',
     };
   }
-
-  const results = await hydratePatternProofPackets(rankedResults, Math.min(limit, 5));
-
-  return {
-    success: true,
-    pattern: args.pattern,
-    results,
-    total_found: results.length,
-    selected_change_surface: 'projection_pattern',
-    sparse_result: results.length < Math.min(limit, 3),
-    sufficient_to_answer: true,
-    sufficiency_reason: 'A ranked pattern set with supporting proof packets is available and can be answered directly.',
-    required_answer_fields: ['ranked candidates', 'evidence', 'timing', 'why it qualifies'],
-    response_guidance: 'For each row, state the exact evidence behind the pattern and why it matters. Do not reuse identical canned reasons.',
-    presentation_hints: {
-      format: 'ranked_change_patterns',
-      proof_field: 'primaryProof',
-    },
-    answer_payload: {
-      pattern: args.pattern,
-      results: results.map((result) => ({
-        appid: result.appid,
-        name: result.name,
-        occurredAt: result.occurredAt,
-        confidence: result.confidence,
-        reasons: result.reasons,
-        signalFamilies: result.signalFamilies,
-        primaryProof: result.primaryProof,
-      })),
-    },
-    meta,
-  };
 }

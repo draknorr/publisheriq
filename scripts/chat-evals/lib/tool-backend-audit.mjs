@@ -1,4 +1,4 @@
-const LEGACY_BACKEND_KINDS = new Set([
+export const LEGACY_BACKEND_KINDS = new Set([
   'cube',
   'supabase_sql',
   'supabase_rpc',
@@ -17,7 +17,7 @@ function normalizeTraceEntries(value) {
   return Array.isArray(value) ? value.filter((entry) => entry && typeof entry === 'object') : [];
 }
 
-function summarizeTraceEntries(entries) {
+export function summarizeTraceEntries(entries) {
   const normalized = normalizeTraceEntries(entries);
   const executedEntries = normalized.filter((entry) => entry.readOccurred !== false);
   const legacyEntries = executedEntries.filter((entry) =>
@@ -321,6 +321,12 @@ function buildAuditSummary(promptTraceRows, scenarioTraceRows, toolUsageSummary,
   const promptLegacyCount = promptTraceRows.filter(
     (row) => row.traceSummary.stillDependsOnLegacyAnswerPath
   ).length;
+  const promptUnknownCount = promptTraceRows.filter(
+    (row) => !row.traceSummary.captured
+  ).length;
+  const promptTigerOnlyCount = promptTraceRows.filter(
+    (row) => row.traceSummary.captured && !row.traceSummary.stillDependsOnLegacyAnswerPath
+  ).length;
   const scenarioTurnRows = scenarioTraceRows.flatMap((scenario) =>
     scenario.turns.map((turn) => ({
       scenarioId: scenario.scenarioId,
@@ -330,6 +336,12 @@ function buildAuditSummary(promptTraceRows, scenarioTraceRows, toolUsageSummary,
   const scenarioLegacyCount = scenarioTurnRows.filter(
     ({ turn }) => turn.traceSummary.stillDependsOnLegacyAnswerPath
   ).length;
+  const scenarioUnknownCount = scenarioTurnRows.filter(
+    ({ turn }) => !turn.traceSummary.captured
+  ).length;
+  const scenarioTigerOnlyCount = scenarioTurnRows.filter(
+    ({ turn }) => turn.traceSummary.captured && !turn.traceSummary.stillDependsOnLegacyAnswerPath
+  ).length;
 
   return {
     backendUsage: backendUsageSummary.map((row) => ({
@@ -338,9 +350,11 @@ function buildAuditSummary(promptTraceRows, scenarioTraceRows, toolUsageSummary,
       itemCount: row.itemCount,
     })),
     promptLegacyDependencyCount: promptLegacyCount,
-    promptTigerOnlyCount: promptTraceRows.length - promptLegacyCount,
+    promptTigerOnlyCount,
+    promptUnknownDependencyCount: promptUnknownCount,
     scenarioTurnLegacyDependencyCount: scenarioLegacyCount,
-    scenarioTurnTigerOnlyCount: scenarioTurnRows.length - scenarioLegacyCount,
+    scenarioTurnTigerOnlyCount: scenarioTigerOnlyCount,
+    scenarioTurnUnknownDependencyCount: scenarioUnknownCount,
     topLegacyDependencies: toolUsageSummary
       .filter((row) => row.legacyReadCount > 0)
       .slice(0, 10)
@@ -369,6 +383,7 @@ function renderMigrationMatrixMarkdown(params) {
   const scenarioLegacyRows = migrationMatrix.filter(
     (row) => row.itemType === 'scenario_turn' && row.stillDependsOnLegacyAnswerPath
   );
+  const unknownRows = migrationMatrix.filter((row) => row.traceCaptured === false);
 
   const lines = [
     '# Chat Tool and Backend Audit',
@@ -376,8 +391,10 @@ function renderMigrationMatrixMarkdown(params) {
     `- Generated: ${generatedAt}`,
     `- Prompts still using legacy answer-path reads: ${auditSummary.promptLegacyDependencyCount}`,
     `- Prompt rows that are Tiger-only: ${auditSummary.promptTigerOnlyCount}`,
+    `- Prompt rows with unknown dependency state: ${auditSummary.promptUnknownDependencyCount}`,
     `- Scenario turns still using legacy answer-path reads: ${auditSummary.scenarioTurnLegacyDependencyCount}`,
     `- Scenario turns that are Tiger-only: ${auditSummary.scenarioTurnTigerOnlyCount}`,
+    `- Scenario turns with unknown dependency state: ${auditSummary.scenarioTurnUnknownDependencyCount}`,
     '',
     '## Backend Usage',
     '',
@@ -413,6 +430,16 @@ function renderMigrationMatrixMarkdown(params) {
     lines.push(
       `| ${escapeTable(row.itemId)} | ${escapeTable(row.prompt)} | ${escapeTable(row.legacyDependencies.join(', ') || '-')} | ${escapeTable(row.recommendedTigerContracts.join(', ') || '-')} |`
     );
+  }
+
+  if (unknownRows.length > 0) {
+    lines.push('', '## Prompts And Turns Without Trace Coverage', '', '| Item | Prompt | Route | Status |', '|---|---|---|---|');
+
+    for (const row of unknownRows) {
+      lines.push(
+        `| ${escapeTable(row.itemId)} | ${escapeTable(row.prompt)} | ${escapeTable(row.routeSummary || '-')} | ${escapeTable(row.status || '-')} |`
+      );
+    }
   }
 
   return `${lines.join('\n')}\n`;

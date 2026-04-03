@@ -7,6 +7,7 @@ import { buildAuditArtifacts } from './tool-backend-audit.mjs';
 
 export async function writeFullSuiteArtifacts(params) {
   const {
+    baselineComparison,
     outDir,
     promptResults,
     reportTitle,
@@ -24,6 +25,7 @@ export async function writeFullSuiteArtifacts(params) {
   const enrichedRunSummary = {
     ...runSummary,
     auditSummary: auditArtifacts.auditSummary,
+    comparisonSummary: baselineComparison?.summary ?? null,
   };
 
   await fs.writeFile(
@@ -90,8 +92,32 @@ export async function writeFullSuiteArtifacts(params) {
     `${JSON.stringify(auditArtifacts.unmappedTools, null, 2)}\n`
   );
 
+  if (baselineComparison) {
+    await fs.writeFile(
+      path.join(outDir, 'prompt-baseline-comparison.json'),
+      `${JSON.stringify(baselineComparison.promptComparisons, null, 2)}\n`
+    );
+    await fs.writeFile(
+      path.join(outDir, 'scenario-baseline-comparison.json'),
+      `${JSON.stringify(baselineComparison.scenarioComparisons, null, 2)}\n`
+    );
+    await fs.writeFile(
+      path.join(outDir, 'prompt-baseline-comparison.md'),
+      baselineComparison.promptComparisonMarkdown
+    );
+    await fs.writeFile(
+      path.join(outDir, 'non-tiger-prompts.json'),
+      `${JSON.stringify(baselineComparison.nonTigerPrompts, null, 2)}\n`
+    );
+    await fs.writeFile(
+      path.join(outDir, 'migration-priority.json'),
+      `${JSON.stringify(baselineComparison.migrationPriority, null, 2)}\n`
+    );
+  }
+
   return {
     auditArtifacts,
+    baselineComparison,
     promptRankings,
     scenarioRankings,
   };

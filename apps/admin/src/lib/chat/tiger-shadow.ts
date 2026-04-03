@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { SessionChatContext } from '@/lib/chat/chat-context-types';
+import { buildChatEntityUid } from '@/lib/chat/entity-uid';
 import type { ChatToolCall } from '@/lib/llm/types';
 import { renderTigerPrimaryResult } from '@/lib/chat/tiger-primary-renderer';
 
@@ -32,7 +33,7 @@ const CHANGE_EXPLANATION_TOOL_NAMES = new Set([
   'compare_change_before_after',
 ]);
 const NEWS_PROMPT_PATTERN =
-  /\b(news|announcement|announcements|patch notes?|devlog|roadmap|update notes?|recent updates?)\b/i;
+  /\b(news|announcement|announcements|patch notes?|devlog|dev diar(?:y|ies)|developer diar(?:y|ies)|roadmap|demo|playtest|update notes?|recent updates?|behind the scenes)\b/i;
 const CHANGE_PROMPT_PATTERN =
   /\b(what changed|changed recently|why did .* spike|recent changes|change timeline|timeline of changes)\b/i;
 const CHANGE_DISCOVERY_PROMPT_PATTERN =
@@ -49,6 +50,10 @@ const CONCEPT_DISCOVERY_PROMPT_PATTERN =
   /\b(?:recommend|find|show|give)\b.*\bgames?\b/i;
 const COMPARE_PROMPT_PATTERN =
   /\bcompare\b|\bvs\.?\b|\bversus\b|\bstack up\b/i;
+const COMPARE_FOLLOW_UP_PROMPT_PATTERN =
+  /\b(?:compare\s+(?:those|them)|same compare|same comparison|same set|same results)\b/i;
+const COMPARE_TOP_COUNT_FOLLOW_UP_PROMPT_PATTERN =
+  /^(?:now|just)\s+(?:the\s+)?top\s+(\d+)\b/i;
 const METRIC_HISTORY_PROMPT_PATTERN =
   /\b(?:how have|show|track|history of|over time|trend of)\b.*\b(?:reviews?|review score|sentiment|owners?|sales|ccu|concurrent players?|price|discount|playtime)\b/i;
 const RANKING_BASE_PROMPT_PATTERN =
@@ -147,7 +152,98 @@ interface RankEntitiesResponse {
 }
 
 interface SearchDocumentsResponse {
-  items?: unknown[];
+  entity?: {
+    displayName?: string;
+  } | null;
+  interpretedFilters?: {
+    mode?: 'digest' | 'latest_item' | 'topic_search';
+    query?: string | null;
+  };
+  items?: Array<{
+    appName?: string;
+    appid?: number;
+    bodyPreview?: string | null;
+    excerpt?: string | null;
+    feedLabel?: string | null;
+    feedScope?: string;
+    publishedAt?: string | null;
+    sortTime?: string;
+    title?: string | null;
+    url?: string;
+  }>;
+  latestItem?: SearchDocumentsResponse['items'] extends Array<infer T> ? T | null : null;
+  sufficientToAnswer?: boolean;
+}
+
+type ChangeActivitySignalFamily =
+  | 'announcement'
+  | 'release'
+  | 'pricing'
+  | 'store-page'
+  | 'media'
+  | 'taxonomy'
+  | 'platform'
+  | 'build';
+
+type ChangePattern =
+  | 'marketing_push'
+  | 'relaunch_pattern'
+  | 'update_tease'
+  | 'under_marketed'
+  | 'signable_candidate'
+  | 'rescue_candidate'
+  | 'sustained_response'
+  | 'announcement_weak_response';
+
+interface SearchChangeActivityResponse {
+  interpretedFilters?: {
+    days?: number;
+    mode?: 'all' | 'announcements' | 'changes';
+    query?: string | null;
+    signalFamilies?: ChangeActivitySignalFamily[];
+    sort?: string;
+    view?: string;
+  };
+  items?: Array<{
+    activityId: string;
+    activityKind: 'announcement' | 'change';
+    appid: number;
+    facts: string[];
+    headline: string;
+    highlightLabels: string[];
+    name: string;
+    occurredAt: string;
+    relatedAnnouncementCount: number;
+    signalFamilies: ChangeActivitySignalFamily[];
+    storyKind: string;
+    summary: string;
+  }>;
+  sufficientToAnswer?: boolean;
+}
+
+interface DiscoverChangePatternsResponse {
+  interpretedFilters?: {
+    days?: number;
+    pattern?: ChangePattern;
+    query?: string | null;
+  };
+  items?: Array<{
+    activityIds: string[];
+    appid: number;
+    confidence: 'high' | 'medium';
+    name: string;
+    occurredAt: string;
+    primaryProof?: {
+      activityId: string;
+      facts: string[];
+      headline: string;
+      occurredAt: string;
+      signalFamilies: ChangeActivitySignalFamily[];
+      summary: string;
+    } | null;
+    reasons: string[];
+    signalFamilies: ChangeActivitySignalFamily[];
+  }>;
   sufficientToAnswer?: boolean;
 }
 
@@ -304,8 +400,8 @@ type TigerPrimaryMatchedIntent = Exclude<TigerShadowMatchedIntent, null>;
 
 function isTigerPrimaryRenderableIntent(
   intent: TigerPrimaryMatchedIntent
-): intent is Exclude<TigerPrimaryMatchedIntent, 'change_discovery'> {
-  return intent !== 'change_discovery';
+): intent is TigerPrimaryMatchedIntent {
+  return Boolean(intent);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -462,6 +558,27 @@ function inferPrimaryMatchedIntent(prompt: string): TigerPrimaryMatchedIntent | 
   }
 
   return null;
+}
+
+function inferCompareFollowUpIntent(
+  prompt: string,
+  sessionContext: SessionChatContext | null
+): boolean {
+  const candidateSet = sessionContext?.candidateSet;
+  if (!candidateSet || candidateSet.ids.length < 2) {
+    return false;
+  }
+
+  if (
+    candidateSet.kind !== 'games'
+    && candidateSet.kind !== 'publishers'
+    && candidateSet.kind !== 'developers'
+  ) {
+    return false;
+  }
+
+  return COMPARE_FOLLOW_UP_PROMPT_PATTERN.test(prompt)
+    || COMPARE_TOP_COUNT_FOLLOW_UP_PROMPT_PATTERN.test(prompt);
 }
 
 function inferCompareIntent(prompt: string): boolean {
@@ -658,6 +775,98 @@ function extractEntityOverviewQuery(prompt: string): string | null {
   return extractEntityQueryFromPrompt(prompt);
 }
 
+function splitExplicitEntityList(value: string): string[] {
+  return value
+    .replace(/\s+/g, ' ')
+    .split(/\s*,\s*|\s+and\s+/i)
+    .map((item) => normalizeEntityQuery(item))
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 4);
+}
+
+function extractExplicitNewsTargets(prompt: string): string[] {
+  const patterns = [
+    /\bsummar(?:y|ize)\b.+?\bacross\s+(.+?)(?:[?.!]|$)/i,
+    /\bnews\s+across\s+(.+?)(?:[?.!]|$)/i,
+    /\bupdates?\s+across\s+(.+?)(?:[?.!]|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    const raw = normalizeEntityQuery(match?.[1] ?? null);
+    if (!raw) {
+      continue;
+    }
+
+    const items = splitExplicitEntityList(raw);
+    if (items.length >= 2) {
+      return items;
+    }
+  }
+
+  return [];
+}
+
+function inferNewsTopicQuery(prompt: string): string | null {
+  if (/\b(?:developer diar(?:y|ies)|dev diar(?:y|ies)|devlog)\b/i.test(prompt)) {
+    return 'developer diary';
+  }
+
+  if (/\broadmap\b/i.test(prompt)) {
+    return 'roadmap';
+  }
+
+  if (/\b(?:demo|playtest)\b/i.test(prompt)) {
+    return 'demo or playtest';
+  }
+
+  if (/\b(?:patch notes?|update notes?)\b/i.test(prompt)) {
+    return 'patch notes';
+  }
+
+  if (/\bbehind[- ]the[- ]scenes\b/i.test(prompt)) {
+    return 'behind the scenes';
+  }
+
+  return null;
+}
+
+function parsePromptDays(prompt: string, fallback = 30): number {
+  const explicitDays = prompt.match(/\b(?:last|past)\s+(\d+)\s+days?\b/i);
+  if (explicitDays) {
+    const parsed = Number.parseInt(explicitDays[1] ?? '', 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.min(parsed, 180);
+    }
+  }
+
+  if (/\bthis week\b/i.test(prompt)) {
+    return 7;
+  }
+
+  if (/\bthis month\b/i.test(prompt)) {
+    return 30;
+  }
+
+  if (/\bthis quarter\b/i.test(prompt)) {
+    return 90;
+  }
+
+  return fallback;
+}
+
+function shouldUseDigestNewsMode(prompt: string, entityQueries: string[]): boolean {
+  return entityQueries.length >= 2 || /\b(?:summar(?:y|ize)|digest|across)\b/i.test(prompt);
+}
+
+function shouldUseLatestNewsMode(prompt: string, entityQuery: string | null): boolean {
+  if (!entityQuery) {
+    return false;
+  }
+
+  return /\b(?:latest|newest|most recent)\b/i.test(prompt);
+}
+
 function inferEntityOverviewKindHint(
   prompt: string
 ): 'developer' | 'game' | 'publisher' | null {
@@ -688,6 +897,11 @@ function inferEntityOverviewViewMode(
 }
 
 function buildNewsTopicQuery(prompt: string, entityQuery?: string | null): string {
+  const canonicalTopic = inferNewsTopicQuery(prompt);
+  if (canonicalTopic) {
+    return canonicalTopic;
+  }
+
   let normalized = prompt
     .replace(/^(find|show|give|tell)\s+me\s+/i, '')
     .replace(/\b(any|recent|noteworthy|announcements?|news|updates?)\b/gi, '')
@@ -1813,6 +2027,27 @@ async function resolveGameEntityAttempt(query: string | null): Promise<{
   };
 }
 
+async function resolveGameEntityAttempts(queries: string[]): Promise<{
+  attempts: TigerShadowAttempt[];
+  entityUids: string[];
+}> {
+  const attempts: TigerShadowAttempt[] = [];
+  const entityUids: string[] = [];
+
+  for (const query of queries) {
+    const resolved = await resolveGameEntityAttempt(query);
+    attempts.push(resolved.attempt);
+    if (resolved.entityUid) {
+      entityUids.push(resolved.entityUid);
+    }
+  }
+
+  return {
+    attempts,
+    entityUids: Array.from(new Set(entityUids)),
+  };
+}
+
 function pickCompareResolutionGroup(params: {
   expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
   responses: Array<{ entities: ResolvedCompareEntity[] }>;
@@ -2135,6 +2370,7 @@ async function resolveDerivedCompareEntitiesAttempt(params: {
 
 async function buildCompareRequestFromPrompt(params: {
   prompt: string;
+  sessionContext: SessionChatContext | null;
   timeoutMs: number;
 }): Promise<CompareRequestBuildResult> {
   const unsupportedReason = inferUnsupportedCompareReason(params.prompt);
@@ -2148,6 +2384,7 @@ async function buildCompareRequestFromPrompt(params: {
   const metrics = extractCompareMetrics(params.prompt);
   const explicitEntityNames = parseCompareEntities(params.prompt);
   const expectedEntityKind = normalizeEntityKindHint(params.prompt);
+  const topCount = extractRequestedTopCount(stripCompareLeadIn(params.prompt), 5, 5);
 
   if (explicitEntityNames.length >= 2) {
     const resolved = await resolveExplicitCompareEntitiesAttempt({
@@ -2184,6 +2421,20 @@ async function buildCompareRequestFromPrompt(params: {
     };
   }
 
+  if (inferCompareFollowUpIntent(params.prompt, params.sessionContext)) {
+    const sessionRequest = buildCompareRequestFromSessionContext({
+      metrics,
+      sessionContext: params.sessionContext,
+      topCount,
+    });
+    if (sessionRequest) {
+      return {
+        attempts: [],
+        request: sessionRequest,
+      };
+    }
+  }
+
   const derived = await resolveDerivedCompareEntitiesAttempt({
     metrics,
     prompt: params.prompt,
@@ -2198,6 +2449,49 @@ async function buildCompareRequestFromPrompt(params: {
             ...(metrics.length > 0 ? { metrics } : {}),
           }
         : null,
+  };
+}
+
+function buildCompareRequestFromSessionContext(params: {
+  metrics: CompareMetricName[];
+  sessionContext: SessionChatContext | null;
+  topCount: number;
+}): CompareEntitiesShadowRequest | null {
+  const { metrics, sessionContext, topCount } = params;
+  const candidateSet = sessionContext?.candidateSet;
+  if (!candidateSet || candidateSet.ids.length < 2) {
+    return null;
+  }
+
+  if (
+    candidateSet.kind !== 'games'
+    && candidateSet.kind !== 'publishers'
+    && candidateSet.kind !== 'developers'
+  ) {
+    return null;
+  }
+
+  const entityKind =
+    candidateSet.kind === 'games'
+      ? 'game'
+      : candidateSet.kind === 'publishers'
+        ? 'publisher'
+        : 'developer';
+  const derivedEntityUids =
+    candidateSet.entityUids?.length
+      ? candidateSet.entityUids
+      : candidateSet.ids
+          .map((id) => buildChatEntityUid({ entityKind, platformEntityId: id }))
+          .filter((value) => typeof value === 'string' && value.length > 0);
+
+  const entityUids = [...new Set(derivedEntityUids)].slice(0, Math.min(topCount, 5));
+  if (entityUids.length < 2) {
+    return null;
+  }
+
+  return {
+    entityUids,
+    ...(metrics.length > 0 ? { metrics } : {}),
   };
 }
 
@@ -2301,32 +2595,356 @@ async function runExplainChangesPrimary(entityQuery: string | null): Promise<{
   };
 }
 
+function inferChangePattern(prompt: string): ChangePattern | null {
+  if (/\bmarketing push\b/i.test(prompt)) {
+    return 'marketing_push';
+  }
+  if (/\brelaunch pattern\b/i.test(prompt)) {
+    return 'relaunch_pattern';
+  }
+  if (/\bteasing a big update\b/i.test(prompt)) {
+    return 'update_tease';
+  }
+  if (/\bunder-marketed\b|\bagency leads\b/i.test(prompt)) {
+    return 'under_marketed';
+  }
+  if (/\bsignable indie games\b/i.test(prompt)) {
+    return 'signable_candidate';
+  }
+  if (/\brescue candidate\b/i.test(prompt)) {
+    return 'rescue_candidate';
+  }
+  if (/\bsustained response\b/i.test(prompt)) {
+    return 'sustained_response';
+  }
+  if (/\bannouncement\b.*\bweak\b|\bweak\b.*\bannouncement\b/i.test(prompt)) {
+    return 'announcement_weak_response';
+  }
+
+  return null;
+}
+
+function buildSearchChangeActivityRequest(prompt: string): {
+  request: {
+    appTypes: string[];
+    days: number;
+    limit: number;
+    mode: 'all' | 'announcements' | 'changes';
+    query: string | null;
+    signalFamilies: ChangeActivitySignalFamily[];
+    sort: 'relevant' | 'newest' | 'biggest-change' | 'most-commercial' | 'most-launch-relevant';
+    view: 'overview' | 'launch-watch' | 'commercial-moves' | 'store-refreshes' | 'all-activity';
+  };
+  requireNoAnnouncement: boolean;
+} {
+  const days = parsePromptDays(prompt, 30);
+  const requireNoAnnouncement = /\bwithout an announcement\b/i.test(prompt);
+  const signalFamilies = new Set<ChangeActivitySignalFamily>();
+  let view: 'overview' | 'launch-watch' | 'commercial-moves' | 'store-refreshes' | 'all-activity' = 'overview';
+  let sort: 'relevant' | 'newest' | 'biggest-change' | 'most-commercial' | 'most-launch-relevant' = 'relevant';
+
+  if (/\b(?:steam page refresh|page refresh|store-?page changes?)\b/i.test(prompt)) {
+    signalFamilies.add('store-page');
+    signalFamilies.add('media');
+    view = 'store-refreshes';
+    sort = 'biggest-change';
+  }
+
+  if (/\b(?:screenshots?|trailers?)\b/i.test(prompt)) {
+    signalFamilies.add('media');
+    view = 'store-refreshes';
+    sort = 'biggest-change';
+  }
+
+  if (/\brelease timing changes?\b/i.test(prompt)) {
+    signalFamilies.add('release');
+    view = 'launch-watch';
+    sort = 'most-launch-relevant';
+  }
+
+  if (/\b(?:changed tags?|genres?)\b/i.test(prompt)) {
+    signalFamilies.add('taxonomy');
+  }
+
+  if (/\bcommercial\b|\bpricing\b/i.test(prompt)) {
+    signalFamilies.add('pricing');
+    view = 'commercial-moves';
+    sort = 'most-commercial';
+  }
+
+  return {
+    request: {
+      appTypes: ['game'],
+      days,
+      limit: 8,
+      mode: 'changes',
+      query: null,
+      signalFamilies: Array.from(signalFamilies),
+      sort,
+      view,
+    },
+    requireNoAnnouncement,
+  };
+}
+
+function filterSearchChangeActivityItems(params: {
+  items: NonNullable<SearchChangeActivityResponse['items']>;
+  requireNoAnnouncement: boolean;
+}): NonNullable<SearchChangeActivityResponse['items']> {
+  let filtered = params.items;
+
+  if (params.requireNoAnnouncement) {
+    filtered = filtered.filter(
+      (item) => item.relatedAnnouncementCount === 0 && !item.signalFamilies.includes('announcement')
+    );
+  }
+
+  return filtered;
+}
+
+async function runChangeDiscoveryPrimary(prompt: string): Promise<{
+  attempts: TigerShadowAttempt[];
+  response: DiscoverChangePatternsResponse | SearchChangeActivityResponse | null;
+}> {
+  const timeoutMs = Math.max(readPrimaryTimeoutMs(), 20000);
+  const pattern = inferChangePattern(prompt);
+
+  if (pattern) {
+    const request = {
+      appTypes: ['game'],
+      days: parsePromptDays(prompt, 30),
+      limit: 8,
+      pattern,
+      query: null,
+    };
+    const startedAt = performance.now();
+    const response = await postToQueryApi<DiscoverChangePatternsResponse>(
+      '/v1/contracts/discover-change-patterns',
+      request,
+      { timeoutMs }
+    );
+    const timingMs = Math.round(performance.now() - startedAt);
+
+    if (!response.ok) {
+      return {
+        attempts: [{
+          contractName: 'discoverChangePatterns',
+          errorCode: response.errorCode,
+          httpStatus: response.httpStatus,
+          reason: response.reason,
+          status: 'error',
+          timingMs,
+        }],
+        response: null,
+      };
+    }
+
+    return {
+      attempts: [{
+        contractName: 'discoverChangePatterns',
+        httpStatus: response.httpStatus,
+        resultCount: response.data?.items?.length ?? 0,
+        status: 'success',
+        sufficientToAnswer: response.data?.sufficientToAnswer ?? false,
+        timingMs,
+      }],
+      response:
+        (response.data?.items?.length ?? 0) > 0 && response.data?.sufficientToAnswer
+          ? response.data ?? null
+          : null,
+    };
+  }
+
+  const built = buildSearchChangeActivityRequest(prompt);
+  const startedAt = performance.now();
+  const response = await postToQueryApi<SearchChangeActivityResponse>(
+    '/v1/contracts/search-change-activity',
+    built.request,
+    { timeoutMs }
+  );
+  const timingMs = Math.round(performance.now() - startedAt);
+
+  if (!response.ok) {
+    return {
+      attempts: [{
+        contractName: 'searchChangeActivity',
+        errorCode: response.errorCode,
+        httpStatus: response.httpStatus,
+        reason: response.reason,
+        status: 'error',
+        timingMs,
+      }],
+      response: null,
+    };
+  }
+
+  const items = filterSearchChangeActivityItems({
+    items: response.data?.items ?? [],
+    requireNoAnnouncement: built.requireNoAnnouncement,
+  });
+
+  return {
+    attempts: [{
+      contractName: 'searchChangeActivity',
+      httpStatus: response.httpStatus,
+      resultCount: items.length,
+      status: 'success',
+      sufficientToAnswer: (response.data?.sufficientToAnswer ?? false) && items.length > 0,
+      timingMs,
+    }],
+    response:
+      (response.data?.sufficientToAnswer ?? false) && items.length > 0
+        ? {
+            ...(response.data ?? {}),
+            items,
+          }
+        : null,
+  };
+}
+
+async function runChangeDiscoveryShadow(prompt: string): Promise<TigerShadowAttempt[]> {
+  const timeoutMs = Math.max(readShadowTimeoutMs(), 20000);
+  const pattern = inferChangePattern(prompt);
+
+  if (pattern) {
+    const startedAt = performance.now();
+    const response = await postToQueryApi<DiscoverChangePatternsResponse>(
+      '/v1/contracts/discover-change-patterns',
+      {
+        appTypes: ['game'],
+        days: parsePromptDays(prompt, 30),
+        limit: 8,
+        pattern,
+        query: null,
+      },
+      { timeoutMs }
+    );
+    const timingMs = Math.round(performance.now() - startedAt);
+
+    return [{
+      contractName: 'discoverChangePatterns',
+      errorCode: response.ok ? undefined : response.errorCode,
+      httpStatus: response.httpStatus,
+      reason: response.ok ? undefined : response.reason,
+      resultCount: response.data?.items?.length ?? 0,
+      status: response.ok ? 'success' : 'error',
+      sufficientToAnswer: response.data?.sufficientToAnswer ?? false,
+      timingMs,
+    }];
+  }
+
+  const built = buildSearchChangeActivityRequest(prompt);
+  const startedAt = performance.now();
+  const response = await postToQueryApi<SearchChangeActivityResponse>(
+    '/v1/contracts/search-change-activity',
+    built.request,
+    { timeoutMs }
+  );
+  const timingMs = Math.round(performance.now() - startedAt);
+  const items = filterSearchChangeActivityItems({
+    items: response.data?.items ?? [],
+    requireNoAnnouncement: built.requireNoAnnouncement,
+  });
+
+  return [{
+    contractName: 'searchChangeActivity',
+    errorCode: response.ok ? undefined : response.errorCode,
+    httpStatus: response.httpStatus,
+    reason: response.ok ? undefined : response.reason,
+    resultCount: items.length,
+    status: response.ok ? 'success' : 'error',
+    sufficientToAnswer: (response.data?.sufficientToAnswer ?? false) && items.length > 0,
+    timingMs,
+  }];
+}
+
+async function buildSearchDocumentsRequest(params: {
+  entityQuery: string | null;
+  prompt: string;
+}): Promise<{
+  attempts: TigerShadowAttempt[];
+  request: {
+    endTime: string;
+    entityUids?: string[];
+    limit: number;
+    mode: 'digest' | 'latest_item' | 'topic_search';
+    query?: string | null;
+    startTime: string;
+  } | null;
+}> {
+  const explicitTargets = extractExplicitNewsTargets(params.prompt);
+  const resolvedTargets = explicitTargets.length > 0
+    ? explicitTargets
+    : params.entityQuery
+      ? [params.entityQuery]
+      : [];
+  const useDigestMode = shouldUseDigestNewsMode(params.prompt, resolvedTargets);
+  const useLatestMode = !useDigestMode && shouldUseLatestNewsMode(params.prompt, params.entityQuery);
+  const days = parsePromptDays(params.prompt, 30);
+  const startTime = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const endTime = new Date().toISOString();
+
+  if (resolvedTargets.length > 0) {
+    const resolved = await resolveGameEntityAttempts(resolvedTargets);
+    if (resolved.entityUids.length === 0) {
+      return { attempts: resolved.attempts, request: null };
+    }
+
+    return {
+      attempts: resolved.attempts,
+      request: {
+        endTime,
+        entityUids: resolved.entityUids,
+        limit: useLatestMode ? 3 : 6,
+        mode: useDigestMode ? 'digest' : useLatestMode ? 'latest_item' : 'topic_search',
+        startTime,
+        ...(!useDigestMode && !useLatestMode
+          ? { query: buildNewsTopicQuery(params.prompt, params.entityQuery) }
+          : {}),
+      },
+    };
+  }
+
+  return {
+    attempts: [
+      buildSkippedAttempt(
+        'resolveEntities',
+        'No game entity hint was available, so Tiger news routing ran without an entity filter.'
+      ),
+    ],
+    request: {
+      endTime,
+      limit: 8,
+      mode: 'topic_search',
+      query: buildNewsTopicQuery(params.prompt, params.entityQuery),
+      startTime,
+    },
+  };
+}
+
 async function runSearchDocumentsShadow(params: {
   entityQuery: string | null;
   prompt: string;
 }): Promise<TigerShadowAttempt[]> {
-  const attempts: TigerShadowAttempt[] = [];
-  let entityUid: string | null = null;
+  const builtRequest = await buildSearchDocumentsRequest(params);
+  const attempts = [...builtRequest.attempts];
 
-  if (params.entityQuery) {
-    const resolved = await resolveGameEntityAttempt(params.entityQuery);
-    attempts.push(resolved.attempt);
-    entityUid = resolved.entityUid;
-  } else {
+  if (!builtRequest.request) {
     attempts.push(
       buildSkippedAttempt(
-        'resolveEntities',
-        'No game entity hint was available, so news search shadow routing ran without an entity filter.'
+        'searchDocuments',
+        'Tiger news shadow routing could not build a supported request from the prompt.'
       )
     );
+    return attempts;
   }
 
   const startedAt = performance.now();
-  const response = await postToQueryApi<SearchDocumentsResponse>('/v1/contracts/search-documents', {
-    entityUid,
-    limit: 6,
-    query: buildNewsTopicQuery(params.prompt, params.entityQuery),
-  });
+  const response = await postToQueryApi<SearchDocumentsResponse>(
+    '/v1/contracts/search-documents',
+    builtRequest.request,
+    { timeoutMs: readShadowTimeoutMs() }
+  );
   const timingMs = Math.round(performance.now() - startedAt);
 
   if (!response.ok) {
@@ -2359,28 +2977,25 @@ async function runSearchDocumentsPrimary(params: {
   attempts: TigerShadowAttempt[];
   response: SearchDocumentsResponse | null;
 }> {
-  const attempts: TigerShadowAttempt[] = [];
-  let entityUid: string | null = null;
+  const builtRequest = await buildSearchDocumentsRequest(params);
+  const attempts = [...builtRequest.attempts];
 
-  if (params.entityQuery) {
-    const resolved = await resolveGameEntityAttempt(params.entityQuery);
-    attempts.push(resolved.attempt);
-    entityUid = resolved.entityUid;
-  } else {
+  if (!builtRequest.request) {
     attempts.push(
       buildSkippedAttempt(
-        'resolveEntities',
-        'No game entity hint was available, so Tiger primary news routing ran without an entity filter.'
+        'searchDocuments',
+        'Tiger primary news routing could not build a supported request from the prompt.'
       )
     );
+    return { attempts, response: null };
   }
 
   const startedAt = performance.now();
-  const response = await postToQueryApi<SearchDocumentsResponse>('/v1/contracts/search-documents', {
-    entityUid,
-    limit: 6,
-    query: buildNewsTopicQuery(params.prompt, params.entityQuery),
-  });
+  const response = await postToQueryApi<SearchDocumentsResponse>(
+    '/v1/contracts/search-documents',
+    builtRequest.request,
+    { timeoutMs: readPrimaryTimeoutMs() }
+  );
   const timingMs = Math.round(performance.now() - startedAt);
 
   if (!response.ok) {
@@ -2514,9 +3129,13 @@ async function runRankEntitiesShadow(prompt: string): Promise<TigerShadowAttempt
   }];
 }
 
-async function runCompareEntitiesShadow(prompt: string): Promise<TigerShadowAttempt[]> {
+async function runCompareEntitiesShadow(
+  prompt: string,
+  sessionContext: SessionChatContext | null
+): Promise<TigerShadowAttempt[]> {
   const builtRequest = await buildCompareRequestFromPrompt({
     prompt,
+    sessionContext,
     timeoutMs: readShadowTimeoutMs(),
   });
   const attempts = [...builtRequest.attempts];
@@ -2900,13 +3519,17 @@ async function runRankEntitiesPrimary(prompt: string): Promise<{
   };
 }
 
-async function runCompareEntitiesPrimary(prompt: string): Promise<{
+async function runCompareEntitiesPrimary(params: {
+  prompt: string;
+  sessionContext: SessionChatContext | null;
+}): Promise<{
   attempts: TigerShadowAttempt[];
   request: CompareEntitiesShadowRequest | null;
   response: CompareEntitiesResponse | null;
 }> {
   const builtRequest = await buildCompareRequestFromPrompt({
-    prompt,
+    prompt: params.prompt,
+    sessionContext: params.sessionContext,
     timeoutMs: readPrimaryTimeoutMs(),
   });
   const attempts = [...builtRequest.attempts];
@@ -3021,8 +3644,8 @@ async function runMetricHistoryPrimary(params: {
 
 export async function runTigerPrimaryEvaluation(params: {
   isEvalRequest: boolean;
-  prompt: string;
-  sessionContext: SessionChatContext | null;
+    prompt: string;
+    sessionContext: SessionChatContext | null;
   userId: string | null;
 }): Promise<TigerPrimaryEvaluationResult> {
   const mode = readPrimaryMode();
@@ -3043,7 +3666,8 @@ export async function runTigerPrimaryEvaluation(params: {
     };
   }
 
-  const matchedIntent = inferPrimaryMatchedIntent(params.prompt);
+  const matchedIntent = inferPrimaryMatchedIntent(params.prompt)
+    ?? (inferCompareFollowUpIntent(params.prompt, params.sessionContext) ? 'entity_compare' : null);
   if (!matchedIntent) {
     return {
       contractResult: null,
@@ -3066,7 +3690,7 @@ export async function runTigerPrimaryEvaluation(params: {
 
   try {
     const outcome = matchedIntent === 'change_discovery'
-      ? { attempts: [], response: null }
+      ? await runChangeDiscoveryPrimary(params.prompt)
       : matchedIntent === 'entity_overview'
       ? await runEntityOverviewPrimary(params.prompt)
       : matchedIntent === 'catalog_search'
@@ -3074,7 +3698,10 @@ export async function runTigerPrimaryEvaluation(params: {
       : matchedIntent === 'entity_ranking'
         ? await runRankEntitiesPrimary(params.prompt)
         : matchedIntent === 'entity_compare'
-          ? await runCompareEntitiesPrimary(params.prompt)
+          ? await runCompareEntitiesPrimary({
+              prompt: params.prompt,
+              sessionContext: params.sessionContext,
+            })
           : matchedIntent === 'metric_history'
             ? await runMetricHistoryPrimary({
                 entityQuery,
@@ -3191,8 +3818,10 @@ export async function runTigerPrimaryEvaluation(params: {
             ? 'getEntityOverview'
             : matchedIntent === 'entity_ranking'
             ? 'rankEntities'
-            : matchedIntent === 'entity_compare'
-              ? 'compareEntities'
+          : matchedIntent === 'entity_compare'
+            ? 'compareEntities'
+          : matchedIntent === 'change_discovery'
+            ? 'searchChangeActivity'
             : matchedIntent === 'metric_history'
               ? 'traceMetricHistory'
               : matchedIntent === 'news_search'
@@ -3255,7 +3884,7 @@ export async function runTigerShadowEvaluation(params: {
     extractEntityQueryFromPrompt(params.prompt);
 
   const attempts = matchedIntent === 'change_discovery'
-    ? []
+    ? await runChangeDiscoveryShadow(params.prompt)
     : matchedIntent === 'entity_overview'
     ? await runEntityOverviewShadow(params.prompt)
     : matchedIntent === 'change_explanation'
@@ -3276,7 +3905,7 @@ export async function runTigerShadowEvaluation(params: {
             toolCalls: params.toolCalls,
           })
         : matchedIntent === 'entity_compare'
-          ? await runCompareEntitiesShadow(params.prompt)
+          ? await runCompareEntitiesShadow(params.prompt, params.sessionContext)
         : matchedIntent === 'entity_ranking'
           ? await runRankEntitiesShadow(params.prompt)
           : await runMetricHistoryShadow({
@@ -3290,8 +3919,10 @@ export async function runTigerShadowEvaluation(params: {
         attempt.contractName === 'explainChanges'
         || attempt.contractName === 'getEntityOverview'
         || attempt.contractName === 'compareEntities'
+        || attempt.contractName === 'discoverChangePatterns'
         || attempt.contractName === 'rankEntities'
         || attempt.contractName === 'searchCatalog'
+        || attempt.contractName === 'searchChangeActivity'
         || attempt.contractName === 'searchDocuments'
         || attempt.contractName === 'semanticSearch'
         || attempt.contractName === 'traceMetricHistory'

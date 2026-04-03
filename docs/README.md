@@ -120,6 +120,7 @@ Highlights:
 - **[Data Gaps Analysis](reference/data-gaps-analysis.md)** - Coverage analysis
 - **[Data Sources Comprehensive](reference/data-sources-comprehensive.md)** - Broader source inventory
 - **[Steam Game Change Intelligence Research](reference/steam-game-change-intelligence-research.md)** - Research and roadmap context
+- **[Steam User Data Access And Scraping Research](reference/steam-user-data-access-and-scraping-research.md)** - Owner-only access, public scraping surfaces, and profiling limits
 
 ---
 

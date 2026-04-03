@@ -1,10 +1,8 @@
 import { NextRequest } from 'next/server';
 import { getServiceClient } from '@publisheriq/database';
 import { createProvider } from '@/lib/llm/providers';
-import { buildCubeSystemPrompt } from '@/lib/llm/cube-system-prompt';
+import { buildTigerSystemPrompt } from '@/lib/llm/tiger-system-prompt';
 import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
-import { executeQuery } from '@/lib/query-executor';
-import { executeCubeQuery } from '@/lib/cube-executor';
 import {
   findSimilarWithTimeout,
   searchByConceptWithTimeout,
@@ -119,6 +117,19 @@ import type { TigerShadowInfo } from '@/lib/chat/tiger-shadow-types';
 const MAX_TOOL_ITERATIONS = 5;
 const LOCAL_BYPASS_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
 
+function readRequestHostCandidates(request: NextRequest): string[] {
+  const hostHeader = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
+
+  return [request.nextUrl.hostname, hostHeader]
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim().replace(/:\d+$/, '').toLowerCase())
+    .filter(Boolean);
+}
+
+function isLocalHostRequest(request: NextRequest): boolean {
+  return readRequestHostCandidates(request).some((hostname) => LOCAL_BYPASS_HOSTS.has(hostname));
+}
+
 export interface ChatRouteDependencies {
   createProvider: typeof createProvider;
   createServerClient: typeof createServerClient;
@@ -184,13 +195,7 @@ function isLocalEvalBypassEligible(request: NextRequest, isEvalRequest: boolean)
     return false;
   }
 
-  const hostHeader = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
-  const hostCandidates = [request.nextUrl.hostname, hostHeader]
-    .flatMap((value) => value.split(','))
-    .map((value) => value.trim().replace(/:\d+$/, '').toLowerCase())
-    .filter(Boolean);
-
-  return hostCandidates.some((hostname) => LOCAL_BYPASS_HOSTS.has(hostname));
+  return isLocalHostRequest(request);
 }
 
 async function resolveLocalEvalBypassUserId(
@@ -215,13 +220,15 @@ function isLocalBrowserBypassEligible(request: NextRequest): boolean {
     return false;
   }
 
-  const hostHeader = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
-  const hostCandidates = [request.nextUrl.hostname, hostHeader]
-    .flatMap((value) => value.split(','))
-    .map((value) => value.trim().replace(/:\d+$/, '').toLowerCase())
-    .filter(Boolean);
+  return isLocalHostRequest(request);
+}
 
-  return hostCandidates.some((hostname) => LOCAL_BYPASS_HOSTS.has(hostname));
+function shouldAttachLocalExecutionTrace(request: NextRequest): boolean {
+  const traceHeader = request.headers.get('x-chat-eval-trace');
+  return (
+    (traceHeader === '1' || traceHeader === 'true') &&
+    isLocalHostRequest(request)
+  );
 }
 
 async function resolveLocalBrowserBypassUserId(
@@ -275,23 +282,25 @@ async function resolveLocalBypassUserId(params: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function executeTool(toolCall: ToolCall): Promise<{ success: boolean; error?: string; [key: string]: any }> {
   if (toolCall.name === 'query_database') {
-    const args = toolCall.arguments as { sql: string; reasoning: string };
-    return executeQuery(args.sql);
+    return {
+      success: false,
+      unavailable: true,
+      error: 'query_database is not available in Tiger-only chat.',
+      sufficient_to_answer: false,
+    };
   } else if (toolCall.name === 'query_analytics') {
     const args = toolCall.arguments as unknown as QueryAnalyticsArgs;
     const tigerCompatibleResult = await tryTigerQueryAnalyticsCompat(args);
     if (tigerCompatibleResult) {
       return tigerCompatibleResult;
     }
-    return executeCubeQuery({
-      cube: args.cube,
-      dimensions: args.dimensions,
-      measures: args.measures,
-      filters: args.filters,
-      segments: args.segments,
-      order: args.order,
-      limit: args.limit,
-    });
+    return {
+      success: false,
+      unavailable: true,
+      error:
+        'query_analytics is not available in Tiger-only chat. Use Tiger-backed discovery, ranking, compare, momentum, or change-intel tools instead.',
+      sufficient_to_answer: false,
+    };
   } else if (toolCall.name === 'find_similar') {
     const args = toolCall.arguments as unknown as FindSimilarArgs;
     return findSimilarWithTimeout(args);
@@ -380,12 +389,27 @@ function sumTigerAttemptTimingMs(
 }
 
 function buildTigerSyntheticToolCall(params: {
-  contractName: 'getEntityOverview' | 'searchCatalog' | 'semanticSearch';
+  contractName: 'compareEntities' | 'getEntityOverview' | 'searchCatalog' | 'semanticSearch';
   request: Record<string, unknown>;
   response: Record<string, unknown>;
   resultSet?: SessionChatResultSet | null;
 }): ChatToolCall {
   const { contractName, request, response, resultSet } = params;
+
+  if (contractName === 'compareEntities') {
+    return {
+      name: 'compareEntities',
+      arguments: request,
+      result: {
+        success: true,
+        entityKind: response.entityKind,
+        highlights: Array.isArray(response.highlights) ? response.highlights : [],
+        items: Array.isArray(response.items) ? response.items : [],
+        metrics: Array.isArray(response.metrics) ? response.metrics : [],
+        sufficientToAnswer: response.sufficientToAnswer === true,
+      },
+    };
+  }
 
   if (contractName === 'getEntityOverview') {
     const entity = isRecord(response.entity) ? response.entity : null;
@@ -589,13 +613,13 @@ function buildSessionLogSummary(
 }
 
 function buildSystemPrompt(sessionContext: SessionChatContext | null): string {
-  const basePrompt = buildCubeSystemPrompt();
+  const basePrompt = buildTigerSystemPrompt();
+  const contextPrompt = buildSessionContextPrompt(sessionContext);
 
   if (!readChatPhase1QualityEnabled()) {
-    return basePrompt;
+    return [basePrompt, contextPrompt].filter(Boolean).join('\n\n');
   }
 
-  const contextPrompt = buildSessionContextPrompt(sessionContext);
   const phase1Instructions = [
     'PHASE 1 QUALITY CONTRACTS:',
     '- Respect phase1_contract metadata in tool results.',
@@ -689,6 +713,7 @@ export async function handleChatStreamRequest(
   const isEvalRequest =
     Boolean(chatEvalSecret) &&
     presentedEvalSecret === chatEvalSecret;
+  const captureExecutionTrace = isEvalRequest || shouldAttachLocalExecutionTrace(request);
 
   if (requireEvalSecret && !isEvalRequest) {
     return new Response(
@@ -833,7 +858,7 @@ export async function handleChatStreamRequest(
         lastIterationHadText: false,
       };
       const recordExecutionTrace = (entries: ChatExecutionTraceEntry[]) => {
-        if (!isEvalRequest || entries.length === 0) {
+        if (!captureExecutionTrace || entries.length === 0) {
           return;
         }
 
@@ -851,10 +876,9 @@ export async function handleChatStreamRequest(
         }
 
         const chatPhase1QualityEnabled = readChatPhase1QualityEnabled();
-        const sessionContext =
-          chatPhase1QualityEnabled && isRecord(body.sessionContext)
-            ? (body.sessionContext as SessionChatContext)
-            : null;
+        const sessionContext = isRecord(body.sessionContext)
+          ? (body.sessionContext as SessionChatContext)
+          : null;
         const lastUserPrompt = body.messages.filter((message) => message.role === 'user').pop()?.content ?? '';
         lastUserMessageContent = lastUserPrompt || null;
         updatedSessionContext = sessionContext;
@@ -877,7 +901,6 @@ export async function handleChatStreamRequest(
 
         if (tigerPrimaryResult.route === 'primary_success' && tigerPrimaryEvaluation.renderedText) {
           if (
-            chatPhase1QualityEnabled &&
             tigerPrimaryEvaluation.contractResult &&
             isRecord(tigerPrimaryEvaluation.contractResult.response)
           ) {
@@ -904,15 +927,12 @@ export async function handleChatStreamRequest(
                     })
                   : null;
 
-            const syntheticToolCall =
-              contractResult.contractName === 'compareEntities'
-                ? null
-                : buildTigerSyntheticToolCall({
-                    contractName: contractResult.contractName,
-                    request: contractResult.request,
-                    response: contractResult.response as Record<string, unknown>,
-                    resultSet,
-                  });
+            const syntheticToolCall = buildTigerSyntheticToolCall({
+              contractName: contractResult.contractName,
+              request: contractResult.request,
+              response: contractResult.response as Record<string, unknown>,
+              resultSet,
+            });
 
             if (syntheticToolCall) {
               updatedSessionContext = buildSessionContextFromTurn({
@@ -976,8 +996,8 @@ export async function handleChatStreamRequest(
             },
             debug: debugStats,
             quality: phase1Quality,
-            sessionContext: chatPhase1QualityEnabled ? updatedSessionContext : undefined,
-            executionTrace: isEvalRequest ? executionTrace : undefined,
+            sessionContext: updatedSessionContext,
+            executionTrace: captureExecutionTrace ? executionTrace : undefined,
             tigerPrimary: tigerPrimaryResult,
             usage: {
               inputTokens: totalInputTokens,
@@ -1030,9 +1050,7 @@ export async function handleChatStreamRequest(
             >
           | null = null;
 
-        const continuationResolution = chatPhase1QualityEnabled
-          ? resolveResultSetContinuation(lastUserPrompt, sessionContext)
-          : null;
+        const continuationResolution = resolveResultSetContinuation(lastUserPrompt, sessionContext);
 
         if (continuationResolution) {
           if (continuationResolution.sourceContract) {
@@ -1480,16 +1498,17 @@ export async function handleChatStreamRequest(
                 result: phase1Result,
                 timing: { executionMs: 0 },
               });
-              recordExecutionTrace([
-                buildToolExecutionTraceEntry({
-                  latencyMs: 0,
-                  readOccurred: false,
-                  result: phase1Result,
-                  status: 'skipped',
-                  toolArguments: routedToolCall.arguments,
-                  toolName: routedToolCall.name,
-                }),
-              ]);
+            {
+              const traceEntry = buildToolExecutionTraceEntry({
+                latencyMs: 0,
+                readOccurred: false,
+                result: phase1Result,
+                status: 'skipped',
+                toolArguments: routedToolCall.arguments,
+                toolName: routedToolCall.name,
+              });
+              recordExecutionTrace([traceEntry]);
+            }
               lastBroadDiscoveryState = extractBroadDiscoveryState(
                 routedToolCall.name,
                 routedToolCall.arguments,
@@ -1536,16 +1555,17 @@ export async function handleChatStreamRequest(
                 result: phase1Result,
                 timing: { executionMs: 0 },
               });
-              recordExecutionTrace([
-                buildToolExecutionTraceEntry({
+              {
+                const traceEntry = buildToolExecutionTraceEntry({
                   latencyMs: 0,
                   readOccurred: false,
                   result: phase1Result,
                   status: 'skipped',
                   toolArguments: routedToolCall.arguments,
                   toolName: routedToolCall.name,
-                }),
-              ]);
+                });
+                recordExecutionTrace([traceEntry]);
+              }
               lastBroadDiscoveryState = extractBroadDiscoveryState(
                 routedToolCall.name,
                 routedToolCall.arguments,
@@ -1591,15 +1611,16 @@ export async function handleChatStreamRequest(
               timing: { executionMs: Math.round(toolExecutionMs) },
             };
             controller.enqueue(encoder.encode(formatSSE(toolResultEvent)));
-            recordExecutionTrace([
-              buildToolExecutionTraceEntry({
+            {
+              const traceEntry = buildToolExecutionTraceEntry({
                 latencyMs: Math.round(toolExecutionMs),
                 provenanceOverride: executionProvenance ?? undefined,
                 result: isRecord(result) ? result : null,
                 toolArguments: routedToolCall.arguments,
                 toolName: routedToolCall.name,
-              }),
-            ]);
+              });
+              recordExecutionTrace([traceEntry]);
+            }
 
             toolResults.push({ toolCall: routedToolCall, result });
             executedToolCalls.push({
@@ -1713,13 +1734,13 @@ export async function handleChatStreamRequest(
               ],
             };
           }
-
-          updatedSessionContext = buildSessionContextFromTurn({
-            previousContext: sessionContext,
-            executedToolCalls: allToolCalls,
-            terminalContract: phase1Quality.terminalContract ?? null,
-          });
         }
+
+        updatedSessionContext = buildSessionContextFromTurn({
+          previousContext: sessionContext,
+          executedToolCalls: allToolCalls,
+          terminalContract: phase1Quality?.terminalContract ?? null,
+        });
 
         // Calculate credits if enabled
         if (creditsEnabled && reservationId) {
@@ -1809,8 +1830,8 @@ export async function handleChatStreamRequest(
           },
           debug: debugStats,
           quality: phase1Quality,
-          sessionContext: chatPhase1QualityEnabled ? updatedSessionContext : undefined,
-          executionTrace: isEvalRequest ? executionTrace : undefined,
+          sessionContext: updatedSessionContext,
+          executionTrace: captureExecutionTrace ? executionTrace : undefined,
           tigerPrimary: tigerPrimaryResult,
           tigerShadow,
           usage: {

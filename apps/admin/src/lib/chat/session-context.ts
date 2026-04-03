@@ -7,6 +7,7 @@ import type {
   SessionChatResultSet,
   ToolAnswerContractSummary,
 } from '@/lib/chat/chat-context-types';
+import { buildChatEntityUid } from '@/lib/chat/entity-uid';
 import { buildResultSetFromToolExecution } from '@/lib/chat/result-set-continuation';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -19,6 +20,19 @@ function getNumber(value: unknown): number | undefined {
 
 function getString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function parseNumericId(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
 }
 
 function pushUniqueEntity(entities: SessionChatEntity[], candidate: SessionChatEntity): void {
@@ -203,7 +217,15 @@ function buildCandidateSet(
   const dataRows = Array.isArray(result.data) ? result.data : [];
   const resultRows = Array.isArray(result.results) ? result.results : [];
   const eventRows = Array.isArray(result.events) ? result.events : [];
-  const rows = dataRows.length > 0 ? dataRows : resultRows.length > 0 ? resultRows : eventRows;
+  const itemRows = Array.isArray(result.items) ? result.items : [];
+  const rows =
+    dataRows.length > 0
+      ? dataRows
+      : resultRows.length > 0
+        ? resultRows
+        : eventRows.length > 0
+          ? eventRows
+          : itemRows;
 
   if (rows.length === 0) {
     return null;
@@ -211,10 +233,33 @@ function buildCandidateSet(
 
   const names: string[] = [];
   const ids: Array<number | string> = [];
+  const entityUids: string[] = [];
   let kind: SessionChatCandidateSet['kind'] = 'games';
 
   for (const row of rows) {
     if (!isRecord(row)) {
+      continue;
+    }
+
+    const entityUid = getString(row.entityUid);
+    const displayName = getString(row.displayName);
+    const entityKind = getString(row.entityKind);
+    const platformEntityId = parseNumericId(row.platformEntityId);
+    if (
+      entityUid &&
+      displayName &&
+      platformEntityId != null &&
+      (entityKind === 'game' || entityKind === 'publisher' || entityKind === 'developer')
+    ) {
+      kind =
+        entityKind === 'game'
+          ? 'games'
+          : entityKind === 'publisher'
+            ? 'publishers'
+            : 'developers';
+      ids.push(platformEntityId);
+      names.push(displayName);
+      entityUids.push(entityUid);
       continue;
     }
 
@@ -236,14 +281,17 @@ function buildCandidateSet(
       kind = 'games';
       ids.push(appid);
       names.push(name);
+      entityUids.push(buildChatEntityUid({ entityKind: 'game', platformEntityId: appid }));
       continue;
     }
 
     if (id && name) {
       if (toolName === 'lookup_publishers' || toolName === 'find_similar' && result.entityType === 'publisher') {
         kind = 'publishers';
+        entityUids.push(buildChatEntityUid({ entityKind: 'publisher', platformEntityId: id }));
       } else if (toolName === 'lookup_developers' || toolName === 'find_similar' && result.entityType === 'developer') {
         kind = 'developers';
+        entityUids.push(buildChatEntityUid({ entityKind: 'developer', platformEntityId: id }));
       }
       ids.push(id);
       names.push(name);
@@ -255,6 +303,7 @@ function buildCandidateSet(
   }
 
   return {
+    ...(entityUids.length > 0 ? { entityUids: [...new Set(entityUids)].slice(0, 25) } : {}),
     kind,
     sourceTool: toolName,
     ids: [...new Set(ids)].slice(0, 25),
@@ -433,6 +482,7 @@ export function summarizeSessionContextForLog(context: SessionChatContext | null
     })),
     candidateSet: context.candidateSet
       ? {
+          entityUids: context.candidateSet.entityUids?.slice(0, 12) ?? null,
           kind: context.candidateSet.kind,
           ids: context.candidateSet.ids.slice(0, 12),
           names: context.candidateSet.names.slice(0, 12),

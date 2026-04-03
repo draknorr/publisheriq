@@ -112,6 +112,20 @@ interface GetEntityOverviewResponse {
 
 type GetEntityOverviewGame = GetEntityOverviewResponse['games'][number];
 
+interface RankEntitiesResponse {
+  items?: Array<{
+    displayName: string;
+    metrics?: {
+      ccuPeak?: number | null;
+      gameCount?: number | null;
+      ownersMidpoint?: number | null;
+      reviewScore?: number | null;
+      totalReviews?: number | null;
+    };
+    platformEntityId: string;
+  }>;
+}
+
 const TIGER_QUERY_ANALYTICS_SEARCH_CATALOG_PROVENANCE: ChatExecutionProvenanceOverride = {
   backendKinds: ['tiger_query_api'],
   dataSources: [
@@ -144,6 +158,27 @@ const TIGER_QUERY_ANALYTICS_ENTITY_OVERVIEW_PROVENANCE: ChatExecutionProvenanceO
   migrationNotes:
     'Legacy query_analytics requests for single-entity and company game-list patterns now execute through Tiger get-entity-overview.',
   recommendedTigerContracts: ['getEntityOverview'],
+};
+
+const TIGER_QUERY_ANALYTICS_RANK_ENTITIES_PROVENANCE: ChatExecutionProvenanceOverride = {
+  backendKinds: ['tiger_query_api'],
+  dataSources: [
+    'query_api:rankEntities',
+    'relation:apps',
+    'relation:latest_daily_metrics',
+    'relation:app_publishers',
+    'relation:publishers',
+    'relation:app_developers',
+    'relation:developers',
+    'relation:app_genres',
+    'relation:steam_genres',
+    'relation:app_steam_tags',
+    'relation:steam_tags',
+  ],
+  migrationDisposition: 'already_tiger',
+  migrationNotes:
+    'Filtered company ranking requests now execute through Tiger rank-entities instead of the legacy chat analytics cubes.',
+  recommendedTigerContracts: ['rankEntities'],
 };
 
 function dimensionFieldName(dimension: string): string {
@@ -187,6 +222,53 @@ function getSingleNumericFilterValue(
 
 function hasSegment(segments: string[] | undefined, segment: string): boolean {
   return segments?.includes(segment) ?? false;
+}
+
+function parseSegmentWindowDays(segments: string[] | undefined): number | null {
+  for (const segment of segments ?? []) {
+    const normalized = segment.toLowerCase();
+    if (normalized.endsWith('lastyear')) {
+      return 365;
+    }
+    if (normalized.endsWith('lastmonth')) {
+      return 30;
+    }
+    const match = normalized.match(/last(\d+)(month|months|year|years)/);
+    if (!match) {
+      continue;
+    }
+
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value <= 0) {
+      continue;
+    }
+
+    return match[2].startsWith('year') ? value * 365 : value * 30;
+  }
+
+  return null;
+}
+
+function parseNumericValue(value: string | number | boolean | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function getFilterThreshold(
+  filters: CubeFilter[] | undefined,
+  member: string,
+  operator: string
+): number | null {
+  const match = filters?.find((filter) => filter.member === member && filter.operator === operator);
+  return parseNumericValue(match?.values?.[0]);
 }
 
 function sortRows(
@@ -437,6 +519,156 @@ function mapEntityOverviewMetricRow(entity: GetEntityOverviewResponse['entity'])
   };
 }
 
+function mapRankedCompanyRow(
+  item: NonNullable<RankEntitiesResponse['items']>[number],
+  cube: string,
+  releaseDays: number | null
+): Record<string, unknown> {
+  const entityId = Number(item.platformEntityId);
+  const gameCount = item.metrics?.gameCount ?? null;
+  const reviewScore = item.metrics?.reviewScore ?? null;
+  const totalReviews = item.metrics?.totalReviews ?? null;
+  const baseName = cube.startsWith('Developer') ? 'developer' : 'publisher';
+
+  if (cube === 'PublisherChatWindowMetrics' || cube === 'DeveloperChatWindowMetrics') {
+    const windowKey =
+      releaseDays != null && releaseDays >= 365
+        ? 'LastYear'
+        : releaseDays != null && releaseDays >= 180
+          ? 'Last6Months'
+          : 'LastWindow';
+
+    return {
+      [`${baseName}Id`]: entityId,
+      [`${baseName}Name`]: item.displayName,
+      exactGameCount: gameCount,
+      [`gamesReleased${windowKey}`]: gameCount,
+      [`meaningfulGamesReleased${windowKey}`]: gameCount,
+      [`totalReviews${windowKey}`]: totalReviews,
+      [`avgReviewPercentage${windowKey}`]: reviewScore,
+      [`minReviewPercentage${windowKey}`]: reviewScore,
+    };
+  }
+
+  return {
+    [`${baseName}Id`]: entityId,
+    [`${baseName}Name`]: item.displayName,
+    avgReviewScore: reviewScore,
+    gameCount,
+    totalReviews,
+  };
+}
+
+async function tryDlcRelationsCompat(args: QueryAnalyticsArgs): Promise<QueryAnalyticsResult | null> {
+  if (args.cube !== 'DlcRelations') {
+    return null;
+  }
+
+  const parentAppid = getSingleNumericFilterValue(args.filters, 'DlcRelations.parentAppid', 'equals');
+  if (parentAppid == null) {
+    return null;
+  }
+
+  const parentResponse = await postToQueryApi<GetEntityOverviewResponse>(
+    '/v1/contracts/get-entity-overview',
+    {
+      entityKind: 'game',
+      gamesLimit: 0,
+      platformEntityId: String(parentAppid),
+    }
+  );
+  const parentName = parentResponse.ok ? parentResponse.data?.entity.displayName ?? null : null;
+
+  const response = await postToQueryApi<SearchCatalogResponse>('/v1/contracts/search-catalog', {
+    includeAppTypes: ['dlc'],
+    limit: normalizeLimit(args.limit, 20, 50),
+    parentAppids: [parentAppid],
+    sortBy: 'release_date',
+    sortDirection: 'desc',
+  });
+
+  if (!response.ok || !response.data) {
+    return null;
+  }
+
+  return buildTigerQueryAnalyticsResult(
+    args,
+    (response.data.items ?? []).map((item) => ({
+      childMetadataAvailable: true,
+      dlcAppid: item.appid,
+      dlcName: item.name,
+      dlcReleaseDate: item.releaseDate ?? null,
+      dlcReleaseState: item.releaseState ?? null,
+      dlcType: item.appType ?? null,
+      parentAppid,
+      parentName,
+      source: 'tiger_search_catalog',
+    })),
+    TIGER_QUERY_ANALYTICS_SEARCH_CATALOG_PROVENANCE,
+    'searchCatalog'
+  );
+}
+
+async function tryCompanyRankingCompat(args: QueryAnalyticsArgs): Promise<QueryAnalyticsResult | null> {
+  if (![
+    'PublisherChatWindowMetrics',
+    'DeveloperChatWindowMetrics',
+    'PublisherGameMetrics',
+    'DeveloperGameMetrics',
+  ].includes(args.cube)) {
+    return null;
+  }
+
+  const cube = args.cube;
+  const entityKind = cube.startsWith('Developer') ? 'developer' : 'publisher';
+  const isSingleEntityQuery = Boolean(
+    getSingleNumericFilterValue(args.filters, `${cube}.${entityKind}Id`, 'equals')
+  );
+
+  if (isSingleEntityQuery) {
+    return null;
+  }
+
+  const releaseDays = parseSegmentWindowDays(args.segments);
+  const aggregateFilters =
+    cube === 'PublisherChatWindowMetrics' || cube === 'DeveloperChatWindowMetrics'
+      ? {
+          minGameCount:
+            getFilterThreshold(args.filters, `${cube}.gamesReleasedLastYear`, 'gte')
+            ?? getFilterThreshold(args.filters, `${cube}.gamesReleasedLast6Months`, 'gte')
+            ?? getFilterThreshold(args.filters, `${cube}.meaningfulGamesReleasedLastYear`, 'gte')
+            ?? getFilterThreshold(args.filters, `${cube}.meaningfulGamesReleasedLast6Months`, 'gte')
+            ?? null,
+          minMinimumReviewScore:
+            getFilterThreshold(args.filters, `${cube}.minReviewPercentageLastYear`, 'gte') ?? null,
+        }
+      : {
+          minAverageReviewScore:
+            getFilterThreshold(args.filters, `${cube}.avgReviewScore`, 'gte') ?? null,
+          minGameCount: getFilterThreshold(args.filters, `${cube}.gameCount`, 'gte') ?? null,
+        };
+
+  const response = await postToQueryApi<RankEntitiesResponse>('/v1/contracts/rank-entities', {
+    aggregateFilters,
+    entityKind,
+    limit: normalizeLimit(args.limit, 10, 25),
+    metric: 'game_count',
+    releaseDays,
+    sortDirection: 'desc',
+  });
+
+  if (!response.ok || !response.data) {
+    return null;
+  }
+
+  return buildTigerQueryAnalyticsResult(
+    args,
+    (response.data.items ?? []).map((item) => mapRankedCompanyRow(item, cube, releaseDays)),
+    TIGER_QUERY_ANALYTICS_RANK_ENTITIES_PROVENANCE,
+    'rankEntities'
+  );
+}
+
 async function tryGameCatalogCompat(args: QueryAnalyticsArgs): Promise<QueryAnalyticsResult | null> {
   const request = buildSearchCatalogRequestFromGameCatalog(args);
   if (!request) {
@@ -585,8 +817,24 @@ async function tryCompanyMetricCompat(args: QueryAnalyticsArgs): Promise<QueryAn
 export async function tryTigerQueryAnalyticsCompat(
   args: QueryAnalyticsArgs
 ): Promise<QueryAnalyticsResult | null> {
+  if (args.cube === 'DlcRelations') {
+    return tryDlcRelationsCompat(args);
+  }
+
   if (args.cube === 'GameCatalog') {
     return tryGameCatalogCompat(args);
+  }
+
+  if (
+    args.cube === 'PublisherChatWindowMetrics'
+    || args.cube === 'DeveloperChatWindowMetrics'
+    || args.cube === 'PublisherGameMetrics'
+    || args.cube === 'DeveloperGameMetrics'
+  ) {
+    const rankedCompanyResult = await tryCompanyRankingCompat(args);
+    if (rankedCompanyResult) {
+      return rankedCompanyResult;
+    }
   }
 
   if (args.cube === 'DeveloperGameMetrics' || args.cube === 'PublisherGameMetrics') {

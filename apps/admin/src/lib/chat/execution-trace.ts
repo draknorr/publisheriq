@@ -68,18 +68,17 @@ const SHARED_CATALOG_RELATIONS = [
 
 const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
   compare_change_before_after: {
-    backendKinds: ['supabase_rpc', 'supabase_table'],
+    backendKinds: ['tiger_query_api'],
     dataSources: [
-      'rpc:get_app_change_feed',
-      'rpc:get_change_window_metrics',
-      'table:app_change_events',
-      'table:apps',
-      'table:steam_news_items',
-      'table:steam_news_versions',
+      'query_api:explainChanges',
+      'relation:core_entities',
+      'relation:events_app_change_events',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
     ],
-    migrationDisposition: 'keep_legacy_temporarily',
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Before/after burst comparisons are still tied to the legacy change-detail surfaces. Keep this path until Tiger gets an equivalent change-window drilldown contract.',
+      'Before/after change comparisons now run through Tiger explain-changes.',
     recommendedTigerContracts: ['explainChanges'],
   },
   discover_trending: {
@@ -91,21 +90,20 @@ const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
     recommendedTigerContracts: ['searchCatalog', 'rankEntities'],
   },
   find_change_patterns: {
-    backendKinds: ['supabase_rpc', 'supabase_table'],
+    backendKinds: ['tiger_query_api'],
     dataSources: [
-      'rpc:get_change_feed_pattern_candidates',
-      'rpc:get_change_window_metrics',
-      'table:latest_daily_metrics',
-      'table:app_trends',
-      'table:app_change_events',
-      'table:steam_news_items',
-      'table:steam_news_versions',
-      'table:apps',
+      'query_api:discoverChangePatterns',
+      'relation:apps',
+      'relation:latest_daily_metrics',
+      'relation:metrics_daily_metrics',
+      'relation:events_app_change_events',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
     ],
-    migrationDisposition: 'needs_tiger_contract',
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Cross-game change-pattern screens need their own Tiger contract instead of staying on the legacy projection stack.',
-    recommendedTigerContracts: [],
+      'Cross-game change-pattern discovery now runs through Tiger discover-change-patterns.',
+    recommendedTigerContracts: ['discoverChangePatterns'],
   },
   find_similar: {
     backendKinds: ['tiger_query_api'],
@@ -115,18 +113,17 @@ const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
     recommendedTigerContracts: ['semanticSearch'],
   },
   get_change_activity_detail: {
-    backendKinds: ['supabase_rpc', 'supabase_table'],
+    backendKinds: ['tiger_query_api'],
     dataSources: [
-      'rpc:get_change_feed_bursts',
-      'rpc:get_change_feed_news',
-      'table:app_change_events',
-      'table:apps',
-      'table:steam_news_items',
-      'table:steam_news_versions',
+      'query_api:explainChanges',
+      'relation:core_entities',
+      'relation:events_app_change_events',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
     ],
-    migrationDisposition: 'keep_legacy_temporarily',
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Detail drilldown depends on the legacy cross-game change feed and should move only after the parent change-discovery flow has a Tiger replacement.',
+      'Change drilldown now runs through Tiger explain-changes.',
     recommendedTigerContracts: ['explainChanges'],
   },
   get_game_change_timeline: {
@@ -138,24 +135,29 @@ const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
     recommendedTigerContracts: ['explainChanges'],
   },
   get_recent_news_detail: {
-    backendKinds: ['supabase_rpc', 'supabase_table'],
+    backendKinds: ['tiger_query_api'],
     dataSources: [
-      'rpc:get_chat_recent_news',
-      'table:steam_news_items',
-      'table:steam_news_versions',
-      'table:apps',
+      'query_api:searchDocuments',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
+      'relation:apps',
     ],
-    migrationDisposition: 'cut_over_now',
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Recent-news detail is already represented by Tiger search-documents behavior and should stop using legacy Supabase reads.',
+      'Recent-news detail now runs through Tiger search-documents.',
     recommendedTigerContracts: ['searchDocuments'],
   },
   get_recent_news_digest: {
-    backendKinds: ['supabase_rpc'],
-    dataSources: ['rpc:get_chat_recent_news'],
-    migrationDisposition: 'cut_over_now',
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:searchDocuments',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
+      'relation:apps',
+    ],
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Recent-news digests should move to the Tiger document search surface instead of the legacy news RPC.',
+      'Recent-news digests now run through Tiger search-documents.',
     recommendedTigerContracts: ['searchDocuments'],
   },
   lookup_developers: {
@@ -204,12 +206,18 @@ const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
     recommendedTigerContracts: ['resolveEntities', 'getEntityOverview', 'searchCatalog', 'rankEntities', 'traceMetricHistory'],
   },
   query_change_activity: {
-    backendKinds: ['supabase_rpc'],
-    dataSources: ['rpc:get_change_feed_bursts', 'rpc:get_change_feed_news'],
-    migrationDisposition: 'needs_tiger_contract',
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:searchChangeActivity',
+      'relation:apps',
+      'relation:events_app_change_events',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
+    ],
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Cross-game change discovery still needs a dedicated Tiger contract. Do not overload search-documents or explain-changes to keep this legacy path alive.',
-    recommendedTigerContracts: [],
+      'Cross-game change discovery now runs through Tiger search-change-activity.',
+    recommendedTigerContracts: ['searchChangeActivity'],
   },
   query_database: {
     backendKinds: ['supabase_sql'],
@@ -259,11 +267,16 @@ const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
     recommendedTigerContracts: ['searchCatalog'],
   },
   search_recent_news_topics: {
-    backendKinds: ['supabase_rpc'],
-    dataSources: ['rpc:search_recent_news_topics'],
-    migrationDisposition: 'cut_over_now',
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:searchDocuments',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
+      'relation:apps',
+    ],
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Cross-game recent-news topic search already has a Tiger document-search destination and should stop using the legacy Supabase RPC.',
+      'Cross-game recent-news topic search now runs through Tiger search-documents.',
     recommendedTigerContracts: ['searchDocuments'],
   },
 };
@@ -310,6 +323,21 @@ const CONTRACT_PROVENANCE: Record<AuditedTigerContractName, ChatExecutionProvena
     migrationNotes: 'Ranking already runs through Tiger.',
     recommendedTigerContracts: ['rankEntities'],
   },
+  discoverChangePatterns: {
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:discoverChangePatterns',
+      'relation:apps',
+      'relation:latest_daily_metrics',
+      'relation:metrics_daily_metrics',
+      'relation:events_app_change_events',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
+    ],
+    migrationDisposition: 'already_tiger',
+    migrationNotes: 'Cross-game change-pattern discovery already runs through Tiger.',
+    recommendedTigerContracts: ['discoverChangePatterns'],
+  },
   resolveEntities: {
     backendKinds: ['tiger_query_api'],
     dataSources: ['query_api:resolveEntities', 'relation:apps', 'relation:latest_daily_metrics', 'relation:publishers', 'relation:developers'],
@@ -323,6 +351,19 @@ const CONTRACT_PROVENANCE: Record<AuditedTigerContractName, ChatExecutionProvena
     migrationDisposition: 'already_tiger',
     migrationNotes: 'Catalog search already runs through Tiger.',
     recommendedTigerContracts: ['searchCatalog'],
+  },
+  searchChangeActivity: {
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:searchChangeActivity',
+      'relation:apps',
+      'relation:events_app_change_events',
+      'relation:docs_steam_news_items',
+      'relation:docs_steam_news_search_projection',
+    ],
+    migrationDisposition: 'already_tiger',
+    migrationNotes: 'Cross-game change activity search already runs through Tiger.',
+    recommendedTigerContracts: ['searchChangeActivity'],
   },
   searchDocuments: {
     backendKinds: ['tiger_query_api'],

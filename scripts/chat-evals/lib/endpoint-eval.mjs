@@ -149,6 +149,7 @@ export async function evaluateChatRequest({ auth, origin, requestBody, timeoutMs
     const headers = {
       Cookie: serializeCookies(auth.cookieJar),
       'Content-Type': 'application/json',
+      'x-chat-eval-trace': '1',
     };
 
     if (auth.evalSecret) {

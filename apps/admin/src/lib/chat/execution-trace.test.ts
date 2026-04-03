@@ -22,6 +22,8 @@ test('execution trace registry covers the current chat tool surface', () => {
     );
   }
 
+  assert.ok(!exposedTools.includes('query_analytics'));
+  assert.ok(auditedTools.has('query_analytics'));
   assert.ok(auditedTools.has('query_database'));
 });
 
