@@ -1443,7 +1443,7 @@ async function tryTigerGameChangeTimeline(
     | {
         displayName: string;
         entityUid: string;
-        matchQuality?: 'exact' | 'prefix' | 'substring';
+        matchQuality?: 'exact' | 'prefix' | 'substring' | 'fuzzy';
         platformEntityId: string;
       }
     | undefined;

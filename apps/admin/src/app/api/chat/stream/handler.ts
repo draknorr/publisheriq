@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getServiceClient } from '@publisheriq/database';
 import { createProvider } from '@/lib/llm/providers';
+import { buildTigerNarratorSystemPrompt } from '@/lib/llm/tiger-narrator-prompt';
 import { buildTigerSystemPrompt } from '@/lib/llm/tiger-system-prompt';
 import { CUBE_TOOLS } from '@/lib/llm/cube-tools';
 import {
@@ -8,7 +9,7 @@ import {
   searchByConceptWithTimeout,
   type FindSimilarArgs,
   type SearchByConceptArgs,
-} from '@/lib/qdrant/search-service';
+} from '@/lib/semantic-search/query-api-service';
 import { searchGames, type SearchGamesArgs } from '@/lib/search/game-search';
 import { lookupTags, type LookupTagsArgs } from '@/lib/search/tag-lookup';
 import {
@@ -88,10 +89,16 @@ import {
   type TigerContractContinuationResult,
 } from '@/lib/chat/result-set-continuation';
 import {
+  applyTigerPrimarySessionState,
   buildSessionContextFromTurn,
   buildSessionContextPrompt,
   summarizeSessionContextForLog,
 } from '@/lib/chat/session-context';
+import {
+  buildTigerSuccessBrief,
+  renderTigerNarratedAnswer,
+  type TigerAnswerBrief,
+} from '@/lib/chat/tiger-answer-brief';
 import { renderToolResultForChat } from '@/lib/chat/chat-edge-renderer';
 import { renderTigerPrimaryResult } from '@/lib/chat/tiger-primary-renderer';
 import { postToQueryApi } from '@/lib/query-api-client';
@@ -177,6 +184,23 @@ function readChatEvalLocalBypassEnabled(): boolean {
 
 function readChatLocalBrowserBypassEnabled(): boolean {
   return process.env.CHAT_LOCAL_BROWSER_BYPASS_ENABLED === 'true';
+}
+
+function readTigerLegacyFallbackEnabled(): boolean {
+  return process.env.CHAT_TIGER_LEGACY_FALLBACK_ENABLED === 'true';
+}
+
+function readTigerNarratorEnabled(): boolean {
+  if (process.env.CHAT_TIGER_NARRATOR_ENABLED === 'false') {
+    return false;
+  }
+
+  return process.env.NODE_ENV !== 'test';
+}
+
+function readTigerNarratorTimeoutMs(): number {
+  const parsed = Number(process.env.CHAT_TIGER_NARRATOR_TIMEOUT_MS ?? '3000');
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3000;
 }
 
 interface QueryAnalyticsArgs {
@@ -389,7 +413,12 @@ function sumTigerAttemptTimingMs(
 }
 
 function buildTigerSyntheticToolCall(params: {
-  contractName: 'compareEntities' | 'getEntityOverview' | 'searchCatalog' | 'semanticSearch';
+  contractName:
+    | 'compareEntities'
+    | 'discoverMomentum'
+    | 'getEntityOverview'
+    | 'searchCatalog'
+    | 'semanticSearch';
   request: Record<string, unknown>;
   response: Record<string, unknown>;
   resultSet?: SessionChatResultSet | null;
@@ -499,6 +528,48 @@ function buildTigerSyntheticToolCall(params: {
     };
   }
 
+  if (contractName === 'discoverMomentum') {
+    const items = Array.isArray(response.items)
+      ? response.items
+          .filter((item): item is Record<string, unknown> => isRecord(item))
+          .map((item) => ({
+            appid: typeof item.appid === 'number' ? item.appid : 0,
+            ccuPeak: typeof item.ccuPeak === 'number' ? item.ccuPeak : null,
+            developerName: typeof item.developerName === 'string' ? item.developerName : null,
+            isFree: item.isFree === true,
+            momentumScore: typeof item.momentumScore === 'number' ? item.momentumScore : null,
+            name: typeof item.name === 'string' ? item.name : 'Unknown',
+            publisherName: typeof item.publisherName === 'string' ? item.publisherName : null,
+            supportLevel: typeof item.supportLevel === 'string' ? item.supportLevel : 'medium',
+            supportReasons: Array.isArray(item.supportReasons)
+              ? item.supportReasons.map((reason) => String(reason))
+              : [],
+            totalReviews: typeof item.totalReviews === 'number' ? item.totalReviews : null,
+          }))
+      : [];
+
+    return {
+      name: 'screen_games',
+      arguments: request,
+      result: {
+        success: true,
+        filters_applied: Array.isArray(response.filtersApplied)
+          ? response.filtersApplied.map((value) => String(value))
+          : [],
+        ranking_definition:
+          typeof response.rankingDefinition === 'string' ? response.rankingDefinition : undefined,
+        ranking_label:
+          typeof response.rankingLabel === 'string' ? response.rankingLabel : undefined,
+        results: items,
+        timeframe: typeof response.timeframe === 'string' ? response.timeframe : undefined,
+        timeframe_label:
+          typeof response.timeframeLabel === 'string' ? response.timeframeLabel : undefined,
+        total_found: items.length,
+        ...(resultSet ? { continuation_meta: { resultSet } } : {}),
+      },
+    };
+  }
+
   return {
     name: typeof request.mode === 'string' && request.mode === 'concept' ? 'search_by_concept' : 'find_similar',
     arguments: request,
@@ -568,6 +639,7 @@ function buildSessionLogSummary(
   if (tigerPrimary) {
     summary.tigerPrimaryRoute = tigerPrimary.route;
     summary.tigerPrimaryIntent = tigerPrimary.matchedIntent;
+    summary.tigerPrimaryRenderMode = tigerPrimary.renderMode;
     summary.tigerPrimaryEnabled = tigerPrimary.enabled;
     summary.tigerPrimaryCohort = tigerPrimary.cohort;
     summary.tigerPrimaryAttemptedContracts = Array.from(
@@ -629,6 +701,147 @@ function buildSystemPrompt(sessionContext: SessionChatContext | null): string {
   ].join('\n');
 
   return [basePrompt, phase1Instructions, contextPrompt].filter(Boolean).join('\n\n');
+}
+
+function extractTigerPrimaryReasons(
+  tigerPrimary: MessageEndEvent['tigerPrimary'] | undefined
+): string[] {
+  return Array.from(
+    new Set(
+      (tigerPrimary?.attempts ?? [])
+        .map((attempt) => attempt.reason?.trim())
+        .filter((reason): reason is string => Boolean(reason))
+    )
+  );
+}
+
+function getContinuationMatchedIntent(
+  sourceContract: TigerContractContinuationResult['sourceContract']
+): 'catalog_search' | 'momentum_discovery' | 'semantic_search' {
+  if (sourceContract === 'discoverMomentum') {
+    return 'momentum_discovery';
+  }
+
+  if (sourceContract === 'searchCatalog') {
+    return 'catalog_search';
+  }
+
+  return 'semantic_search';
+}
+
+function buildTigerOnlyFallbackReply(params: {
+  tigerPrimary: NonNullable<MessageEndEvent['tigerPrimary']>;
+}): string {
+  const { tigerPrimary } = params;
+  const primaryReason = extractTigerPrimaryReasons(tigerPrimary)[0] ?? null;
+  const reasonSuffix = primaryReason ? `\n\nTiger reason: ${primaryReason}` : '';
+
+  switch (tigerPrimary.matchedIntent) {
+    case 'entity_overview':
+      return `I couldn't resolve a single stable game or company for that Tiger overview request. Try the exact Steam title or the exact studio/publisher name.${reasonSuffix}`;
+    case 'entity_compare':
+      return `I couldn't build a stable Tiger comparison for that prompt. Try \`compare FromSoftware and Rockstar Games by reviews\` or name the exact entities you want compared.${reasonSuffix}`;
+    case 'catalog_search':
+      return `Tiger couldn't satisfy that catalog search as phrased. Try a simpler request like \`show me all games by FromSoftware\` or \`show me Linux games with overwhelmingly positive reviews\`.${reasonSuffix}`;
+    case 'entity_ranking':
+      return `Tiger couldn't satisfy that ranking prompt as phrased. Try a direct ranking like \`what are the top games by reviews?\` or \`what publisher has the most games on Steam?\`.${reasonSuffix}`;
+    case 'momentum_discovery':
+      return `Tiger couldn't satisfy that momentum prompt as phrased. Try a direct discovery like \`what games are trending this week?\`, \`what games are breaking out this week?\`, or \`show free-to-play games with the most players\`.${reasonSuffix}`;
+    case 'metric_history':
+      return `I couldn't resolve a single game for that Tiger history request. Try the exact Steam title and a direct time window, like \`How have Hades II reviews changed over the last 30 days?\`${reasonSuffix}`;
+    case 'news_search':
+      return `Tiger couldn't build a stable news lookup for that prompt. Try the exact game title, like \`Any recent announcements about Primeval?\`${reasonSuffix}`;
+    case 'change_explanation':
+      return `Tiger couldn't build a stable change explanation for that prompt. Try the exact game title, like \`What changed for Primeval this week?\`${reasonSuffix}`;
+    case 'change_discovery':
+      return `Tiger couldn't satisfy that change-discovery prompt as phrased. Try a direct prompt like \`show recent store-page changes\` or \`find games teasing a big update\`.${reasonSuffix}`;
+    case 'semantic_search':
+      return `Tiger couldn't satisfy that similarity prompt as phrased. Try \`games like Hades with better reviews\` or describe the concept more directly.${reasonSuffix}`;
+    default:
+      return `Tiger chat couldn't route that prompt yet. It currently handles catalog discovery, rankings, momentum discovery, game and company overviews, direct comparisons, metric history, change/news lookups, and semantic similarity. Try naming the game or company and the task directly.${reasonSuffix}`;
+  }
+}
+
+function buildTigerNarrationMessages(params: {
+  brief: TigerAnswerBrief;
+  prompt: string;
+}): Message[] {
+  return [
+    {
+      role: 'system',
+      content: buildTigerNarratorSystemPrompt(),
+    },
+    {
+      role: 'user',
+      content: [
+        `User question:\n${params.prompt}`,
+        '',
+        `Answer brief:\n${JSON.stringify({
+          answerKind: params.brief.answerKind,
+          directAnswer: params.brief.directAnswer,
+          keyFacts: params.brief.keyFacts,
+          selectionNote: params.brief.selectionNote ?? null,
+        }, null, 2)}`,
+      ].join('\n'),
+    },
+  ];
+}
+
+function isUsableTigerNarration(value: string | null | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (/\b(from Tiger|Tiger-backed|contract|tool call|internal routing)\b/i.test(normalized)) {
+    return false;
+  }
+
+  return true;
+}
+
+async function narrateTigerAnswer(params: {
+  brief: TigerAnswerBrief;
+  deps: Pick<ChatRouteDependencies, 'createProvider' | 'now'>;
+  prompt: string;
+}): Promise<{ content: string | null; durationMs: number }> {
+  if (!readTigerNarratorEnabled() || params.brief.answerKind !== 'success') {
+    return { content: null, durationMs: 0 };
+  }
+
+  const narrationMessages = buildTigerNarrationMessages({
+    brief: params.brief,
+    prompt: params.prompt,
+  });
+  const startedAt = params.deps.now();
+
+  try {
+    const provider = params.deps.createProvider();
+    const response = await Promise.race([
+      provider.chat(narrationMessages),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Tiger narrator timed out')), readTigerNarratorTimeoutMs())
+      ),
+    ]);
+    const durationMs = params.deps.now() - startedAt;
+    const content = response && typeof response === 'object' && 'content' in response
+      ? (response.content ?? null)
+      : null;
+
+    return {
+      content: isUsableTigerNarration(content) ? content.trim() : null,
+      durationMs,
+    };
+  } catch {
+    return {
+      content: null,
+      durationMs: params.deps.now() - startedAt,
+    };
+  }
 }
 
 async function executeResolvedToolCall(params: {
@@ -841,6 +1054,7 @@ export async function handleChatStreamRequest(
       let body: ChatRequest | null = null;
       let lastUserMessageContent: string | null = null;
       let tigerPrimaryResult: MessageEndEvent['tigerPrimary'];
+      let tigerFollowUpSuggestions: MessageEndEvent['followUpSuggestions'];
       let tigerShadow: TigerShadowInfo | undefined;
       const executedToolNames: string[] = [];
       const executedToolCalls: ChatToolCall[] = [];
@@ -900,13 +1114,23 @@ export async function handleChatStreamRequest(
         );
 
         if (tigerPrimaryResult.route === 'primary_success' && tigerPrimaryEvaluation.renderedText) {
+          tigerFollowUpSuggestions = tigerPrimaryEvaluation.followUpSuggestions ?? undefined;
+
           if (
             tigerPrimaryEvaluation.contractResult &&
             isRecord(tigerPrimaryEvaluation.contractResult.response)
           ) {
             const contractResult = tigerPrimaryEvaluation.contractResult;
             const resultSet =
-              contractResult.contractName === 'searchCatalog'
+              contractResult.contractName === 'discoverMomentum'
+                ? buildTigerPrimaryResultSet({
+                    family: 'momentum',
+                    result: contractResult.response as Record<string, unknown>,
+                    sourceArgs: contractResult.request,
+                    sourceContract: 'discoverMomentum',
+                    sourceTool: 'screen_games',
+                  })
+                : contractResult.contractName === 'searchCatalog'
                 ? buildTigerPrimaryResultSet({
                     family: 'discovery',
                     result: contractResult.response as Record<string, unknown>,
@@ -943,8 +1167,35 @@ export async function handleChatStreamRequest(
             }
           }
 
+          updatedSessionContext = applyTigerPrimarySessionState({
+            baseContext: updatedSessionContext,
+            lastAnswer: tigerPrimaryEvaluation.sessionState?.lastAnswer ?? null,
+            selectionState: tigerPrimaryEvaluation.sessionState?.selectionState ?? null,
+          });
+
+          let primaryText = tigerPrimaryEvaluation.renderedText;
+          if (tigerPrimaryEvaluation.answerBrief) {
+            const narration = await narrateTigerAnswer({
+              brief: tigerPrimaryEvaluation.answerBrief,
+              deps,
+              prompt: lastUserPrompt,
+            });
+            totalLlmMs += narration.durationMs;
+
+            if (narration.content) {
+              primaryText = renderTigerNarratedAnswer({
+                brief: tigerPrimaryEvaluation.answerBrief,
+                narration: narration.content,
+              });
+              tigerPrimaryResult = {
+                ...tigerPrimaryResult,
+                renderMode: 'hybrid_narrator',
+              };
+            }
+          }
+
           debugStats.textDeltaCount = 1;
-          debugStats.totalChars = tigerPrimaryEvaluation.renderedText.length;
+          debugStats.totalChars = primaryText.length;
           debugStats.lastIterationHadText = true;
 
           if (lastUserMessageContent && !skipUsageAccounting) {
@@ -955,7 +1206,7 @@ export async function handleChatStreamRequest(
                 tool_count: 0,
                 iteration_count: 0,
                 response_length: debugStats.totalChars,
-                timing_llm_ms: 0,
+                timing_llm_ms: totalLlmMs > 0 ? Math.round(totalLlmMs) : 0,
                 timing_tools_ms: Math.round(totalToolsMs),
                 timing_total_ms: Math.round(deps.now() - requestStart),
                 user_id: userId ?? undefined,
@@ -983,14 +1234,14 @@ export async function handleChatStreamRequest(
 
           const textEvent: TextDeltaEvent = {
             type: 'text_delta',
-            delta: tigerPrimaryEvaluation.renderedText,
+            delta: primaryText,
           };
           controller.enqueue(encoder.encode(formatSSE(textEvent)));
 
           const endEvent: MessageEndEvent = {
             type: 'message_end',
             timing: {
-              llmMs: 0,
+              llmMs: Math.round(totalLlmMs),
               toolsMs: Math.round(totalToolsMs),
               totalMs: Math.round(deps.now() - requestStart),
             },
@@ -998,6 +1249,7 @@ export async function handleChatStreamRequest(
             quality: phase1Quality,
             sessionContext: updatedSessionContext,
             executionTrace: captureExecutionTrace ? executionTrace : undefined,
+            followUpSuggestions: tigerFollowUpSuggestions,
             tigerPrimary: tigerPrimaryResult,
             usage: {
               inputTokens: totalInputTokens,
@@ -1090,11 +1342,27 @@ export async function handleChatStreamRequest(
                 error: contractResponse.reason ?? 'Unknown Tiger continuation error',
                 success: false,
               };
+              tigerPrimaryResult = {
+                ...(tigerPrimaryResult ?? {
+                  attempts: [],
+                  cohort: 'default',
+                  enabled: true,
+                  matchedIntent: null,
+                  mode: 'all',
+                  renderMode: 'deterministic',
+                  route: 'error',
+                }),
+                renderMode: 'deterministic',
+                route: 'error',
+              };
             } else {
               const nextResultSet = buildTigerContinuationResultSet({
                 resolution: continuationResolution,
                 response: contractResponse.data,
               });
+              const continuationMatchedIntent = getContinuationMatchedIntent(
+                contractResponse.data.sourceContract
+              );
 
               syntheticToolCall = buildTigerSyntheticToolCall({
                 contractName: contractResponse.data.sourceContract,
@@ -1113,16 +1381,65 @@ export async function handleChatStreamRequest(
                 continuationExhausted: nextResultSet.exhausted,
               };
 
+              const continuationAnswerBrief =
+                nextResultSet.exhausted && nextResultSet.returnedIds.length === 0
+                  ? null
+                  : buildTigerSuccessBrief({
+                      fallbackMarkdown: renderTigerPrimaryResult({
+                        matchedIntent: continuationMatchedIntent,
+                        response: contractResponse.data.result,
+                      }),
+                      intent: continuationMatchedIntent,
+                      response: contractResponse.data.result,
+                      selectionState: null,
+                    });
+
               renderedContinuationText =
                 nextResultSet.exhausted && nextResultSet.returnedIds.length === 0
                   ? 'No additional matching results remain beyond the rows already shown.'
-                : renderTigerPrimaryResult({
-                      matchedIntent:
-                        contractResponse.data.sourceContract === 'searchCatalog'
-                          ? 'catalog_search'
-                          : 'semantic_search',
-                      response: contractResponse.data.result,
-                    });
+                  : continuationAnswerBrief?.fallbackMarkdown ?? null;
+
+              if (continuationAnswerBrief) {
+                const narration = await narrateTigerAnswer({
+                  brief: continuationAnswerBrief,
+                  deps,
+                  prompt: lastUserPrompt,
+                });
+                totalLlmMs += narration.durationMs;
+
+                if (narration.content) {
+                  renderedContinuationText = renderTigerNarratedAnswer({
+                    brief: continuationAnswerBrief,
+                    narration: narration.content,
+                  });
+                }
+              }
+
+              tigerPrimaryResult = {
+                ...(tigerPrimaryResult ?? {
+                  attempts: [],
+                  cohort: 'default',
+                  enabled: true,
+                  matchedIntent: continuationMatchedIntent,
+                  mode: 'all',
+                  renderMode: 'deterministic',
+                  route: 'primary_success',
+                }),
+                attempts: [{
+                  contractName: contractResponse.data.sourceContract,
+                  httpStatus: 200,
+                  resultCount: nextResultSet.returnedIds.length,
+                  status: 'success',
+                  sufficientToAnswer: true,
+                  timingMs: Math.round(executionMs),
+                }],
+                matchedIntent: continuationMatchedIntent,
+                renderMode: continuationAnswerBrief && renderedContinuationText !== continuationAnswerBrief.fallbackMarkdown
+                  ? 'hybrid_narrator'
+                  : 'deterministic',
+                route: 'primary_success',
+              };
+              tigerFollowUpSuggestions = continuationAnswerBrief?.followUpSuggestions ?? undefined;
             }
             recordExecutionTrace([
               buildTigerContractTraceEntry({
@@ -1343,6 +1660,29 @@ export async function handleChatStreamRequest(
               forceFinalRenderWithoutTools = true;
             }
           }
+        }
+
+        const tigerOwnsFallbackPath =
+          tigerPrimaryResult?.enabled === true && !readTigerLegacyFallbackEnabled();
+
+        if (tigerOwnsFallbackPath && debugStats.totalChars === 0) {
+          const tigerOnlyReply = buildTigerOnlyFallbackReply({
+            tigerPrimary: tigerPrimaryResult,
+          });
+
+          tigerPrimaryResult = {
+            ...tigerPrimaryResult,
+            route: 'primary_success',
+          };
+          debugStats.textDeltaCount++;
+          debugStats.totalChars += tigerOnlyReply.length;
+          debugStats.lastIterationHadText = true;
+
+          const textEvent: TextDeltaEvent = {
+            type: 'text_delta',
+            delta: tigerOnlyReply,
+          };
+          controller.enqueue(encoder.encode(formatSSE(textEvent)));
         }
 
         while (debugStats.totalChars === 0 && iterations < MAX_TOOL_ITERATIONS) {
@@ -1832,6 +2172,7 @@ export async function handleChatStreamRequest(
           quality: phase1Quality,
           sessionContext: updatedSessionContext,
           executionTrace: captureExecutionTrace ? executionTrace : undefined,
+          followUpSuggestions: tigerFollowUpSuggestions,
           tigerPrimary: tigerPrimaryResult,
           tigerShadow,
           usage: {

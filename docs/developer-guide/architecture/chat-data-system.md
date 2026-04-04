@@ -4,6 +4,8 @@ This document provides a complete reference for the PublisherIQ chat system's da
 
 **Last Updated:** March 30, 2026
 
+> Note: the canonical `/chat` runtime is now Tiger-primary through `apps/query-api` and `packages/data-plane`. Some legacy tool-loop sections below are retained as historical reference until this document is fully rewritten.
+
 ## Recent Improvements
 
 - **Change-intel tools**: `query_change_activity`, `get_game_change_timeline`, `get_recent_news_detail`, `get_recent_news_digest`, `search_recent_news_topics`, `get_change_activity_detail`, `compare_change_before_after`, and `find_change_patterns`
@@ -53,15 +55,15 @@ This document provides a complete reference for the PublisherIQ chat system's da
 │                           Tool Selection                                     │
 │            ┌──────────────────────┼──────────────────────┐                  │
 │            ▼                      ▼                      ▼                  │
-│   lookup_publishers     query_analytics          find_similar               │
-│   lookup_developers     search_games             lookup_tags                │
-│   lookup_games          change-intel tools      discover_trending           │
+│   Tiger contracts       query_analytics          lookup helpers             │
+│   semanticSearch        searchCatalog           facet lookup                │
+│   discoverMomentum      change-intel tools      explainChanges             │
 └────────────┬──────────────────────┬──────────────────────┬──────────────────┘
              │                      │                      │
              ▼                      ▼                      ▼
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────────┐
-│  Publisher Lookup   │  │  Cube.dev API       │  │  Qdrant Cloud           │
-│  (Supabase ILIKE)   │  │  (JWT Auth)         │  │  (Vector Search)        │
+│  Publisher Lookup   │  │  Cube.dev API       │  │  Query API / Tiger      │
+│  (Supabase ILIKE)   │  │  (JWT Auth)         │  │  (semantic + contracts) │
 └─────────────────────┘  └──────────┬──────────┘  └─────────────────────────┘
                                     │
                                     ▼
@@ -71,9 +73,7 @@ This document provides a complete reference for the PublisherIQ chat system's da
                          │  - Tables           │
                          │  - Views            │
                          │  - Materialized     │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
+                         └─────────────────────┘
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     ENTITY LINK PRE-FORMATTING                              │
 │  formatResultWithEntityLinks() transforms raw results:                      │
@@ -138,7 +138,7 @@ The chat system provides 18 tools to the LLM for data access.
 
 ### 2. find_similar
 
-**Purpose**: Semantic similarity search using Qdrant vector embeddings.
+**Purpose**: Semantic similarity search using Tiger-backed semantic retrieval via the query-api.
 
 **Parameters**:
 
@@ -266,7 +266,7 @@ The chat system provides 18 tools to the LLM for data access.
 
 **Use for**: Concept-based queries WITHOUT a reference game.
 
-**File**: [apps/admin/src/lib/qdrant/search-service.ts](../../apps/admin/src/lib/qdrant/search-service.ts)
+**File**: [apps/admin/src/lib/semantic-search/query-api-service.ts](../../apps/admin/src/lib/semantic-search/query-api-service.ts)
 
 **Parameters**:
 
@@ -298,10 +298,10 @@ The chat system provides 18 tools to the LLM for data access.
 
 **How It Works**:
 1. User provides natural language description
-2. Description is embedded using OpenAI text-embedding-3-small (512 dims)
-3. Vector search in Qdrant's `publisheriq_games` collection
-4. Filters applied during search
-5. Results returned with similarity scores
+2. Description is embedded using the current OpenAI embedding model configured for the Tiger retrieval pipeline
+3. The app calls Tiger `semanticSearch` through `query-api`
+4. Filters are applied inside the Tiger data plane
+5. Results return with similarity scores and match reasons
 
 **Difference from find_similar**: No reference game needed - pure concept matching.
 
@@ -1148,7 +1148,7 @@ Access chat logs at `/admin/chat-logs`:
 
 ### Extending Similarity Search
 
-1. **Add Qdrant collection** if new entity type
+1. **Add Tiger retrieval tables / backfill** if a new entity type is introduced
 2. **Update find_similar tool** schema with new filters
 3. **Implement filter logic** in similarity search handler
 4. **Update system prompt** with examples

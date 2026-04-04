@@ -7,6 +7,8 @@ export type ChatEntityKind =
   | 'category'
   | 'change_activity';
 
+export type SessionSelectionEntityKind = 'game' | 'publisher' | 'developer';
+export type SessionSelectionMatchQuality = 'exact' | 'prefix' | 'substring' | 'fuzzy';
 export type SessionCandidateKind = 'games' | 'publishers' | 'developers' | 'activities';
 export type SessionResultSetItemKind = 'games' | 'activities';
 
@@ -66,11 +68,37 @@ export interface SessionChatLastAnswer {
   fallbackAction?: Phase1FallbackAction;
 }
 
+export interface SessionChatSelectionCandidate {
+  displayName: string;
+  entityKind: SessionSelectionEntityKind;
+  entityUid: string;
+  matchQuality: SessionSelectionMatchQuality | null;
+  ordinal: number;
+  platform: string;
+  platformEntityId: string | null;
+  score: number;
+}
+
+export interface SessionChatSelectionSlot {
+  candidates: SessionChatSelectionCandidate[];
+  expectedEntityKind?: SessionSelectionEntityKind | null;
+  label: string;
+  query: string;
+  requiresClarification: boolean;
+  selectedEntityUid: string | null;
+  slotId: string;
+}
+
+export interface SessionChatSelectionState {
+  family: string;
+  slots: SessionChatSelectionSlot[];
+}
+
 export interface SessionChatResultSet {
   continuationToken?: string | null;
   family: string;
   sourceTool: string;
-  sourceContract?: 'searchCatalog' | 'semanticSearch';
+  sourceContract?: 'discoverMomentum' | 'searchCatalog' | 'semanticSearch';
   itemKind: SessionResultSetItemKind;
   sourceArgs: Record<string, unknown>;
   shownIds: Array<number | string>;
@@ -85,6 +113,7 @@ export interface SessionChatContext {
   entities: SessionChatEntity[];
   constraints: SessionChatConstraint[];
   candidateSet?: SessionChatCandidateSet | null;
+  selectionState?: SessionChatSelectionState | null;
   resultSet?: SessionChatResultSet | null;
   lastAnswer?: SessionChatLastAnswer | null;
   updatedAt: string;

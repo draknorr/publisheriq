@@ -14,6 +14,7 @@ function createDataPlaneStub(overrides: Record<string, unknown> = {}): Record<st
     describeContracts: async () => ({ contracts: [], source: 'tiger' }),
     explainChanges: async () => ({ ok: true }),
     getEntityOverview: async () => ({ ok: true }),
+    getUserContext: async () => ({ ok: true }),
     healthCheck: async () => ({
       capturedAt: '2026-04-01T00:00:00.000Z',
       source: 'tiger',
@@ -86,7 +87,16 @@ test('query-api routes semantic-search requests to the data-plane service', asyn
           provenance: {
             capturedAt: '2026-04-01T00:00:00.000Z',
             source: 'tiger',
-            tables: ['qdrant:publisheriq_games'],
+            tables: [
+              'legacy.apps',
+              'legacy.latest_daily_metrics',
+              'legacy.app_publishers',
+              'legacy.app_developers',
+              'legacy.app_genres',
+              'legacy.steam_genres',
+              'legacy.app_steam_tags',
+              'legacy.steam_tags',
+            ],
           },
           results: [{ id: 367520, name: 'Hollow Knight', score: 0.94 }],
           sufficient_to_answer: true,
@@ -115,11 +125,110 @@ test('query-api routes semantic-search requests to the data-plane service', asyn
         provenance: {
           capturedAt: '2026-04-01T00:00:00.000Z',
           source: 'tiger',
-          tables: ['qdrant:publisheriq_games'],
+          tables: [
+            'legacy.apps',
+            'legacy.latest_daily_metrics',
+            'legacy.app_publishers',
+            'legacy.app_developers',
+            'legacy.app_genres',
+            'legacy.steam_genres',
+            'legacy.app_steam_tags',
+            'legacy.steam_tags',
+          ],
         },
         results: [{ id: 367520, name: 'Hollow Knight', score: 0.94 }],
         sufficient_to_answer: true,
       });
+    }
+  );
+});
+
+test('query-api routes get-user-context requests to the data-plane service', async () => {
+  let receivedBody: unknown = null;
+
+  await withServer(
+    createDataPlaneStub({
+      getUserContext: async (body: unknown) => {
+        receivedBody = body;
+        return {
+          alertPreferences: {
+            alertCcuDrop: true,
+            alertCcuSpike: true,
+            alertMilestone: true,
+            alertNewRelease: true,
+            alertPriceChange: true,
+            alertReviewSurge: true,
+            alertSentimentShift: true,
+            alertTrendReversal: true,
+            alertsEnabled: true,
+            ccuSensitivity: 1,
+            emailDigestEnabled: false,
+            emailDigestFrequency: 'daily',
+            reviewSensitivity: 1,
+            sentimentSensitivity: 1,
+            source: 'stored',
+          },
+          alerts: [],
+          pins: [{
+            displayName: 'Hades II',
+            entityKind: 'game',
+            entityUid: 'steam:game:1145350',
+            metrics: {
+              ccuPeak: 42000,
+              gameCount: null,
+              ownersMidpoint: 1200000,
+              reviewScore: 95,
+              totalReviews: 54000,
+            },
+            pinId: '11111111-1111-4111-8111-111111111111',
+            pinOrder: 0,
+            pinnedAt: '2026-04-03T00:00:00.000Z',
+            platform: 'steam',
+            platformEntityId: '1145350',
+            summary: {
+              appType: 'game',
+              isFree: false,
+              platforms: ['windows'],
+              releaseYear: 2024,
+            },
+            alertSettings: null,
+          }],
+          provenance: {
+            capturedAt: '2026-04-03T00:00:00.000Z',
+            source: 'tiger',
+            tables: ['legacy.user_pins', 'legacy.user_alerts'],
+          },
+          sufficientToAnswer: true,
+          totalAlerts: 0,
+          totalPins: 1,
+          unreadAlertCount: 0,
+          userId: '11111111-1111-4111-8111-111111111111',
+        };
+      },
+    }),
+    null,
+    async (origin) => {
+      const response = await fetch(`${origin}/v1/contracts/get-user-context`, {
+        body: JSON.stringify({
+          includeAlerts: true,
+          includePins: true,
+          limitAlerts: 5,
+          userId: '11111111-1111-4111-8111-111111111111',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(receivedBody, {
+        includeAlerts: true,
+        includePins: true,
+        limitAlerts: 5,
+        userId: '11111111-1111-4111-8111-111111111111',
+      });
+      const payload = await response.json() as { totalPins: number; unreadAlertCount: number };
+      assert.equal(payload.totalPins, 1);
+      assert.equal(payload.unreadAlertCount, 0);
     }
   );
 });

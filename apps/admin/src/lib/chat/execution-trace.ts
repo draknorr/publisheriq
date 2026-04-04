@@ -82,12 +82,16 @@ const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
     recommendedTigerContracts: ['explainChanges'],
   },
   discover_trending: {
-    backendKinds: ['cube'],
-    dataSources: ['cube:Discovery'],
-    migrationDisposition: 'needs_tiger_contract',
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:discoverMomentum',
+      ...SHARED_CATALOG_RELATIONS,
+      'relation:metrics_daily_metrics',
+    ],
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Breakout, acceleration, and decline prompts still depend on the generic Cube discovery surface and need a dedicated Tiger trend contract.',
-    recommendedTigerContracts: ['searchCatalog', 'rankEntities'],
+      'Trend-discovery prompts now run through Tiger discover-momentum.',
+    recommendedTigerContracts: ['discoverMomentum'],
   },
   find_change_patterns: {
     backendKinds: ['tiger_query_api'],
@@ -228,20 +232,16 @@ const TOOL_PROVENANCE: Record<string, ChatExecutionProvenanceDefinition> = {
     recommendedTigerContracts: [],
   },
   screen_games: {
-    backendKinds: ['supabase_rpc', 'supabase_table', 'tiger_query_api'],
+    backendKinds: ['tiger_query_api'],
     dataSources: [
-      'rpc:get_apps_with_filters',
-      'table:review_velocity_stats',
-      'table:steam_tags',
-      'table:steam_genres',
-      'table:steam_categories',
-      'table:app_steam_tags',
-      'query_api:semanticSearch',
+      'query_api:discoverMomentum',
+      ...SHARED_CATALOG_RELATIONS,
+      'relation:metrics_daily_metrics',
     ],
-    migrationDisposition: 'needs_tiger_contract',
+    migrationDisposition: 'already_tiger',
     migrationNotes:
-      'Momentum and screening prompts still use a mixed legacy stack and need a dedicated Tiger screening surface before the tool can be removed.',
-    recommendedTigerContracts: ['searchCatalog'],
+      'Momentum and screening prompts now execute through Tiger discover-momentum.',
+    recommendedTigerContracts: ['discoverMomentum'],
   },
   search_by_concept: {
     backendKinds: ['tiger_query_api'],
@@ -309,12 +309,37 @@ const CONTRACT_PROVENANCE: Record<AuditedTigerContractName, ChatExecutionProvena
     migrationNotes: 'Single-entity change explanation already runs through Tiger.',
     recommendedTigerContracts: ['explainChanges'],
   },
+  discoverMomentum: {
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:discoverMomentum',
+      ...SHARED_CATALOG_RELATIONS,
+      'relation:metrics_daily_metrics',
+    ],
+    migrationDisposition: 'already_tiger',
+    migrationNotes: 'Momentum discovery already runs through Tiger.',
+    recommendedTigerContracts: ['discoverMomentum'],
+  },
   getEntityOverview: {
     backendKinds: ['tiger_query_api'],
     dataSources: ['query_api:getEntityOverview', ...SHARED_CATALOG_RELATIONS],
     migrationDisposition: 'already_tiger',
     migrationNotes: 'Entity overview and company portfolio snapshots already run through Tiger.',
     recommendedTigerContracts: ['getEntityOverview'],
+  },
+  getUserContext: {
+    backendKinds: ['tiger_query_api'],
+    dataSources: [
+      'query_api:getUserContext',
+      'relation:user_pins',
+      'relation:user_alerts',
+      'relation:user_alert_preferences',
+      'relation:user_pin_alert_settings',
+      ...SHARED_CATALOG_RELATIONS,
+    ],
+    migrationDisposition: 'already_tiger',
+    migrationNotes: 'Pinned items, alert preferences, and unread alert context now run through Tiger.',
+    recommendedTigerContracts: ['getUserContext'],
   },
   rankEntities: {
     backendKinds: ['tiger_query_api'],

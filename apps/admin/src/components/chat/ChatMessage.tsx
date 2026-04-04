@@ -21,6 +21,7 @@ interface DisplayMessage {
   toolCalls?: ChatToolCall[];
   timing?: ChatTiming;
   debug?: StreamDebugInfo;
+  followUpSuggestions?: QuerySuggestion[];
   tigerPrimary?: TigerPrimaryInfo;
   tigerShadow?: TigerShadowInfo;
   timestamp: Date;

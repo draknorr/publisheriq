@@ -92,9 +92,18 @@ export function ChatContainer({ initialQuery }: ChatContainerProps) {
   }, [messages]);
 
   const followUpSuggestions: QuerySuggestion[] = useMemo(() => {
-    if (isStreaming || !lastAssistantMessage || !lastAssistantMessage.toolCalls) {
+    if (isStreaming || !lastAssistantMessage) {
       return [];
     }
+
+    if (lastAssistantMessage.followUpSuggestions && lastAssistantMessage.followUpSuggestions.length > 0) {
+      return lastAssistantMessage.followUpSuggestions;
+    }
+
+    if (!lastAssistantMessage.toolCalls) {
+      return [];
+    }
+
     // Find the user query that preceded this assistant message
     const assistantIndex = messages.findIndex(m => m.id === lastAssistantMessage.id);
     const userMessage = assistantIndex > 0 ? messages[assistantIndex - 1] : null;

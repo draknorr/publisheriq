@@ -1,13 +1,4 @@
 import type { QueryResultRow } from 'pg';
-import OpenAI from 'openai';
-
-import {
-  runSemanticSearch,
-  type ResolveReferenceResult,
-  type ResolvedReferenceEntity,
-  type SemanticSearchDependencies,
-} from '@publisheriq/semantic-search';
-import { COLLECTIONS, EMBEDDING_CONFIG, getQdrantClient, type GamePayload } from '@publisheriq/qdrant';
 import { logger, PublisherIQError } from '@publisheriq/shared';
 
 import type {
@@ -38,6 +29,8 @@ import type {
   ExplainChangesResponse,
   GetEntityOverviewRequest,
   GetEntityOverviewResponse,
+  GetUserContextRequest,
+  GetUserContextResponse,
   MatchQuality,
   QueryProvenance,
   RankEntitiesRequest,
@@ -57,6 +50,8 @@ import type {
   SearchDocumentItem,
   SearchDocumentsRequest,
   SearchDocumentsResponse,
+  SemanticSearchCandidate,
+  SemanticSearchFilters,
   SemanticSearchRequest,
   SemanticSearchResultItem,
   SemanticSearchResponse,
@@ -64,6 +59,12 @@ import type {
   TraceMetricHistoryRequest,
   TraceMetricHistoryResponse,
   TraceMetricHistorySeries,
+  UserAlertSeverity,
+  UserAlertType,
+  UserContextAlert,
+  UserContextAlertPreferences,
+  UserContextPin,
+  UserContextPinAlertSettings,
 } from './contracts.js';
 import { CONTRACT_REGISTRY } from './contract-registry.js';
 import { loadDataPlaneConfig, type DataPlaneConfig } from './config.js';
@@ -76,9 +77,11 @@ interface EntityRow extends QueryResultRow {
   display_name: string;
   entity_id: number;
   game_count?: number | null;
+  match_quality?: MatchQuality | null;
   owners_midpoint: number | null;
   release_year?: number | null;
   review_score: number | null;
+  similarity_score?: number | null;
   total_reviews: number | null;
 }
 
@@ -204,17 +207,99 @@ interface SemanticGameReferenceRow extends QueryResultRow {
   appid: number;
   current_price_cents: number | null;
   developer_ids: number[] | null;
+  genres: string[] | null;
+  is_free: boolean;
   name: string;
+  platforms: string | null;
   pics_review_percentage: number | null;
   publisher_ids: number[] | null;
+  steam_deck_category: string | null;
+  tags: string[] | null;
   total_reviews: number | null;
   type: string | null;
 }
 
 interface SemanticCompanyReferenceRow extends QueryResultRow {
+  avg_review_percentage: number | null;
   game_count: number | null;
   id: number;
   name: string;
+  top_genres: string[] | null;
+  top_tags: string[] | null;
+}
+
+interface SemanticGameCandidateRow extends QueryResultRow {
+  appid: number;
+  current_price_cents: number | null;
+  developer_ids: number[] | null;
+  genres: string[] | null;
+  is_free: boolean;
+  name: string;
+  platforms: string | null;
+  positive_percentage: number | null;
+  publisher_ids: number[] | null;
+  steam_deck_category: string | null;
+  tags: string[] | null;
+  total_reviews: number | null;
+  type: string | null;
+}
+
+interface TigerSemanticGameProfileRow extends QueryResultRow {
+  appid: number;
+  current_price_cents: number | null;
+  developer_ids: number[] | null;
+  genres: string[] | null;
+  is_free: boolean;
+  name: string;
+  pics_review_percentage?: number | null;
+  platforms: string | null;
+  positive_percentage?: number | null;
+  publisher_ids: number[] | null;
+  steam_deck_category?: string | null;
+  tags: string[] | null;
+  total_reviews: number | null;
+  type: string | null;
+}
+
+interface SemanticCompanyCandidateRow extends QueryResultRow {
+  avg_review_percentage: number | null;
+  game_count: number | null;
+  id: number;
+  name: string;
+  top_genres: string[] | null;
+  top_tags: string[] | null;
+  total_reviews: number | null;
+}
+
+interface TigerSemanticGameProfile {
+  appid: number;
+  developerIds: number[];
+  genres: string[];
+  isFree: boolean;
+  name: string;
+  platforms: string[];
+  priceCents: number | null;
+  publisherIds: number[];
+  reviewPercentage: number | null;
+  tags: string[];
+  totalReviews: number | null;
+  type: string;
+}
+
+interface TigerSemanticCompanyProfile {
+  avgReviewPercentage: number | null;
+  gameCount: number | null;
+  id: number;
+  isIndie: boolean;
+  isMajor: boolean;
+  name: string;
+  topGenres: string[];
+  topTags: string[];
+}
+
+interface RankedSemanticItem {
+  item: SemanticSearchResultItem;
+  score: number;
 }
 
 interface ExplainNewsRow extends QueryResultRow {
@@ -231,6 +316,7 @@ interface ExplainNewsRow extends QueryResultRow {
 
 interface SearchDocumentRow extends QueryResultRow {
   app_name: string;
+  app_name_hit?: boolean;
   appid: number;
   body_preview?: string | null;
   content_preview?: string | null;
@@ -243,8 +329,10 @@ interface SearchDocumentRow extends QueryResultRow {
   match_reason?: string | null;
   published_at: string | null;
   rank: number;
+  ranking_reason?: string | null;
   sort_time: string;
   title: string | null;
+  title_exact_hit?: boolean;
   title_phrase_hit: boolean;
   url: string;
 }
@@ -255,6 +343,7 @@ interface ChangeActivityContractRow extends QueryResultRow {
   app_name: string;
   app_type: string | null;
   appid: number;
+  burst_strength?: 'high' | 'low' | 'medium' | null;
   external_url: string | null;
   facts: string[] | null;
   has_before_after: boolean | null;
@@ -262,10 +351,13 @@ interface ChangeActivityContractRow extends QueryResultRow {
   highlight_labels: string[] | null;
   is_released: boolean | null;
   occurred_at: string;
+  relevance_reason?: string | null;
+  relevance_score?: number | null;
   related_announcement_count: number | null;
   release_date: string | null;
   signal_families: string[] | null;
   sort_score?: number | null;
+  strongest_signal?: string | null;
   story_kind: string | null;
   summary: string | null;
 }
@@ -354,6 +446,78 @@ interface ChangeWindowMetricRow extends QueryResultRow {
   total_reviews: number | null;
 }
 
+interface UserContextPinRow extends QueryResultRow {
+  alert_ccu_drop: boolean | null;
+  alert_ccu_spike: boolean | null;
+  alert_milestone: boolean | null;
+  alert_new_release: boolean | null;
+  alert_price_change: boolean | null;
+  alert_review_surge: boolean | null;
+  alert_sentiment_shift: boolean | null;
+  alert_trend_reversal: boolean | null;
+  alerts_enabled: boolean | null;
+  app_type: string | null;
+  ccu_peak: number | null;
+  ccu_sensitivity: number | null;
+  developer_game_count: number | null;
+  display_name: string;
+  entity_id: number;
+  entity_type: EntityKind;
+  is_free: boolean | null;
+  owners_midpoint: number | null;
+  pin_id: string;
+  pin_order: number;
+  pinned_at: string;
+  platforms: string | null;
+  publisher_game_count: number | null;
+  release_year: number | null;
+  review_score: number | null;
+  review_sensitivity: number | null;
+  sentiment_sensitivity: number | null;
+  total_reviews: number | null;
+  use_custom_settings: boolean | null;
+}
+
+interface UserContextAlertPreferencesRow extends QueryResultRow {
+  alert_ccu_drop: boolean;
+  alert_ccu_spike: boolean;
+  alert_milestone: boolean;
+  alert_new_release: boolean;
+  alert_price_change: boolean;
+  alert_review_surge: boolean;
+  alert_sentiment_shift: boolean;
+  alert_trend_reversal: boolean;
+  alerts_enabled: boolean;
+  ccu_sensitivity: number;
+  email_digest_enabled: boolean;
+  email_digest_frequency: string | null;
+  review_sensitivity: number;
+  sentiment_sensitivity: number;
+}
+
+interface UserContextAlertRow extends QueryResultRow {
+  alert_id: string;
+  alert_type: UserAlertType;
+  change_percent: number | null;
+  created_at: string;
+  current_value: number | null;
+  description: string;
+  display_name: string;
+  entity_id: number;
+  entity_type: EntityKind;
+  is_read: boolean;
+  metric_name: string | null;
+  pin_id: string;
+  previous_value: number | null;
+  read_at: string | null;
+  severity: UserAlertSeverity;
+  title: string;
+}
+
+interface UserContextUnreadCountRow extends QueryResultRow {
+  unread_alert_count: number;
+}
+
 interface ExplainMomentAccumulator {
   directNewsGids: Set<string>;
   events: ChangeEventRow[];
@@ -375,6 +539,16 @@ interface SearchChangeMomentAccumulator {
   windowStart: Date;
 }
 
+type ChangeBurstStrength = 'high' | 'low' | 'medium';
+
+interface ChangeEvidenceSummary {
+  burstStrength: ChangeBurstStrength;
+  relevanceReason: string;
+  relevanceScore: number;
+  significanceReasons: string[];
+  strongestSignal: string | null;
+}
+
 interface ParsedTigerActivityId {
   activityKind: 'announcement' | 'change';
   appid: number;
@@ -384,6 +558,25 @@ interface ParsedTigerActivityId {
 
 interface ContinuationTokenPayload {
   offset: number;
+}
+
+interface ResolvedReferenceEntity {
+  id: number;
+  metrics?: {
+    developer_ids?: number[];
+    price_cents?: number | null;
+    publisher_ids?: number[];
+    review_percentage?: number | null;
+    total_reviews?: number | null;
+  };
+  name: string;
+  type: string;
+}
+
+interface ResolveReferenceResult {
+  candidates?: SemanticSearchCandidate[];
+  entity?: ResolvedReferenceEntity | null;
+  error?: string;
 }
 
 interface RelationLocation {
@@ -409,10 +602,13 @@ const DEFAULT_COMPARE_METRICS: CompareMetric[] = [
   'game_count',
 ];
 const DEFAULT_TRACE_DAYS = 30;
+const DEFAULT_SEMANTIC_RESULTS = 10;
+const DEFAULT_COMPANY_SEMANTIC_RESULTS = 6;
 const DEFAULT_EXPLAIN_CHANGES_DAYS = 14;
 const DEFAULT_EXPLAIN_CHANGES_LIMIT = 20;
 const DEFAULT_DOCUMENT_SEARCH_DAYS = 30;
 const DEFAULT_DOCUMENT_LIMIT = 8;
+const DEFAULT_USER_ALERT_LIMIT = 10;
 const MAX_ENTITY_LIMIT = 15;
 const MAX_CATALOG_LIMIT = 50;
 const MAX_ENTITY_GAMES_LIMIT = 25;
@@ -425,12 +621,21 @@ const MAX_CHANGE_PATTERN_LIMIT = 10;
 const MAX_COMPARE_ENTITY_COUNT = 5;
 const MAX_TRACE_DAYS = 180;
 const MAX_TRACE_METRICS = 4;
+const MAX_SEMANTIC_RESULTS = 50;
+const MAX_SEMANTIC_SEARCH_WINDOW = 120;
 const MAX_EXPLAIN_CHANGES_DAYS = 90;
 const MAX_EXPLAIN_CHANGES_LIMIT = 50;
 const MAX_DOCUMENT_SEARCH_DAYS = 90;
 const MAX_DOCUMENT_LIMIT = 10;
+const MAX_USER_ALERT_LIMIT = 50;
 const EXPLAIN_CHANGE_MOMENT_GAP_MS = 6 * 60 * 60 * 1000;
 const EXPLAIN_NEWS_PROXIMITY_MS = 24 * 60 * 60 * 1000;
+const ALLOW_EMPTY_RELATIONS = new Set<DataPlaneRelationKey>([
+  'user_pins',
+  'user_alerts',
+  'user_alert_preferences',
+  'user_pin_alert_settings',
+]);
 const READINESS_GATE_CONTRACTS = new Set<
   RuntimeQueryContractDescriptor['name']
 >([
@@ -448,6 +653,71 @@ const READINESS_GATE_CONTRACTS = new Set<
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SEMANTIC_TITLE_STOP_WORDS = new Set([
+  'game',
+  'games',
+  'edition',
+  'definitive',
+  'remastered',
+  'remaster',
+  'ultimate',
+  'complete',
+  'deluxe',
+  'version',
+  'chapter',
+  'episode',
+  'demo',
+  'beta',
+  'alpha',
+  'prologue',
+  'soundtrack',
+  'ost',
+  'the',
+  'and',
+  'of',
+  'for',
+  'to',
+  'a',
+  'an',
+  'ii',
+  'iii',
+  'iv',
+  'v',
+  'vi',
+  'vii',
+  'viii',
+  'ix',
+  'x',
+]);
+type SemanticSteamDeckCategory = NonNullable<SemanticSearchResultItem['steam_deck']>;
+const SEMANTIC_CONCEPT_STOP_WORDS = new Set([
+  'game',
+  'games',
+  'with',
+  'that',
+  'this',
+  'those',
+  'from',
+  'into',
+  'under',
+  'over',
+  'about',
+  'like',
+  'similar',
+]);
+const SEMANTIC_ATTRIBUTE_BLACKLIST = new Set([
+  'action',
+  'adventure',
+  'indie',
+  'casual',
+  'rpg',
+  'singleplayer',
+  'early access',
+  'story rich',
+  'exploration',
+  'atmospheric',
+  'female protagonist',
+]);
 const TRACE_METRIC_SET = new Set<TraceMetric>([
   'owners_midpoint',
   'ccu_peak',
@@ -511,7 +781,6 @@ const CHANGE_TYPE_TO_SIGNAL_FAMILY = Object.fromEntries(
     changeTypes.map((changeType) => [changeType, family])
   )
 ) as Record<string, ChangeActivitySignalFamily>;
-let openaiClient: OpenAI | null = null;
 const RELATION_LOCATIONS: Record<
   DataPlaneConfig['source'],
   Record<DataPlaneRelationKey, RelationLocation>
@@ -521,6 +790,7 @@ const RELATION_LOCATIONS: Record<
     app_developers: { schema: 'public', sql: 'public.app_developers', table: 'app_developers' },
     app_genres: { schema: 'public', sql: 'public.app_genres', table: 'app_genres' },
     app_publishers: { schema: 'public', sql: 'public.app_publishers', table: 'app_publishers' },
+    app_steam_deck: { schema: 'public', sql: 'public.app_steam_deck', table: 'app_steam_deck' },
     app_steam_tags: { schema: 'public', sql: 'public.app_steam_tags', table: 'app_steam_tags' },
     apps: { schema: 'public', sql: 'public.apps', table: 'apps' },
     developers: { schema: 'public', sql: 'public.developers', table: 'developers' },
@@ -555,6 +825,18 @@ const RELATION_LOCATIONS: Record<
       table: 'app_change_events',
     },
     publishers: { schema: 'public', sql: 'public.publishers', table: 'publishers' },
+    user_alert_preferences: {
+      schema: 'public',
+      sql: 'public.user_alert_preferences',
+      table: 'user_alert_preferences',
+    },
+    user_alerts: { schema: 'public', sql: 'public.user_alerts', table: 'user_alerts' },
+    user_pin_alert_settings: {
+      schema: 'public',
+      sql: 'public.user_pin_alert_settings',
+      table: 'user_pin_alert_settings',
+    },
+    user_pins: { schema: 'public', sql: 'public.user_pins', table: 'user_pins' },
     steam_categories: { schema: 'public', sql: 'public.steam_categories', table: 'steam_categories' },
     steam_genres: { schema: 'public', sql: 'public.steam_genres', table: 'steam_genres' },
     steam_tags: { schema: 'public', sql: 'public.steam_tags', table: 'steam_tags' },
@@ -564,6 +846,7 @@ const RELATION_LOCATIONS: Record<
     app_developers: { schema: 'legacy', sql: 'legacy.app_developers', table: 'app_developers' },
     app_genres: { schema: 'legacy', sql: 'legacy.app_genres', table: 'app_genres' },
     app_publishers: { schema: 'legacy', sql: 'legacy.app_publishers', table: 'app_publishers' },
+    app_steam_deck: { schema: 'legacy', sql: 'legacy.app_steam_deck', table: 'app_steam_deck' },
     app_steam_tags: { schema: 'legacy', sql: 'legacy.app_steam_tags', table: 'app_steam_tags' },
     apps: { schema: 'legacy', sql: 'legacy.apps', table: 'apps' },
     developers: { schema: 'legacy', sql: 'legacy.developers', table: 'developers' },
@@ -598,6 +881,18 @@ const RELATION_LOCATIONS: Record<
       table: 'app_change_events',
     },
     publishers: { schema: 'legacy', sql: 'legacy.publishers', table: 'publishers' },
+    user_alert_preferences: {
+      schema: 'legacy',
+      sql: 'legacy.user_alert_preferences',
+      table: 'user_alert_preferences',
+    },
+    user_alerts: { schema: 'legacy', sql: 'legacy.user_alerts', table: 'user_alerts' },
+    user_pin_alert_settings: {
+      schema: 'legacy',
+      sql: 'legacy.user_pin_alert_settings',
+      table: 'user_pin_alert_settings',
+    },
+    user_pins: { schema: 'legacy', sql: 'legacy.user_pins', table: 'user_pins' },
     steam_categories: { schema: 'legacy', sql: 'legacy.steam_categories', table: 'steam_categories' },
     steam_genres: { schema: 'legacy', sql: 'legacy.steam_genres', table: 'steam_genres' },
     steam_tags: { schema: 'legacy', sql: 'legacy.steam_tags', table: 'steam_tags' },
@@ -622,6 +917,26 @@ function formatDateOnly(value: Date): string {
 
 function formatTimestamp(value: Date): string {
   return value.toISOString();
+}
+
+function buildDefaultUserAlertPreferences(): UserContextAlertPreferences {
+  return {
+    alertCcuDrop: true,
+    alertCcuSpike: true,
+    alertMilestone: true,
+    alertNewRelease: true,
+    alertPriceChange: true,
+    alertReviewSurge: true,
+    alertSentimentShift: true,
+    alertTrendReversal: true,
+    alertsEnabled: true,
+    ccuSensitivity: 1,
+    emailDigestEnabled: false,
+    emailDigestFrequency: 'daily',
+    reviewSensitivity: 1,
+    sentimentSensitivity: 1,
+    source: 'default',
+  };
 }
 
 function parseDateOnly(value: string): Date {
@@ -830,15 +1145,147 @@ function inferMatchQuality(candidate: string, query: string): MatchQuality {
   return 'substring';
 }
 
+function normalizeMatchQuality(value: unknown): MatchQuality | null {
+  return value === 'exact' || value === 'prefix' || value === 'substring' || value === 'fuzzy'
+    ? value
+    : null;
+}
+
 function matchConfidence(matchQuality: MatchQuality): number {
   switch (matchQuality) {
     case 'exact':
       return 0.99;
     case 'prefix':
       return 0.92;
+    case 'fuzzy':
+      return 0.72;
     default:
       return 0.82;
   }
+}
+
+function normalizeSemanticTextToken(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+function tokenizeSemanticTitle(value: string): string[] {
+  return normalizeSemanticTextToken(value)
+    .split(' ')
+    .filter((token) => token.length >= 3 && !SEMANTIC_TITLE_STOP_WORDS.has(token));
+}
+
+function tokenizeSemanticConcept(value: string): string[] {
+  return normalizeSemanticTextToken(value)
+    .split(' ')
+    .filter((token) => token.length >= 4 && !SEMANTIC_CONCEPT_STOP_WORDS.has(token));
+}
+
+function sharedSemanticStrings(left: string[] | undefined, right: string[] | undefined): string[] {
+  if (!left?.length || !right?.length) {
+    return [];
+  }
+
+  const normalizedRight = new Map<string, string>(
+    right
+      .map((value) => [normalizeSemanticTextToken(value), value.trim()] as const)
+      .filter(([key]) => key.length > 0)
+  );
+
+  const matches: string[] = [];
+  for (const value of left) {
+    const normalized = normalizeSemanticTextToken(value);
+    const match = normalizedRight.get(normalized);
+    if (match && !matches.some((candidate) => normalizeSemanticTextToken(candidate) === normalized)) {
+      matches.push(match);
+    }
+  }
+
+  return matches;
+}
+
+function filterSemanticAttributes(values: string[]): string[] {
+  return values.filter((value) => !SEMANTIC_ATTRIBUTE_BLACKLIST.has(normalizeSemanticTextToken(value)));
+}
+
+function semanticReviewSupportBonus(
+  totalReviews: number | null | undefined,
+  reviewPercentage: number | null | undefined
+): number {
+  if (
+    totalReviews !== null &&
+    totalReviews !== undefined &&
+    totalReviews >= 500 &&
+    reviewPercentage !== null &&
+    reviewPercentage !== undefined &&
+    reviewPercentage >= 80
+  ) {
+    return 0.05;
+  }
+
+  if (
+    totalReviews !== null &&
+    totalReviews !== undefined &&
+    totalReviews >= 100 &&
+    reviewPercentage !== null &&
+    reviewPercentage !== undefined &&
+    reviewPercentage >= 70
+  ) {
+    return 0.025;
+  }
+
+  return 0;
+}
+
+function semanticLowSignalPenalty(
+  totalReviews: number | null | undefined,
+  reviewPercentage: number | null | undefined
+): number {
+  if (totalReviews === null || totalReviews === undefined || totalReviews < 20) {
+    return 0.12;
+  }
+
+  if (
+    reviewPercentage !== null &&
+    reviewPercentage !== undefined &&
+    totalReviews < 50 &&
+    reviewPercentage < 60
+  ) {
+    return 0.08;
+  }
+
+  return 0;
+}
+
+function semanticClosenessScore(left: number | null | undefined, right: number | null | undefined): number {
+  if (!left || !right) {
+    return 0;
+  }
+
+  const leftLog = Math.log10(left + 1);
+  const rightLog = Math.log10(right + 1);
+  const distance = Math.abs(leftLog - rightLog);
+
+  return Math.max(0, 1 - distance / 3);
+}
+
+function hasSuspiciousSemanticTitleOverlap(referenceName: string, candidateName: string): boolean {
+  const referenceTokens = tokenizeSemanticTitle(referenceName);
+  const candidateTokens = tokenizeSemanticTitle(candidateName);
+
+  if (referenceTokens.length === 0 || candidateTokens.length === 0) {
+    return false;
+  }
+
+  const shared = referenceTokens.filter((token) => candidateTokens.includes(token));
+  const sharedRatio = shared.length / Math.max(referenceTokens.length, candidateTokens.length);
+
+  return sharedRatio >= 0.75;
+}
+
+function normalizeSemanticSteamDeckCategory(
+  category: string | null | undefined
+): SemanticSteamDeckCategory | undefined {
+  return category === 'playable' || category === 'verified' ? category : undefined;
 }
 
 function buildProvenance(source: DataPlaneConfig['source'], tables: string[]): QueryProvenance {
@@ -847,20 +1294,6 @@ function buildProvenance(source: DataPlaneConfig['source'], tables: string[]): Q
     source,
     tables,
   };
-}
-
-function getOpenAI(): OpenAI {
-  if (openaiClient) {
-    return openaiClient;
-  }
-
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('Missing OPENAI_API_KEY environment variable');
-  }
-
-  openaiClient = new OpenAI({ apiKey });
-  return openaiClient;
 }
 
 function encodeContinuationToken(payload: ContinuationTokenPayload): string {
@@ -1525,8 +1958,13 @@ export class DataPlaneService {
 
     const limit = normalizeLimit(request.limit, DEFAULT_MOMENTUM_LIMIT, MAX_MOMENTUM_LIMIT);
     const timeframe = this.normalizeMomentumTimeframe(request.timeframe, request.sortBy, request.trendType);
-    const qdrantFiltered = Boolean(request.filters?.steamDeck?.length);
-    const candidateLimit = qdrantFiltered ? Math.min(limit * 8, 120) : limit;
+    const excludedAppIds = new Set(
+      (request.excludeAppIds ?? []).filter(
+        (appid): appid is number => Number.isInteger(appid) && appid > 0
+      )
+    );
+    const candidateLimitBase = Math.min(limit + excludedAppIds.size, 200);
+    const candidateLimit = candidateLimitBase;
     const rows = await this.queryMomentumRows({
       filters: request.filters ?? null,
       indieHeuristic: request.indieHeuristic ?? false,
@@ -1536,9 +1974,10 @@ export class DataPlaneService {
       timeframe,
       trendType: request.trendType ?? null,
     });
-    const filteredRows = await this.applyMomentumQdrantFilters(rows, request.filters ?? null);
-    const pageRows = filteredRows.slice(0, limit);
-    const includesQdrant = qdrantFiltered && pageRows.length > 0;
+    const uniqueRows = excludedAppIds.size > 0
+      ? rows.filter((row) => !excludedAppIds.has(row.appid))
+      : rows;
+    const pageRows = uniqueRows.slice(0, limit);
 
     return {
       filtersApplied: this.buildMomentumFiltersApplied(request, timeframe),
@@ -1555,13 +1994,15 @@ export class DataPlaneService {
         this.relation('steam_genres').sql,
         this.relation('app_steam_tags').sql,
         this.relation('steam_tags').sql,
-        ...(includesQdrant ? ['qdrant:publisheriq_games'] : []),
+        ...(request.filters?.steamDeck?.length ? [this.relation('app_steam_deck').sql] : []),
       ]),
       rankingDefinition: this.describeMomentumRanking(request.sortBy, timeframe, request.trendType ?? null),
       rankingLabel: this.labelMomentumRanking(request.sortBy),
+      sortBy: request.sortBy,
       sufficientToAnswer: pageRows.length > 0,
       timeframe,
       timeframeLabel: this.labelMomentumTimeframe(timeframe),
+      trendType: request.trendType ?? null,
     };
   }
 
@@ -1860,6 +2301,7 @@ export class DataPlaneService {
     }
 
     const responseMoments: ExplainChangesMoment[] = moments.map((moment) => ({
+      ...this.buildExplainMomentMetadata(moment),
       changeTypes: [...new Set(moment.events.map((event) => event.change_type))].sort(),
       eventCount: moment.events.length,
       events: [...moment.events]
@@ -1888,7 +2330,8 @@ export class DataPlaneService {
 
     const responseEvents = responseMoments.flatMap((moment) => moment.events);
     const responseNews = responseMoments.flatMap((moment) => moment.linkedNews);
-    const selectedMoment = mode === 'before_after' ? responseMoments[0] ?? null : null;
+    const strongestMoment = this.pickStrongestExplainMoment(responseMoments);
+    const selectedMoment = mode === 'before_after' ? strongestMoment : null;
     const comparisonWindows = selectedMoment
       ? await this.buildExplainComparisonWindows(
           appid,
@@ -1927,6 +2370,9 @@ export class DataPlaneService {
         eventCount: responseEvents.length,
         momentCount: responseMoments.length,
         newsCount: responseNews.length,
+        strongestMomentReasons: strongestMoment?.significanceReasons ?? [],
+        strongestMomentStart: strongestMoment?.windowStart ?? null,
+        strongestMomentStrength: strongestMoment?.burstStrength ?? null,
       },
       timeWindow: {
         endTime,
@@ -2227,34 +2673,72 @@ export class DataPlaneService {
     request: SemanticSearchRequest
   ): Promise<SemanticSearchResponse> {
     await this.assertContractRuntime('semanticSearch');
+    await this.assertTigerSemanticFiltersSupported(request);
 
-    const result = await runSemanticSearch(
-      request,
-      this.buildSemanticSearchDependencies()
-    );
+    const result =
+      request.mode === 'concept'
+        ? await this.runTigerSemanticConceptSearch(request)
+        : await this.runTigerSemanticSimilaritySearch(request);
 
     return {
       ...result,
-      provenance: buildProvenance(
-        this.config.source,
-        request.entityKind === 'game'
-          ? [
-              this.relation('apps').sql,
-              this.relation('latest_daily_metrics').sql,
-              this.relation('app_publishers').sql,
-              this.relation('app_developers').sql,
-              'qdrant:publisheriq_games',
-            ]
-          : [
-              this.relation(request.entityKind === 'publisher' ? 'publishers' : 'developers').sql,
-              request.entityKind === 'publisher'
-                ? 'qdrant:publisheriq_publishers_portfolio'
-                : 'qdrant:publisheriq_developers_portfolio',
-              request.entityKind === 'publisher'
-                ? 'qdrant:publisheriq_publishers_identity'
-                : 'qdrant:publisheriq_developers_identity',
-            ]
-      ),
+      provenance: this.buildSemanticSearchProvenance(request.entityKind),
+    };
+  }
+
+  async getUserContext(
+    request: GetUserContextRequest
+  ): Promise<GetUserContextResponse> {
+    await this.assertContractRuntime('getUserContext');
+
+    const userId = request.userId.trim();
+    if (!UUID_PATTERN.test(userId)) {
+      throw new PublisherIQError(
+        'getUserContext requires a valid UUID userId.',
+        'INVALID_USER_CONTEXT_USER_ID',
+        {
+          userId: request.userId,
+        }
+      );
+    }
+
+    const includePins = request.includePins !== false;
+    const includeAlerts = request.includeAlerts !== false;
+    const includeAlertPreferences = request.includeAlertPreferences !== false;
+    const limitAlerts = normalizeLimit(
+      request.limitAlerts,
+      DEFAULT_USER_ALERT_LIMIT,
+      MAX_USER_ALERT_LIMIT
+    );
+
+    const [pins, alertPreferences, alerts, unreadAlertCount] = await Promise.all([
+      includePins ? this.queryUserContextPins(userId) : Promise.resolve([]),
+      includeAlertPreferences
+        ? this.queryUserAlertPreferences(userId)
+        : Promise.resolve(null),
+      includeAlerts ? this.queryUserContextAlerts(userId, limitAlerts) : Promise.resolve([]),
+      includeAlerts ? this.queryUnreadAlertCount(userId) : Promise.resolve(0),
+    ]);
+
+    return {
+      alertPreferences,
+      alerts,
+      pins,
+      provenance: buildProvenance(this.config.source, [
+        this.relation('user_pins').sql,
+        this.relation('user_alerts').sql,
+        this.relation('user_alert_preferences').sql,
+        this.relation('user_pin_alert_settings').sql,
+        this.relation('apps').sql,
+        this.relation('latest_daily_metrics').sql,
+        this.relation('publishers').sql,
+        this.relation('developers').sql,
+      ]),
+      sufficientToAnswer: true,
+      totalAlerts: alerts.length,
+      totalPins: pins.length,
+      unreadAlertCount,
+      userId,
     };
   }
 
@@ -2285,6 +2769,28 @@ export class DataPlaneService {
         continuationToken: result.continuationToken,
         effectiveArgs,
         exhausted: result.continuationToken == null,
+        provenance: result.provenance,
+        result,
+        sourceContract: request.sourceContract,
+        sufficientToAnswer: result.sufficientToAnswer,
+      };
+    }
+
+    if (request.sourceContract === 'discoverMomentum') {
+      await this.assertContractRuntime('discoverMomentum');
+
+      const sourceArgs = request.sourceArgs as DiscoverMomentumRequest;
+      const effectiveArgs = this.applyContinuationDeltaToDiscoverMomentumArgs(
+        sourceArgs,
+        requestedCount,
+        request.delta
+      );
+      const result = await this.discoverMomentum(effectiveArgs);
+
+      return {
+        continuationToken: null,
+        effectiveArgs,
+        exhausted: result.items.length < requestedCount,
         provenance: result.provenance,
         result,
         sourceContract: request.sourceContract,
@@ -2325,27 +2831,126 @@ export class DataPlaneService {
       };
     }
 
-  private buildSemanticSearchDependencies(): SemanticSearchDependencies {
-    return {
-      embedText: async (text: string) => this.generateSemanticQueryEmbedding(text),
-      resolveReference: async (params) => this.resolveSemanticReference(params),
-    };
+  private buildSemanticSearchProvenance(entityKind: EntityKind): QueryProvenance {
+    const sharedTables = [
+      this.relation('apps').sql,
+      this.relation('latest_daily_metrics').sql,
+      this.relation('app_publishers').sql,
+      this.relation('app_developers').sql,
+      this.relation('app_genres').sql,
+      this.relation('steam_genres').sql,
+      this.relation('app_steam_tags').sql,
+      this.relation('steam_tags').sql,
+    ];
+
+    const entityTables =
+      entityKind === 'game'
+        ? sharedTables
+        : [
+            this.relation(entityKind === 'publisher' ? 'publishers' : 'developers').sql,
+            ...sharedTables,
+          ];
+
+    return buildProvenance(this.config.source, entityTables);
   }
 
-  private async generateSemanticQueryEmbedding(text: string): Promise<number[]> {
-    const openai = getOpenAI();
-    const response = await openai.embeddings.create({
-      dimensions: EMBEDDING_CONFIG.DIMENSIONS,
-      input: text,
-      model: EMBEDDING_CONFIG.MODEL,
+  private async runTigerSemanticSimilaritySearch(
+    request: SemanticSearchRequest
+  ): Promise<Omit<SemanticSearchResponse, 'provenance'>> {
+    const resolved = await this.resolveSemanticReference({
+      entityKind: request.entityKind,
+      referencePlatformEntityId: request.referencePlatformEntityId,
+      referenceQuery: request.referenceQuery,
     });
 
-    const embedding = response.data[0]?.embedding;
-    if (!embedding) {
-      throw new Error('OpenAI did not return an embedding vector.');
+    if (!resolved.entity) {
+      return {
+        candidates: resolved.candidates,
+        entityType: request.entityKind === 'game' ? undefined : request.entityKind,
+        error: resolved.error ?? `Could not resolve the requested ${request.entityKind}.`,
+        success: false,
+      };
     }
 
-    return embedding;
+    return request.entityKind === 'game'
+      ? this.runTigerGameSimilaritySearch(request, resolved.entity)
+      : this.runTigerCompanySimilaritySearch(
+          request as SemanticSearchRequest & { entityKind: 'developer' | 'publisher' },
+          resolved.entity
+        );
+  }
+
+  private async runTigerSemanticConceptSearch(
+    request: SemanticSearchRequest
+  ): Promise<Omit<SemanticSearchResponse, 'provenance'>> {
+    if (request.entityKind !== 'game') {
+      return {
+        error: 'Concept search currently supports only game entities.',
+        success: false,
+      };
+    }
+
+    const description = request.description?.trim() ?? '';
+    if (!description) {
+      return {
+        error: 'Description is required for concept search.',
+        success: false,
+      };
+    }
+
+    const requestedLimit = Math.min(
+      Math.max(request.limit ?? DEFAULT_SEMANTIC_RESULTS, 1),
+      MAX_SEMANTIC_RESULTS
+    );
+    const { offset } = decodeContinuationToken(request.continuationToken);
+    const searchLimit = Math.min(
+      Math.max((offset + requestedLimit) * 4, 30),
+      MAX_SEMANTIC_SEARCH_WINDOW
+    );
+    const terms = tokenizeSemanticConcept(description);
+
+    if (terms.length === 0) {
+      return {
+        error: 'Try describing the kind of game you want with a few concrete traits.',
+        success: false,
+      };
+    }
+
+    const candidates = await this.queryTigerConceptGameCandidates({
+      description,
+      filters: request.filters,
+      limit: searchLimit,
+      terms,
+    });
+    const reranked = this.rankTigerConceptGameCandidates(description, candidates);
+    const pageResults = reranked.slice(offset, offset + requestedLimit);
+    const nextOffset = offset + pageResults.length;
+
+    return {
+      continuation_token:
+        nextOffset < reranked.length
+          ? encodeContinuationToken({ offset: nextOffset })
+          : null,
+      debug: {
+        searchParams: {
+          description,
+          entityKind: request.entityKind,
+          limit: requestedLimit,
+          offset,
+          terms,
+        },
+      },
+      mode: 'semantic',
+      query_description: description,
+      results: pageResults.map((result) => result.item),
+      sufficient_to_answer: reranked.length > 0,
+      sufficiency_reason:
+        reranked.length > 0
+          ? 'Returned Tiger concept matches that already satisfy the request. Respond directly from these rows instead of broadening.'
+          : undefined,
+      success: true,
+      total_found: reranked.length,
+    };
   }
 
   private async resolveSemanticReference(params: {
@@ -2418,6 +3023,10 @@ export class DataPlaneService {
     const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
     const appPublishersTable = this.relation('app_publishers').sql;
     const appDevelopersTable = this.relation('app_developers').sql;
+    const appGenresTable = this.relation('app_genres').sql;
+    const steamGenresTable = this.relation('steam_genres').sql;
+    const appSteamTagsTable = this.relation('app_steam_tags').sql;
+    const steamTagsTable = this.relation('steam_tags').sql;
 
     const result = await runQuery<SemanticGameReferenceRow>(
       `
@@ -2425,9 +3034,12 @@ export class DataPlaneService {
           a.appid,
           a.name,
           a.type::text AS type,
+          a.is_free,
+          a.platforms,
           a.current_price_cents,
           a.pics_review_percentage,
           ldm.total_reviews,
+          NULL::text AS steam_deck_category,
           COALESCE((
             SELECT array_agg(DISTINCT ap.publisher_id ORDER BY ap.publisher_id)
             FROM ${appPublishersTable} ap
@@ -2438,6 +3050,19 @@ export class DataPlaneService {
             FROM ${appDevelopersTable} ad
             WHERE ad.appid = a.appid
           ), ARRAY[]::int[]) AS developer_ids
+          ,
+          COALESCE((
+            SELECT array_agg(DISTINCT sg.name ORDER BY sg.name)
+            FROM ${appGenresTable} ag
+            JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+            WHERE ag.appid = a.appid
+          ), ARRAY[]::text[]) AS genres,
+          COALESCE((
+            SELECT array_agg(DISTINCT st.name ORDER BY st.name)
+            FROM ${appSteamTagsTable} ast
+            JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+            WHERE ast.appid = a.appid
+          ), ARRAY[]::text[]) AS tags
         FROM ${appsTable} a
         LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
         WHERE a.appid = $1
@@ -2473,11 +3098,76 @@ export class DataPlaneService {
     id: number
   ): Promise<ResolvedReferenceEntity | null> {
     const table = this.relation(entityKind === 'publisher' ? 'publishers' : 'developers').sql;
+    const relationTable = this.relation(
+      entityKind === 'publisher' ? 'app_publishers' : 'app_developers'
+    ).sql;
+    const relationColumn = entityKind === 'publisher' ? 'publisher_id' : 'developer_id';
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const appGenresTable = this.relation('app_genres').sql;
+    const steamGenresTable = this.relation('steam_genres').sql;
+    const appSteamTagsTable = this.relation('app_steam_tags').sql;
+    const steamTagsTable = this.relation('steam_tags').sql;
     const result = await runQuery<SemanticCompanyReferenceRow>(
       `
-        SELECT id, name, game_count
-        FROM ${table}
-        WHERE id = $1
+        SELECT
+          c.id,
+          c.name,
+          c.game_count,
+          CASE
+            WHEN SUM(COALESCE(ldm.total_reviews, 0)) > 0
+              THEN ROUND(
+                (
+                  SUM(COALESCE(ldm.positive_percentage, 0) * COALESCE(ldm.total_reviews, 0))::numeric
+                  / NULLIF(SUM(COALESCE(ldm.total_reviews, 0)), 0)
+                ),
+                2
+              )::double precision
+            ELSE NULL
+          END AS avg_review_percentage,
+          COALESCE((
+            SELECT array_agg(top_genres.name ORDER BY top_genres.cnt DESC, top_genres.name ASC)
+            FROM (
+              SELECT sg.name, COUNT(*)::int AS cnt
+              FROM ${relationTable} rel2
+              JOIN ${appsTable} a2
+                ON a2.appid = rel2.appid
+               AND a2.is_delisted = false
+               AND ${GAME_TYPE_PREDICATE[this.config.source].replace(/\ba\./g, 'a2.')}
+              JOIN ${appGenresTable} ag ON ag.appid = a2.appid
+              JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+              WHERE rel2.${relationColumn} = c.id
+              GROUP BY sg.name
+              ORDER BY cnt DESC, sg.name ASC
+              LIMIT 5
+            ) top_genres
+          ), ARRAY[]::text[]) AS top_genres,
+          COALESCE((
+            SELECT array_agg(top_tags.name ORDER BY top_tags.cnt DESC, top_tags.name ASC)
+            FROM (
+              SELECT st.name, COUNT(*)::int AS cnt
+              FROM ${relationTable} rel2
+              JOIN ${appsTable} a2
+                ON a2.appid = rel2.appid
+               AND a2.is_delisted = false
+               AND ${GAME_TYPE_PREDICATE[this.config.source].replace(/\ba\./g, 'a2.')}
+              JOIN ${appSteamTagsTable} ast ON ast.appid = a2.appid
+              JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+              WHERE rel2.${relationColumn} = c.id
+              GROUP BY st.name
+              ORDER BY cnt DESC, st.name ASC
+              LIMIT 5
+            ) top_tags
+          ), ARRAY[]::text[]) AS top_tags
+        FROM ${table} c
+        LEFT JOIN ${relationTable} rel ON rel.${relationColumn} = c.id
+        LEFT JOIN ${appsTable} a
+          ON a.appid = rel.appid
+         AND a.is_delisted = false
+         AND ${GAME_TYPE_PREDICATE[this.config.source]}
+        LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+        WHERE c.id = $1
+        GROUP BY c.id, c.name, c.game_count
         LIMIT 1
       `,
       [id],
@@ -2496,9 +3186,1042 @@ export class DataPlaneService {
     };
   }
 
+  private mapTigerSemanticGameProfile(
+    row: TigerSemanticGameProfileRow
+  ): TigerSemanticGameProfile {
+    const reviewPercentage = row.pics_review_percentage ?? row.positive_percentage ?? null;
+
+    return {
+      appid: row.appid,
+      developerIds: row.developer_ids ?? [],
+      genres: row.genres ?? [],
+      isFree: row.is_free,
+      name: row.name,
+      platforms: row.platforms
+        ? row.platforms.split(',').map((platform) => platform.trim()).filter(Boolean)
+        : [],
+      priceCents: row.current_price_cents,
+      publisherIds: row.publisher_ids ?? [],
+      reviewPercentage,
+      tags: row.tags ?? [],
+      totalReviews: row.total_reviews,
+      type: row.type ?? 'game',
+    };
+  }
+
+  private mapTigerSemanticCompanyProfile(
+    row: Pick<
+      SemanticCompanyReferenceRow | SemanticCompanyCandidateRow,
+      'avg_review_percentage' | 'game_count' | 'id' | 'name' | 'top_genres' | 'top_tags'
+    >
+  ): TigerSemanticCompanyProfile {
+    const gameCount = row.game_count ?? null;
+    return {
+      avgReviewPercentage: row.avg_review_percentage,
+      gameCount,
+      id: row.id,
+      isIndie: gameCount !== null ? gameCount <= 15 : false,
+      isMajor: gameCount !== null ? gameCount >= 50 : false,
+      name: row.name,
+      topGenres: row.top_genres ?? [],
+      topTags: row.top_tags ?? [],
+    };
+  }
+
+  private async runTigerGameSimilaritySearch(
+    request: SemanticSearchRequest,
+    reference: ResolvedReferenceEntity
+  ): Promise<Omit<SemanticSearchResponse, 'provenance'>> {
+    const requestedLimit = Math.min(
+      Math.max(request.limit ?? DEFAULT_SEMANTIC_RESULTS, 1),
+      MAX_SEMANTIC_RESULTS
+    );
+    const { offset } = decodeContinuationToken(request.continuationToken);
+    const referenceProfile = await this.queryTigerSemanticGameProfile(reference.id);
+
+    if (!referenceProfile) {
+      return {
+        error: `${reference.name} is not available for Tiger similarity search yet.`,
+        success: false,
+      };
+    }
+
+    const searchLimit = Math.min(
+      Math.max((offset + requestedLimit) * 4, 30),
+      MAX_SEMANTIC_SEARCH_WINDOW
+    );
+    const candidates = await this.queryTigerSemanticGameCandidates({
+      filters: request.filters,
+      limit: searchLimit,
+      reference: referenceProfile,
+    });
+    const ranked = this.rankTigerGameSimilarityCandidates(referenceProfile, candidates, request.filters);
+    const pageResults = ranked.slice(offset, offset + requestedLimit);
+    const nextOffset = offset + pageResults.length;
+
+    return {
+      continuation_token:
+        nextOffset < ranked.length
+          ? encodeContinuationToken({ offset: nextOffset })
+          : null,
+      debug: {
+        searchParams: {
+          entityKind: request.entityKind,
+          limit: requestedLimit,
+          offset,
+          reference_id: reference.id,
+        },
+      },
+      mode: 'semantic',
+      reference: {
+        id: reference.id,
+        name: reference.name,
+        type: reference.type,
+      },
+      results: pageResults.map((result) => result.item),
+      sufficient_to_answer: ranked.length > 0,
+      sufficiency_reason:
+        ranked.length > 0
+          ? 'Returned Tiger similarity rows that already answer the request. Respond directly instead of broadening.'
+          : undefined,
+      success: true,
+      total_found: ranked.length,
+    };
+  }
+
+  private async runTigerCompanySimilaritySearch(
+    request: SemanticSearchRequest & { entityKind: 'developer' | 'publisher' },
+    reference: ResolvedReferenceEntity
+  ): Promise<Omit<SemanticSearchResponse, 'provenance'>> {
+    const requestedLimit = Math.min(
+      Math.max(request.limit ?? DEFAULT_COMPANY_SEMANTIC_RESULTS, 1),
+      DEFAULT_COMPANY_SEMANTIC_RESULTS
+    );
+    const referenceProfile = await this.queryTigerSemanticCompanyProfile(request.entityKind, reference.id);
+
+    if (!referenceProfile) {
+      return {
+        entityType: request.entityKind,
+        error: `${reference.name} is not available for Tiger company similarity search yet.`,
+        reference: {
+          id: reference.id,
+          name: reference.name,
+          type: request.entityKind,
+        },
+        success: false,
+      };
+    }
+
+    const candidates = await this.queryTigerSemanticCompanyCandidates({
+      entityKind: request.entityKind,
+      filters: request.filters,
+      limit: Math.min(Math.max(requestedLimit * 4, 20), MAX_SEMANTIC_SEARCH_WINDOW),
+      reference: referenceProfile,
+    });
+    const ranked = this.rankTigerCompanySimilarityCandidates(referenceProfile, candidates);
+
+    return {
+      continuation_token: null,
+      debug: {
+        searchParams: {
+          entityKind: request.entityKind,
+          limit: requestedLimit,
+          reference_id: reference.id,
+        },
+      },
+      entityType: request.entityKind,
+      mode: 'semantic',
+      reference: {
+        id: reference.id,
+        name: reference.name,
+        type: request.entityKind,
+      },
+      results: ranked.slice(0, requestedLimit).map((result) => result.item),
+      sufficient_to_answer: ranked.length > 0,
+      sufficiency_reason:
+        ranked.length > 0
+          ? 'Returned Tiger company peers that already answer the request. Respond directly instead of broadening.'
+          : undefined,
+      success: true,
+      total_found: ranked.length,
+    };
+  }
+
+  private rankTigerConceptGameCandidates(
+    description: string,
+    rows: SemanticGameCandidateRow[]
+  ): RankedSemanticItem[] {
+    const descriptionTerms = tokenizeSemanticConcept(description);
+
+    return rows
+      .map((row) => {
+        const profile = this.mapTigerSemanticGameProfile(row);
+        const payloadTerms = [
+          profile.name,
+          ...profile.genres,
+          ...profile.tags,
+        ].join(' ').toLowerCase();
+        const matchedTerms = descriptionTerms.filter((term) => payloadTerms.includes(term));
+
+        let score = Math.min(matchedTerms.length * 0.18, 0.72);
+        score += semanticReviewSupportBonus(profile.totalReviews, profile.reviewPercentage);
+        score -= semanticLowSignalPenalty(profile.totalReviews, profile.reviewPercentage);
+
+        if (descriptionTerms.length >= 2 && matchedTerms.length === 0) {
+          score -= 0.18;
+        }
+
+        const reasons: string[] = [];
+        if (matchedTerms.length >= 2) {
+          reasons.push(`${matchedTerms[0]} + ${matchedTerms[1]} fit`);
+        } else if (matchedTerms.length === 1) {
+          reasons.push(`${matchedTerms[0]} fit`);
+        }
+        if ((profile.totalReviews ?? 0) >= 100 && (profile.reviewPercentage ?? 0) >= 80) {
+          reasons.push('Well-supported reviews');
+        }
+
+        return {
+          item: {
+            genres: profile.genres,
+            id: profile.appid,
+            is_free: profile.isFree,
+            matchReasons: reasons.length > 0 ? reasons : undefined,
+            name: profile.name,
+            price_cents: profile.priceCents,
+            rawScore: Math.round(Math.min(matchedTerms.length * 0.18, 0.72) * 100),
+            review_percentage: profile.reviewPercentage,
+            score: Math.round(Math.max(0, Math.min(score, 1)) * 100),
+            steam_deck: normalizeSemanticSteamDeckCategory(row.steam_deck_category),
+            tags: profile.tags,
+            total_reviews: profile.totalReviews,
+            type: profile.type,
+          },
+          score: Math.max(0, Math.min(score, 1)),
+        };
+      })
+      .filter((result) => result.score >= 0.12)
+      .sort((left, right) => right.score - left.score);
+  }
+
+  private rankTigerGameSimilarityCandidates(
+    reference: TigerSemanticGameProfile,
+    rows: SemanticGameCandidateRow[],
+    filters: SemanticSearchFilters | undefined
+  ): RankedSemanticItem[] {
+    return rows
+      .map((row) => {
+        const candidate = this.mapTigerSemanticGameProfile(row);
+        let score = 0;
+        let rawScore = 0;
+        const reasons: string[] = [];
+
+        const sharedGenres = sharedSemanticStrings(reference.genres, candidate.genres);
+        const sharedTags = sharedSemanticStrings(reference.tags, candidate.tags);
+        const informativeGenres = filterSemanticAttributes(sharedGenres);
+        const informativeTags = filterSemanticAttributes(sharedTags);
+
+        if (reference.developerIds.some((developerId) => candidate.developerIds.includes(developerId))) {
+          score += 0.18;
+          rawScore += 0.18;
+          reasons.push('Same developer');
+        }
+
+        if (reference.publisherIds.some((publisherId) => candidate.publisherIds.includes(publisherId))) {
+          score += 0.06;
+          rawScore += 0.06;
+          reasons.push('Same publisher');
+        }
+
+        score += Math.min(sharedGenres.length, 2) * 0.1;
+        rawScore += Math.min(sharedGenres.length, 2) * 0.1;
+        score += Math.min(sharedTags.length, 3) * 0.06;
+        rawScore += Math.min(sharedTags.length, 3) * 0.06;
+
+        for (const reason of [...informativeTags, ...informativeGenres, ...sharedTags, ...sharedGenres]) {
+          if (!reasons.includes(reason)) {
+            reasons.push(reason);
+          }
+          if (reasons.length >= 4) {
+            break;
+          }
+        }
+
+        if (
+          filters?.review_comparison &&
+          filters.review_comparison !== 'any' &&
+          reference.totalReviews != null &&
+          reference.reviewPercentage != null
+        ) {
+          if (
+            candidate.reviewPercentage == null ||
+            ((filters.review_comparison === 'better_only' || filters.review_comparison === 'similar_or_better') &&
+              candidate.reviewPercentage < reference.reviewPercentage - (filters.review_comparison === 'better_only' ? 0 : 2))
+          ) {
+            score = -1;
+          } else {
+            score += 0.04;
+            reasons.push('Review fit');
+          }
+        }
+
+        if (
+          filters?.steam_deck?.length &&
+          row.steam_deck_category &&
+          filters.steam_deck.includes(row.steam_deck_category as 'verified' | 'playable')
+        ) {
+          score += 0.04;
+          reasons.push(`Steam Deck ${row.steam_deck_category}`);
+        }
+
+        if (filters?.popularity_comparison === 'less_popular') {
+          if (
+            candidate.totalReviews == null ||
+            reference.totalReviews == null ||
+            candidate.totalReviews >= reference.totalReviews
+          ) {
+            score = -1;
+          } else {
+            score += 0.03;
+            reasons.push('Smaller review footprint');
+          }
+        }
+
+        if (
+          hasSuspiciousSemanticTitleOverlap(reference.name, candidate.name) &&
+          informativeGenres.length === 0 &&
+          informativeTags.length === 0 &&
+          !reasons.includes('Same developer') &&
+          !reasons.includes('Same publisher')
+        ) {
+          score -= 0.18;
+        }
+
+        score += semanticReviewSupportBonus(candidate.totalReviews, candidate.reviewPercentage);
+        score -= semanticLowSignalPenalty(candidate.totalReviews, candidate.reviewPercentage);
+
+        const boundedScore = Math.max(0, Math.min(score, 1));
+        return {
+          item: {
+            genres: candidate.genres,
+            id: candidate.appid,
+            is_free: candidate.isFree,
+            matchReasons: reasons.length > 0 ? reasons.slice(0, 4) : undefined,
+            name: candidate.name,
+            price_cents: candidate.priceCents,
+            rawScore: Math.round(Math.max(0, Math.min(rawScore, 1)) * 100),
+            review_percentage: candidate.reviewPercentage,
+            score: Math.round(boundedScore * 100),
+            steam_deck: normalizeSemanticSteamDeckCategory(row.steam_deck_category),
+            tags: candidate.tags,
+            total_reviews: candidate.totalReviews,
+            type: candidate.type,
+          },
+          score: boundedScore,
+        };
+      })
+      .filter((result) => result.score >= 0.16)
+      .sort((left, right) => right.score - left.score);
+  }
+
+  private rankTigerCompanySimilarityCandidates(
+    reference: TigerSemanticCompanyProfile,
+    rows: SemanticCompanyCandidateRow[]
+  ): RankedSemanticItem[] {
+    return rows
+      .map((row) => {
+        const candidate = this.mapTigerSemanticCompanyProfile(row);
+        const sharedGenres = sharedSemanticStrings(reference.topGenres, candidate.topGenres);
+        const sharedTags = sharedSemanticStrings(reference.topTags, candidate.topTags);
+        let score = Math.min(sharedGenres.length, 2) * 0.16 + Math.min(sharedTags.length, 3) * 0.1;
+
+        const reasons: string[] = [];
+        if (sharedGenres.length > 0) {
+          reasons.push('Similar genre footprint');
+        }
+        if (sharedTags.length > 0) {
+          reasons.push('Overlapping portfolio tags');
+        }
+
+        const gameCountCloseness = semanticClosenessScore(reference.gameCount, candidate.gameCount);
+        if (gameCountCloseness >= 0.65) {
+          score += 0.08;
+          reasons.push('Similar catalog size');
+        }
+
+        if (
+          reference.avgReviewPercentage != null &&
+          candidate.avgReviewPercentage != null &&
+          Math.abs(reference.avgReviewPercentage - candidate.avgReviewPercentage) <= 6
+        ) {
+          score += 0.06;
+          reasons.push('Similar average review quality');
+        }
+
+        if (reference.isMajor === candidate.isMajor && (reference.isMajor || candidate.isMajor)) {
+          score += 0.03;
+        }
+        if (reference.isIndie === candidate.isIndie && (reference.isIndie || candidate.isIndie)) {
+          score += 0.03;
+        }
+
+        const boundedScore = Math.max(0, Math.min(score, 1));
+        return {
+          item: {
+            avg_review_percentage: candidate.avgReviewPercentage,
+            game_count: candidate.gameCount ?? undefined,
+            id: candidate.id,
+            is_indie: candidate.isIndie,
+            is_major: candidate.isMajor,
+            matchReasons: reasons.length > 0 ? reasons.slice(0, 4) : undefined,
+            name: candidate.name,
+            score: Math.round(boundedScore * 100),
+            top_genres: candidate.topGenres,
+            top_tags: candidate.topTags,
+          },
+          score: boundedScore,
+        };
+      })
+      .filter((result) => result.score >= 0.12)
+      .sort((left, right) => right.score - left.score);
+  }
+
+  private async queryTigerSemanticGameProfile(appid: number): Promise<TigerSemanticGameProfile | null> {
+    const profileRow = await runQuery<SemanticGameReferenceRow>(
+      `
+        SELECT
+          a.appid,
+          a.name,
+          a.type::text AS type,
+          a.is_free,
+          a.platforms,
+          a.current_price_cents,
+          a.pics_review_percentage,
+          ldm.total_reviews,
+          NULL::text AS steam_deck_category,
+          COALESCE((
+            SELECT array_agg(DISTINCT ap.publisher_id ORDER BY ap.publisher_id)
+            FROM ${this.relation('app_publishers').sql} ap
+            WHERE ap.appid = a.appid
+          ), ARRAY[]::int[]) AS publisher_ids,
+          COALESCE((
+            SELECT array_agg(DISTINCT ad.developer_id ORDER BY ad.developer_id)
+            FROM ${this.relation('app_developers').sql} ad
+            WHERE ad.appid = a.appid
+          ), ARRAY[]::int[]) AS developer_ids,
+          COALESCE((
+            SELECT array_agg(DISTINCT sg.name ORDER BY sg.name)
+            FROM ${this.relation('app_genres').sql} ag
+            JOIN ${this.relation('steam_genres').sql} sg ON sg.genre_id = ag.genre_id
+            WHERE ag.appid = a.appid
+          ), ARRAY[]::text[]) AS genres,
+          COALESCE((
+            SELECT array_agg(DISTINCT st.name ORDER BY st.name)
+            FROM ${this.relation('app_steam_tags').sql} ast
+            JOIN ${this.relation('steam_tags').sql} st ON st.tag_id = ast.tag_id
+            WHERE ast.appid = a.appid
+          ), ARRAY[]::text[]) AS tags
+        FROM ${this.relation('apps').sql} a
+        LEFT JOIN ${this.relation('latest_daily_metrics').sql} ldm ON ldm.appid = a.appid
+        WHERE a.appid = $1
+        LIMIT 1
+      `,
+      [appid],
+      this.config
+    );
+
+    return profileRow.rows[0] ? this.mapTigerSemanticGameProfile(profileRow.rows[0]) : null;
+  }
+
+  private async queryTigerSemanticCompanyProfile(
+    entityKind: Extract<EntityKind, 'publisher' | 'developer'>,
+    id: number
+  ): Promise<TigerSemanticCompanyProfile | null> {
+    const row = await runQuery<SemanticCompanyReferenceRow>(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            c.id,
+            c.name,
+            c.game_count,
+            CASE
+              WHEN SUM(COALESCE(ldm.total_reviews, 0)) > 0
+                THEN ROUND(
+                  (
+                    SUM(COALESCE(ldm.positive_percentage, 0) * COALESCE(ldm.total_reviews, 0))::numeric
+                    / NULLIF(SUM(COALESCE(ldm.total_reviews, 0)), 0)
+                  ),
+                  2
+                )::double precision
+              ELSE NULL
+            END AS avg_review_percentage,
+            COALESCE((
+              SELECT array_agg(top_genres.name ORDER BY top_genres.cnt DESC, top_genres.name ASC)
+              FROM (
+                SELECT sg.name, COUNT(*)::int AS cnt
+                FROM ${this.relation(entityKind === 'publisher' ? 'app_publishers' : 'app_developers').sql} rel2
+                JOIN ${this.relation('apps').sql} a2
+                  ON a2.appid = rel2.appid
+                 AND a2.is_delisted = false
+                 AND ${GAME_TYPE_PREDICATE[this.config.source].replace(/\ba\./g, 'a2.')}
+                JOIN ${this.relation('app_genres').sql} ag ON ag.appid = a2.appid
+                JOIN ${this.relation('steam_genres').sql} sg ON sg.genre_id = ag.genre_id
+                WHERE rel2.${entityKind === 'publisher' ? 'publisher_id' : 'developer_id'} = c.id
+                GROUP BY sg.name
+                ORDER BY cnt DESC, sg.name ASC
+                LIMIT 5
+              ) top_genres
+            ), ARRAY[]::text[]) AS top_genres,
+            COALESCE((
+              SELECT array_agg(top_tags.name ORDER BY top_tags.cnt DESC, top_tags.name ASC)
+              FROM (
+                SELECT st.name, COUNT(*)::int AS cnt
+                FROM ${this.relation(entityKind === 'publisher' ? 'app_publishers' : 'app_developers').sql} rel2
+                JOIN ${this.relation('apps').sql} a2
+                  ON a2.appid = rel2.appid
+                 AND a2.is_delisted = false
+                 AND ${GAME_TYPE_PREDICATE[this.config.source].replace(/\ba\./g, 'a2.')}
+                JOIN ${this.relation('app_steam_tags').sql} ast ON ast.appid = a2.appid
+                JOIN ${this.relation('steam_tags').sql} st ON st.tag_id = ast.tag_id
+                WHERE rel2.${entityKind === 'publisher' ? 'publisher_id' : 'developer_id'} = c.id
+                GROUP BY st.name
+                ORDER BY cnt DESC, st.name ASC
+                LIMIT 5
+              ) top_tags
+            ), ARRAY[]::text[]) AS top_tags
+          FROM ${this.relation(entityKind === 'publisher' ? 'publishers' : 'developers').sql} c
+          LEFT JOIN ${this.relation(entityKind === 'publisher' ? 'app_publishers' : 'app_developers').sql} rel
+            ON rel.${entityKind === 'publisher' ? 'publisher_id' : 'developer_id'} = c.id
+          LEFT JOIN ${this.relation('apps').sql} a
+            ON a.appid = rel.appid
+           AND a.is_delisted = false
+           AND ${GAME_TYPE_PREDICATE[this.config.source]}
+          LEFT JOIN ${this.relation('latest_daily_metrics').sql} ldm ON ldm.appid = a.appid
+          WHERE c.id = $1
+          GROUP BY c.id, c.name, c.game_count
+        ) profile
+      `,
+      [id],
+      this.config
+    );
+
+    return row.rows[0] ? this.mapTigerSemanticCompanyProfile(row.rows[0]) : null;
+  }
+
+  private async queryTigerSemanticGameCandidates(params: {
+    filters: SemanticSearchFilters | undefined;
+    limit: number;
+    reference: TigerSemanticGameProfile;
+  }): Promise<SemanticGameCandidateRow[]> {
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const appPublishersTable = this.relation('app_publishers').sql;
+    const appDevelopersTable = this.relation('app_developers').sql;
+    const appGenresTable = this.relation('app_genres').sql;
+    const steamGenresTable = this.relation('steam_genres').sql;
+    const appSteamTagsTable = this.relation('app_steam_tags').sql;
+    const steamTagsTable = this.relation('steam_tags').sql;
+    const appSteamDeckTable = this.relation('app_steam_deck').sql;
+    const filters = params.filters;
+    const steamDeckSelect = filters?.steam_deck?.length
+      ? `(SELECT asd.category::text FROM ${appSteamDeckTable} asd WHERE asd.appid = a.appid LIMIT 1)`
+      : 'NULL::text';
+    const queryParams: unknown[] = [params.reference.appid];
+    const conditions: string[] = [
+      'a.appid <> $1',
+      'a.is_delisted = false',
+      GAME_TYPE_PREDICATE[this.config.source],
+    ];
+
+    if (filters?.platforms?.length) {
+      for (const platform of filters.platforms) {
+        queryParams.push(`%${platform.toLowerCase()}%`);
+        conditions.push(`lower(COALESCE(a.platforms, '')) LIKE $${queryParams.length}`);
+      }
+    }
+
+    if (typeof filters?.is_free === 'boolean') {
+      queryParams.push(filters.is_free);
+      conditions.push(`a.is_free = $${queryParams.length}`);
+    }
+
+    if (typeof filters?.max_price_cents === 'number') {
+      queryParams.push(filters.max_price_cents);
+      conditions.push(`COALESCE(a.current_price_cents, 0) <= $${queryParams.length}`);
+    }
+
+    if (typeof filters?.min_reviews === 'number') {
+      queryParams.push(filters.min_reviews);
+      conditions.push(`COALESCE(ldm.total_reviews, 0) >= $${queryParams.length}`);
+    }
+
+    if (typeof filters?.max_reviews === 'number') {
+      queryParams.push(filters.max_reviews);
+      conditions.push(`COALESCE(ldm.total_reviews, 0) <= $${queryParams.length}`);
+    }
+
+    if (filters?.review_percentage?.gte != null) {
+      queryParams.push(filters.review_percentage.gte);
+      conditions.push(`COALESCE(ldm.positive_percentage, 0) >= $${queryParams.length}`);
+    }
+
+    if (filters?.review_percentage?.lte != null) {
+      queryParams.push(filters.review_percentage.lte);
+      conditions.push(`COALESCE(ldm.positive_percentage, 0) <= $${queryParams.length}`);
+    }
+
+    if (filters?.release_year?.gte != null) {
+      queryParams.push(filters.release_year.gte);
+      conditions.push(`EXTRACT(YEAR FROM a.release_date) >= $${queryParams.length}`);
+    }
+
+    if (filters?.release_year?.lte != null) {
+      queryParams.push(filters.release_year.lte);
+      conditions.push(`EXTRACT(YEAR FROM a.release_date) <= $${queryParams.length}`);
+    }
+
+    if (filters?.genres?.length) {
+      queryParams.push(filters.genres.map((genre) => genre.toLowerCase()));
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appGenresTable} ag
+          JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+          WHERE ag.appid = a.appid
+            AND lower(sg.name) = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    if (filters?.tags?.length) {
+      queryParams.push(filters.tags.map((tag) => tag.toLowerCase()));
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamTagsTable} ast
+          JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+          WHERE ast.appid = a.appid
+            AND lower(st.name) = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    if (filters?.steam_deck?.length) {
+      queryParams.push(filters.steam_deck);
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamDeckTable} asd_filter
+          WHERE asd_filter.appid = a.appid
+            AND asd_filter.category::text = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    const signalClauses: string[] = [];
+
+    if (params.reference.developerIds.length > 0) {
+      queryParams.push(params.reference.developerIds);
+      signalClauses.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appDevelopersTable} ad
+          WHERE ad.appid = a.appid
+            AND ad.developer_id = ANY($${queryParams.length}::int[])
+        )`
+      );
+    }
+
+    if (params.reference.publisherIds.length > 0) {
+      queryParams.push(params.reference.publisherIds);
+      signalClauses.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appPublishersTable} ap
+          WHERE ap.appid = a.appid
+            AND ap.publisher_id = ANY($${queryParams.length}::int[])
+        )`
+      );
+    }
+
+    if (params.reference.genres.length > 0) {
+      queryParams.push(params.reference.genres.map((genre) => genre.toLowerCase()));
+      signalClauses.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appGenresTable} ag
+          JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+          WHERE ag.appid = a.appid
+            AND lower(sg.name) = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    if (params.reference.tags.length > 0) {
+      queryParams.push(params.reference.tags.map((tag) => tag.toLowerCase()));
+      signalClauses.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamTagsTable} ast
+          JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+          WHERE ast.appid = a.appid
+            AND lower(st.name) = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    if (signalClauses.length > 0) {
+      conditions.push(`(${signalClauses.join(' OR ')})`);
+    }
+
+    queryParams.push(params.limit);
+
+    const result = await runQuery<SemanticGameCandidateRow>(
+      `
+        SELECT
+          a.appid,
+          a.name,
+          a.type::text AS type,
+          a.is_free,
+          a.platforms,
+          a.current_price_cents,
+          ldm.positive_percentage,
+          ldm.total_reviews,
+          ${steamDeckSelect} AS steam_deck_category,
+          COALESCE((
+            SELECT array_agg(DISTINCT ap.publisher_id ORDER BY ap.publisher_id)
+            FROM ${appPublishersTable} ap
+            WHERE ap.appid = a.appid
+          ), ARRAY[]::int[]) AS publisher_ids,
+          COALESCE((
+            SELECT array_agg(DISTINCT ad.developer_id ORDER BY ad.developer_id)
+            FROM ${appDevelopersTable} ad
+            WHERE ad.appid = a.appid
+          ), ARRAY[]::int[]) AS developer_ids,
+          COALESCE((
+            SELECT array_agg(DISTINCT sg.name ORDER BY sg.name)
+            FROM ${appGenresTable} ag
+            JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+            WHERE ag.appid = a.appid
+          ), ARRAY[]::text[]) AS genres,
+          COALESCE((
+            SELECT array_agg(DISTINCT st.name ORDER BY st.name)
+            FROM ${appSteamTagsTable} ast
+            JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+            WHERE ast.appid = a.appid
+          ), ARRAY[]::text[]) AS tags
+        FROM ${appsTable} a
+        LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+        WHERE ${conditions.join('\n          AND ')}
+        ORDER BY COALESCE(ldm.total_reviews, 0) DESC, COALESCE(ldm.ccu_peak, 0) DESC, a.name ASC
+        LIMIT $${queryParams.length}
+      `,
+      queryParams,
+      this.config
+    );
+
+    return result.rows;
+  }
+
+  private async queryTigerConceptGameCandidates(params: {
+    description: string;
+    filters: SemanticSearchFilters | undefined;
+    limit: number;
+    terms: string[];
+  }): Promise<SemanticGameCandidateRow[]> {
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const appGenresTable = this.relation('app_genres').sql;
+    const steamGenresTable = this.relation('steam_genres').sql;
+    const appSteamTagsTable = this.relation('app_steam_tags').sql;
+    const steamTagsTable = this.relation('steam_tags').sql;
+    const appSteamDeckTable = this.relation('app_steam_deck').sql;
+    const steamDeckSelect = params.filters?.steam_deck?.length
+      ? `(SELECT asd.category::text FROM ${appSteamDeckTable} asd WHERE asd.appid = a.appid LIMIT 1)`
+      : 'NULL::text';
+    const queryParams: unknown[] = [];
+    const conditions: string[] = [
+      'a.is_delisted = false',
+      GAME_TYPE_PREDICATE[this.config.source],
+    ];
+
+    if (params.filters?.platforms?.length) {
+      for (const platform of params.filters.platforms) {
+        queryParams.push(`%${platform.toLowerCase()}%`);
+        conditions.push(`lower(COALESCE(a.platforms, '')) LIKE $${queryParams.length}`);
+      }
+    }
+
+    if (typeof params.filters?.is_free === 'boolean') {
+      queryParams.push(params.filters.is_free);
+      conditions.push(`a.is_free = $${queryParams.length}`);
+    }
+
+    if (typeof params.filters?.max_price_cents === 'number') {
+      queryParams.push(params.filters.max_price_cents);
+      conditions.push(`COALESCE(a.current_price_cents, 0) <= $${queryParams.length}`);
+    }
+
+    if (typeof params.filters?.min_reviews === 'number') {
+      queryParams.push(params.filters.min_reviews);
+      conditions.push(`COALESCE(ldm.total_reviews, 0) >= $${queryParams.length}`);
+    }
+
+    if (typeof params.filters?.max_reviews === 'number') {
+      queryParams.push(params.filters.max_reviews);
+      conditions.push(`COALESCE(ldm.total_reviews, 0) <= $${queryParams.length}`);
+    }
+
+    if (params.filters?.review_percentage?.gte != null) {
+      queryParams.push(params.filters.review_percentage.gte);
+      conditions.push(`COALESCE(ldm.positive_percentage, 0) >= $${queryParams.length}`);
+    }
+
+    if (params.filters?.review_percentage?.lte != null) {
+      queryParams.push(params.filters.review_percentage.lte);
+      conditions.push(`COALESCE(ldm.positive_percentage, 0) <= $${queryParams.length}`);
+    }
+
+    if (params.filters?.release_year?.gte != null) {
+      queryParams.push(params.filters.release_year.gte);
+      conditions.push(`EXTRACT(YEAR FROM a.release_date) >= $${queryParams.length}`);
+    }
+
+    if (params.filters?.release_year?.lte != null) {
+      queryParams.push(params.filters.release_year.lte);
+      conditions.push(`EXTRACT(YEAR FROM a.release_date) <= $${queryParams.length}`);
+    }
+
+    if (params.filters?.genres?.length) {
+      queryParams.push(params.filters.genres.map((genre) => genre.toLowerCase()));
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appGenresTable} ag
+          JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+          WHERE ag.appid = a.appid
+            AND lower(sg.name) = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    if (params.filters?.tags?.length) {
+      queryParams.push(params.filters.tags.map((tag) => tag.toLowerCase()));
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamTagsTable} ast
+          JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+          WHERE ast.appid = a.appid
+            AND lower(st.name) = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    if (params.filters?.steam_deck?.length) {
+      queryParams.push(params.filters.steam_deck);
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamDeckTable} asd_filter
+          WHERE asd_filter.appid = a.appid
+            AND asd_filter.category::text = ANY($${queryParams.length}::text[])
+        )`
+      );
+    }
+
+    const termPatterns = params.terms.map((term) => `%${term}%`);
+    queryParams.push(termPatterns);
+    const namePatternParam = queryParams.length;
+    queryParams.push(params.terms);
+    const exactTermParam = queryParams.length;
+
+    conditions.push(
+      `(
+        lower(a.name) LIKE ANY($${namePatternParam}::text[])
+        OR EXISTS (
+          SELECT 1
+          FROM ${appGenresTable} ag
+          JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+          WHERE ag.appid = a.appid
+            AND lower(sg.name) = ANY($${exactTermParam}::text[])
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM ${appSteamTagsTable} ast
+          JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+          WHERE ast.appid = a.appid
+            AND lower(st.name) = ANY($${exactTermParam}::text[])
+        )
+      )`
+    );
+
+    queryParams.push(params.limit);
+
+    const result = await runQuery<SemanticGameCandidateRow>(
+      `
+        SELECT
+          a.appid,
+          a.name,
+          a.type::text AS type,
+          a.is_free,
+          a.platforms,
+          a.current_price_cents,
+          ldm.positive_percentage,
+          ldm.total_reviews,
+          ${steamDeckSelect} AS steam_deck_category,
+          ARRAY[]::int[] AS publisher_ids,
+          ARRAY[]::int[] AS developer_ids,
+          COALESCE((
+            SELECT array_agg(DISTINCT sg.name ORDER BY sg.name)
+            FROM ${appGenresTable} ag
+            JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+            WHERE ag.appid = a.appid
+          ), ARRAY[]::text[]) AS genres,
+          COALESCE((
+            SELECT array_agg(DISTINCT st.name ORDER BY st.name)
+            FROM ${appSteamTagsTable} ast
+            JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+            WHERE ast.appid = a.appid
+          ), ARRAY[]::text[]) AS tags
+        FROM ${appsTable} a
+        LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+        WHERE ${conditions.join('\n          AND ')}
+        ORDER BY COALESCE(ldm.total_reviews, 0) DESC, COALESCE(ldm.ccu_peak, 0) DESC, a.name ASC
+        LIMIT $${queryParams.length}
+      `,
+      queryParams,
+      this.config
+    );
+
+    return result.rows;
+  }
+
+  private async queryTigerSemanticCompanyCandidates(params: {
+    entityKind: Extract<EntityKind, 'publisher' | 'developer'>;
+    filters: SemanticSearchFilters | undefined;
+    limit: number;
+    reference: TigerSemanticCompanyProfile;
+  }): Promise<SemanticCompanyCandidateRow[]> {
+    const companyTable = this.relation(params.entityKind === 'publisher' ? 'publishers' : 'developers').sql;
+    const relationTable = this.relation(
+      params.entityKind === 'publisher' ? 'app_publishers' : 'app_developers'
+    ).sql;
+    const relationColumn = params.entityKind === 'publisher' ? 'publisher_id' : 'developer_id';
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const appGenresTable = this.relation('app_genres').sql;
+    const steamGenresTable = this.relation('steam_genres').sql;
+    const appSteamTagsTable = this.relation('app_steam_tags').sql;
+    const steamTagsTable = this.relation('steam_tags').sql;
+    const queryParams: unknown[] = [params.reference.id];
+    const filters = params.filters;
+    const whereConditions: string[] = ['c.id <> $1'];
+    const havingConditions: string[] = ['COUNT(DISTINCT a.appid) > 0'];
+    const weightedReviewExpression = `CASE
+      WHEN SUM(COALESCE(ldm.total_reviews, 0)) > 0
+        THEN ROUND(
+          (
+            SUM(COALESCE(ldm.positive_percentage, 0) * COALESCE(ldm.total_reviews, 0))::numeric
+            / NULLIF(SUM(COALESCE(ldm.total_reviews, 0)), 0)
+          ),
+          2
+        )::double precision
+      ELSE NULL
+    END`;
+
+    if (filters?.game_count?.gte != null) {
+      queryParams.push(filters.game_count.gte);
+      havingConditions.push(`COUNT(DISTINCT a.appid) >= $${queryParams.length}`);
+    }
+    if (filters?.game_count?.lte != null) {
+      queryParams.push(filters.game_count.lte);
+      havingConditions.push(`COUNT(DISTINCT a.appid) <= $${queryParams.length}`);
+    }
+    if (filters?.avg_review_percentage?.gte != null) {
+      queryParams.push(filters.avg_review_percentage.gte);
+      havingConditions.push(`${weightedReviewExpression} >= $${queryParams.length}`);
+    }
+    if (filters?.avg_review_percentage?.lte != null) {
+      queryParams.push(filters.avg_review_percentage.lte);
+      havingConditions.push(`${weightedReviewExpression} <= $${queryParams.length}`);
+    }
+    if (filters?.is_major === true) {
+      havingConditions.push('COUNT(DISTINCT a.appid) >= 50');
+    }
+    if (filters?.is_indie === true) {
+      havingConditions.push('COUNT(DISTINCT a.appid) <= 15');
+    }
+
+    queryParams.push(params.limit);
+
+    const result = await runQuery<SemanticCompanyCandidateRow>(
+      `
+        SELECT
+          c.id,
+          c.name,
+          COUNT(DISTINCT a.appid)::int AS game_count,
+          ${weightedReviewExpression} AS avg_review_percentage,
+          SUM(COALESCE(ldm.total_reviews, 0))::double precision AS total_reviews,
+          COALESCE((
+            SELECT array_agg(top_genres.name ORDER BY top_genres.cnt DESC, top_genres.name ASC)
+            FROM (
+              SELECT sg.name, COUNT(*)::int AS cnt
+              FROM ${relationTable} rel2
+              JOIN ${appsTable} a2
+                ON a2.appid = rel2.appid
+               AND a2.is_delisted = false
+               AND ${GAME_TYPE_PREDICATE[this.config.source].replace(/\ba\./g, 'a2.')}
+              JOIN ${appGenresTable} ag ON ag.appid = a2.appid
+              JOIN ${steamGenresTable} sg ON sg.genre_id = ag.genre_id
+              WHERE rel2.${relationColumn} = c.id
+              GROUP BY sg.name
+              ORDER BY cnt DESC, sg.name ASC
+              LIMIT 5
+            ) top_genres
+          ), ARRAY[]::text[]) AS top_genres,
+          COALESCE((
+            SELECT array_agg(top_tags.name ORDER BY top_tags.cnt DESC, top_tags.name ASC)
+            FROM (
+              SELECT st.name, COUNT(*)::int AS cnt
+              FROM ${relationTable} rel2
+              JOIN ${appsTable} a2
+                ON a2.appid = rel2.appid
+               AND a2.is_delisted = false
+               AND ${GAME_TYPE_PREDICATE[this.config.source].replace(/\ba\./g, 'a2.')}
+              JOIN ${appSteamTagsTable} ast ON ast.appid = a2.appid
+              JOIN ${steamTagsTable} st ON st.tag_id = ast.tag_id
+              WHERE rel2.${relationColumn} = c.id
+              GROUP BY st.name
+              ORDER BY cnt DESC, st.name ASC
+              LIMIT 5
+            ) top_tags
+          ), ARRAY[]::text[]) AS top_tags
+        FROM ${companyTable} c
+        LEFT JOIN ${relationTable} rel ON rel.${relationColumn} = c.id
+        LEFT JOIN ${appsTable} a
+          ON a.appid = rel.appid
+         AND a.is_delisted = false
+         AND ${GAME_TYPE_PREDICATE[this.config.source]}
+        LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+        WHERE ${whereConditions.join('\n          AND ')}
+        GROUP BY c.id, c.name
+        HAVING ${havingConditions.join('\n          AND ')}
+        ORDER BY COUNT(DISTINCT a.appid) DESC, SUM(COALESCE(ldm.total_reviews, 0)) DESC, c.name ASC
+        LIMIT $${queryParams.length}
+      `,
+      queryParams,
+      this.config
+    );
+
+    return result.rows;
+  }
+
   private async queryGames(query: string, limit: number): Promise<EntityRow[]> {
     const appsTable = this.relation('apps').sql;
     const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const fuzzyThreshold = 0.45;
     const sql = `
       SELECT
         a.appid AS entity_id,
@@ -2507,7 +4230,14 @@ export class DataPlaneService {
         ldm.total_reviews,
         ldm.review_score,
         ldm.owners_midpoint,
-        ldm.ccu_peak
+        ldm.ccu_peak,
+        CASE
+          WHEN lower(a.name) = lower($1) THEN 'exact'
+          WHEN lower(a.name) LIKE lower($2) THEN 'prefix'
+          WHEN lower(a.name) LIKE lower($3) THEN 'substring'
+          ELSE 'fuzzy'
+        END AS match_quality,
+        similarity(lower(a.name), lower($1)) AS similarity_score
       FROM ${appsTable} a
       LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
       WHERE a.is_delisted = false
@@ -2515,21 +4245,24 @@ export class DataPlaneService {
           lower(a.name) = lower($1)
           OR lower(a.name) LIKE lower($2)
           OR lower(a.name) LIKE lower($3)
+          OR similarity(lower(a.name), lower($1)) >= $4
         )
       ORDER BY
         CASE
-          WHEN lower(a.name) = lower($1) THEN 3
-          WHEN lower(a.name) LIKE lower($2) THEN 2
+          WHEN lower(a.name) = lower($1) THEN 4
+          WHEN lower(a.name) LIKE lower($2) THEN 3
+          WHEN lower(a.name) LIKE lower($3) THEN 2
           ELSE 1
         END DESC,
+        similarity(lower(a.name), lower($1)) DESC,
         COALESCE(ldm.total_reviews, 0) DESC,
         a.name ASC
-      LIMIT $4
+      LIMIT $5
     `;
 
     const result = await runQuery<EntityRow>(
       sql,
-      [query, `${query}%`, normalizeLikeValue(query), limit],
+      [query, `${query}%`, normalizeLikeValue(query), fuzzyThreshold, limit],
       this.config
     );
 
@@ -2728,6 +4461,52 @@ export class DataPlaneService {
     return result.rows;
   }
 
+  private buildExplainMomentMetadata(moment: ExplainMomentAccumulator): Pick<
+    ExplainChangesMoment,
+    'burstStrength' | 'linkedNewsCount' | 'significanceReasons'
+  > {
+    const families = normalizeChangeSignalFamilies(
+      [...new Set(moment.events.map((event) => event.change_type))]
+        .map((changeType) => this.familyForChangeType(changeType))
+    );
+    const evidence = this.buildChangeEvidenceSummary({
+      eventCount: moment.events.length,
+      families,
+      hasBeforeAfter: moment.events.some(
+        (event) => event.before_value != null || event.after_value != null
+      ),
+      relatedAnnouncementCount: moment.linkedNews.length,
+      windowEnd: moment.windowEnd,
+      windowStart: moment.windowStart,
+    });
+
+    return {
+      burstStrength: evidence.burstStrength,
+      linkedNewsCount: moment.linkedNews.length,
+      significanceReasons: evidence.significanceReasons,
+    };
+  }
+
+  private pickStrongestExplainMoment(
+    moments: ExplainChangesMoment[]
+  ): ExplainChangesMoment | null {
+    if (moments.length === 0) {
+      return null;
+    }
+
+    return [...moments].sort((left, right) => {
+      const rightStrength = right.burstStrength === 'high' ? 3 : right.burstStrength === 'medium' ? 2 : 1;
+      const leftStrength = left.burstStrength === 'high' ? 3 : left.burstStrength === 'medium' ? 2 : 1;
+
+      return (
+        rightStrength - leftStrength
+        || right.eventCount - left.eventCount
+        || (right.linkedNewsCount ?? 0) - (left.linkedNewsCount ?? 0)
+        || parseTimestamp(right.windowEnd).getTime() - parseTimestamp(left.windowEnd).getTime()
+      );
+    })[0] ?? null;
+  }
+
   private async querySearchDocumentRows(params: {
     appidFilter: number | null;
     appids?: number[] | null;
@@ -2740,7 +4519,8 @@ export class DataPlaneService {
     const projectionTable = this.relation('docs_steam_news_search_projection').sql;
     const newsItemsTable = this.relation('docs_steam_news_items').sql;
     const appsTable = this.relation('apps').sql;
-    const sqlParams: unknown[] = [params.query, params.startTime, params.endTime];
+    const normalizedQuery = params.query.replace(/\s+/g, ' ').trim();
+    const sqlParams: unknown[] = [normalizedQuery, params.startTime, params.endTime];
     const conditions = [
       'projection.sort_time BETWEEN $2::timestamptz AND $3::timestamptz',
       "projection.search_document @@ websearch_to_tsquery('english', $1::text)",
@@ -2759,8 +4539,12 @@ export class DataPlaneService {
       conditions.push(`projection.appid = ANY($${sqlParams.length}::int[])`);
     }
 
-    sqlParams.push(normalizeLikeValue(params.query));
+    sqlParams.push(normalizeLikeValue(normalizedQuery));
+    const titleLikeParam = sqlParams.length;
+    sqlParams.push(normalizedQuery.toLowerCase());
+    const exactTitleParam = sqlParams.length;
     sqlParams.push(params.limit);
+    const limitParam = sqlParams.length;
 
     const result = await runQuery<SearchDocumentRow>(
       `
@@ -2780,21 +4564,56 @@ export class DataPlaneService {
             projection.search_document,
             websearch_to_tsquery('english', $1::text)
           )::double precision AS rank,
-          lower(COALESCE(projection.title, '')) LIKE $${sqlParams.length - 1} AS title_phrase_hit,
+          lower(COALESCE(projection.title, '')) = $${exactTitleParam} AS title_exact_hit,
+          lower(COALESCE(projection.title, '')) LIKE $${titleLikeParam} AS title_phrase_hit,
+          lower(COALESCE(apps.name, '')) LIKE $${titleLikeParam} AS app_name_hit,
           NULL::text AS body_preview,
-          NULL::text AS content_preview,
-          NULL::text AS excerpt,
-          NULL::text AS match_reason
+          NULLIF(
+            BTRIM(
+              CONCAT_WS(
+                ' — ',
+                NULLIF(BTRIM(projection.title), ''),
+                NULLIF(BTRIM(COALESCE(news.feedlabel, news.feedname)), ''),
+                NULLIF(BTRIM(apps.name), '')
+              )
+            ),
+            ''
+          ) AS content_preview,
+          NULLIF(
+            BTRIM(
+              ts_headline(
+                'english',
+                COALESCE(NULLIF(BTRIM(projection.title), ''), apps.name, ''),
+                websearch_to_tsquery('english', $1::text),
+                'StartSel=, StopSel=, MaxWords=18, MinWords=4, MaxFragments=1'
+              )
+            ),
+            ''
+          ) AS excerpt,
+          CASE
+            WHEN lower(COALESCE(projection.title, '')) = $${exactTitleParam} THEN 'matched_exact_title'
+            WHEN lower(COALESCE(projection.title, '')) LIKE $${titleLikeParam} THEN 'matched_title_phrase'
+            WHEN lower(COALESCE(apps.name, '')) LIKE $${titleLikeParam} THEN 'matched_app_name'
+            ELSE 'matched_topic_terms'
+          END AS match_reason,
+          CASE
+            WHEN lower(COALESCE(projection.title, '')) = $${exactTitleParam} THEN 'exact title match'
+            WHEN lower(COALESCE(projection.title, '')) LIKE $${titleLikeParam} THEN 'title matched the topic terms'
+            WHEN lower(COALESCE(apps.name, '')) LIKE $${titleLikeParam} THEN 'game name matched the topic terms'
+            ELSE 'topic terms matched the news projection'
+          END AS ranking_reason
         FROM ${projectionTable} projection
         JOIN ${newsItemsTable} news ON news.gid = projection.gid
         JOIN ${appsTable} apps ON apps.appid = projection.appid
         WHERE ${conditions.join('\n          AND ')}
         ORDER BY
+          title_exact_hit DESC,
           title_phrase_hit DESC,
+          app_name_hit DESC,
           rank DESC,
           projection.sort_time DESC,
           projection.gid DESC
-        LIMIT $${sqlParams.length}
+        LIMIT $${limitParam}
       `,
       sqlParams,
       this.config
@@ -2841,11 +4660,24 @@ export class DataPlaneService {
           news.feedname,
           news.url,
           0::double precision AS rank,
+          false AS title_exact_hit,
           false AS title_phrase_hit,
+          false AS app_name_hit,
           NULL::text AS body_preview,
-          NULL::text AS content_preview,
-          NULL::text AS excerpt,
-          'recent_entity_news'::text AS match_reason
+          NULLIF(
+            BTRIM(
+              CONCAT_WS(
+                ' — ',
+                NULLIF(BTRIM(projection.title), ''),
+                NULLIF(BTRIM(COALESCE(news.feedlabel, news.feedname)), ''),
+                NULLIF(BTRIM(apps.name), '')
+              )
+            ),
+            ''
+          ) AS content_preview,
+          NULLIF(BTRIM(COALESCE(projection.title, apps.name)), '') AS excerpt,
+          'recent_entity_news'::text AS match_reason,
+          'latest entity coverage fallback'::text AS ranking_reason
         FROM ${projectionTable} projection
         JOIN ${newsItemsTable} news ON news.gid = projection.gid
         JOIN ${appsTable} apps ON apps.appid = projection.appid
@@ -3074,11 +4906,115 @@ export class DataPlaneService {
     return `${params.appName} showed recent Steam change activity.`;
   }
 
+  private pickStrongestChangeSignal(
+    families: ChangeActivitySignalFamily[]
+  ): ChangeActivitySignalFamily | null {
+    const priority: ChangeActivitySignalFamily[] = [
+      'release',
+      'pricing',
+      'announcement',
+      'build',
+      'platform',
+      'media',
+      'store-page',
+      'taxonomy',
+    ];
+
+    return priority.find((family) => families.includes(family)) ?? families[0] ?? null;
+  }
+
+  private buildChangeEvidenceSummary(params: {
+    eventCount: number;
+    families: ChangeActivitySignalFamily[];
+    hasBeforeAfter: boolean;
+    relatedAnnouncementCount: number;
+    windowEnd: Date;
+    windowStart: Date;
+  }): ChangeEvidenceSummary {
+    const strongestSignal = this.pickStrongestChangeSignal(params.families);
+    const windowHours = Math.max(
+      (params.windowEnd.getTime() - params.windowStart.getTime()) / (60 * 60 * 1000),
+      1
+    );
+    const density = params.eventCount / windowHours;
+    let relevanceScore =
+      params.eventCount * 1.8
+      + params.families.length * 1.4
+      + Math.min(params.relatedAnnouncementCount, 2) * 1.7
+      + (params.hasBeforeAfter ? 1.2 : 0)
+      + Math.min(density, 4);
+
+    if (strongestSignal === 'release' || strongestSignal === 'pricing') {
+      relevanceScore += 1.2;
+    } else if (strongestSignal === 'announcement' || strongestSignal === 'build') {
+      relevanceScore += 0.8;
+    }
+
+    if (
+      params.relatedAnnouncementCount > 0
+      && (params.families.includes('pricing') || params.families.includes('media') || params.families.includes('store-page'))
+    ) {
+      relevanceScore += 1;
+    }
+
+    const burstStrength: ChangeBurstStrength =
+      relevanceScore >= 11
+        ? 'high'
+        : relevanceScore >= 6.5
+          ? 'medium'
+          : 'low';
+
+    const significanceReasons: string[] = [];
+    if (params.eventCount >= 4) {
+      significanceReasons.push(`${params.eventCount} tracked events landed in the same update window.`);
+    }
+    if (params.families.length >= 2) {
+      significanceReasons.push(`Multiple signal families moved together: ${params.families.join(', ')}.`);
+    }
+    if (params.relatedAnnouncementCount > 0) {
+      significanceReasons.push(
+        `${params.relatedAnnouncementCount} linked announcement${params.relatedAnnouncementCount === 1 ? '' : 's'} line up with the same window.`
+      );
+    }
+    if (params.hasBeforeAfter) {
+      significanceReasons.push('Structured before/after values are available for drilldown.');
+    }
+
+    let relevanceReason = 'recent Steam change activity';
+    if (
+      params.relatedAnnouncementCount > 0
+      && (params.families.includes('pricing') || params.families.includes('media') || params.families.includes('store-page'))
+    ) {
+      relevanceReason = 'an announcement-linked commercial or marketing update';
+    } else if (params.families.includes('release') || params.families.includes('platform')) {
+      relevanceReason = 'a launch-adjacent update burst';
+    } else if (params.families.includes('pricing')) {
+      relevanceReason = 'a commercial storefront move';
+    } else if (params.families.includes('build') && params.families.includes('announcement')) {
+      relevanceReason = 'an update tease backed by announcement activity';
+    } else if (params.families.includes('media') || params.families.includes('store-page')) {
+      relevanceReason = 'a store presentation refresh';
+    } else if (params.families.length >= 2) {
+      relevanceReason = 'a multi-signal Steam update';
+    } else if (strongestSignal) {
+      relevanceReason = `${strongestSignal.replace(/-/g, ' ')} change activity`;
+    }
+
+    return {
+      burstStrength,
+      relevanceReason,
+      relevanceScore: Number(relevanceScore.toFixed(2)),
+      significanceReasons: significanceReasons.slice(0, 3),
+      strongestSignal,
+    };
+  }
+
   private buildSearchChangeFacts(params: {
     directNews: ExplainNewsRow[];
     eventCount: number;
     families: ChangeActivitySignalFamily[];
     hasBeforeAfter: boolean;
+    relevanceReason?: string | null;
     relatedAnnouncementCount: number;
     windowEnd: Date;
     windowStart: Date;
@@ -3088,6 +5024,9 @@ export class DataPlaneService {
       `Window: ${formatTimestamp(params.windowStart)} to ${formatTimestamp(params.windowEnd)}.`,
     ];
 
+    if (params.relevanceReason) {
+      facts.push(`Why it stands out: ${params.relevanceReason}.`);
+    }
     if (params.families.length > 0) {
       facts.push(`Signals: ${params.families.join(', ')}.`);
     }
@@ -3109,6 +5048,7 @@ export class DataPlaneService {
     appName: string;
     directNews: ExplainNewsRow[];
     families: ChangeActivitySignalFamily[];
+    relevanceReason?: string | null;
     relatedAnnouncementCount: number;
   }): string {
     if (params.activityKind === 'announcement' && params.directNews[0]?.title) {
@@ -3121,6 +5061,10 @@ export class DataPlaneService {
       params.relatedAnnouncementCount > 0
         ? ` with ${params.relatedAnnouncementCount} linked announcement${params.relatedAnnouncementCount === 1 ? '' : 's'}`
         : ' without a linked announcement';
+
+    if (params.relevanceReason) {
+      return `${params.appName} showed ${params.relevanceReason}${announcementClause}.`;
+    }
 
     return `${params.appName} showed ${signalLabel} changes${announcementClause}.`;
   }
@@ -3164,19 +5108,20 @@ export class DataPlaneService {
       families.length
       + (row.has_before_after ? 1 : 0)
       + Math.min(row.related_announcement_count ?? 0, 2);
+    const relevanceScore = row.relevance_score ?? (impactScore + commercialScore + launchScore);
 
     switch (sort) {
       case 'newest':
         return freshnessScore;
       case 'biggest-change':
-        return impactScore * 10 + freshnessScore;
+        return (impactScore * 6 + relevanceScore * 4) + freshnessScore;
       case 'most-commercial':
-        return commercialScore * 10 + freshnessScore;
+        return (commercialScore * 8 + relevanceScore * 2) + freshnessScore;
       case 'most-launch-relevant':
-        return launchScore * 10 + freshnessScore;
+        return (launchScore * 8 + relevanceScore * 2) + freshnessScore;
       case 'relevant':
       default:
-        return (impactScore + commercialScore + launchScore) * 5 + freshnessScore;
+        return relevanceScore * 5 + freshnessScore;
     }
   }
 
@@ -3357,6 +5302,7 @@ export class DataPlaneService {
       activityKind: row.activity_kind,
       appType: row.app_type,
       appid: row.appid,
+      burstStrength: row.burst_strength ?? undefined,
       externalUrl: row.external_url,
       facts: row.facts ?? [],
       hasBeforeAfter: row.has_before_after ?? false,
@@ -3365,10 +5311,13 @@ export class DataPlaneService {
       isReleased: row.is_released,
       name: row.app_name,
       occurredAt: formatTimestamp(parseTimestamp(row.occurred_at)),
+      relevanceReason: row.relevance_reason ?? null,
+      relevanceScore: row.relevance_score ?? null,
       relatedAnnouncementCount: row.related_announcement_count ?? 0,
       releaseDate: row.release_date,
       signalFamilies: normalizeChangeSignalFamilies(row.signal_families),
       storyKind: normalizeChangeStoryKind(row.story_kind),
+      strongestSignal: row.strongest_signal ?? null,
       summary: row.summary ?? `${row.app_name} showed recent Steam change activity.`,
     };
   }
@@ -3455,11 +5404,20 @@ export class DataPlaneService {
         families,
         storyKind,
       });
+      const evidence = this.buildChangeEvidenceSummary({
+        eventCount: moment.events.length,
+        families,
+        hasBeforeAfter,
+        relatedAnnouncementCount,
+        windowEnd: moment.windowEnd,
+        windowStart: moment.windowStart,
+      });
       const summary = this.buildSearchChangeSummary({
         activityKind,
         appName: moment.appName,
         directNews,
         families,
+        relevanceReason: evidence.relevanceReason,
         relatedAnnouncementCount,
       });
       const facts = this.buildSearchChangeFacts({
@@ -3467,6 +5425,7 @@ export class DataPlaneService {
         eventCount: moment.events.length,
         families,
         hasBeforeAfter,
+        relevanceReason: evidence.relevanceReason,
         relatedAnnouncementCount,
         windowEnd: moment.windowEnd,
         windowStart: moment.windowStart,
@@ -3489,12 +5448,16 @@ export class DataPlaneService {
         highlight_labels: highlightLabels,
         is_released: moment.isReleased,
         occurred_at: formatTimestamp(moment.windowEnd),
+        relevance_reason: evidence.relevanceReason,
+        relevance_score: evidence.relevanceScore,
         related_announcement_count: relatedAnnouncementCount,
         release_date: moment.releaseDate,
         signal_families: families,
         sort_score: null,
+        strongest_signal: evidence.strongestSignal,
         story_kind: storyKind,
         summary,
+        burst_strength: evidence.burstStrength,
       };
       contractRow.sort_score = this.scoreSearchChangeActivityRow(contractRow, 'relevant');
       rows.push(contractRow);
@@ -3614,11 +5577,24 @@ export class DataPlaneService {
           news.feedname,
           news.url,
           0::double precision AS rank,
+          false AS title_exact_hit,
           false AS title_phrase_hit,
+          false AS app_name_hit,
           NULL::text AS body_preview,
-          NULL::text AS content_preview,
-          NULL::text AS excerpt,
-          'recent_entity_news'::text AS match_reason
+          NULLIF(
+            BTRIM(
+              CONCAT_WS(
+                ' — ',
+                NULLIF(BTRIM(projection.title), ''),
+                NULLIF(BTRIM(COALESCE(news.feedlabel, news.feedname)), ''),
+                NULLIF(BTRIM(apps.name), '')
+              )
+            ),
+            ''
+          ) AS content_preview,
+          NULLIF(BTRIM(COALESCE(projection.title, apps.name)), '') AS excerpt,
+          'recent_entity_news'::text AS match_reason,
+          'latest recent coverage'::text AS ranking_reason
         FROM ${projectionTable} projection
         JOIN ${newsItemsTable} news ON news.gid = projection.gid
         JOIN ${appsTable} apps ON apps.appid = projection.appid
@@ -3641,6 +5617,10 @@ export class DataPlaneService {
     const explicitMatchReason =
       row.match_reason === 'recent_entity_news'
         ? 'recent_entity_news'
+        : row.match_reason === 'matched_exact_title'
+          ? 'matched_exact_title'
+          : row.match_reason === 'matched_app_name'
+            ? 'matched_app_name'
         : row.title_phrase_hit
           ? 'matched_title_phrase'
           : 'matched_topic_terms';
@@ -3659,6 +5639,7 @@ export class DataPlaneService {
       matchReason: explicitMatchReason,
       publishedAt: row.published_at ? formatTimestamp(parseTimestamp(row.published_at)) : null,
       rank: row.rank,
+      rankingReason: row.ranking_reason ?? null,
       sortTime: formatTimestamp(parseTimestamp(row.sort_time)),
       title: row.title,
       url: row.url,
@@ -4043,28 +6024,39 @@ export class DataPlaneService {
   ): Promise<EntityRow[]> {
     const table = this.relation(kind === 'publisher' ? 'publishers' : 'developers').sql;
     const idColumn = kind === 'publisher' ? 'id' : 'id';
+    const fuzzyThreshold = 0.45;
     const result = await runQuery<EntityRow>(
       `
         SELECT
           ${idColumn} AS entity_id,
           name AS display_name,
-          game_count
+          game_count,
+          CASE
+            WHEN lower(name) = lower($1) THEN 'exact'
+            WHEN lower(name) LIKE lower($2) THEN 'prefix'
+            WHEN lower(name) LIKE lower($3) THEN 'substring'
+            ELSE 'fuzzy'
+          END AS match_quality,
+          similarity(lower(name), lower($1)) AS similarity_score
         FROM ${table}
         WHERE
           lower(name) = lower($1)
           OR lower(name) LIKE lower($2)
           OR lower(name) LIKE lower($3)
+          OR similarity(lower(name), lower($1)) >= $4
         ORDER BY
           CASE
-            WHEN lower(name) = lower($1) THEN 3
-            WHEN lower(name) LIKE lower($2) THEN 2
+            WHEN lower(name) = lower($1) THEN 4
+            WHEN lower(name) LIKE lower($2) THEN 3
+            WHEN lower(name) LIKE lower($3) THEN 2
             ELSE 1
           END DESC,
+          similarity(lower(name), lower($1)) DESC,
           COALESCE(game_count, 0) DESC,
           name ASC
-        LIMIT $4
+        LIMIT $5
       `,
-      [query, `${query}%`, normalizeLikeValue(query), limit],
+      [query, `${query}%`, normalizeLikeValue(query), fuzzyThreshold, limit],
       this.config
     );
 
@@ -4819,49 +6811,6 @@ export class DataPlaneService {
     };
   }
 
-  private async applyMomentumQdrantFilters(
-    rows: MomentumRow[],
-    filters: DiscoverMomentumRequest['filters'] | null
-  ): Promise<MomentumRow[]> {
-    if (!filters?.steamDeck?.length || rows.length === 0) {
-      return rows;
-    }
-
-    const client = getQdrantClient();
-    const points = await client.retrieve(COLLECTIONS.GAMES, {
-      ids: rows.map((row) => row.appid),
-      with_payload: true,
-      with_vector: false,
-    });
-    const payloadById = new Map<number, GamePayload>();
-
-    for (const point of points) {
-      const pointId = typeof point.id === 'number' ? point.id : Number(point.id);
-      if (Number.isInteger(pointId) && point.payload) {
-        payloadById.set(pointId, point.payload as unknown as GamePayload);
-      }
-    }
-
-    return rows.filter((row) => {
-      const payload = payloadById.get(row.appid);
-      if (!payload) {
-        return false;
-      }
-
-      if (payload.steam_deck !== 'verified' && payload.steam_deck !== 'playable') {
-        return false;
-      }
-
-      return filters.steamDeck?.includes(payload.steam_deck) ?? false;
-    }).map((row) => {
-      const payload = payloadById.get(row.appid);
-      return {
-        ...row,
-        platforms: payload?.platforms?.join(',') ?? row.platforms,
-      };
-    });
-  }
-
   private async queryMomentumRows(params: {
     filters: DiscoverMomentumRequest['filters'] | null;
     indieHeuristic: boolean;
@@ -4882,6 +6831,7 @@ export class DataPlaneService {
     const steamGenresTable = this.relation('steam_genres').sql;
     const appSteamTagsTable = this.relation('app_steam_tags').sql;
     const steamTagsTable = this.relation('steam_tags').sql;
+    const appSteamDeckTable = this.relation('app_steam_deck').sql;
     const paramsList: unknown[] = [];
     const candidateConditions: string[] = [
       'a.is_delisted = false',
@@ -4923,6 +6873,18 @@ export class DataPlaneService {
         paramsList.push(`%${platform.toLowerCase()}%`);
         candidateConditions.push(`lower(COALESCE(a.platforms, '')) LIKE $${paramsList.length}`);
       }
+    }
+
+    if (filters?.steamDeck?.length) {
+      paramsList.push(filters.steamDeck);
+      candidateConditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM ${appSteamDeckTable} asd
+          WHERE asd.appid = a.appid
+            AND asd.category::text = ANY($${paramsList.length}::text[])
+        )`
+      );
     }
 
     if (typeof filters?.isFree === 'boolean') {
@@ -5409,6 +7371,44 @@ export class DataPlaneService {
     };
   }
 
+  private applyContinuationDeltaToDiscoverMomentumArgs(
+    sourceArgs: DiscoverMomentumRequest,
+    requestedCount: number,
+    delta: ContinueResultSetRequest['delta']
+  ): DiscoverMomentumRequest {
+    const nextFilters = { ...(sourceArgs.filters ?? {}) };
+
+    if (typeof delta?.maxPriceCents === 'number' && Number.isFinite(delta.maxPriceCents)) {
+      const currentMaxPrice =
+        typeof nextFilters.maxPriceCents === 'number' && Number.isFinite(nextFilters.maxPriceCents)
+          ? nextFilters.maxPriceCents
+          : null;
+      nextFilters.maxPriceCents =
+        currentMaxPrice == null
+          ? Math.max(0, Math.trunc(delta.maxPriceCents))
+          : Math.min(currentMaxPrice, Math.max(0, Math.trunc(delta.maxPriceCents)));
+    }
+
+    if (Array.isArray(delta?.steamDeck) && delta.steamDeck.length > 0) {
+      nextFilters.steamDeck = [...new Set(delta.steamDeck)];
+    }
+
+    const excludeAppIds = [
+      ...new Set(
+        (sourceArgs.excludeAppIds ?? []).filter(
+          (appid): appid is number => Number.isInteger(appid) && appid > 0
+        )
+      ),
+    ];
+
+    return {
+      ...sourceArgs,
+      excludeAppIds,
+      ...(Object.keys(nextFilters).length > 0 ? { filters: nextFilters } : {}),
+      limit: requestedCount,
+    };
+  }
+
   private buildTraceSeries(
     metric: TraceMetric,
     rows: DailyMetricHistoryRow[]
@@ -5799,6 +7799,11 @@ export class DataPlaneService {
       requiredRelations.add('steam_tags');
     }
 
+    if (filters.steamDeck?.length) {
+      unsupportedFilters.push('steamDeck');
+      requiredRelations.add('app_steam_deck');
+    }
+
     if (requiredRelations.size === 0) {
       return;
     }
@@ -5811,6 +7816,52 @@ export class DataPlaneService {
         'discoverMomentum',
         blockingTables,
         { unsupportedFilters }
+      );
+    }
+  }
+
+  private async assertTigerSemanticFiltersSupported(
+    request: SemanticSearchRequest
+  ): Promise<void> {
+    if (this.config.source !== 'tiger') {
+      return;
+    }
+
+    const filters = request.filters;
+    if (!filters) {
+      return;
+    }
+
+    const requiredRelations = new Set<DataPlaneRelationKey>([
+      'app_genres',
+      'steam_genres',
+      'app_steam_tags',
+      'steam_tags',
+    ]);
+    const unsupportedFilters: string[] = [];
+
+    if (filters.steam_deck?.length) {
+      unsupportedFilters.push('steamDeck');
+      requiredRelations.add('app_steam_deck');
+    }
+
+    const blockingTables = await this.getBlockingTables([...requiredRelations]);
+
+    if (blockingTables.length > 0) {
+      throw new ContractRuntimeUnavailableError(
+        `Tiger semanticSearch does not support ${unsupportedFilters.length > 0 ? unsupportedFilters.join(', ') : 'the required metadata joins'} until the source tables are present and backfilled.`,
+        'semanticSearch',
+        blockingTables,
+        { unsupportedFilters }
+      );
+    }
+
+    if (filters.same_franchise_only) {
+      throw new ContractRuntimeUnavailableError(
+        'Tiger semanticSearch does not support same_franchise_only until franchise metadata is backfilled.',
+        'semanticSearch',
+        ['legacy.app_franchises'],
+        { unsupportedFilters: ['same_franchise_only'] }
       );
     }
   }
@@ -5938,6 +7989,262 @@ export class DataPlaneService {
     };
   }
 
+  private async queryUserContextPins(userId: string): Promise<UserContextPin[]> {
+    const pinsTable = this.relation('user_pins').sql;
+    const pinSettingsTable = this.relation('user_pin_alert_settings').sql;
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const publishersTable = this.relation('publishers').sql;
+    const developersTable = this.relation('developers').sql;
+
+    const result = await runQuery<UserContextPinRow>(
+      `
+        SELECT
+          p.id::text AS pin_id,
+          p.entity_type::text AS entity_type,
+          p.entity_id,
+          p.display_name,
+          p.pin_order,
+          p.pinned_at::text AS pinned_at,
+          a.type::text AS app_type,
+          a.is_free,
+          a.platforms,
+          EXTRACT(YEAR FROM a.release_date)::int AS release_year,
+          ldm.ccu_peak,
+          ldm.owners_midpoint,
+          ldm.review_score,
+          ldm.total_reviews,
+          pub.game_count AS publisher_game_count,
+          dev.game_count AS developer_game_count,
+          ps.use_custom_settings,
+          ps.alerts_enabled,
+          ps.ccu_sensitivity::double precision AS ccu_sensitivity,
+          ps.review_sensitivity::double precision AS review_sensitivity,
+          ps.sentiment_sensitivity::double precision AS sentiment_sensitivity,
+          ps.alert_ccu_spike,
+          ps.alert_ccu_drop,
+          ps.alert_trend_reversal,
+          ps.alert_review_surge,
+          ps.alert_sentiment_shift,
+          ps.alert_price_change,
+          ps.alert_new_release,
+          ps.alert_milestone
+        FROM ${pinsTable} p
+        LEFT JOIN ${pinSettingsTable} ps ON ps.pin_id = p.id
+        LEFT JOIN ${appsTable} a
+          ON p.entity_type = 'game'
+         AND a.appid = p.entity_id
+        LEFT JOIN ${latestDailyMetricsTable} ldm
+          ON p.entity_type = 'game'
+         AND ldm.appid = p.entity_id
+        LEFT JOIN ${publishersTable} pub
+          ON p.entity_type = 'publisher'
+         AND pub.id = p.entity_id
+        LEFT JOIN ${developersTable} dev
+          ON p.entity_type = 'developer'
+         AND dev.id = p.entity_id
+        WHERE p.user_id = $1::uuid
+        ORDER BY p.pin_order ASC, p.pinned_at ASC, p.id ASC
+      `,
+      [userId],
+      this.config
+    );
+
+    return result.rows.map((row) => this.mapUserContextPin(row));
+  }
+
+  private async queryUserAlertPreferences(
+    userId: string
+  ): Promise<UserContextAlertPreferences> {
+    const preferencesTable = this.relation('user_alert_preferences').sql;
+    const result = await runQuery<UserContextAlertPreferencesRow>(
+      `
+        SELECT
+          alerts_enabled,
+          email_digest_enabled,
+          email_digest_frequency,
+          ccu_sensitivity::double precision AS ccu_sensitivity,
+          review_sensitivity::double precision AS review_sensitivity,
+          sentiment_sensitivity::double precision AS sentiment_sensitivity,
+          alert_ccu_spike,
+          alert_ccu_drop,
+          alert_trend_reversal,
+          alert_review_surge,
+          alert_sentiment_shift,
+          alert_price_change,
+          alert_new_release,
+          alert_milestone
+        FROM ${preferencesTable}
+        WHERE user_id = $1::uuid
+        LIMIT 1
+      `,
+      [userId],
+      this.config
+    );
+
+    const row = result.rows[0];
+    return row ? this.mapUserAlertPreferences(row) : buildDefaultUserAlertPreferences();
+  }
+
+  private async queryUserContextAlerts(
+    userId: string,
+    limit: number
+  ): Promise<UserContextAlert[]> {
+    const alertsTable = this.relation('user_alerts').sql;
+    const pinsTable = this.relation('user_pins').sql;
+    const result = await runQuery<UserContextAlertRow>(
+      `
+        SELECT
+          a.id::text AS alert_id,
+          a.pin_id::text AS pin_id,
+          a.alert_type::text AS alert_type,
+          a.severity::text AS severity,
+          a.title,
+          a.description,
+          a.metric_name,
+          a.previous_value::double precision AS previous_value,
+          a.current_value::double precision AS current_value,
+          a.change_percent::double precision AS change_percent,
+          a.is_read,
+          a.read_at::text AS read_at,
+          a.created_at::text AS created_at,
+          p.display_name,
+          p.entity_type::text AS entity_type,
+          p.entity_id
+        FROM ${alertsTable} a
+        JOIN ${pinsTable} p
+          ON p.id = a.pin_id
+        WHERE a.user_id = $1::uuid
+        ORDER BY a.created_at DESC, a.id DESC
+        LIMIT $2
+      `,
+      [userId, limit],
+      this.config
+    );
+
+    return result.rows.map((row) => this.mapUserContextAlert(row));
+  }
+
+  private async queryUnreadAlertCount(userId: string): Promise<number> {
+    const alertsTable = this.relation('user_alerts').sql;
+    const result = await runQuery<UserContextUnreadCountRow>(
+      `
+        SELECT count(*)::int AS unread_alert_count
+        FROM ${alertsTable}
+        WHERE user_id = $1::uuid
+          AND is_read = false
+      `,
+      [userId],
+      this.config
+    );
+
+    return result.rows[0]?.unread_alert_count ?? 0;
+  }
+
+  private mapUserContextPin(row: UserContextPinRow): UserContextPin {
+    const entityKind = row.entity_type;
+    const platform = entityKind === 'game' ? 'steam' : 'publisheriq';
+    const gameCount =
+      entityKind === 'publisher'
+        ? row.publisher_game_count
+        : entityKind === 'developer'
+          ? row.developer_game_count
+          : null;
+    const hasAlertSettings = row.use_custom_settings !== null;
+
+    return {
+      alertSettings: hasAlertSettings
+        ? {
+            alertCcuDrop: row.alert_ccu_drop,
+            alertCcuSpike: row.alert_ccu_spike,
+            alertMilestone: row.alert_milestone,
+            alertNewRelease: row.alert_new_release,
+            alertPriceChange: row.alert_price_change,
+            alertReviewSurge: row.alert_review_surge,
+            alertSentimentShift: row.alert_sentiment_shift,
+            alertTrendReversal: row.alert_trend_reversal,
+            alertsEnabled: row.alerts_enabled ?? true,
+            ccuSensitivity: row.ccu_sensitivity,
+            reviewSensitivity: row.review_sensitivity,
+            sentimentSensitivity: row.sentiment_sensitivity,
+            useCustomSettings: row.use_custom_settings ?? false,
+          }
+        : null,
+      displayName: row.display_name,
+      entityKind,
+      entityUid: buildEntityUid(platform, entityKind, String(row.entity_id)),
+      metrics: {
+        ccuPeak: row.ccu_peak,
+        gameCount,
+        ownersMidpoint: row.owners_midpoint,
+        reviewScore: row.review_score,
+        totalReviews: row.total_reviews,
+      },
+      pinId: row.pin_id,
+      pinOrder: row.pin_order,
+      pinnedAt: formatTimestamp(parseTimestamp(row.pinned_at)),
+      platform,
+      platformEntityId: String(row.entity_id),
+      summary: {
+        appType: row.app_type,
+        isFree: row.is_free,
+        platforms: row.platforms
+          ? row.platforms.split(',').map((value) => value.trim()).filter(Boolean)
+          : [],
+        releaseYear: row.release_year,
+      },
+    };
+  }
+
+  private mapUserAlertPreferences(
+    row: UserContextAlertPreferencesRow
+  ): UserContextAlertPreferences {
+    return {
+      alertCcuDrop: row.alert_ccu_drop,
+      alertCcuSpike: row.alert_ccu_spike,
+      alertMilestone: row.alert_milestone,
+      alertNewRelease: row.alert_new_release,
+      alertPriceChange: row.alert_price_change,
+      alertReviewSurge: row.alert_review_surge,
+      alertSentimentShift: row.alert_sentiment_shift,
+      alertTrendReversal: row.alert_trend_reversal,
+      alertsEnabled: row.alerts_enabled,
+      ccuSensitivity: row.ccu_sensitivity,
+      emailDigestEnabled: row.email_digest_enabled,
+      emailDigestFrequency: row.email_digest_frequency,
+      reviewSensitivity: row.review_sensitivity,
+      sentimentSensitivity: row.sentiment_sensitivity,
+      source: 'stored',
+    };
+  }
+
+  private mapUserContextAlert(row: UserContextAlertRow): UserContextAlert {
+    const platform = row.entity_type === 'game' ? 'steam' : 'publisheriq';
+
+    return {
+      alertId: row.alert_id,
+      alertType: row.alert_type,
+      changePercent: row.change_percent,
+      createdAt: formatTimestamp(parseTimestamp(row.created_at)),
+      currentValue: row.current_value,
+      description: row.description,
+      entity: {
+        displayName: row.display_name,
+        entityKind: row.entity_type,
+        entityUid: buildEntityUid(platform, row.entity_type, String(row.entity_id)),
+        platform,
+        platformEntityId: String(row.entity_id),
+      },
+      isRead: row.is_read,
+      metricName: row.metric_name,
+      pinId: row.pin_id,
+      previousValue: row.previous_value,
+      readAt: row.read_at ? formatTimestamp(parseTimestamp(row.read_at)) : null,
+      severity: row.severity,
+      title: row.title,
+    };
+  }
+
   private async assertContractRuntime(
     contractName: RuntimeQueryContractDescriptor['name']
   ): Promise<void> {
@@ -5974,6 +8281,10 @@ export class DataPlaneService {
         continue;
       }
 
+      if (ALLOW_EMPTY_RELATIONS.has(relationKey)) {
+        continue;
+      }
+
       const hasRowsResult = await runQuery<{ has_rows: boolean }>(
         `SELECT EXISTS(SELECT 1 FROM ${location.sql} LIMIT 1) AS has_rows`,
         [],
@@ -5998,22 +8309,8 @@ export class DataPlaneService {
   private getAdditionalContractBlockers(
     contractName: RuntimeQueryContractDescriptor['name']
   ): string[] {
-    if (contractName !== 'semanticSearch') {
-      return [];
-    }
-
-    const blockers: string[] = [];
-    if (!process.env.QDRANT_URL) {
-      blockers.push('env:QDRANT_URL');
-    }
-    if (!process.env.QDRANT_API_KEY) {
-      blockers.push('env:QDRANT_API_KEY');
-    }
-    if (!process.env.OPENAI_API_KEY) {
-      blockers.push('env:OPENAI_API_KEY');
-    }
-
-    return blockers;
+    void contractName;
+    return [];
   }
 
   private relation(relationKey: DataPlaneRelationKey): RelationLocation {
@@ -6122,7 +8419,8 @@ export class DataPlaneService {
     query: string,
     includeMetrics: boolean
   ): ResolvedEntity {
-    const matchQuality = inferMatchQuality(row.display_name, query);
+    const matchQuality =
+      normalizeMatchQuality(row.match_quality) ?? inferMatchQuality(row.display_name, query);
 
     return {
       confidence: matchConfidence(matchQuality),

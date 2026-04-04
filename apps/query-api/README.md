@@ -27,9 +27,9 @@ This service is the first step of the Tiger migration runtime split.
 validate gate is green. It remains metadata-first and is intended for
 news/topic lookups plus Tiger shadow chat coverage.
 
-`semantic-search` is now the canonical runtime for similarity and concept
-retrieval. Admin chat and similarity routes should proxy here instead of
-executing Qdrant locally inside the Next.js app.
+`semantic-search` is now served by the Tiger data plane itself. Admin chat and
+similarity routes should proxy here instead of executing direct semantic
+lookups inside the Next.js app.
 
 ## Environment
 
@@ -41,9 +41,6 @@ executing Qdrant locally inside the Next.js app.
 - `QUERY_API_HOST`
 - `QUERY_API_PORT`
 - `QUERY_API_BEARER_TOKEN`
-- `QDRANT_URL`
-- `QDRANT_API_KEY`
-- `OPENAI_API_KEY`
 
 `TIGER_PRIMARY_URL` is preferred. Until Tiger exists, the service falls back to `DATA_PLANE_SOURCE_URL` or `DATABASE_URL`.
 
@@ -65,6 +62,7 @@ The chat runtime currently promotes only these prompt families to Tiger-owned vi
 - entity compare
 - entity ranking
 - metric history
+- momentum discovery
 - semantic search
 
 News and change-intel can stay shadow-only while the live ingesting docs/events slice continues to drift.
@@ -79,9 +77,6 @@ Recommended Railway env:
 
 - `TIGER_PRIMARY_URL`
 - `QUERY_API_BEARER_TOKEN`
-- `QDRANT_URL`
-- `QDRANT_API_KEY`
-- `OPENAI_API_KEY`
 - `DATA_PLANE_STATEMENT_TIMEOUT_MS=10000`
 - `DATA_PLANE_MAX_POOL_SIZE=5`
 - `QUERY_API_HOST=0.0.0.0`

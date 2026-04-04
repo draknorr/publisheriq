@@ -32,8 +32,10 @@ test('execution trace registry covers Tiger contracts and continuation', () => {
 
   for (const contractName of [
     'resolveEntities',
+    'discoverMomentum',
     'rankEntities',
     'compareEntities',
+    'getUserContext',
     'searchCatalog',
     'searchDocuments',
     'explainChanges',

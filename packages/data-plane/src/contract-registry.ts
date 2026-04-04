@@ -189,6 +189,10 @@ export const CONTRACT_REGISTRY: QueryContractDescriptor[] = [
       'developers',
       'app_publishers',
       'app_developers',
+      'app_genres',
+      'steam_genres',
+      'app_steam_tags',
+      'steam_tags',
     ],
     description:
       'Resolve concept- and similarity-driven prompts against entity-linked embeddings.',
@@ -197,8 +201,17 @@ export const CONTRACT_REGISTRY: QueryContractDescriptor[] = [
   {
     name: 'getUserContext',
     endpoint: '/v1/contracts/get-user-context',
-    status: 'planned',
-    requiredRelations: [],
+    status: 'ready',
+    requiredRelations: [
+      'user_pins',
+      'user_alerts',
+      'user_alert_preferences',
+      'user_pin_alert_settings',
+      'apps',
+      'latest_daily_metrics',
+      'publishers',
+      'developers',
+    ],
     description:
       'Return the user context needed for portfolio, pin, and alert-aware chat.',
     naturalLanguageStrength: ['my portfolio', 'games I pinned'],

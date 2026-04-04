@@ -1,11 +1,22 @@
 import 'server-only';
 
-import type { Platform, PopularityComparison, ReviewComparison } from '@publisheriq/qdrant';
-
 import { postToQueryApi } from '@/lib/query-api-client';
 
-export const QDRANT_SEARCH_TIMEOUT_MS = 10000;
-export const QDRANT_TIMEOUT_ERROR = 'Similarity search timed out. Please try again.';
+export type SemanticSearchPlatform = 'windows' | 'macos' | 'linux';
+export type SemanticSearchPopularityComparison =
+  | 'any'
+  | 'less_popular'
+  | 'more_popular'
+  | 'similar';
+export type SemanticSearchReviewComparison = 'any' | 'better_only' | 'similar_or_better';
+export type SemanticSearchSteamDeckCategory =
+  | 'playable'
+  | 'unknown'
+  | 'unsupported'
+  | 'verified';
+
+export const SEMANTIC_SEARCH_TIMEOUT_MS = 10000;
+export const SEMANTIC_SEARCH_TIMEOUT_ERROR = 'Similarity search timed out. Please try again.';
 
 export interface FindSimilarArgs {
   entity_type: 'developer' | 'game' | 'publisher';
@@ -19,13 +30,13 @@ export interface FindSimilarArgs {
     max_price_cents?: number;
     max_reviews?: number;
     min_reviews?: number;
-    platforms?: Platform[];
-    popularity_comparison?: PopularityComparison;
+    platforms?: SemanticSearchPlatform[];
+    popularity_comparison?: SemanticSearchPopularityComparison;
     release_year?: { gte?: number; lte?: number };
-    review_comparison?: ReviewComparison;
+    review_comparison?: SemanticSearchReviewComparison;
     review_percentage?: { gte?: number; lte?: number };
     same_franchise_only?: boolean;
-    steam_deck?: ('playable' | 'verified')[];
+    steam_deck?: Array<'playable' | 'verified'>;
     tags?: string[];
     top_genres?: string[];
     top_tags?: string[];
@@ -49,7 +60,7 @@ export interface SimilarEntity {
   rawScore?: number;
   review_percentage?: number | null;
   score: number;
-  steam_deck?: 'playable' | 'unknown' | 'unsupported' | 'verified';
+  steam_deck?: SemanticSearchSteamDeckCategory;
   tags?: string[];
   top_genres?: string[];
   top_tags?: string[];
@@ -69,6 +80,8 @@ export interface FindSimilarResult {
   };
   entityType?: 'developer' | 'publisher';
   error?: string;
+  errorCode?: string | null;
+  httpStatus?: number | null;
   mode?: 'heuristic_portfolio' | 'semantic';
   reference?: {
     id: number;
@@ -90,10 +103,10 @@ export interface SearchByConceptArgs {
     max_price_cents?: number;
     max_reviews?: number;
     min_reviews?: number;
-    platforms?: Platform[];
+    platforms?: SemanticSearchPlatform[];
     release_year?: { gte?: number; lte?: number };
     review_percentage?: { gte?: number; lte?: number };
-    steam_deck?: ('playable' | 'verified')[];
+    steam_deck?: Array<'playable' | 'verified'>;
     tags?: string[];
   };
   limit?: number;
@@ -119,11 +132,11 @@ function normalizeReason(reason: string | null | undefined): string {
   }
 
   if (
-    reason.includes('This operation was aborted') ||
-    reason.includes('The operation was aborted') ||
-    reason.includes('TimeoutError')
+    reason.includes('This operation was aborted')
+    || reason.includes('The operation was aborted')
+    || reason.includes('TimeoutError')
   ) {
-    return QDRANT_TIMEOUT_ERROR;
+    return SEMANTIC_SEARCH_TIMEOUT_ERROR;
   }
 
   return reason;
@@ -133,17 +146,22 @@ async function callSemanticSearch<T extends FindSimilarResult>(
   body: SemanticSearchRequestBody
 ): Promise<T> {
   const response = await postToQueryApi<T>('/v1/contracts/semantic-search', body, {
-    timeoutMs: QDRANT_SEARCH_TIMEOUT_MS,
+    timeoutMs: SEMANTIC_SEARCH_TIMEOUT_MS,
   });
 
   if (!response.ok || !response.data) {
     return {
       error: normalizeReason(response.reason),
+      errorCode: response.errorCode ?? null,
+      httpStatus: response.httpStatus,
       success: false,
     } as T;
   }
 
-  return response.data;
+  return {
+    ...response.data,
+    httpStatus: response.httpStatus,
+  };
 }
 
 export async function findSimilar(args: FindSimilarArgs): Promise<FindSimilarResult> {

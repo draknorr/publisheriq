@@ -758,7 +758,7 @@ export default async function AppDetailPage({
         key: 'similarity',
         label: 'Similarity search index',
         status: 'unknown',
-        source: 'Qdrant via /api/similarity',
+        source: 'Tiger semantic search via /api/similarity',
         detail: 'Resolved client-side (configured vs indexed vs no results)',
       },
     ],

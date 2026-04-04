@@ -41,7 +41,7 @@ interface ResolveEntitiesResponse {
     confidence: number;
     displayName: string;
     entityKind: 'developer' | 'game' | 'publisher';
-    matchQuality: 'exact' | 'prefix' | 'substring';
+    matchQuality: 'exact' | 'prefix' | 'substring' | 'fuzzy';
     platformEntityId: string;
     releaseYear?: number | null;
   }>;

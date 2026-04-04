@@ -58,17 +58,17 @@ The chat interface requires an LLM provider. Choose one:
 
 ### 4. OpenAI API Key (for Embeddings)
 
-Required for vector similarity search:
+Required for the current semantic retrieval pipeline:
 1. Create account at [platform.openai.com](https://platform.openai.com)
 2. Generate an API key
 3. Used for text-embedding-3-small model (1536 dimensions)
 
-### 5. Qdrant Cloud (for Similarity Search)
+### 5. Tiger / Timescale (for Query API Data Plane)
 
-Vector database for game/publisher/developer similarity:
-1. Create account at [cloud.qdrant.io](https://cloud.qdrant.io)
-2. Create a cluster
-3. Get your cluster URL and API key
+Tiger backs the current query-api contracts used by `/chat` and `/api/similarity`:
+1. Create or access a Tiger / Timescale service
+2. Get the Postgres connection string for `TIGER_PRIMARY_URL`
+3. Allow your local/dev runtime or deployed `query-api` to connect
 
 ### 6. Cube.js Cloud or Fly.io (for Analytics)
 

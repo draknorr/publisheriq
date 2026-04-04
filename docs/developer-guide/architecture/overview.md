@@ -15,7 +15,7 @@ PublisherIQ is a Steam analytics platform built around three product surfaces:
 | Frontend | Next.js 15 + React 19 | Signed-in dashboard and public entry surfaces |
 | Database | Supabase Postgres | Warehouse tables, queues, auth, RPCs, and cached admin stats |
 | Semantic Layer | Cube.js | Chat analytics, screeners, and structured discovery |
-| Vector Search | Qdrant Cloud | Similarity and concept search |
+| Tiger Query API | `apps/query-api` + `packages/data-plane` | Tiger-backed chat contracts, semantic retrieval, and continuation |
 | TS Workers | `@publisheriq/ingestion` | Scheduled syncs, queue workers, and change-intel maintenance |
 | Python Service | `services/pics-service` | PICS ingestion plus history capture and first-pass bootstrap |
 
@@ -41,7 +41,7 @@ TypeScript workers + PICS service
         ↓
 Supabase (tables, queues, projections, RPCs, auth)
         ↓
-Cube.js + Qdrant
+Cube.js + Tiger query-api
         ↓
 Next.js dashboard
 ```
@@ -86,7 +86,7 @@ Supabase stores:
 - change-intel projections and change-feed read surfaces
 - cached admin stats for catalog control and CCU quality
 
-Cube.js and Qdrant support the AI chat and search/discovery surfaces.
+Cube.js and the Tiger query-api support the AI chat and search/discovery surfaces.
 
 ## Auth Model
 
@@ -114,9 +114,10 @@ The `/changes` page reads from SQL functions and internal APIs on top of those s
 ```text
 publisheriq/
 ├── apps/admin/
+├── apps/query-api/
+├── packages/data-plane/
 ├── packages/database/
 ├── packages/ingestion/
-├── packages/qdrant/
 ├── packages/shared/
 ├── packages/cube/
 ├── services/pics-service/

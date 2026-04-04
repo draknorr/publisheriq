@@ -18,7 +18,7 @@ type ContinuationIntent =
   | 'continue_with_constraint_delta'
   | 'not_continuation';
 
-type ContinuableContractName = 'searchCatalog' | 'semanticSearch';
+type ContinuableContractName = 'discoverMomentum' | 'searchCatalog' | 'semanticSearch';
 
 interface ParsedContinuationDelta {
   maxPriceCents?: number;
@@ -58,11 +58,18 @@ interface TigerSemanticSearchResult {
   }>;
 }
 
+interface TigerDiscoverMomentumResult {
+  items?: Array<{
+    appid: number;
+    name?: string;
+  }>;
+}
+
 export interface TigerContractContinuationResult {
   continuationToken: string | null;
   effectiveArgs: Record<string, unknown>;
   exhausted: boolean;
-  result: TigerSearchCatalogResult | TigerSemanticSearchResult;
+  result: TigerDiscoverMomentumResult | TigerSearchCatalogResult | TigerSemanticSearchResult;
   sourceContract: ContinuableContractName;
 }
 
@@ -269,7 +276,11 @@ function parseContinuationCue(prompt: string, hasDelta: boolean): ContinuationCu
     }
   }
 
-  if (/^(?:more|what else|anything else|more of those|keep going|continue|next|next page)$/.test(exact)) {
+  if (
+    /^(?:more|show more|show me more|give me more|what else|anything else|more of those|show me the rest|the rest|more results|keep going|continue|next|next page)$/.test(
+      exact
+    )
+  ) {
     return {
       intent: hasDelta ? 'continue_with_constraint_delta' : 'continue',
       requestedCount: null,
@@ -291,11 +302,9 @@ function hasUnsupportedModifier(prompt: string): boolean {
     return false;
   }
 
-  if (/\bof those\b/.test(prompt)) {
-    return true;
-  }
-
-  return !/^(?:more|what else|anything else|keep going|continue|next|next page|more of those|same|same thing|same query|same list|same results|show me|give me|list|what are|what about|another|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\s)+$/.test(prompt);
+  return !/^(?:more|show more|show me more|give me more|show me the rest|the rest|more results|what else|anything else|keep going|continue|next|next page|more of those|same|same thing|same query|same list|same results|show me|give me|list|what are|what about|another|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\s)+$/.test(
+    prompt
+  );
 }
 
 function uniqueIds(ids: Array<number | string>): Array<number | string> {
@@ -303,7 +312,9 @@ function uniqueIds(ids: Array<number | string>): Array<number | string> {
 }
 
 function toContinuableContractName(value: string | undefined): ContinuableContractName | null {
-  return value === 'searchCatalog' || value === 'semanticSearch' ? value : null;
+  return value === 'discoverMomentum' || value === 'searchCatalog' || value === 'semanticSearch'
+    ? value
+    : null;
 }
 
 function toContinuableToolName(value: string): ContinuableToolName | null {
@@ -326,6 +337,7 @@ function sanitizeContractSourceArgs(args: Record<string, unknown>): Record<strin
   const nextArgs = cloneArgs(args);
   delete nextArgs.limit;
   delete nextArgs.continuationToken;
+  delete nextArgs.excludeAppIds;
   return nextArgs;
 }
 
@@ -527,12 +539,17 @@ function buildTigerResultSet(params: {
   sourceArgs: Record<string, unknown>;
   sourceContract: ContinuableContractName;
   sourceTool?: string;
-  result: TigerSearchCatalogResult | TigerSemanticSearchResult;
+  result: TigerDiscoverMomentumResult | TigerSearchCatalogResult | TigerSemanticSearchResult;
   timestamp?: string;
 }): SessionChatResultSet | null {
   const { family, result, sourceArgs, sourceContract, sourceTool = sourceContract, timestamp = new Date().toISOString() } = params;
+  const requestedLimit = getNumber(sourceArgs.limit);
   const shownIds =
-    sourceContract === 'searchCatalog'
+    sourceContract === 'discoverMomentum'
+      ? ((result as TigerDiscoverMomentumResult).items ?? [])
+          .map((item) => item.appid)
+          .filter((appid): appid is number => Number.isFinite(appid))
+      : sourceContract === 'searchCatalog'
       ? ((result as TigerSearchCatalogResult).items ?? [])
           .map((item) => item.appid)
           .filter((appid): appid is number => Number.isFinite(appid))
@@ -558,7 +575,11 @@ function buildTigerResultSet(params: {
     lastPageSize: shownIds.length,
     totalFound: null,
     continuable:
-      sourceContract === 'searchCatalog'
+      sourceContract === 'discoverMomentum'
+        ? requestedLimit == null
+          ? shownIds.length > 0
+          : shownIds.length >= Math.max(1, requestedLimit)
+        : sourceContract === 'searchCatalog'
         ? (result as TigerSearchCatalogResult).continuationToken != null
         : ((result as TigerSemanticSearchResult).continuation_token ?? null) != null,
     updatedAt: timestamp,
@@ -569,7 +590,8 @@ export function buildTigerPrimaryResultSet(params: {
   family: string;
   sourceArgs: Record<string, unknown>;
   sourceContract: ContinuableContractName;
-  result: TigerSearchCatalogResult | TigerSemanticSearchResult;
+  sourceTool?: string;
+  result: TigerDiscoverMomentumResult | TigerSearchCatalogResult | TigerSemanticSearchResult;
   timestamp?: string;
 }): SessionChatResultSet | null {
   return buildTigerResultSet(params);
@@ -618,7 +640,8 @@ export function resolveResultSetContinuation(
     }
 
     if (
-      resultSet.sourceContract === 'semanticSearch' &&
+      (resultSet.sourceContract === 'semanticSearch' ||
+        resultSet.sourceContract === 'discoverMomentum') &&
       delta.days != null
     ) {
       return null;
@@ -630,7 +653,12 @@ export function resolveResultSetContinuation(
       requestedCount,
       sourceContract: resultSet.sourceContract,
       sourceTool: resultSet.sourceTool,
-      sourceArgs: applyContractDeltaToArgs(resultSet.sourceContract, resultSet.sourceArgs, delta),
+      sourceArgs: applyContractDeltaToArgs(
+        resultSet.sourceContract,
+        resultSet.sourceArgs,
+        delta,
+        resultSet
+      ),
       excludedCount: resultSet.shownIds.length,
       resultSet,
     };
@@ -660,9 +688,36 @@ export function resolveResultSetContinuation(
 function applyContractDeltaToArgs(
   sourceContract: ContinuableContractName,
   sourceArgs: Record<string, unknown>,
-  delta: ParsedContinuationDelta
+  delta: ParsedContinuationDelta,
+  resultSet: SessionChatResultSet
 ): Record<string, unknown> {
   const nextArgs = sanitizeContractSourceArgs(sourceArgs);
+
+  if (sourceContract === 'discoverMomentum') {
+    const filters = isRecord(nextArgs.filters) ? { ...nextArgs.filters } : {};
+
+    if (delta.maxPriceCents != null) {
+      const currentMaxPrice = getNumber(filters.maxPriceCents);
+      filters.maxPriceCents =
+        currentMaxPrice == null
+          ? delta.maxPriceCents
+          : Math.min(currentMaxPrice, delta.maxPriceCents);
+    }
+
+    if (delta.steamDeck?.length) {
+      filters.steamDeck = [...new Set(delta.steamDeck)];
+    }
+
+    if (Object.keys(filters).length > 0) {
+      nextArgs.filters = filters;
+    } else {
+      delete nextArgs.filters;
+    }
+    nextArgs.excludeAppIds = resultSet.shownIds.filter(
+      (value): value is number => typeof value === 'number'
+    );
+    return nextArgs;
+  }
 
   if (sourceContract !== 'semanticSearch') {
     return nextArgs;
@@ -768,7 +823,7 @@ export function buildTigerContinuationResultSet(params: {
       family: resolution.resultSet.family,
       continuationToken: response.continuationToken,
       sourceContract: response.sourceContract,
-      sourceTool: response.sourceContract,
+      sourceTool: resolution.resultSet.sourceTool,
       itemKind: 'games',
       sourceArgs: sanitizeContractSourceArgs(response.effectiveArgs),
       shownIds: nextShownIds,

@@ -1,26 +1,108 @@
-import type {
-  SemanticSearchCandidate,
-  SemanticSearchDebugInfo,
-  SemanticSearchEngineResult,
-  SemanticSearchFilters,
-  SemanticSearchReference,
-  SemanticSearchResultItem,
-} from '@publisheriq/semantic-search';
-
-export type {
-  SemanticSearchCandidate,
-  SemanticSearchDebugInfo,
-  SemanticSearchFilters,
-  SemanticSearchReference,
-  SemanticSearchResultItem,
-};
-
 export type EntityKind = 'game' | 'publisher' | 'developer';
 export type EntityPlatform = 'steam' | 'publisheriq';
 export type DataPlaneSource = 'supabase-postgres' | 'tiger';
-export type MatchQuality = 'exact' | 'prefix' | 'substring';
+export type MatchQuality = 'exact' | 'prefix' | 'substring' | 'fuzzy';
 export type ContractStatus = 'ready' | 'planned';
 export type ContractRuntimeReadiness = 'ready' | 'blocked';
+export type SemanticSearchMode = 'similarity' | 'concept';
+export type SemanticSearchEntityKind = 'game' | 'publisher' | 'developer';
+export type SemanticSearchPlatform = 'windows' | 'macos' | 'linux';
+export type SemanticSearchSteamDeckCategory =
+  | 'unknown'
+  | 'unsupported'
+  | 'playable'
+  | 'verified';
+export type SemanticSearchPopularityComparison =
+  | 'any'
+  | 'less_popular'
+  | 'similar'
+  | 'more_popular';
+export type SemanticSearchReviewComparison =
+  | 'any'
+  | 'similar_or_better'
+  | 'better_only';
+
+export interface SemanticSearchRange {
+  gte?: number;
+  lte?: number;
+}
+
+export interface SemanticSearchFilters {
+  avg_review_percentage?: SemanticSearchRange;
+  game_count?: SemanticSearchRange;
+  genres?: string[];
+  is_free?: boolean;
+  is_indie?: boolean;
+  is_major?: boolean;
+  max_price_cents?: number;
+  max_reviews?: number;
+  min_reviews?: number;
+  platforms?: SemanticSearchPlatform[];
+  popularity_comparison?: SemanticSearchPopularityComparison;
+  release_year?: SemanticSearchRange;
+  review_comparison?: SemanticSearchReviewComparison;
+  review_percentage?: SemanticSearchRange;
+  same_franchise_only?: boolean;
+  steam_deck?: Array<'verified' | 'playable'>;
+  tags?: string[];
+  top_genres?: string[];
+  top_tags?: string[];
+}
+
+export interface SemanticSearchReference {
+  id: number;
+  name: string;
+  type: string;
+}
+
+export interface SemanticSearchCandidate {
+  id: number;
+  name: string;
+}
+
+export interface SemanticSearchResultItem {
+  avg_review_percentage?: number | null;
+  game_count?: number;
+  genres?: string[];
+  id: number;
+  is_free?: boolean;
+  is_indie?: boolean;
+  is_major?: boolean;
+  matchReasons?: string[];
+  name: string;
+  price_cents?: number | null;
+  rawScore?: number;
+  review_percentage?: number | null;
+  score: number;
+  steam_deck?: SemanticSearchSteamDeckCategory;
+  tags?: string[];
+  top_genres?: string[];
+  top_tags?: string[];
+  total_reviews?: number | null;
+  type?: string;
+}
+
+export interface SemanticSearchDebugInfo {
+  searchParams?: Record<string, unknown>;
+  vectorFilter?: Record<string, unknown>;
+}
+
+export interface SemanticSearchEngineResult {
+  candidates?: SemanticSearchCandidate[];
+  continuation_token?: string | null;
+  debug?: SemanticSearchDebugInfo;
+  entityType?: 'publisher' | 'developer';
+  error?: string;
+  mode?: 'heuristic_portfolio' | 'semantic';
+  query_description?: string;
+  reference?: SemanticSearchReference;
+  results?: SemanticSearchResultItem[];
+  sufficient_to_answer?: boolean;
+  sufficiency_reason?: string;
+  success: boolean;
+  total_found?: number;
+}
+
 export type RankMetric =
   | 'total_reviews'
   | 'owners_midpoint'
@@ -85,7 +167,12 @@ export type DataPlaneRelationKey =
   | 'publishers'
   | 'app_dlc'
   | 'app_developers'
+  | 'app_steam_deck'
   | 'app_publishers'
+  | 'user_pins'
+  | 'user_alerts'
+  | 'user_alert_preferences'
+  | 'user_pin_alert_settings'
   | 'latest_daily_metrics'
   | 'metrics_daily_metrics'
   | 'core_entities'
@@ -439,10 +526,13 @@ export interface ExplainChangesLinkedNewsItem {
 }
 
 export interface ExplainChangesMoment {
+  burstStrength?: 'high' | 'low' | 'medium';
   changeTypes: string[];
   eventCount: number;
   events: ExplainChangesEvent[];
   linkedNews: ExplainChangesLinkedNewsItem[];
+  linkedNewsCount?: number;
+  significanceReasons?: string[];
   sources: string[];
   windowEnd: string;
   windowStart: string;
@@ -485,6 +575,9 @@ export interface ExplainChangesResponse {
     eventCount: number;
     momentCount: number;
     newsCount: number;
+    strongestMomentReasons?: string[];
+    strongestMomentStart?: string | null;
+    strongestMomentStrength?: 'high' | 'low' | 'medium' | null;
   };
   timeWindow: {
     endTime: string;
@@ -514,9 +607,15 @@ export interface SearchDocumentItem {
   feedScope: string;
   firstSeenAt: string;
   gid: string;
-  matchReason: 'matched_title_phrase' | 'matched_topic_terms' | 'recent_entity_news';
+  matchReason:
+    | 'matched_app_name'
+    | 'matched_exact_title'
+    | 'matched_title_phrase'
+    | 'matched_topic_terms'
+    | 'recent_entity_news';
   publishedAt: string | null;
   rank: number;
+  rankingReason?: string | null;
   sortTime: string;
   title: string | null;
   url: string;
@@ -565,6 +664,7 @@ export interface SearchChangeActivityItem {
   activityKind: 'change' | 'announcement';
   appType: string | null;
   appid: number;
+  burstStrength?: 'high' | 'low' | 'medium';
   externalUrl: string | null;
   facts: string[];
   hasBeforeAfter: boolean;
@@ -573,10 +673,13 @@ export interface SearchChangeActivityItem {
   isReleased: boolean | null;
   name: string;
   occurredAt: string;
+  relevanceReason?: string | null;
+  relevanceScore?: number | null;
   relatedAnnouncementCount: number;
   releaseDate: string | null;
   signalFamilies: ChangeActivitySignalFamily[];
   storyKind: ChangeActivityStoryKind;
+  strongestSignal?: string | null;
   summary: string;
 }
 
@@ -727,9 +830,11 @@ export interface DiscoverMomentumResponse {
   provenance: QueryProvenance;
   rankingDefinition: string;
   rankingLabel: string;
+  sortBy: DiscoverMomentumRequest['sortBy'];
   sufficientToAnswer: boolean;
   timeframe: '7d' | '30d' | 'current';
   timeframeLabel: string;
+  trendType: DiscoverMomentumRequest['trendType'];
 }
 
 export interface SemanticSearchRequest {
@@ -790,6 +895,119 @@ export interface SemanticSearchResponse extends SemanticSearchEngineResult {
   provenance: QueryProvenance;
 }
 
+export type UserAlertSeverity = 'low' | 'medium' | 'high';
+export type UserAlertType =
+  | 'ccu_spike'
+  | 'ccu_drop'
+  | 'trend_reversal'
+  | 'review_surge'
+  | 'sentiment_shift'
+  | 'price_change'
+  | 'new_release'
+  | 'milestone';
+
+export interface GetUserContextRequest {
+  includeAlertPreferences?: boolean;
+  includeAlerts?: boolean;
+  includePins?: boolean;
+  limitAlerts?: number;
+  userId: string;
+}
+
+export interface UserContextAlertPreferences {
+  alertCcuDrop: boolean;
+  alertCcuSpike: boolean;
+  alertMilestone: boolean;
+  alertNewRelease: boolean;
+  alertPriceChange: boolean;
+  alertReviewSurge: boolean;
+  alertSentimentShift: boolean;
+  alertTrendReversal: boolean;
+  alertsEnabled: boolean;
+  ccuSensitivity: number;
+  emailDigestEnabled: boolean;
+  emailDigestFrequency: string | null;
+  reviewSensitivity: number;
+  sentimentSensitivity: number;
+  source: 'default' | 'stored';
+}
+
+export interface UserContextPinAlertSettings {
+  alertCcuDrop: boolean | null;
+  alertCcuSpike: boolean | null;
+  alertMilestone: boolean | null;
+  alertNewRelease: boolean | null;
+  alertPriceChange: boolean | null;
+  alertReviewSurge: boolean | null;
+  alertSentimentShift: boolean | null;
+  alertTrendReversal: boolean | null;
+  alertsEnabled: boolean;
+  ccuSensitivity: number | null;
+  reviewSensitivity: number | null;
+  sentimentSensitivity: number | null;
+  useCustomSettings: boolean;
+}
+
+export interface UserContextPin {
+  alertSettings: UserContextPinAlertSettings | null;
+  displayName: string;
+  entityKind: EntityKind;
+  entityUid: string;
+  metrics: {
+    ccuPeak: number | null;
+    gameCount: number | null;
+    ownersMidpoint: number | null;
+    reviewScore: number | null;
+    totalReviews: number | null;
+  };
+  pinId: string;
+  pinOrder: number;
+  pinnedAt: string;
+  platform: EntityPlatform;
+  platformEntityId: string;
+  summary: {
+    appType?: string | null;
+    isFree?: boolean | null;
+    platforms?: string[];
+    releaseYear?: number | null;
+  };
+}
+
+export interface UserContextAlert {
+  alertId: string;
+  alertType: UserAlertType;
+  changePercent: number | null;
+  createdAt: string;
+  currentValue: number | null;
+  description: string;
+  entity: {
+    displayName: string;
+    entityKind: EntityKind;
+    entityUid: string;
+    platform: EntityPlatform;
+    platformEntityId: string;
+  };
+  isRead: boolean;
+  metricName: string | null;
+  pinId: string;
+  previousValue: number | null;
+  readAt: string | null;
+  severity: UserAlertSeverity;
+  title: string;
+}
+
+export interface GetUserContextResponse {
+  alertPreferences: UserContextAlertPreferences | null;
+  alerts: UserContextAlert[];
+  pins: UserContextPin[];
+  provenance: QueryProvenance;
+  sufficientToAnswer: boolean;
+  totalAlerts: number;
+  totalPins: number;
+  unreadAlertCount: number;
+  userId: string;
+}
+
 export interface ContinueResultSetRequest {
   continuationToken?: string | null;
   delta?: {
@@ -797,16 +1015,16 @@ export interface ContinueResultSetRequest {
     steamDeck?: Array<'verified' | 'playable'>;
   };
   requestedCount?: number;
-  sourceArgs: SearchCatalogRequest | SemanticSearchRequest;
-  sourceContract: 'searchCatalog' | 'semanticSearch';
+  sourceArgs: DiscoverMomentumRequest | SearchCatalogRequest | SemanticSearchRequest;
+  sourceContract: 'discoverMomentum' | 'searchCatalog' | 'semanticSearch';
 }
 
 export interface ContinueResultSetResponse {
   continuationToken: string | null;
-  effectiveArgs: SearchCatalogRequest | SemanticSearchRequest;
+  effectiveArgs: DiscoverMomentumRequest | SearchCatalogRequest | SemanticSearchRequest;
   exhausted: boolean;
   provenance: QueryProvenance;
-  result: SearchCatalogResponse | SemanticSearchResponse;
+  result: DiscoverMomentumResponse | SearchCatalogResponse | SemanticSearchResponse;
   sourceContract: ContinueResultSetRequest['sourceContract'];
   sufficientToAnswer: boolean;
 }

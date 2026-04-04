@@ -2,7 +2,7 @@
 
 > **Steam Data Analytics Platform with AI Chat Interface**
 
-PublisherIQ is an enterprise-grade analytics platform for Steam game data. It consolidates real-time data from seven sources into a single dashboard with advanced filtering, AI-powered natural language querying, change-intelligence monitoring, and personalized alerting. Built on Next.js 15, Supabase, Cube.js, and Qdrant, the platform tracks 200,000+ games, 15M+ daily metric records, and 5M+ concurrent user snapshots to deliver deep insight into game performance, publisher portfolios, and market trends.
+PublisherIQ is an enterprise-grade analytics platform for Steam game data. It consolidates real-time data from seven sources into a single dashboard with advanced filtering, AI-powered natural language querying, change-intelligence monitoring, and personalized alerting. Built on Next.js 15, Supabase, Cube.js, and a Tiger-backed query-api, the platform tracks 200,000+ games, 15M+ daily metric records, and 5M+ concurrent user snapshots to deliver deep insight into game performance, publisher portfolios, and market trends.
 
 ---
 
@@ -53,7 +53,8 @@ PublisherIQ is a data analytics platform purpose-built for the Steam gaming ecos
 | Frontend | Next.js 15, React 19, TailwindCSS |
 | Database | Supabase (PostgreSQL) with materialized views and RPC read surfaces |
 | Semantic Layer | Cube.js (27 cubes across 9 model files) |
-| Vector Search | Qdrant Cloud (5 collections, OpenAI text-embedding-3-small) |
+| Tiger Query API | Tiger-backed contracts for chat, semantic retrieval, and continuation |
+| Semantic Retrieval | Tiger-backed retrieval tables with OpenAI embeddings |
 | LLM | GPT-4o-mini (default), streaming via SSE |
 | Ingestion | TypeScript workers, repair scripts, and change-intel runtime |
 | PICS Service | Python microservice (SteamKit2; bulk, first-pass, and change-monitor modes) |
@@ -395,7 +396,7 @@ The AI chat interface (`/chat`) enables natural language querying of all platfor
 
 1. **Natural Language Understanding**: User query interpreted by LLM
 2. **Tool Selection**: LLM selects appropriate data tools (up to 5 iterations)
-3. **Query Execution**: Tools query Supabase, Cube.js, or Qdrant
+3. **Query Execution**: The app routes requests into Tiger query contracts, Cube.js, and curated SQL read surfaces
 4. **Entity Linking**: Results enriched with clickable links to game/company pages
 5. **Streaming Response**: Results streamed via Server-Sent Events (SSE)
 
@@ -884,8 +885,8 @@ PICS Service (Python) ──── SteamKit2 ───────────�
                                                   │  27 cubes    │     (analytics queries)
                                                   └──────────────┘
                                                   ┌──────────────┐
-Embedding Worker      ──── OpenAI API ──────────▶│  Qdrant      │──── Vector Search
-                                                  │  5 collections│     (similarity, concept)
+Query API             ──────────────────────────▶│  Tiger Data  │──── Contract-backed retrieval
+                                                  │  + vectors    │     (similarity, concept, chat)
                                                   └──────────────┘
 ```
 
@@ -898,8 +899,8 @@ Embedding Worker      ──── OpenAI API ──────────▶�
 | Styling | TailwindCSS | Utility-first CSS |
 | Database | Supabase (PostgreSQL) | Primary data store with RLS |
 | Semantic Layer | Cube.js | Analytics query abstraction (27 cubes) |
-| Vector Database | Qdrant Cloud | Similarity search (5 collections) |
-| Embeddings | OpenAI text-embedding-3-small | 512-dimension vectors |
+| Query API | Railway-hosted `query-api` | Tiger-backed chat contracts and semantic retrieval |
+| Embeddings | OpenAI text-embedding-3-small | Stored in Tiger-backed retrieval tables |
 | LLM | GPT-4o-mini (default) | Chat query understanding |
 | PICS Service | Python + SteamKit2 | Steam product info cache |
 | Monorepo | pnpm workspaces | Package management |
@@ -982,27 +983,15 @@ Embedding Worker      ──── OpenAI API ──────────▶�
 - 5 measures (count, avgPrice, avgScore, totalReviews, totalOwners)
 - 26 segments (indie, freeToPlay, earlyAccess, highlyRated, wellReviewed, trending, steamDeckVerified, etc.)
 
-### 5.5 Vector Search (Qdrant)
+### 5.5 Tiger Semantic Retrieval
 
-| Collection | Contents | Vectors |
-|------------|----------|---------|
-| `games` | Game descriptions, tags, metadata, momentum data | ~200K |
-| `publishers` | Publisher portfolio descriptions | ~50K |
-| `developers` | Developer portfolio descriptions | ~80K |
-| `concepts` | Concept embeddings for semantic search | Derived |
-| `trending` | Trend-enhanced game embeddings | Derived |
+Semantic similarity and concept search now flow through the Tiger query-api rather than a separate vector database.
 
-**Model**: OpenAI `text-embedding-3-small` (512 dimensions, reduced from 1536 for 67% storage savings)
-
-**Optimizations**:
-- Int8 scalar quantization (~75% savings vs float32)
-- On-disk payloads (~50% RAM savings)
-- Combined total: ~90% storage reduction
-
-**Capabilities**:
-- Similarity search with filters (price, platforms, Steam Deck, genres, tags, owner range)
-- Concept search via natural language descriptions
-- Hash-based change detection for incremental sync
+**Current shape**:
+- embeddings are stored in Tiger-backed retrieval tables
+- semantic, concept, and continuation queries go through `semanticSearch`
+- filters such as price, platforms, Steam Deck, genres, and tags are enforced inside the Tiger data plane
+- the app keeps the LLM in the loop for phrasing, but Tiger owns the facts and candidate retrieval
 
 ### 5.6 Deployment
 
@@ -1012,7 +1001,7 @@ Embedding Worker      ──── OpenAI API ──────────▶�
 | PICS Service | Railway | Python microservice for Steam product data |
 | Cube.js | Fly.io | Semantic analytics layer |
 | Database | Supabase | PostgreSQL with RLS + Auth |
-| Vector DB | Qdrant Cloud | Vector similarity search |
+| Query API + Tiger | Railway + Tiger | Chat contracts and semantic retrieval |
 | CI/CD | GitHub Actions | 15+ scheduled workflows |
 
 ---

@@ -141,8 +141,251 @@ test('chat route can return a Tiger primary deterministic answer with continuabl
   assertExhausted();
 });
 
+test('chat route returns Tiger primary momentum answers with server follow-up suggestions', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'What games are trending this week?' }],
+    },
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        response: {
+          contractResult: null,
+          followUpSuggestions: [
+            {
+              category: 'game',
+              label: 'What changed for Breakout Hit?',
+              query: 'What changed for Breakout Hit this week?',
+            },
+          ],
+          info: {
+            attempts: [{ contractName: 'discoverMomentum', status: 'success', timingMs: 6 }],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'momentum_discovery',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'primary_success',
+          },
+          renderedText: 'Breakout Hit currently leads this set by Momentum Score.',
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const textEvents = events.filter(
+    (event): event is TextDeltaEvent => event.type === 'text_delta'
+  );
+  const endEvent =
+    events.find((event): event is MessageEndEvent => event.type === 'message_end') ?? null;
+
+  assert.equal(textEvents.length, 1);
+  assert.equal(textEvents[0]?.delta, 'Breakout Hit currently leads this set by Momentum Score.');
+  assert.ok(endEvent);
+  assert.equal(endEvent.tigerPrimary?.matchedIntent, 'momentum_discovery');
+  assert.equal(endEvent.followUpSuggestions?.[0]?.query, 'What changed for Breakout Hit this week?');
+  assertExhausted();
+});
+
+test('chat route stores continuable Tiger momentum result sets in session context', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'What games have the most players right now?' }],
+    },
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        response: {
+          contractResult: {
+            contractName: 'discoverMomentum',
+            request: {
+              limit: 3,
+              sortBy: 'ccu_peak',
+              timeframe: 'current',
+            },
+            response: {
+              filtersApplied: ['sort_by: ccu_peak', 'timeframe: current'],
+              items: [
+                { appid: 730, name: 'Counter-Strike 2' },
+                { appid: 570, name: 'Dota 2' },
+                { appid: 320, name: 'Slay the Spire 2' },
+              ],
+              rankingDefinition: 'Peak CCU uses the latest 24-hour concurrent-player snapshot.',
+              rankingLabel: 'Peak CCU',
+              sufficientToAnswer: true,
+              timeframe: 'current',
+              timeframeLabel: 'Current snapshot',
+            },
+          },
+          info: {
+            attempts: [{ contractName: 'discoverMomentum', status: 'success', timingMs: 6 }],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'momentum_discovery',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'primary_success',
+          },
+          renderedText: 'Counter-Strike 2 currently leads this set by Peak CCU.',
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const endEvent = getEndEvent(events);
+
+  assert.ok(endEvent);
+  assert.equal(endEvent.sessionContext?.resultSet?.sourceContract, 'discoverMomentum');
+  assert.equal(endEvent.sessionContext?.resultSet?.sourceTool, 'screen_games');
+  assert.deepEqual(endEvent.sessionContext?.resultSet?.shownIds, [730, 570, 320]);
+  assertExhausted();
+});
+
+test('chat route continues Tiger momentum result sets for natural follow-ups like "show me more"', async () => {
+  const priorContext: SessionChatContext = {
+    version: 1,
+    entities: [],
+    constraints: [],
+    lastAnswer: null,
+    resultSet: {
+      continuationToken: null,
+      continuable: true,
+      family: 'momentum',
+      itemKind: 'games',
+      lastPageSize: 3,
+      shownIds: [730, 570, 320],
+      sourceArgs: {
+        sortBy: 'ccu_peak',
+        timeframe: 'current',
+      },
+      sourceContract: 'discoverMomentum',
+      sourceTool: 'screen_games',
+      totalFound: null,
+      updatedAt: '2026-04-01T00:00:00.000Z',
+    },
+    updatedAt: '2026-04-01T00:00:00.000Z',
+  };
+
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'show me more' }],
+      sessionContext: priorContext,
+    },
+  });
+
+  const { assertExhausted, deps, trace } = createScriptedChatDeps({
+    queryApiCalls: [
+      {
+        assertBody: (body) => {
+          assert.deepEqual(body, {
+            continuationToken: null,
+            requestedCount: 3,
+            sourceArgs: {
+              excludeAppIds: [730, 570, 320],
+              sortBy: 'ccu_peak',
+              timeframe: 'current',
+            },
+            sourceContract: 'discoverMomentum',
+          });
+        },
+        expectedPath: '/v1/contracts/continue-result-set',
+        response: {
+          data: {
+            continuationToken: null,
+            effectiveArgs: {
+              excludeAppIds: [730, 570, 320],
+              limit: 3,
+              sortBy: 'ccu_peak',
+              timeframe: 'current',
+            },
+            exhausted: false,
+            provenance: {
+              capturedAt: '2026-04-01T00:00:00.000Z',
+              source: 'tiger',
+              tables: ['legacy.apps', 'legacy.latest_daily_metrics'],
+            },
+            result: {
+              filtersApplied: ['sort_by: ccu_peak', 'timeframe: current'],
+              items: [
+                {
+                  appid: 440,
+                  ccuPeak: 88000,
+                  name: 'Team Fortress 2',
+                  supportLevel: 'medium',
+                  supportReasons: ['Legacy player demand remains durable.'],
+                  totalReviews: 1200000,
+                },
+                {
+                  appid: 1172470,
+                  ccuPeak: 76000,
+                  name: 'Apex Legends',
+                  supportLevel: 'medium',
+                  supportReasons: ['The active-player baseline is still strong.'],
+                  totalReviews: 900000,
+                },
+                {
+                  appid: 271590,
+                  ccuPeak: 69000,
+                  name: 'Grand Theft Auto V',
+                  supportLevel: 'medium',
+                  supportReasons: ['Peak concurrency remains high.'],
+                  totalReviews: 1800000,
+                },
+              ],
+              rankingDefinition: 'Peak CCU uses the latest 24-hour concurrent-player snapshot.',
+              rankingLabel: 'Peak CCU',
+              sufficientToAnswer: true,
+              timeframe: 'current',
+              timeframeLabel: 'Current snapshot',
+            },
+            sourceContract: 'discoverMomentum',
+            sufficientToAnswer: true,
+          },
+          httpStatus: 200,
+          ok: true,
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const textEvents = getTextEvents(events);
+  const endEvent = getEndEvent(events);
+
+  assert.deepEqual(getEventTypes(events), ['tool_start', 'tool_result', 'text_delta', 'message_end']);
+  assert.equal(textEvents.length, 1);
+  assert.ok(textEvents[0]?.delta.includes('Peak CCU'));
+  assert.ok(endEvent);
+  assert.equal(endEvent.sessionContext?.resultSet?.sourceContract, 'discoverMomentum');
+  assert.deepEqual(endEvent.sessionContext?.resultSet?.shownIds, [730, 570, 320, 440, 1172470, 271590]);
+  assert.equal(trace.queryApiCalls.length, 1);
+  assertExhausted();
+});
+
 test('chat route includes execution trace metadata for eval requests', async (t) => {
   setScopedEnv(t, 'CHAT_EVAL_SECRET', 'test-secret');
+  setScopedEnv(t, 'CHAT_TIGER_LEGACY_FALLBACK_ENABLED', 'true');
 
   const request = createJsonNextRequest({
     body: {
@@ -290,6 +533,56 @@ test('chat route includes execution trace metadata for eval requests', async (t)
   assertExhausted();
 });
 
+test('chat route keeps Tiger-owned fallback answers off the legacy tool loop when Tiger primary is enabled', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'how many players do fromsoftware games have?' }],
+    },
+  });
+
+  const { assertExhausted, deps, trace } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        response: {
+          contractResult: null,
+          info: {
+            attempts: [
+              {
+                contractName: 'getEntityOverview',
+                reason: 'The Tiger primary entity overview path was skipped because the prompt did not resolve to a stable entity.',
+                status: 'skipped',
+              },
+            ],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'entity_overview',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'fallback_to_legacy',
+          },
+          renderedText: null,
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const endEvent = getEndEvent(events);
+
+  assert.deepEqual(getEventTypes(events), ['text_delta', 'message_end']);
+  assert.ok(endEvent);
+  assert.equal(trace.providerCalls.length, 0);
+  assert.equal(endEvent.tigerPrimary?.route, 'primary_success');
+  assert.equal(endEvent.tigerPrimary?.matchedIntent, 'entity_overview');
+  assert.match(getTextEvents(events)[0]?.delta ?? '', /couldn't resolve a single stable game or company/i);
+  assertExhausted();
+});
+
 test('chat route includes execution trace metadata for local audit-trace requests without eval secret', async () => {
   const request = createJsonNextRequest({
     body: {
@@ -420,7 +713,16 @@ test('chat route uses Tiger continuation contracts for semantic follow-ups', asy
             provenance: {
               capturedAt: '2026-04-01T00:00:00.000Z',
               source: 'tiger',
-              tables: ['qdrant:publisheriq_games'],
+              tables: [
+                'legacy.apps',
+                'legacy.latest_daily_metrics',
+                'legacy.app_publishers',
+                'legacy.app_developers',
+                'legacy.app_genres',
+                'legacy.steam_genres',
+                'legacy.app_steam_tags',
+                'legacy.steam_tags',
+              ],
             },
             result: {
               continuation_token: null,
@@ -690,8 +992,77 @@ for (const testCase of TIGER_PRIMARY_SUCCESS_CASES) {
   });
 }
 
+test('chat route preserves Tiger primary selection state for deterministic clarification turns', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'compare FromSoftware to Rockstar Games' }],
+    },
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        response: {
+          contractResult: null,
+          info: {
+            attempts: [],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'entity_compare',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'primary_success',
+          },
+          renderedText: 'I found multiple plausible matches for this Tiger request.',
+          sessionState: {
+            lastAnswer: {
+              clarificationNeeded: true,
+              family: 'entity_compare',
+              summary: 'Tiger needs clarification for entity_compare.',
+            },
+            selectionState: {
+              family: 'entity_compare',
+              slots: [{
+                candidates: [{
+                  displayName: 'FromSoftware',
+                  entityKind: 'developer',
+                  entityUid: 'developer:publisheriq:1',
+                  matchQuality: 'exact',
+                  ordinal: 1,
+                  platform: 'publisheriq',
+                  platformEntityId: '1',
+                  score: 100,
+                }],
+                label: 'FromSoftware',
+                query: 'FromSoftware',
+                requiresClarification: true,
+                selectedEntityUid: null,
+                slotId: 'compare:0',
+              }],
+            },
+          },
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const endEvent = getEndEvent(events);
+
+  assert.ok(endEvent);
+  assert.equal(endEvent.sessionContext?.selectionState?.family, 'entity_compare');
+  assert.equal(endEvent.sessionContext?.lastAnswer?.clarificationNeeded, true);
+  assertExhausted();
+});
+
 test('chat route preserves Tiger fallback metadata and attaches Tiger shadow metadata for legacy recent-news topic answers', async (t) => {
   setScopedEnv(t, 'CHAT_PHASE1_QUALITY_ENABLED', 'true');
+  setScopedEnv(t, 'CHAT_TIGER_LEGACY_FALLBACK_ENABLED', 'true');
 
   const request = createJsonNextRequest({
     body: {

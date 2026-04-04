@@ -9,8 +9,10 @@ export type TigerShadowMatchedIntent =
   | 'entity_ranking'
   | 'entity_compare'
   | 'metric_history'
+  | 'momentum_discovery'
   | 'news_search'
   | 'semantic_search'
+  | 'user_context'
   | null;
 export type TigerShadowRoute =
   | 'disabled'
@@ -27,6 +29,7 @@ export type TigerPrimaryRoute =
 export type TigerShadowContractName =
   | 'resolveEntities'
   | 'getEntityOverview'
+  | 'discoverMomentum'
   | 'rankEntities'
   | 'compareEntities'
   | 'searchCatalog'
@@ -34,6 +37,7 @@ export type TigerShadowContractName =
   | 'searchDocuments'
   | 'discoverChangePatterns'
   | 'explainChanges'
+  | 'getUserContext'
   | 'semanticSearch'
   | 'traceMetricHistory';
 export type TigerShadowAttemptStatus = 'success' | 'error' | 'skipped';
@@ -64,6 +68,6 @@ export interface TigerPrimaryInfo {
   enabled: boolean;
   matchedIntent: TigerShadowMatchedIntent;
   mode: TigerPrimaryMode;
-  renderMode: 'deterministic';
+  renderMode: 'deterministic' | 'hybrid_narrator';
   route: TigerPrimaryRoute;
 }

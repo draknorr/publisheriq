@@ -1,7 +1,22 @@
 import 'server-only';
 
-import type { SessionChatContext } from '@/lib/chat/chat-context-types';
+import type {
+  SessionChatContext,
+  SessionChatLastAnswer,
+  SessionChatSelectionCandidate,
+  SessionChatSelectionSlot,
+  SessionChatSelectionState,
+  SessionSelectionEntityKind,
+  SessionSelectionMatchQuality,
+} from '@/lib/chat/chat-context-types';
+import { COMMON_TAGS, type QuerySuggestion } from '@/lib/chat/query-templates';
 import { buildChatEntityUid } from '@/lib/chat/entity-uid';
+import {
+  buildTigerClarificationBrief,
+  buildTigerSuccessBrief,
+  renderTigerAnswerBrief,
+  type TigerAnswerBrief,
+} from '@/lib/chat/tiger-answer-brief';
 import type { ChatToolCall } from '@/lib/llm/types';
 import { renderTigerPrimaryResult } from '@/lib/chat/tiger-primary-renderer';
 
@@ -32,18 +47,42 @@ const CHANGE_EXPLANATION_TOOL_NAMES = new Set([
   'get_game_change_timeline',
   'compare_change_before_after',
 ]);
+const MOMENTUM_TOOL_NAMES = new Set([
+  'discover_trending',
+  'screen_games',
+]);
 const NEWS_PROMPT_PATTERN =
   /\b(news|announcement|announcements|patch notes?|devlog|dev diar(?:y|ies)|developer diar(?:y|ies)|roadmap|demo|playtest|update notes?|recent updates?|behind the scenes)\b/i;
+const USER_ALERT_PROMPT_PATTERN =
+  /\b(?:my alerts?|unread alerts?|recent alerts?|alert history|what alerts do i have)\b/i;
+const USER_PORTFOLIO_PROMPT_PATTERN =
+  /\b(?:my portfolio|my pins?|games? i pinned|what have i pinned|what am i tracking|tracked games|tracked publishers|tracked developers)\b/i;
 const CHANGE_PROMPT_PATTERN =
   /\b(what changed|changed recently|why did .* spike|recent changes|change timeline|timeline of changes)\b/i;
 const CHANGE_DISCOVERY_PROMPT_PATTERN =
   /\b(biggest steam page refreshes?|store-?page changes?|release timing changes?|changed tags?(?: or genres?)?|marketing push|relaunch pattern|teasing a big update|sustained response|under-marketed|signable indie games|agency leads|without an announcement)\b/i;
+const MOMENTUM_PROMPT_PATTERN =
+  /\b(?:most players(?: right now)?|highest ccu|most concurrent players?|most played(?: right now)?|trending(?: up)?|gaining traction|hot right now|breaking out|accelerating|declining|review momentum|reviews? surging)\b/i;
+const MOMENTUM_PLAYER_PROMPT_PATTERN =
+  /\b(?:most players(?: right now)?|highest ccu|most concurrent players?|most played(?: right now)?)\b/i;
+const MOMENTUM_TRENDING_PROMPT_PATTERN =
+  /\b(?:trending(?: up)?|gaining traction|hot right now)\b/i;
+const MOMENTUM_BREAKOUT_PROMPT_PATTERN = /\bbreaking out\b/i;
+const MOMENTUM_ACCELERATING_PROMPT_PATTERN = /\baccelerating\b/i;
+const MOMENTUM_DECLINING_PROMPT_PATTERN = /\b(?:declining|trending down)\b/i;
+const MOMENTUM_REVIEW_PROMPT_PATTERN = /\b(?:review momentum|reviews? surging)\b/i;
+const MOMENTUM_DISCOVERY_LEAD_PATTERN =
+  /\b(?:what(?:'s| is| are)?|which|show|find|give|list)\b/i;
 const COMPANY_GAME_LIST_PROMPT_PATTERN =
   /\b(?:show|list|find|give|top|best)\b.*\bgames?\b.*\b(?:by|from)\b|\bgames?\b.*\b(?:by|from)\b/i;
 const ENTITY_OVERVIEW_PROMPT_PATTERN =
   /\b(?:tell me about|what can you tell me about|give me an overview of|overview of)\b/i;
 const COMPANY_COUNT_PROMPT_PATTERN =
   /\bhow many\s+(?:games|titles)\s+has\s+(.+?)\s+(?:published|developed)\b/i;
+const COMPANY_PORTFOLIO_METRIC_PROMPT_PATTERN =
+  /\bhow many\s+(?:players?|owners?|reviews?)\s+do\s+(.+?)\s+games?\s+have\b/i;
+const GAME_METRIC_OVERVIEW_PROMPT_PATTERN =
+  /\bhow many\s+(?:players?|owners?|reviews?)\s+does\s+(.+?)\s+have\b|\bwhat(?:'s| is)\s+(?:the\s+)?(?:review score|price|discount|ccu|owners?|player count|total reviews?)\s+for\s+(.+?)(?:[?!.]|$)/i;
 const SEMANTIC_SIMILARITY_PROMPT_PATTERN =
   /\b(?:games?|publishers?|developers?|studios?)\b.*\b(?:like|similar to)\b|\b(?:similar to|like)\b.*\b(?:games?|publishers?|developers?|studios?)\b/i;
 const CONCEPT_DISCOVERY_PROMPT_PATTERN =
@@ -54,6 +93,23 @@ const COMPARE_FOLLOW_UP_PROMPT_PATTERN =
   /\b(?:compare\s+(?:those|them)|same compare|same comparison|same set|same results)\b/i;
 const COMPARE_TOP_COUNT_FOLLOW_UP_PROMPT_PATTERN =
   /^(?:now|just)\s+(?:the\s+)?top\s+(\d+)\b/i;
+const SAME_FAMILY_ENTITY_FOLLOW_UP_PATTERN =
+  /^(?:and\s+)?(?:what|how)\s+about\s+(.+?)(?:[?!.]|$)/i;
+const ENTITY_KIND_CORRECTION_PATTERN =
+  /^(.+?)\s+is\s+(?:a|an)\s+(game|publisher|developer|studio|company)(?:[?!.]|$)/i;
+const SINGLE_SELECTION_INDEX_PATTERN =
+  /^\s*(\d+)\s*$/i;
+const COMPARE_SELECTION_INDEX_PATTERN =
+  /^\s*(\d+)\s*(?:and|&)\s*(\d+)\s*$/i;
+const SWITCH_TO_OTHER_PATTERN =
+  /\b(?:use|switch(?:\s+\w+)?)\s+(?:to\s+)?the\s+other\s+one\b/i;
+const SWITCH_TO_ROLE_PATTERN =
+  /\b(?:use|switch(?:\s+\w+)?)\s+(?:to\s+)?the\s+(publisher|developer|game)\s+one\b/i;
+const SWITCH_TO_NAMED_ENTITY_PATTERN =
+  /\b(?:use|switch(?:\s+\w+)?)\b.+\b(?:instead|one)?\b/i;
+const DID_YOU_MEAN_PATTERN = /^\s*did\s+you\s+mean\b/i;
+const ORGANIZATION_SUFFIX_PATTERN =
+  /\b(games|studios?|entertainment|interactive|digital|inc\.?|ltd\.?|llc|works|software|soft|productions?)\b/i;
 const METRIC_HISTORY_PROMPT_PATTERN =
   /\b(?:how have|show|track|history of|over time|trend of)\b.*\b(?:reviews?|review score|sentiment|owners?|sales|ccu|concurrent players?|price|discount|playtime)\b/i;
 const RANKING_BASE_PROMPT_PATTERN =
@@ -72,6 +128,8 @@ const ENTITY_QUERY_PATTERNS = [
 
 interface ResolveEntitiesResponse {
   ambiguity?: {
+    candidateNames?: string[];
+    message?: string | null;
     requiresClarification?: boolean;
   };
   entities?: Array<{
@@ -79,6 +137,8 @@ interface ResolveEntitiesResponse {
     displayName: string;
     entityKind: string;
     entityUid: string;
+    matchQuality?: SessionSelectionMatchQuality;
+    matchedName?: string;
     platform: string;
     platformEntityId?: string;
     signals?: {
@@ -247,16 +307,82 @@ interface DiscoverChangePatternsResponse {
   sufficientToAnswer?: boolean;
 }
 
+interface DiscoverMomentumResponse {
+  filtersApplied?: string[];
+  items?: Array<{
+    appid: number;
+    ccuGrowth30dPercent?: number | null;
+    ccuGrowth7dPercent?: number | null;
+    ccuPeak?: number | null;
+    developerName?: string | null;
+    discountPercent?: number | null;
+    isFree: boolean;
+    isSelfPublished?: boolean;
+    matchedSteamDeck?: 'playable' | 'verified' | null;
+    momentumScore?: number | null;
+    name: string;
+    platformSupport?: string[];
+    priceCents?: number | null;
+    publisherName?: string | null;
+    releaseDate?: string | null;
+    releaseYear?: number | null;
+    reviewPercentage?: number | null;
+    reviewsAdded30d?: number | null;
+    reviewsAdded7d?: number | null;
+    sentimentDelta?: number | null;
+    steamDeckCategory?: string | null;
+    supportLevel?: 'high' | 'low' | 'medium';
+    supportReasons?: string[];
+    totalReviews?: number | null;
+    trendDirection?: 'down' | 'stable' | 'up' | null;
+    velocity30d?: number | null;
+    velocity7d?: number | null;
+    velocityAcceleration?: number | null;
+  }>;
+  rankingDefinition?: string;
+  rankingLabel?: string;
+  sufficientToAnswer?: boolean;
+  timeframe?: '7d' | '30d' | 'current';
+  timeframeLabel?: string;
+}
+
 interface TraceMetricHistoryResponse {
   series?: unknown[];
   sufficientToAnswer?: boolean;
 }
 
 interface ExplainChangesResponse {
-  moments?: unknown[];
+  comparisonWindows?: unknown | null;
+  entity?: {
+    displayName: string;
+    entityKind: 'developer' | 'game' | 'publisher';
+    entityUid: string;
+    platform: 'publisheriq' | 'steam';
+    platformEntityId: string;
+  };
+  mode?: 'before_after' | 'timeline';
+  moments?: Array<{
+    changeTypes: string[];
+    eventCount: number;
+    events: unknown[];
+    linkedNews: unknown[];
+    sources: string[];
+    windowEnd?: string;
+    windowStart: string;
+  }>;
+  provenance?: unknown;
+  selectedMoment?: unknown | null;
   sufficientToAnswer?: boolean;
   summary?: {
+    countsByChangeType?: Record<string, number>;
+    countsBySource?: Record<string, number>;
     eventCount?: number;
+    momentCount?: number;
+    newsCount?: number;
+  };
+  timeWindow?: {
+    endTime: string;
+    startTime: string;
   };
 }
 
@@ -272,6 +398,45 @@ interface SemanticSearchResponse {
   results?: unknown[];
   sufficientToAnswer?: boolean;
   sufficient_to_answer?: boolean;
+}
+
+interface GetUserContextResponse {
+  alertPreferences?: {
+    alertsEnabled?: boolean;
+    emailDigestEnabled?: boolean;
+    emailDigestFrequency?: string | null;
+  } | null;
+  alerts?: Array<{
+    alertId: string;
+    alertType: string;
+    createdAt: string;
+    description: string;
+    entity: {
+      displayName: string;
+      entityKind: 'developer' | 'game' | 'publisher';
+    };
+    isRead: boolean;
+    severity: 'high' | 'low' | 'medium';
+    title: string;
+  }>;
+  pins?: Array<{
+    displayName: string;
+    entityKind: 'developer' | 'game' | 'publisher';
+    metrics: {
+      ccuPeak?: number | null;
+      gameCount?: number | null;
+      ownersMidpoint?: number | null;
+      reviewScore?: number | null;
+      totalReviews?: number | null;
+    };
+    pinId: string;
+    pinOrder: number;
+    pinnedAt: string;
+  }>;
+  sufficientToAnswer?: boolean;
+  totalAlerts?: number;
+  totalPins?: number;
+  unreadAlertCount?: number;
 }
 
 interface CompareEntitiesResponse {
@@ -318,6 +483,43 @@ interface RankEntitiesShadowRequest {
   sortDirection?: 'asc' | 'desc';
 }
 
+interface DiscoverMomentumShadowRequest {
+  excludeAppIds?: number[];
+  filters?: {
+    genres?: string[];
+    isFree?: boolean | null;
+    maxPriceCents?: number | null;
+    maxReviews?: number | null;
+    minCcu?: number | null;
+    minReviewScore?: number | null;
+    minReviews?: number | null;
+    minReviewsAdded30d?: number | null;
+    minReviewsAdded7d?: number | null;
+    platforms?: string[];
+    releaseYear?: {
+      gte?: number | null;
+      lte?: number | null;
+    } | null;
+    steamDeck?: Array<'playable' | 'verified'>;
+    tags?: string[];
+  } | null;
+  indieHeuristic?: boolean;
+  limit?: number;
+  sortBy:
+    | 'ccu_peak'
+    | 'momentum_score'
+    | 'review_score'
+    | 'reviews_added_30d'
+    | 'reviews_added_7d'
+    | 'sentiment_delta'
+    | 'total_reviews'
+    | 'velocity_7d'
+    | 'velocity_acceleration';
+  sortDirection?: 'asc' | 'desc';
+  timeframe?: '7d' | '30d' | 'current';
+  trendType?: 'accelerating' | 'breaking_out' | 'declining' | 'review_momentum' | null;
+}
+
 interface SemanticSearchShadowRequest {
   continuationToken?: string | null;
   description?: string | null;
@@ -361,19 +563,35 @@ interface CatalogShadowBuildResult {
   reason?: string;
 }
 
+interface MomentumBuildResult {
+  reason?: string;
+  request: DiscoverMomentumShadowRequest | null;
+}
+
 interface CatalogPrimaryBuildResult {
   reason?: string;
   requests: SearchCatalogShadowRequest[];
 }
 
 interface TigerPrimaryEvaluationResult {
+  answerBrief?: TigerAnswerBrief | null;
   contractResult?: {
-    contractName: 'compareEntities' | 'getEntityOverview' | 'searchCatalog' | 'semanticSearch';
+    contractName:
+      | 'compareEntities'
+      | 'discoverMomentum'
+      | 'getEntityOverview'
+      | 'searchCatalog'
+      | 'semanticSearch';
     request: Record<string, unknown>;
     response: unknown;
   } | null;
+  followUpSuggestions?: QuerySuggestion[] | null;
   info: TigerPrimaryInfo;
   renderedText: string | null;
+  sessionState?: {
+    lastAnswer: SessionChatLastAnswer | null;
+    selectionState: SessionChatSelectionState | null;
+  } | null;
 }
 
 interface CompareResolutionGroup {
@@ -383,17 +601,264 @@ interface CompareResolutionGroup {
 
 interface CompareRequestBuildResult {
   attempts: TigerShadowAttempt[];
+  clarificationText?: string | null;
   request: CompareEntitiesShadowRequest | null;
+  selectionState?: SessionChatSelectionState | null;
 }
 
-function compareResolutionStrength(entity: ResolvedCompareEntity): number {
+interface RankedSelectionCandidate extends SessionChatSelectionCandidate {
+  confidence: number;
+  displayNameNormalized: string;
+  gameCount: number;
+}
+
+interface RankedSelectionSlot extends SessionChatSelectionSlot {
+  candidates: RankedSelectionCandidate[];
+}
+
+interface PrimaryEntityResolutionResult {
+  attempt: TigerShadowAttempt;
+  entity: ResolvedCompareEntity | null;
+  selectionState: SessionChatSelectionState | null;
+}
+
+function normalizeForLooseMatch(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function normalizeOrganizationCore(value: string): string {
+  return normalizeForLooseMatch(value)
+    .replace(/\b(games|studios?|entertainment|interactive|digital|inc|ltd|llc|works|productions?)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function selectionReferenceMatchesQuery(reference: string | null | undefined, query: string | null | undefined): boolean {
+  if (!reference || !query) {
+    return false;
+  }
+
+  const normalizedReference = normalizeForLooseMatch(reference);
+  const normalizedQuery = normalizeForLooseMatch(query);
+  if (!normalizedReference || !normalizedQuery) {
+    return false;
+  }
+
+  if (normalizedReference === normalizedQuery) {
+    return true;
+  }
+
+  const referenceCore = normalizeOrganizationCore(reference);
+  const queryCore = normalizeOrganizationCore(query);
+  return Boolean(referenceCore) && referenceCore === queryCore;
+}
+
+function matchQualityBaseScore(matchQuality: SessionSelectionMatchQuality | null | undefined): number {
+  switch (matchQuality) {
+    case 'exact':
+      return 100;
+    case 'prefix':
+      return 92;
+    case 'substring':
+      return 84;
+    case 'fuzzy':
+      return 70;
+    default:
+      return 78;
+  }
+}
+
+function queryLooksOrganization(value: string): boolean {
+  return ORGANIZATION_SUFFIX_PATTERN.test(value);
+}
+
+function entityLooksOrganization(value: string): boolean {
+  return ORGANIZATION_SUFFIX_PATTERN.test(value);
+}
+
+function normalizeSelectionKind(value: string): SessionSelectionEntityKind | null {
+  return value === 'game' || value === 'publisher' || value === 'developer'
+    ? value
+    : null;
+}
+
+function scoreResolvedEntity(params: {
+  entity: ResolvedCompareEntity;
+  expectedEntityKind: SessionSelectionEntityKind | null;
+  query: string;
+}): number {
+  const { entity, expectedEntityKind, query } = params;
+  const entityKind = normalizeSelectionKind(entity.entityKind);
+  if (!entityKind) {
+    return 0;
+  }
+
+  const normalizedQuery = normalizeForLooseMatch(query);
+  const normalizedDisplayName = normalizeForLooseMatch(entity.displayName);
+  const normalizedMatchedName = normalizeForLooseMatch(entity.matchedName ?? entity.displayName);
   const confidence = typeof entity.confidence === 'number' ? entity.confidence : 0;
+  const matchQuality = entity.matchQuality ?? null;
+  const queryIsOrganizationLike = queryLooksOrganization(query);
+  const displayNameIsOrganizationLike = entityLooksOrganization(entity.displayName);
   const gameCount =
     typeof entity.signals?.gameCount === 'number' && Number.isFinite(entity.signals.gameCount)
       ? entity.signals.gameCount
       : 0;
 
-  return (confidence * 100) + Math.min(gameCount, 25);
+  let score = matchQualityBaseScore(matchQuality) + (confidence * 8);
+
+  if (normalizedDisplayName === normalizedQuery || normalizedMatchedName === normalizedQuery) {
+    score += 12;
+  }
+
+  if (expectedEntityKind) {
+    score += entityKind === expectedEntityKind ? 18 : -18;
+  }
+
+  if (queryIsOrganizationLike) {
+    score += entityKind === 'game' ? -18 : 14;
+  }
+
+  if (displayNameIsOrganizationLike && entityKind !== 'game') {
+    score += 8;
+  }
+
+  if (entityKind !== 'game') {
+    score += Math.min(gameCount, 20) * 0.6;
+    if (entity.platform === 'publisheriq') {
+      score += 4;
+    }
+  } else if (entity.platform === 'steam') {
+    score += 4;
+  }
+
+  if (matchQuality === 'fuzzy' && entityKind === 'game') {
+    score -= 10;
+  }
+
+  if (matchQuality === 'substring' && entityKind === 'game') {
+    score -= 6;
+  }
+
+  return Math.round(score);
+}
+
+function buildRankedSelectionCandidates(params: {
+  entities: ResolvedCompareEntity[];
+  expectedEntityKind: SessionSelectionEntityKind | null;
+  query: string;
+}): RankedSelectionCandidate[] {
+  const candidates = params.entities
+    .map((entity) => {
+      const entityKind = normalizeSelectionKind(entity.entityKind);
+      if (!entityKind) {
+        return null;
+      }
+
+      const gameCount =
+        typeof entity.signals?.gameCount === 'number' && Number.isFinite(entity.signals.gameCount)
+          ? entity.signals.gameCount
+          : 0;
+
+      return {
+        confidence: typeof entity.confidence === 'number' ? entity.confidence : 0,
+        displayName: entity.displayName,
+        displayNameNormalized: normalizeForLooseMatch(entity.displayName),
+        entityKind,
+        entityUid: entity.entityUid,
+        gameCount,
+        matchQuality: entity.matchQuality ?? null,
+        ordinal: 0,
+        platform: entity.platform,
+        platformEntityId: entity.platformEntityId ?? null,
+        score: scoreResolvedEntity({
+          entity,
+          expectedEntityKind: params.expectedEntityKind,
+          query: params.query,
+        }),
+      };
+    })
+    .filter((candidate): candidate is RankedSelectionCandidate => Boolean(candidate));
+
+  const companyGroups = new Map<string, RankedSelectionCandidate[]>();
+  for (const candidate of candidates) {
+    if (candidate.entityKind === 'game') {
+      continue;
+    }
+
+    const organizationCore = normalizeOrganizationCore(candidate.displayName);
+    if (!organizationCore) {
+      continue;
+    }
+
+    const groupKey = `${candidate.entityKind}:${candidate.platform}:${organizationCore}`;
+    const group = companyGroups.get(groupKey) ?? [];
+    group.push(candidate);
+    companyGroups.set(groupKey, group);
+  }
+
+  for (const group of companyGroups.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+
+    const maxGameCount = Math.max(...group.map((candidate) => candidate.gameCount));
+    if (maxGameCount < 2) {
+      continue;
+    }
+
+    for (const candidate of group) {
+      if (candidate.gameCount === maxGameCount) {
+        candidate.score += 6;
+        continue;
+      }
+
+      const delta = maxGameCount - candidate.gameCount;
+      candidate.score -= Math.min(18, Math.round(delta * 1.5));
+    }
+  }
+
+  return candidates
+    .sort((left, right) => right.score - left.score)
+    .map((candidate, index) => ({
+      ...candidate,
+      ordinal: index + 1,
+    }));
+}
+
+function needsClarificationForRankedCandidates(params: {
+  candidates: RankedSelectionCandidate[];
+  query: string;
+}): boolean {
+  const [top, runnerUp] = params.candidates;
+  if (!top || top.score < 70) {
+    return true;
+  }
+
+  if (!runnerUp) {
+    return false;
+  }
+
+  const scoreGap = top.score - runnerUp.score;
+  const queryIsOrganizationLike = queryLooksOrganization(params.query);
+
+  if (scoreGap < 12) {
+    return true;
+  }
+
+  if (top.entityKind !== runnerUp.entityKind && scoreGap < 18) {
+    return true;
+  }
+
+  if (top.matchQuality === 'fuzzy' && scoreGap < 18) {
+    return true;
+  }
+
+  if (queryIsOrganizationLike && top.entityKind === 'game' && runnerUp.entityKind !== 'game' && scoreGap < 24) {
+    return true;
+  }
+
+  return false;
 }
 
 type TigerPrimaryMatchedIntent = Exclude<TigerShadowMatchedIntent, null>;
@@ -478,12 +943,20 @@ function hasAnyToolCall(toolCalls: ChatToolCall[], names: Set<string>): boolean 
 }
 
 function inferMatchedIntent(prompt: string, toolCalls: ChatToolCall[]): TigerShadowMatchedIntent {
+  if (inferUserContextIntent(prompt)) {
+    return 'user_context';
+  }
+
   if (inferCompareIntent(prompt)) {
     return 'entity_compare';
   }
 
   if (inferMetricHistoryIntent(prompt)) {
     return 'metric_history';
+  }
+
+  if (hasAnyToolCall(toolCalls, MOMENTUM_TOOL_NAMES) || inferMomentumIntent(prompt)) {
+    return 'momentum_discovery';
   }
 
   if (
@@ -521,12 +994,20 @@ function inferMatchedIntent(prompt: string, toolCalls: ChatToolCall[]): TigerSha
 }
 
 function inferPrimaryMatchedIntent(prompt: string): TigerPrimaryMatchedIntent | null {
+  if (inferUserContextIntent(prompt)) {
+    return 'user_context';
+  }
+
   if (inferCompareIntent(prompt)) {
     return 'entity_compare';
   }
 
   if (inferMetricHistoryIntent(prompt)) {
     return 'metric_history';
+  }
+
+  if (inferMomentumIntent(prompt)) {
+    return 'momentum_discovery';
   }
 
   if (CHANGE_DISCOVERY_PROMPT_PATTERN.test(prompt)) {
@@ -558,6 +1039,22 @@ function inferPrimaryMatchedIntent(prompt: string): TigerPrimaryMatchedIntent | 
   }
 
   return null;
+}
+
+function inferUserContextIntent(prompt: string): boolean {
+  return USER_ALERT_PROMPT_PATTERN.test(prompt) || USER_PORTFOLIO_PROMPT_PATTERN.test(prompt);
+}
+
+function inferUserContextFocus(prompt: string): 'alerts' | 'pins' | 'overview' {
+  if (USER_ALERT_PROMPT_PATTERN.test(prompt)) {
+    return 'alerts';
+  }
+
+  if (USER_PORTFOLIO_PROMPT_PATTERN.test(prompt)) {
+    return 'pins';
+  }
+
+  return 'overview';
 }
 
 function inferCompareFollowUpIntent(
@@ -594,7 +1091,9 @@ function inferEntityOverviewIntent(prompt: string): boolean {
     return true;
   }
 
-  return COMPANY_COUNT_PROMPT_PATTERN.test(prompt);
+  return COMPANY_COUNT_PROMPT_PATTERN.test(prompt)
+    || COMPANY_PORTFOLIO_METRIC_PROMPT_PATTERN.test(prompt)
+    || GAME_METRIC_OVERVIEW_PROMPT_PATTERN.test(prompt);
 }
 
 function inferSemanticIntent(prompt: string, toolCalls: ChatToolCall[]): boolean {
@@ -690,6 +1189,32 @@ function inferRankingIntent(prompt: string): boolean {
   return /\b(?:reviews?|review score|ratings?|owners?|players?|ccu|games?)\b/i.test(prompt);
 }
 
+function inferMomentumIntent(prompt: string): boolean {
+  if (!MOMENTUM_PROMPT_PATTERN.test(prompt)) {
+    return false;
+  }
+
+  if (
+    inferCompareIntent(prompt)
+    || SEMANTIC_SIMILARITY_PROMPT_PATTERN.test(prompt)
+    || CHANGE_DISCOVERY_PROMPT_PATTERN.test(prompt)
+    || CHANGE_PROMPT_PATTERN.test(prompt)
+    || NEWS_PROMPT_PATTERN.test(prompt)
+    || inferMetricHistoryIntent(prompt)
+    || /\b(?:publishers?|developers?|studios?|companies?)\b/i.test(prompt)
+  ) {
+    return false;
+  }
+
+  if (extractCompanyQueryFromPrompt(prompt)) {
+    return false;
+  }
+
+  return MOMENTUM_DISCOVERY_LEAD_PATTERN.test(prompt)
+    || /\b(?:games?|titles?)\b/i.test(prompt)
+    || /\bwhat(?:'s| is)\s+(?:trending|breaking out|hot right now)\b/i.test(prompt);
+}
+
 function inferMetricHistoryIntent(prompt: string): boolean {
   if (!METRIC_HISTORY_PROMPT_PATTERN.test(prompt) || METRIC_HISTORY_DISALLOWED_PATTERN.test(prompt)) {
     return false;
@@ -706,6 +1231,8 @@ function normalizeEntityQuery(candidate: string | null): string | null {
   const normalized = candidate
     .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
     .replace(/\b(this game|this title|it|them)\b/gi, '')
+    .replace(/\s+\b(?:before and after|before|after)\b.*$/i, '')
+    .replace(/\s+\b(?:this|last|over|in|during|from|while|since)\b.*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -762,6 +1289,18 @@ function extractEntityOverviewQuery(prompt: string): string | null {
   const countQuery = normalizeEntityQuery(countMatch?.[1] ?? null);
   if (countQuery) {
     return countQuery;
+  }
+
+  const companyMetricMatch = prompt.match(COMPANY_PORTFOLIO_METRIC_PROMPT_PATTERN);
+  const companyMetricQuery = normalizeEntityQuery(companyMetricMatch?.[1] ?? null);
+  if (companyMetricQuery) {
+    return companyMetricQuery;
+  }
+
+  const gameMetricMatch = prompt.match(GAME_METRIC_OVERVIEW_PROMPT_PATTERN);
+  const gameMetricQuery = normalizeEntityQuery(gameMetricMatch?.[1] ?? gameMetricMatch?.[2] ?? null);
+  if (gameMetricQuery) {
+    return gameMetricQuery;
   }
 
   const overviewMatch =
@@ -884,13 +1423,17 @@ function inferEntityOverviewKindHint(
 function inferEntityOverviewViewMode(
   prompt: string,
   entityKind: 'developer' | 'game' | 'publisher'
-): 'company_count' | 'company_games' | 'game_overview' {
+): 'company_count' | 'company_games' | 'company_metrics' | 'game_overview' {
   if (entityKind === 'game') {
     return 'game_overview';
   }
 
   if (COMPANY_COUNT_PROMPT_PATTERN.test(prompt)) {
     return 'company_count';
+  }
+
+  if (COMPANY_PORTFOLIO_METRIC_PROMPT_PATTERN.test(prompt)) {
+    return 'company_metrics';
   }
 
   return 'company_games';
@@ -1216,6 +1759,251 @@ function extractPrimaryReleaseYear(prompt: string): { gte?: number; lte?: number
   return Number.isFinite(year) ? { gte: year, lte: year } : undefined;
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toFilterLabel(value: string): string {
+  return value
+    .split(/(\s+|-)/)
+    .map((segment) => (/^\s+$|-$/.test(segment) ? segment : `${segment.slice(0, 1).toUpperCase()}${segment.slice(1)}`))
+    .join('');
+}
+
+function parseCountToken(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/,/g, '');
+  const match = normalized.match(/^(\d+(?:\.\d+)?)([kmb])?$/i);
+  if (!match) {
+    return null;
+  }
+
+  const base = Number.parseFloat(match[1] ?? '0');
+  if (!Number.isFinite(base)) {
+    return null;
+  }
+
+  const suffix = match[2]?.toLowerCase();
+  if (suffix === 'k') {
+    return Math.round(base * 1_000);
+  }
+  if (suffix === 'm') {
+    return Math.round(base * 1_000_000);
+  }
+  if (suffix === 'b') {
+    return Math.round(base * 1_000_000_000);
+  }
+
+  return Math.round(base);
+}
+
+function extractMomentumSteamDeck(prompt: string): Array<'playable' | 'verified'> | undefined {
+  if (/\bsteam deck verified\b/i.test(prompt)) {
+    return ['verified'];
+  }
+
+  if (/\bsteam deck playable\b/i.test(prompt)) {
+    return ['playable'];
+  }
+
+  return undefined;
+}
+
+function extractMomentumReviewThreshold(prompt: string): number | undefined {
+  if (/\boverwhelmingly positive\b/i.test(prompt)) {
+    return 95;
+  }
+
+  if (/\bhighly rated\b/i.test(prompt)) {
+    return 85;
+  }
+
+  if (/\bgreat reviews?\b/i.test(prompt)) {
+    return 80;
+  }
+
+  return undefined;
+}
+
+function extractMomentumMinReviews(prompt: string): number | undefined {
+  const match = prompt.match(/\b(?:at least|min(?:imum)?(?: of)?|over|more than)\s+([\d,.]+[kmb]?)\s+reviews?\b/i);
+  const parsed = parseCountToken(match?.[1] ?? null);
+  return parsed != null ? parsed : undefined;
+}
+
+function extractMomentumMinCcu(prompt: string): number | undefined {
+  const match = prompt.match(
+    /\b(?:at least|min(?:imum)?(?: of)?|over|more than)\s+([\d,.]+[kmb]?)\s+(?:ccu|concurrent players?|players?\s+right\s+now)\b/i
+  );
+  const parsed = parseCountToken(match?.[1] ?? null);
+  return parsed != null ? parsed : undefined;
+}
+
+function extractMomentumMaxPriceCents(prompt: string): number | undefined {
+  const match = prompt.match(/\bunder\s+\$?(\d{1,4})(?:\.\d{1,2})?\b/i);
+  if (!match) {
+    return undefined;
+  }
+
+  return Math.round(Number.parseFloat(match[1] ?? '0') * 100);
+}
+
+function extractMomentumTags(prompt: string): string[] | undefined {
+  const excluded = new Set([
+    'indie',
+    'free-to-play',
+    'early access',
+    'demo',
+    'multiplayer',
+    'single-player',
+    'vr',
+  ]);
+
+  const matches = COMMON_TAGS.filter((tag) => {
+    if (excluded.has(tag)) {
+      return false;
+    }
+
+    const escaped = escapeRegex(tag);
+    return new RegExp(`\\b${escaped}\\b\\s+games?`, 'i').test(prompt)
+      || new RegExp(`\\b(?:games?|titles?)\\b[^.?!]{0,24}\\b${escaped}\\b`, 'i').test(prompt);
+  }).map(toFilterLabel);
+
+  return matches.length > 0 ? Array.from(new Set(matches)) : undefined;
+}
+
+function inferMomentumTimeframe(
+  prompt: string,
+  promptFamily: 'current_players' | 'trending' | 'breaking_out' | 'accelerating' | 'declining' | 'review_momentum'
+): '7d' | '30d' | 'current' {
+  if (promptFamily === 'current_players') {
+    return 'current';
+  }
+
+  if (/\b(?:this week|last week|past 7 days?|over the last 7 days?)\b/i.test(prompt)) {
+    return '7d';
+  }
+
+  if (/\b(?:this month|last month|past 30 days?|over the last 30 days?|lately|recently)\b/i.test(prompt)) {
+    return '30d';
+  }
+
+  if (promptFamily === 'accelerating' || promptFamily === 'declining') {
+    return '30d';
+  }
+
+  return '7d';
+}
+
+function buildMomentumPrimaryRequest(prompt: string): MomentumBuildResult {
+  if (inferCompareIntent(prompt) || SEMANTIC_SIMILARITY_PROMPT_PATTERN.test(prompt)) {
+    return {
+      reason: 'Tiger momentum routing does not combine discovery with compare or similarity prompts yet.',
+      request: null,
+    };
+  }
+
+  if (extractCompanyQueryFromPrompt(prompt) || /\b(?:publisher|developer|studio|company)\b/i.test(prompt)) {
+    return {
+      reason: 'Tiger momentum routing does not handle company-specific portfolio momentum yet.',
+      request: null,
+    };
+  }
+
+  let promptFamily:
+    | 'accelerating'
+    | 'breaking_out'
+    | 'current_players'
+    | 'declining'
+    | 'review_momentum'
+    | 'trending'
+    | null = null;
+  let sortBy: DiscoverMomentumShadowRequest['sortBy'] | null = null;
+  let sortDirection: DiscoverMomentumShadowRequest['sortDirection'] = 'desc';
+  let trendType: DiscoverMomentumShadowRequest['trendType'] = null;
+
+  if (MOMENTUM_PLAYER_PROMPT_PATTERN.test(prompt)) {
+    promptFamily = 'current_players';
+    sortBy = 'ccu_peak';
+  } else if (MOMENTUM_BREAKOUT_PROMPT_PATTERN.test(prompt)) {
+    promptFamily = 'breaking_out';
+    sortBy = 'momentum_score';
+    trendType = 'breaking_out';
+  } else if (MOMENTUM_ACCELERATING_PROMPT_PATTERN.test(prompt)) {
+    promptFamily = 'accelerating';
+    sortBy = 'velocity_acceleration';
+    trendType = 'accelerating';
+  } else if (MOMENTUM_DECLINING_PROMPT_PATTERN.test(prompt)) {
+    promptFamily = 'declining';
+    sortBy = 'velocity_acceleration';
+    sortDirection = 'asc';
+    trendType = 'declining';
+  } else if (MOMENTUM_REVIEW_PROMPT_PATTERN.test(prompt)) {
+    promptFamily = 'review_momentum';
+    trendType = 'review_momentum';
+  } else if (MOMENTUM_TRENDING_PROMPT_PATTERN.test(prompt)) {
+    promptFamily = 'trending';
+    sortBy = 'momentum_score';
+  }
+
+  if (!promptFamily) {
+    return {
+      reason: 'Tiger momentum routing could not infer a stable momentum query from the prompt.',
+      request: null,
+    };
+  }
+
+  const timeframe = inferMomentumTimeframe(prompt, promptFamily);
+  if (!sortBy) {
+    sortBy = promptFamily === 'review_momentum'
+      ? timeframe === '30d'
+        ? 'reviews_added_30d'
+        : 'reviews_added_7d'
+      : 'momentum_score';
+  }
+
+  const platforms = extractPrimaryPlatforms(prompt);
+  const steamDeck = extractMomentumSteamDeck(prompt);
+  const tags = extractMomentumTags(prompt);
+  const releaseYear = extractPrimaryReleaseYear(prompt);
+  const maxPriceCents = extractMomentumMaxPriceCents(prompt);
+  const minReviewScore = extractMomentumReviewThreshold(prompt);
+  const minReviews = extractMomentumMinReviews(prompt);
+  const minCcu = extractMomentumMinCcu(prompt);
+  const isFree =
+    /\b(?:free-to-play|free to play)\b/i.test(prompt)
+      ? true
+      : /\bpremium games?\b/i.test(prompt)
+        ? false
+        : undefined;
+  const filters: NonNullable<DiscoverMomentumShadowRequest['filters']> = {
+    ...(platforms.length > 0 ? { platforms } : {}),
+    ...(steamDeck ? { steamDeck } : {}),
+    ...(tags ? { tags } : {}),
+    ...(releaseYear ? { releaseYear } : {}),
+    ...(maxPriceCents != null ? { maxPriceCents } : {}),
+    ...(minReviewScore != null ? { minReviewScore } : {}),
+    ...(minReviews != null ? { minReviews } : {}),
+    ...(minCcu != null ? { minCcu } : {}),
+    ...(isFree != null ? { isFree } : {}),
+  };
+
+  return {
+    request: {
+      ...(Object.keys(filters).length > 0 ? { filters } : {}),
+      ...( /\bindie\b/i.test(prompt) ? { indieHeuristic: true } : {}),
+      limit: extractRequestedTopCount(prompt, 10, 20),
+      sortBy,
+      sortDirection,
+      timeframe,
+      trendType,
+    },
+  };
+}
+
 function buildCatalogSearchPrimaryRequests(prompt: string): CatalogPrimaryBuildResult {
   const normalized = prompt.toLowerCase();
   const limit = extractRequestedTopCount(prompt, 20);
@@ -1312,9 +2100,6 @@ function normalizeEntityKindHint(
   }
   if (/\bdevelopers?\b|\bstudios?\b/.test(normalized)) {
     return 'developer';
-  }
-  if (/\bgames?\b/.test(normalized)) {
-    return 'game';
   }
 
   return null;
@@ -1454,7 +2239,6 @@ function buildSemanticSearchShadowRequest(params: {
 function normalizeCompareToken(value: string): string {
   return value
     .replace(/^(?:games?|publishers?|developers?|studios?)\s+/i, '')
-    .replace(/\s+(?:game|publisher|developer|studio)s?$/i, '')
     .replace(/\b(?:stack up|head to head)\b/gi, '')
     .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
     .trim();
@@ -1504,7 +2288,7 @@ function parseCompareEntities(prompt: string): string[] {
     return [];
   }
 
-  const separatorsPattern = /\s+vs\.?\s+|\s+versus\s+|\s+and\s+|,\s*/i;
+  const separatorsPattern = /\s+vs\.?\s+|\s+versus\s+|\s+and\s+|\s+to\s+|,\s*/i;
   if (!separatorsPattern.test(explicitBody)) {
     const single = normalizeCompareToken(explicitBody);
     return single ? [single] : [];
@@ -1514,10 +2298,272 @@ function parseCompareEntities(prompt: string): string[] {
     .replace(/\s+vs\.?\s+/gi, ',')
     .replace(/\s+versus\s+/gi, ',')
     .replace(/\s+and\s+/gi, ',')
+    .replace(/\s+to\s+/gi, ',')
     .split(',')
     .map((part) => normalizeCompareToken(part))
     .filter((part) => part.length > 0)
     .slice(0, 5);
+}
+
+function toSelectionCandidate(candidate: RankedSelectionCandidate): SessionChatSelectionCandidate {
+  return {
+    displayName: candidate.displayName,
+    entityKind: candidate.entityKind,
+    entityUid: candidate.entityUid,
+    matchQuality: candidate.matchQuality,
+    ordinal: candidate.ordinal,
+    platform: candidate.platform,
+    platformEntityId: candidate.platformEntityId,
+    score: candidate.score,
+  };
+}
+
+function buildSelectionState(params: {
+  family: TigerPrimaryMatchedIntent;
+  slots: RankedSelectionSlot[];
+}): SessionChatSelectionState | null {
+  if (params.slots.length === 0) {
+    return null;
+  }
+
+  return {
+    family: params.family,
+    slots: params.slots.map((slot) => ({
+      candidates: slot.candidates.map(toSelectionCandidate),
+      expectedEntityKind: slot.expectedEntityKind ?? null,
+      label: slot.label,
+      query: slot.query,
+      requiresClarification: slot.requiresClarification,
+      selectedEntityUid: slot.selectedEntityUid,
+      slotId: slot.slotId,
+    })),
+  };
+}
+
+function renderSelectionClarification(selectionState: SessionChatSelectionState): string {
+  const brief = buildTigerClarificationBrief({
+    intent: selectionState.family as TigerPrimaryMatchedIntent,
+    selectionState,
+  });
+
+  return renderTigerAnswerBrief(brief);
+}
+
+function buildTigerSelectionLastAnswer(params: {
+  family: TigerPrimaryMatchedIntent;
+  clarificationNeeded?: boolean;
+}): SessionChatLastAnswer {
+  return {
+    clarificationNeeded: params.clarificationNeeded ?? false,
+    family: params.family,
+    summary: params.clarificationNeeded
+      ? `Tiger needs clarification for ${params.family}.`
+      : `Tiger answered ${params.family}.`,
+  };
+}
+
+function extractSameFamilyEntityFollowUpQuery(prompt: string): string | null {
+  const followUpMatch = prompt.match(SAME_FAMILY_ENTITY_FOLLOW_UP_PATTERN);
+  const followUpQuery = normalizeEntityQuery(followUpMatch?.[1] ?? null);
+  if (followUpQuery) {
+    return followUpQuery;
+  }
+
+  const correctionMatch = prompt.match(ENTITY_KIND_CORRECTION_PATTERN);
+  return normalizeEntityQuery(correctionMatch?.[1] ?? null);
+}
+
+function inferEntityKindCorrection(prompt: string): SessionSelectionEntityKind | null {
+  const match = prompt.match(ENTITY_KIND_CORRECTION_PATTERN);
+  const raw = match?.[2]?.toLowerCase() ?? null;
+  if (raw === 'developer' || raw === 'publisher' || raw === 'game') {
+    return raw;
+  }
+
+  if (raw === 'studio') {
+    return 'developer';
+  }
+
+  return null;
+}
+
+function inferSelectionFollowUpIntent(
+  prompt: string,
+  sessionContext: SessionChatContext | null
+): boolean {
+  if (!sessionContext?.selectionState?.slots?.length) {
+    return false;
+  }
+
+  return SINGLE_SELECTION_INDEX_PATTERN.test(prompt)
+    || COMPARE_SELECTION_INDEX_PATTERN.test(prompt)
+    || SWITCH_TO_OTHER_PATTERN.test(prompt)
+    || SWITCH_TO_ROLE_PATTERN.test(prompt)
+    || DID_YOU_MEAN_PATTERN.test(prompt)
+    || SWITCH_TO_NAMED_ENTITY_PATTERN.test(prompt);
+}
+
+function pickNamedSelectionCandidateFromPrompt(
+  prompt: string,
+  slot: SessionChatSelectionSlot
+): SessionChatSelectionCandidate | null {
+  const normalizedPrompt = normalizeForLooseMatch(prompt);
+  const switchyPrompt = DID_YOU_MEAN_PATTERN.test(prompt) || /\b(?:use|switch|mean|instead)\b/i.test(prompt);
+  if (!switchyPrompt) {
+    return null;
+  }
+
+  return [...slot.candidates]
+    .sort((left, right) => right.displayName.length - left.displayName.length)
+    .find((candidate) => {
+      const candidateName = normalizeForLooseMatch(candidate.displayName);
+      return candidate.entityUid !== slot.selectedEntityUid
+        && candidateName.length > 0
+        && normalizedPrompt.includes(candidateName);
+    }) ?? null;
+}
+
+function pickSelectionSlotFromPrompt(
+  prompt: string,
+  selectionState: SessionChatSelectionState
+): SessionChatSelectionSlot | null {
+  if (selectionState.slots.length === 1) {
+    return selectionState.slots[0];
+  }
+
+  const normalizedPrompt = normalizeForLooseMatch(prompt);
+  const matches = selectionState.slots.filter((slot) => {
+    if (normalizedPrompt.includes(normalizeForLooseMatch(slot.query))) {
+      return true;
+    }
+
+    return slot.candidates.some((candidate) =>
+      normalizedPrompt.includes(normalizeForLooseMatch(candidate.displayName))
+    );
+  });
+
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
+  const switchableSlots = selectionState.slots.filter((slot) => slot.candidates.length > 1);
+  return switchableSlots.length === 1 ? switchableSlots[0] : null;
+}
+
+function applySelectionFollowUpState(params: {
+  prompt: string;
+  selectionState: SessionChatSelectionState;
+}): {
+  clarificationText: string | null;
+  selectionState: SessionChatSelectionState;
+} {
+  const numericPair = params.prompt.match(COMPARE_SELECTION_INDEX_PATTERN);
+  if (numericPair && params.selectionState.slots.length >= 2) {
+    const ordinals = [Number(numericPair[1]), Number(numericPair[2])];
+    return {
+      clarificationText: null,
+      selectionState: {
+        ...params.selectionState,
+        slots: params.selectionState.slots.map((slot, index) => ({
+          ...slot,
+          requiresClarification: false,
+          selectedEntityUid: slot.candidates.find((candidate) => candidate.ordinal === ordinals[index])?.entityUid ?? null,
+        })),
+      },
+    };
+  }
+
+  const numericSingle = params.prompt.match(SINGLE_SELECTION_INDEX_PATTERN);
+  if (numericSingle && params.selectionState.slots.length === 1) {
+    const ordinal = Number(numericSingle[1]);
+    return {
+      clarificationText: null,
+      selectionState: {
+        ...params.selectionState,
+        slots: params.selectionState.slots.map((slot) => ({
+          ...slot,
+          requiresClarification: false,
+          selectedEntityUid: slot.candidates.find((candidate) => candidate.ordinal === ordinal)?.entityUid ?? null,
+        })),
+      },
+    };
+  }
+
+  const targetSlot = pickSelectionSlotFromPrompt(params.prompt, params.selectionState);
+  if (!targetSlot) {
+    return {
+      clarificationText: 'Which entity should switch? Reply with the slot name or a numbered choice.',
+      selectionState: params.selectionState,
+    };
+  }
+
+  const namedCandidate = pickNamedSelectionCandidateFromPrompt(params.prompt, targetSlot);
+  if (namedCandidate) {
+    return {
+      clarificationText: null,
+      selectionState: {
+        ...params.selectionState,
+        slots: params.selectionState.slots.map((slot) =>
+          slot.slotId === targetSlot.slotId
+            ? {
+                ...slot,
+                requiresClarification: false,
+                selectedEntityUid: namedCandidate.entityUid,
+              }
+            : slot
+        ),
+      },
+    };
+  }
+
+  const roleMatch = params.prompt.match(SWITCH_TO_ROLE_PATTERN);
+  if (roleMatch) {
+    const desiredKind = roleMatch[1] as SessionSelectionEntityKind;
+    const nextCandidate = targetSlot.candidates.find(
+      (candidate) => candidate.entityKind === desiredKind && candidate.entityUid !== targetSlot.selectedEntityUid
+    );
+    return {
+      clarificationText: nextCandidate ? null : `I couldn't find a ${desiredKind} alternative for ${targetSlot.label}.`,
+      selectionState: {
+        ...params.selectionState,
+        slots: params.selectionState.slots.map((slot) =>
+          slot.slotId === targetSlot.slotId
+            ? {
+                ...slot,
+                requiresClarification: false,
+                selectedEntityUid: nextCandidate?.entityUid ?? slot.selectedEntityUid,
+              }
+            : slot
+        ),
+      },
+    };
+  }
+
+  if (SWITCH_TO_OTHER_PATTERN.test(params.prompt)) {
+    const nextCandidate = targetSlot.candidates.find(
+      (candidate) => candidate.entityUid !== targetSlot.selectedEntityUid
+    );
+    return {
+      clarificationText: nextCandidate ? null : `I couldn't find another plausible match for ${targetSlot.label}.`,
+      selectionState: {
+        ...params.selectionState,
+        slots: params.selectionState.slots.map((slot) =>
+          slot.slotId === targetSlot.slotId
+            ? {
+                ...slot,
+                requiresClarification: false,
+                selectedEntityUid: nextCandidate?.entityUid ?? slot.selectedEntityUid,
+              }
+            : slot
+        ),
+      },
+    };
+  }
+
+  return {
+    clarificationText: 'I could not map that follow-up to one of the available Tiger matches.',
+    selectionState: params.selectionState,
+  };
 }
 
 function inferUnsupportedCompareReason(prompt: string): string | null {
@@ -1871,36 +2917,40 @@ function buildSkippedAttempt(
   };
 }
 
-function pickResolvedPrimaryEntity(params: {
-  expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
-  response: ResolveEntitiesResponse | undefined;
-}): ResolvedCompareEntity | null {
-  const entities = params.response?.entities ?? [];
-
-  if (params.expectedEntityKind) {
-    const exactKind = entities.find((entity) => entity.entityKind === params.expectedEntityKind);
-    if (exactKind) {
-      return exactKind;
-    }
-  }
-
-  return entities[0] ?? null;
+function buildResolvedEntityByUidMap(entities: ResolvedCompareEntity[]): Map<string, ResolvedCompareEntity> {
+  return new Map(
+    entities
+      .filter((entity) => entity.entityUid)
+      .map((entity) => [entity.entityUid, entity] as const)
+  );
 }
 
-async function resolvePrimaryEntityAttempt(params: {
-  expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
+async function resolveSelectionSlotAttempt(params: {
+  expectedEntityKind: SessionSelectionEntityKind | null;
+  label: string;
   query: string | null;
+  slotId: string;
 }): Promise<{
   attempt: TigerShadowAttempt;
-  entity: ResolvedCompareEntity | null;
+  entitiesByUid: Map<string, ResolvedCompareEntity>;
+  slot: RankedSelectionSlot;
 }> {
   if (!params.query) {
     return {
       attempt: buildSkippedAttempt(
         'resolveEntities',
-        'No resolvable entity reference was available for Tiger overview routing.'
+        'No resolvable entity reference was available for Tiger routing.'
       ),
-      entity: null,
+      entitiesByUid: new Map(),
+      slot: {
+        candidates: [],
+        expectedEntityKind: params.expectedEntityKind,
+        label: params.label,
+        query: params.query ?? '',
+        requiresClarification: true,
+        selectedEntityUid: null,
+        slotId: params.slotId,
+      },
     };
   }
 
@@ -1910,7 +2960,7 @@ async function resolvePrimaryEntityAttempt(params: {
       ? [params.expectedEntityKind]
       : ['game', 'publisher', 'developer'],
     includeMetrics: false,
-    limit: 5,
+    limit: 6,
     query: params.query,
   });
   const timingMs = Math.round(performance.now() - startedAt);
@@ -1925,105 +2975,185 @@ async function resolvePrimaryEntityAttempt(params: {
         status: 'error',
         timingMs,
       },
-      entity: null,
-    };
-  }
-
-  const entity = pickResolvedPrimaryEntity({
-    expectedEntityKind: params.expectedEntityKind,
-    response: response.data,
-  });
-
-  if (!entity?.entityUid || !entity.platformEntityId) {
-    return {
-      attempt: {
-        contractName: 'resolveEntities',
-        httpStatus: response.httpStatus,
-        reason: 'Tiger overview routing could not resolve the prompt to a stable entity.',
-        resultCount: response.data?.entities?.length ?? 0,
-        status: 'error',
-        sufficientToAnswer: false,
-        timingMs,
+      entitiesByUid: new Map(),
+      slot: {
+        candidates: [],
+        expectedEntityKind: params.expectedEntityKind,
+        label: params.label,
+        query: params.query,
+        requiresClarification: true,
+        selectedEntityUid: null,
+        slotId: params.slotId,
       },
-      entity: null,
     };
   }
+
+  const entities = response.data?.entities ?? [];
+  const candidates = buildRankedSelectionCandidates({
+    entities,
+    expectedEntityKind: params.expectedEntityKind,
+    query: params.query,
+  });
+  const requiresClarification =
+    (response.data?.ambiguity?.requiresClarification ?? false)
+      || needsClarificationForRankedCandidates({
+        candidates,
+        query: params.query,
+      });
+  const selectedEntityUid = !requiresClarification ? candidates[0]?.entityUid ?? null : null;
 
   return {
     attempt: {
       contractName: 'resolveEntities',
       httpStatus: response.httpStatus,
-      resultCount: response.data?.entities?.length ?? 0,
+      reason: requiresClarification
+        ? response.data?.ambiguity?.message ?? 'Tiger found multiple plausible matches and needs clarification.'
+        : entities.length === 0
+          ? 'Tiger could not resolve a stable entity from the prompt.'
+          : undefined,
+      resultCount: entities.length,
       status: 'success',
-      sufficientToAnswer: true,
+      sufficientToAnswer: !requiresClarification && Boolean(selectedEntityUid),
       timingMs,
     },
-    entity,
+    entitiesByUid: buildResolvedEntityByUidMap(entities),
+    slot: {
+      candidates,
+      expectedEntityKind: params.expectedEntityKind,
+      label: params.label,
+      query: params.query,
+      requiresClarification,
+      selectedEntityUid,
+      slotId: params.slotId,
+    },
   };
 }
 
-async function resolveGameEntityAttempt(query: string | null): Promise<{
-  attempt: TigerShadowAttempt;
-  entityUid: string | null;
-}> {
-  if (!query) {
+function pickSelectedEntityFromSlot(params: {
+  entitiesByUid: Map<string, ResolvedCompareEntity>;
+  slot: SessionChatSelectionSlot | RankedSelectionSlot;
+}): ResolvedCompareEntity | null {
+  if (!params.slot.selectedEntityUid) {
+    return null;
+  }
+
+  return params.entitiesByUid.get(params.slot.selectedEntityUid) ?? null;
+}
+
+function buildResolvedEntityFromSelectionCandidate(
+  candidate: SessionChatSelectionCandidate
+): ResolvedCompareEntity {
+  return {
+    confidence: candidate.score / 100,
+    displayName: candidate.displayName,
+    entityKind: candidate.entityKind,
+    entityUid: candidate.entityUid,
+    matchQuality: candidate.matchQuality ?? undefined,
+    platform: candidate.platform,
+    platformEntityId: candidate.platformEntityId ?? undefined,
+  };
+}
+
+function pickSelectedCandidateFromSelectionState(
+  selectionState: SessionChatSelectionState | null | undefined
+): SessionChatSelectionCandidate | null {
+  const slot = selectionState?.slots[0];
+  if (!slot || slot.requiresClarification || !slot.selectedEntityUid) {
+    return null;
+  }
+
+  return slot.candidates.find((candidate) => candidate.entityUid === slot.selectedEntityUid) ?? null;
+}
+
+async function resolvePrimaryEntityAttempt(params: {
+  expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
+  family?: TigerPrimaryMatchedIntent;
+  query: string | null;
+  selectionState?: SessionChatSelectionState | null;
+}): Promise<PrimaryEntityResolutionResult> {
+  const selectedCandidate = pickSelectedCandidateFromSelectionState(params.selectionState);
+  const selectedSlot = params.selectionState?.slots[0] ?? null;
+  const canReuseSelectedCandidate =
+    selectedCandidate
+    && (!params.expectedEntityKind || selectedCandidate.entityKind === params.expectedEntityKind)
+    && (
+      !params.query
+      || selectionReferenceMatchesQuery(selectedSlot?.query, params.query)
+      || selectionReferenceMatchesQuery(selectedSlot?.label, params.query)
+      || selectionReferenceMatchesQuery(selectedCandidate.displayName, params.query)
+    );
+
+  if (canReuseSelectedCandidate) {
     return {
-      attempt: buildSkippedAttempt('resolveEntities', 'No resolvable game reference was available for shadow routing.'),
-      entityUid: null,
+      attempt: {
+        contractName: 'resolveEntities',
+        reason: 'Tiger reused the current entity selection from session context.',
+        status: 'success',
+        sufficientToAnswer: true,
+      },
+      entity: buildResolvedEntityFromSelectionCandidate(selectedCandidate),
+      selectionState: params.selectionState ?? null,
     };
   }
 
-  const startedAt = performance.now();
-  const response = await postToQueryApi<ResolveEntitiesResponse>('/v1/contracts/resolve-entities', {
-    entityKinds: ['game'],
-    includeMetrics: false,
-    limit: 3,
-    query,
+  const resolved = await resolveSelectionSlotAttempt({
+    expectedEntityKind: params.expectedEntityKind,
+    label: params.query ?? 'entity',
+    query: params.query,
+    slotId: 'primary',
   });
-  const timingMs = Math.round(performance.now() - startedAt);
-  const firstEntity = response.data?.entities?.find(
-    (entity) => entity.entityKind === 'game' && entity.platform === 'steam'
-  );
+  const entity = pickSelectedEntityFromSlot({
+    entitiesByUid: resolved.entitiesByUid,
+    slot: resolved.slot,
+  });
 
-  if (!response.ok) {
+  return {
+    attempt: resolved.attempt,
+    entity,
+    selectionState: params.family
+      ? buildSelectionState({
+          family: params.family,
+          slots: [resolved.slot],
+        })
+      : null,
+  };
+}
+
+async function resolveGameEntityAttempt(params: {
+  family?: TigerPrimaryMatchedIntent;
+  query: string | null;
+  selectionState?: SessionChatSelectionState | null;
+}): Promise<{
+  attempt: TigerShadowAttempt;
+  entity: ResolvedCompareEntity | null;
+  entityUid: string | null;
+  selectionState: SessionChatSelectionState | null;
+}> {
+  const resolved = await resolvePrimaryEntityAttempt({
+    expectedEntityKind: 'game',
+    family: params.family,
+    query: params.query,
+    selectionState: params.selectionState,
+  });
+
+  if (!resolved.entity?.entityUid || resolved.entity.platform !== 'steam') {
     return {
       attempt: {
-        contractName: 'resolveEntities',
-        errorCode: response.errorCode,
-        httpStatus: response.httpStatus,
-        reason: response.reason,
-        status: 'error',
-        timingMs,
-      },
-      entityUid: null,
-    };
-  }
-
-  if (!firstEntity?.entityUid) {
-    return {
-      attempt: {
-        contractName: 'resolveEntities',
-        httpStatus: response.httpStatus,
-        reason: 'The Tiger resolveEntities contract did not return a Steam game match for the inferred reference.',
-        resultCount: response.data?.entities?.length ?? 0,
-        status: 'error',
+        ...resolved.attempt,
+        reason: resolved.attempt.reason ?? 'The Tiger resolveEntities contract did not return a Steam game match for the inferred reference.',
         sufficientToAnswer: false,
-        timingMs,
       },
+      entity: null,
       entityUid: null,
+      selectionState: resolved.selectionState,
     };
   }
 
   return {
-    attempt: {
-      contractName: 'resolveEntities',
-      httpStatus: response.httpStatus,
-      resultCount: response.data?.entities?.length ?? 0,
-      status: 'success',
-      sufficientToAnswer: true,
-      timingMs,
-    },
-    entityUid: firstEntity.entityUid,
+    attempt: resolved.attempt,
+    entity: resolved.entity,
+    entityUid: resolved.entity.entityUid,
+    selectionState: resolved.selectionState,
   };
 }
 
@@ -2035,7 +3165,7 @@ async function resolveGameEntityAttempts(queries: string[]): Promise<{
   const entityUids: string[] = [];
 
   for (const query of queries) {
-    const resolved = await resolveGameEntityAttempt(query);
+    const resolved = await resolveGameEntityAttempt({ query });
     attempts.push(resolved.attempt);
     if (resolved.entityUid) {
       entityUids.push(resolved.entityUid);
@@ -2050,31 +3180,29 @@ async function resolveGameEntityAttempts(queries: string[]): Promise<{
 
 function pickCompareResolutionGroup(params: {
   expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
-  responses: Array<{ entities: ResolvedCompareEntity[] }>;
-}): CompareResolutionGroup | null {
+  slots: RankedSelectionSlot[];
+}): {
+  group: CompareResolutionGroup | null;
+  requiresClarification: boolean;
+} {
   const comboScores = new Map<string, { count: number; group: CompareResolutionGroup; score: number }>();
 
-  for (const response of params.responses) {
-    const bestScoresForResponse = new Map<string, number>();
+  for (const slot of params.slots) {
+    const bestScoresForSlot = new Map<string, number>();
 
-    for (const entity of response.entities) {
+    for (const entity of slot.candidates) {
       if (params.expectedEntityKind && entity.entityKind !== params.expectedEntityKind) {
         continue;
       }
 
-      if (!entity.entityKind || !entity.platform) {
-        continue;
-      }
-
       const key = `${entity.entityKind}:${entity.platform}`;
-      const score = compareResolutionStrength(entity);
-      const currentBest = bestScoresForResponse.get(key) ?? -1;
-      if (score > currentBest) {
-        bestScoresForResponse.set(key, score);
+      const currentBest = bestScoresForSlot.get(key) ?? -1;
+      if (entity.score > currentBest) {
+        bestScoresForSlot.set(key, entity.score);
       }
     }
 
-    for (const [key, score] of bestScoresForResponse.entries()) {
+    for (const [key, score] of bestScoresForSlot.entries()) {
       const [entityKind, platform] = key.split(':');
       if (
         entityKind !== 'developer'
@@ -2093,19 +3221,48 @@ function pickCompareResolutionGroup(params: {
     }
   }
 
-  return [...comboScores.values()]
-    .filter((candidate) => candidate.count === params.responses.length)
-    .sort((left, right) => right.score - left.score)[0]?.group ?? null;
+  const rankedGroups = [...comboScores.values()]
+    .filter((candidate) => candidate.count === params.slots.length)
+    .sort((left, right) => right.score - left.score);
+  const developerGroup = rankedGroups.find((candidate) => candidate.group.entityKind === 'developer') ?? null;
+  const publisherGroup = rankedGroups.find((candidate) => candidate.group.entityKind === 'publisher') ?? null;
+  const preferDeveloperCompanyGroup =
+    !params.expectedEntityKind
+    && developerGroup
+    && publisherGroup
+    && Math.abs(developerGroup.score - publisherGroup.score) < 18;
+  const topGroup =
+    preferDeveloperCompanyGroup
+      ? developerGroup
+      : (rankedGroups[0] ?? null);
+  const runnerUp = rankedGroups.find((candidate) => candidate !== topGroup) ?? null;
+
+  if (!topGroup) {
+    return {
+      group: null,
+      requiresClarification: true,
+    };
+  }
+
+  return {
+    group: topGroup.group,
+    requiresClarification:
+      topGroup.score < params.slots.length * 70
+      || (
+        !preferDeveloperCompanyGroup
+        && runnerUp != null
+        && (topGroup.score - runnerUp.score) < 18
+      ),
+  };
 }
 
 function pickResolvedCompareEntityForGroup(params: {
   group: CompareResolutionGroup;
-  response: ResolveEntitiesResponse | undefined;
-}): ResolvedCompareEntity | null {
-  const entities = params.response?.entities ?? [];
-  return entities
+  slot: RankedSelectionSlot;
+}): RankedSelectionCandidate | null {
+  return params.slot.candidates
     .filter((entity) => entity.entityKind === params.group.entityKind && entity.platform === params.group.platform)
-    .sort((left, right) => compareResolutionStrength(right) - compareResolutionStrength(left))[0] ?? null;
+    .sort((left, right) => right.score - left.score)[0] ?? null;
 }
 
 async function resolveExplicitCompareEntitiesAttempt(params: {
@@ -2116,6 +3273,7 @@ async function resolveExplicitCompareEntitiesAttempt(params: {
   attempts: TigerShadowAttempt[];
   entityKind: 'developer' | 'game' | 'publisher' | null;
   entityUids: string[];
+  selectionState: SessionChatSelectionState | null;
 }> {
   if (params.entityNames.length < 2) {
     return {
@@ -2127,74 +3285,69 @@ async function resolveExplicitCompareEntitiesAttempt(params: {
       ],
       entityKind: null,
       entityUids: [],
+      selectionState: null,
     };
   }
 
   const attempts: TigerShadowAttempt[] = [];
-  const responses: Array<{
-    entities: ResolvedCompareEntity[];
-    entityName: string;
-    response: ResolveEntitiesResponse | undefined;
-  }> = [];
+  const slots: RankedSelectionSlot[] = [];
 
   for (const entityName of params.entityNames) {
-    const startedAt = performance.now();
-    const response = await postToQueryApi<ResolveEntitiesResponse>('/v1/contracts/resolve-entities', {
-      entityKinds: params.expectedEntityKind ? [params.expectedEntityKind] : ['game', 'publisher', 'developer'],
-      includeMetrics: false,
-      limit: 5,
+    const resolved = await resolveSelectionSlotAttempt({
+      expectedEntityKind: params.expectedEntityKind,
+      label: entityName,
       query: entityName,
-    }, { timeoutMs: params.timeoutMs });
-    const timingMs = Math.round(performance.now() - startedAt);
-
-    if (!response.ok) {
-      attempts.push({
-        contractName: 'resolveEntities',
-        errorCode: response.errorCode,
-        httpStatus: response.httpStatus,
-        reason: response.reason,
-        status: 'error',
-        timingMs,
-      });
-      return { attempts, entityKind: null, entityUids: [] };
-    }
-
-    attempts.push({
-      contractName: 'resolveEntities',
-      httpStatus: response.httpStatus,
-      resultCount: response.data?.entities?.length ?? 0,
-      status: 'success',
-      sufficientToAnswer: true,
-      timingMs,
+      slotId: `compare:${slots.length}`,
     });
-    responses.push({
-      entities: response.data?.entities ?? [],
-      entityName,
-      response: response.data,
-    });
+    attempts.push(resolved.attempt);
+    slots.push(resolved.slot);
   }
 
-  const group = pickCompareResolutionGroup({
+  const groupResult = pickCompareResolutionGroup({
     expectedEntityKind: params.expectedEntityKind,
-    responses,
+    slots,
+  });
+  const selectedCandidates = groupResult.group
+    ? slots.map((slot) =>
+      pickResolvedCompareEntityForGroup({
+        group: groupResult.group!,
+        slot,
+      })
+    )
+    : [];
+  const normalizedSlots = slots.map((slot, index) => ({
+    ...slot,
+    requiresClarification: groupResult.requiresClarification || !selectedCandidates[index],
+    selectedEntityUid:
+      !groupResult.requiresClarification && groupResult.group
+        ? selectedCandidates[index]?.entityUid ?? null
+        : null,
+  }));
+  const selectionState = buildSelectionState({
+    family: 'entity_compare',
+    slots: normalizedSlots,
   });
 
-  if (!group) {
+  if (!groupResult.group) {
     attempts.push(
       buildSkippedAttempt(
         'resolveEntities',
         'Tiger compare routing could not resolve all peers to the same entity kind and platform.'
       )
     );
-    return { attempts, entityKind: null, entityUids: [] };
+    return { attempts, entityKind: null, entityUids: [], selectionState };
   }
 
-  const entityUids = responses.map((response) =>
-    pickResolvedCompareEntityForGroup({
-      group,
-      response: response.response,
-    })?.entityUid ?? null
-  );
+  if (groupResult.requiresClarification) {
+    return {
+      attempts,
+      entityKind: groupResult.group.entityKind,
+      entityUids: [],
+      selectionState,
+    };
+  }
+
+  const entityUids = selectedCandidates.map((candidate) => candidate?.entityUid ?? null);
 
   if (entityUids.some((entityUid) => !entityUid)) {
     attempts.push(
@@ -2203,7 +3356,7 @@ async function resolveExplicitCompareEntitiesAttempt(params: {
         'Tiger compare routing could not resolve every peer to a stable shared entity type.'
       )
     );
-    return { attempts, entityKind: null, entityUids: [] };
+    return { attempts, entityKind: null, entityUids: [], selectionState };
   }
 
   const uniqueEntityUids = [...new Set(entityUids.filter((entityUid): entityUid is string => Boolean(entityUid)))];
@@ -2214,10 +3367,15 @@ async function resolveExplicitCompareEntitiesAttempt(params: {
         'Tiger compare routing collapsed to fewer than two distinct peers.'
       )
     );
-    return { attempts, entityKind: null, entityUids: [] };
+    return { attempts, entityKind: null, entityUids: [], selectionState };
   }
 
-  return { attempts, entityKind: group.entityKind, entityUids: uniqueEntityUids };
+  return {
+    attempts,
+    entityKind: groupResult.group.entityKind,
+    entityUids: uniqueEntityUids,
+    selectionState,
+  };
 }
 
 async function resolveDerivedCompareEntitiesAttempt(params: {
@@ -2385,6 +3543,33 @@ async function buildCompareRequestFromPrompt(params: {
   const explicitEntityNames = parseCompareEntities(params.prompt);
   const expectedEntityKind = normalizeEntityKindHint(params.prompt);
   const topCount = extractRequestedTopCount(stripCompareLeadIn(params.prompt), 5, 5);
+  const selectionState = params.sessionContext?.selectionState;
+
+  if (selectionState?.family === 'entity_compare' && inferSelectionFollowUpIntent(params.prompt, params.sessionContext)) {
+    const updatedSelection = applySelectionFollowUpState({
+      prompt: params.prompt,
+      selectionState,
+    });
+    if (updatedSelection.clarificationText) {
+      return {
+        attempts: [],
+        clarificationText: updatedSelection.clarificationText,
+        request: null,
+        selectionState: updatedSelection.selectionState,
+      };
+    }
+
+    const selectionRequest = buildCompareRequestFromSelectionState({
+      metrics,
+      selectionState: updatedSelection.selectionState,
+      topCount,
+    });
+    return {
+      attempts: [],
+      request: selectionRequest,
+      selectionState: updatedSelection.selectionState,
+    };
+  }
 
   if (explicitEntityNames.length >= 2) {
     const resolved = await resolveExplicitCompareEntitiesAttempt({
@@ -2397,6 +3582,16 @@ async function buildCompareRequestFromPrompt(params: {
       return {
         attempts: [...resolved.attempts, buildSkippedAttempt('compareEntities', invalidMetricReason)],
         request: null,
+        selectionState: resolved.selectionState,
+      };
+    }
+
+    if (resolved.selectionState?.slots.some((slot) => slot.requiresClarification)) {
+      return {
+        attempts: resolved.attempts,
+        clarificationText: resolved.selectionState ? renderSelectionClarification(resolved.selectionState) : null,
+        request: null,
+        selectionState: resolved.selectionState,
       };
     }
 
@@ -2418,6 +3613,7 @@ async function buildCompareRequestFromPrompt(params: {
               ...(metrics.length > 0 ? { metrics } : {}),
             }
           : null,
+      selectionState: resolved.selectionState,
     };
   }
 
@@ -2431,6 +3627,7 @@ async function buildCompareRequestFromPrompt(params: {
       return {
         attempts: [],
         request: sessionRequest,
+        selectionState: params.sessionContext?.selectionState ?? null,
       };
     }
   }
@@ -2449,6 +3646,27 @@ async function buildCompareRequestFromPrompt(params: {
             ...(metrics.length > 0 ? { metrics } : {}),
           }
         : null,
+    selectionState: params.sessionContext?.selectionState ?? null,
+  };
+}
+
+function buildCompareRequestFromSelectionState(params: {
+  metrics: CompareMetricName[];
+  selectionState: SessionChatSelectionState;
+  topCount: number;
+}): CompareEntitiesShadowRequest | null {
+  const entityUids = params.selectionState.slots
+    .map((slot) => slot.selectedEntityUid)
+    .filter((entityUid): entityUid is string => Boolean(entityUid))
+    .slice(0, Math.min(params.topCount, 5));
+
+  if (entityUids.length < 2) {
+    return null;
+  }
+
+  return {
+    entityUids,
+    ...(params.metrics.length > 0 ? { metrics: params.metrics } : {}),
   };
 }
 
@@ -2496,7 +3714,7 @@ function buildCompareRequestFromSessionContext(params: {
 }
 
 async function runExplainChangesShadow(entityQuery: string | null): Promise<TigerShadowAttempt[]> {
-  const { attempt: resolveAttempt, entityUid } = await resolveGameEntityAttempt(entityQuery);
+  const { attempt: resolveAttempt, entityUid } = await resolveGameEntityAttempt({ query: entityQuery });
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
   if (!entityUid) {
@@ -2540,11 +3758,20 @@ async function runExplainChangesShadow(entityQuery: string | null): Promise<Tige
   return attempts;
 }
 
-async function runExplainChangesPrimary(entityQuery: string | null): Promise<{
+async function runExplainChangesPrimary(params: {
+  entityQuery: string | null;
+  selectionState?: SessionChatSelectionState | null;
+}): Promise<{
   attempts: TigerShadowAttempt[];
+  clarificationText?: string | null;
   response: ExplainChangesResponse | null;
+  selectionState: SessionChatSelectionState | null;
 }> {
-  const { attempt: resolveAttempt, entityUid } = await resolveGameEntityAttempt(entityQuery);
+  const { attempt: resolveAttempt, entity, entityUid, selectionState } = await resolveGameEntityAttempt({
+    family: 'change_explanation',
+    query: params.entityQuery,
+    selectionState: params.selectionState,
+  });
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
   if (!entityUid) {
@@ -2554,7 +3781,12 @@ async function runExplainChangesPrimary(entityQuery: string | null): Promise<{
         'The Tiger primary explainChanges path was skipped because no game entity could be resolved.'
       )
     );
-    return { attempts, response: null };
+    return {
+      attempts,
+      clarificationText: selectionState ? renderSelectionClarification(selectionState) : null,
+      response: null,
+      selectionState,
+    };
   }
 
   const startedAt = performance.now();
@@ -2574,7 +3806,7 @@ async function runExplainChangesPrimary(entityQuery: string | null): Promise<{
       status: 'error',
       timingMs,
     });
-    return { attempts, response: null };
+    return { attempts, response: null, selectionState };
   }
 
   attempts.push({
@@ -2590,8 +3822,24 @@ async function runExplainChangesPrimary(entityQuery: string | null): Promise<{
     attempts,
     response:
       (response.data?.moments?.length ?? 0) > 0 && response.data?.sufficientToAnswer
-        ? response.data ?? null
+        ? {
+            ...response.data,
+            entity:
+              response.data?.entity
+              ?? (
+                entity
+                  ? {
+                      displayName: entity.displayName,
+                      entityKind: entity.entityKind,
+                      entityUid: entity.entityUid,
+                      platform: entity.platform,
+                      platformEntityId: entity.platformEntityId,
+                    }
+                  : undefined
+              ),
+          } as ExplainChangesResponse
         : null,
+    selectionState,
   };
 }
 
@@ -2858,9 +4106,108 @@ async function runChangeDiscoveryShadow(prompt: string): Promise<TigerShadowAtte
   }];
 }
 
+async function runMomentumPrimary(prompt: string): Promise<{
+  attempts: TigerShadowAttempt[];
+  request: DiscoverMomentumShadowRequest | null;
+  response: DiscoverMomentumResponse | null;
+}> {
+  const built = buildMomentumPrimaryRequest(prompt);
+  if (!built.request) {
+    return {
+      attempts: [
+        buildSkippedAttempt(
+          'discoverMomentum',
+          built.reason ?? 'Tiger momentum routing could not infer a supported momentum request.'
+        ),
+      ],
+      request: null,
+      response: null,
+    };
+  }
+
+  const startedAt = performance.now();
+  const response = await postToQueryApi<DiscoverMomentumResponse>(
+    '/v1/contracts/discover-momentum',
+    built.request,
+    { timeoutMs: readPrimaryTimeoutMs() }
+  );
+  const timingMs = Math.round(performance.now() - startedAt);
+
+  if (!response.ok) {
+    return {
+      attempts: [{
+        contractName: 'discoverMomentum',
+        errorCode: response.errorCode,
+        httpStatus: response.httpStatus,
+        reason: response.reason,
+        status: 'error',
+        timingMs,
+      }],
+      request: built.request,
+      response: null,
+    };
+  }
+
+  const resultCount = response.data?.items?.length ?? 0;
+  const sufficientToAnswer = Boolean((response.data?.sufficientToAnswer ?? false) && resultCount > 0);
+  return {
+    attempts: [{
+      contractName: 'discoverMomentum',
+      httpStatus: response.httpStatus,
+      reason: sufficientToAnswer
+        ? undefined
+        : 'Tiger discoverMomentum returned no stable momentum set for this prompt.',
+      resultCount,
+      status: sufficientToAnswer ? 'success' : 'skipped',
+      sufficientToAnswer,
+      timingMs,
+    }],
+    request: built.request,
+    response: sufficientToAnswer ? (response.data ?? null) : null,
+  };
+}
+
+async function runMomentumShadow(prompt: string): Promise<TigerShadowAttempt[]> {
+  const built = buildMomentumPrimaryRequest(prompt);
+  if (!built.request) {
+    return [
+      buildSkippedAttempt(
+        'discoverMomentum',
+        built.reason ?? 'Tiger momentum shadow could not infer a supported momentum request.'
+      ),
+    ];
+  }
+
+  const startedAt = performance.now();
+  const response = await postToQueryApi<DiscoverMomentumResponse>(
+    '/v1/contracts/discover-momentum',
+    built.request,
+    { timeoutMs: readShadowTimeoutMs() }
+  );
+  const timingMs = Math.round(performance.now() - startedAt);
+  const resultCount = response.data?.items?.length ?? 0;
+  const sufficientToAnswer = Boolean((response.data?.sufficientToAnswer ?? false) && resultCount > 0);
+
+  return [{
+    contractName: 'discoverMomentum',
+    errorCode: response.ok ? undefined : response.errorCode,
+    httpStatus: response.httpStatus,
+    reason: response.ok
+      ? (sufficientToAnswer ? undefined : 'Tiger discoverMomentum returned no stable momentum set for this prompt.')
+      : response.reason,
+    resultCount,
+    status: response.ok
+      ? (sufficientToAnswer ? 'success' : 'skipped')
+      : 'error',
+    sufficientToAnswer,
+    timingMs,
+  }];
+}
+
 async function buildSearchDocumentsRequest(params: {
   entityQuery: string | null;
   prompt: string;
+  selectionState?: SessionChatSelectionState | null;
 }): Promise<{
   attempts: TigerShadowAttempt[];
   request: {
@@ -2871,6 +4218,7 @@ async function buildSearchDocumentsRequest(params: {
     query?: string | null;
     startTime: string;
   } | null;
+  selectionState?: SessionChatSelectionState | null;
 }> {
   const explicitTargets = extractExplicitNewsTargets(params.prompt);
   const resolvedTargets = explicitTargets.length > 0
@@ -2885,9 +4233,62 @@ async function buildSearchDocumentsRequest(params: {
   const endTime = new Date().toISOString();
 
   if (resolvedTargets.length > 0) {
+    const selectedCandidate = pickSelectedCandidateFromSelectionState(params.selectionState);
+    if (
+      params.selectionState?.family === 'news_search'
+      && selectedCandidate?.entityKind === 'game'
+      && resolvedTargets.length === 1
+    ) {
+      return {
+        attempts: [{
+          contractName: 'resolveEntities',
+          reason: 'Tiger reused the current entity selection from session context.',
+          status: 'success',
+          sufficientToAnswer: true,
+        }],
+        request: {
+          endTime,
+          entityUids: [selectedCandidate.entityUid],
+          limit: useLatestMode ? 3 : 6,
+          mode: useDigestMode ? 'digest' : useLatestMode ? 'latest_item' : 'topic_search',
+          startTime,
+          ...(!useDigestMode && !useLatestMode
+            ? { query: buildNewsTopicQuery(params.prompt, params.entityQuery) }
+            : {}),
+        },
+        selectionState: params.selectionState ?? null,
+      };
+    }
+
+    if (resolvedTargets.length === 1) {
+      const resolved = await resolveGameEntityAttempt({
+        family: 'news_search',
+        query: resolvedTargets[0] ?? null,
+        selectionState: params.selectionState,
+      });
+      if (!resolved.entityUid) {
+        return { attempts: [resolved.attempt], request: null, selectionState: resolved.selectionState };
+      }
+
+      return {
+        attempts: [resolved.attempt],
+        request: {
+          endTime,
+          entityUids: [resolved.entityUid],
+          limit: useLatestMode ? 3 : 6,
+          mode: useDigestMode ? 'digest' : useLatestMode ? 'latest_item' : 'topic_search',
+          startTime,
+          ...(!useDigestMode && !useLatestMode
+            ? { query: buildNewsTopicQuery(params.prompt, params.entityQuery) }
+            : {}),
+        },
+        selectionState: resolved.selectionState,
+      };
+    }
+
     const resolved = await resolveGameEntityAttempts(resolvedTargets);
     if (resolved.entityUids.length === 0) {
-      return { attempts: resolved.attempts, request: null };
+      return { attempts: resolved.attempts, request: null, selectionState: null };
     }
 
     return {
@@ -2902,6 +4303,7 @@ async function buildSearchDocumentsRequest(params: {
           ? { query: buildNewsTopicQuery(params.prompt, params.entityQuery) }
           : {}),
       },
+      selectionState: null,
     };
   }
 
@@ -2919,6 +4321,7 @@ async function buildSearchDocumentsRequest(params: {
       query: buildNewsTopicQuery(params.prompt, params.entityQuery),
       startTime,
     },
+    selectionState: params.selectionState ?? null,
   };
 }
 
@@ -2973,9 +4376,12 @@ async function runSearchDocumentsShadow(params: {
 async function runSearchDocumentsPrimary(params: {
   entityQuery: string | null;
   prompt: string;
+  selectionState?: SessionChatSelectionState | null;
 }): Promise<{
   attempts: TigerShadowAttempt[];
+  clarificationText?: string | null;
   response: SearchDocumentsResponse | null;
+  selectionState: SessionChatSelectionState | null;
 }> {
   const builtRequest = await buildSearchDocumentsRequest(params);
   const attempts = [...builtRequest.attempts];
@@ -2987,7 +4393,12 @@ async function runSearchDocumentsPrimary(params: {
         'Tiger primary news routing could not build a supported request from the prompt.'
       )
     );
-    return { attempts, response: null };
+    return {
+      attempts,
+      clarificationText: builtRequest.selectionState ? renderSelectionClarification(builtRequest.selectionState) : null,
+      response: null,
+      selectionState: builtRequest.selectionState ?? params.selectionState ?? null,
+    };
   }
 
   const startedAt = performance.now();
@@ -3007,7 +4418,7 @@ async function runSearchDocumentsPrimary(params: {
       status: 'error',
       timingMs,
     });
-    return { attempts, response: null };
+    return { attempts, response: null, selectionState: builtRequest.selectionState ?? params.selectionState ?? null };
   }
 
   attempts.push({
@@ -3025,6 +4436,80 @@ async function runSearchDocumentsPrimary(params: {
       (response.data?.items?.length ?? 0) > 0 && response.data?.sufficientToAnswer
         ? response.data ?? null
         : null,
+    selectionState: builtRequest.selectionState ?? params.selectionState ?? null,
+  };
+}
+
+async function runUserContextPrimary(params: {
+  prompt: string;
+  userId: string | null;
+}): Promise<{
+  attempts: TigerShadowAttempt[];
+  request: {
+    includeAlertPreferences: boolean;
+    includeAlerts: boolean;
+    includePins: boolean;
+    limitAlerts: number;
+    userId: string;
+  } | null;
+  response: GetUserContextResponse | null;
+}> {
+  if (!params.userId) {
+    return {
+      attempts: [
+        buildSkippedAttempt(
+          'getUserContext',
+          'Tiger user context routing requires an authenticated user.'
+        ),
+      ],
+      request: null,
+      response: null,
+    };
+  }
+
+  const focus = inferUserContextFocus(params.prompt);
+  const request = {
+    includeAlertPreferences: true,
+    includeAlerts: focus !== 'pins',
+    includePins: true,
+    limitAlerts: focus === 'alerts' ? 12 : 5,
+    userId: params.userId,
+  };
+
+  const startedAt = performance.now();
+  const response = await postToQueryApi<GetUserContextResponse>(
+    '/v1/contracts/get-user-context',
+    request,
+    { timeoutMs: readPrimaryTimeoutMs() }
+  );
+  const timingMs = Math.round(performance.now() - startedAt);
+
+  if (!response.ok) {
+    return {
+      attempts: [{
+        contractName: 'getUserContext',
+        errorCode: response.errorCode,
+        httpStatus: response.httpStatus,
+        reason: response.reason,
+        status: 'error',
+        timingMs,
+      }],
+      request,
+      response: null,
+    };
+  }
+
+  return {
+    attempts: [{
+      contractName: 'getUserContext',
+      httpStatus: response.httpStatus,
+      resultCount: (response.data?.pins?.length ?? 0) + (response.data?.alerts?.length ?? 0),
+      status: 'success',
+      sufficientToAnswer: response.data?.sufficientToAnswer ?? true,
+      timingMs,
+    }],
+    request,
+    response: response.data ?? null,
   };
 }
 
@@ -3179,7 +4664,7 @@ async function runMetricHistoryShadow(params: {
   entityQuery: string | null;
   prompt: string;
 }): Promise<TigerShadowAttempt[]> {
-  const { attempt: resolveAttempt, entityUid } = await resolveGameEntityAttempt(params.entityQuery);
+  const { attempt: resolveAttempt, entityUid } = await resolveGameEntityAttempt({ query: params.entityQuery });
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
   if (!entityUid) {
@@ -3280,8 +4765,14 @@ async function runEntityOverviewShadow(prompt: string): Promise<TigerShadowAttem
   return attempts;
 }
 
-async function runEntityOverviewPrimary(prompt: string): Promise<{
+async function runEntityOverviewPrimary(params: {
+  explicitKindHint?: 'developer' | 'game' | 'publisher' | null;
+  prompt: string;
+  queryOverride?: string | null;
+  selectionState?: SessionChatSelectionState | null;
+}): Promise<{
   attempts: TigerShadowAttempt[];
+  clarificationText?: string | null;
   request: {
     entityKind: 'developer' | 'game' | 'publisher';
     gamesLimit: number;
@@ -3289,14 +4780,17 @@ async function runEntityOverviewPrimary(prompt: string): Promise<{
     platformEntityId: string;
   } | null;
   response: (GetEntityOverviewResponse & {
-    viewMode: 'company_count' | 'company_games' | 'game_overview';
+    viewMode: 'company_count' | 'company_games' | 'company_metrics' | 'game_overview';
   }) | null;
+  selectionState: SessionChatSelectionState | null;
 }> {
-  const query = extractEntityOverviewQuery(prompt);
-  const expectedEntityKind = inferEntityOverviewKindHint(prompt);
-  const { attempt: resolveAttempt, entity } = await resolvePrimaryEntityAttempt({
+  const query = params.queryOverride ?? extractEntityOverviewQuery(params.prompt);
+  const expectedEntityKind = params.explicitKindHint ?? inferEntityOverviewKindHint(params.prompt);
+  const { attempt: resolveAttempt, entity, selectionState } = await resolvePrimaryEntityAttempt({
     expectedEntityKind,
+    family: 'entity_overview',
     query,
+    selectionState: params.selectionState,
   });
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
@@ -3307,13 +4801,19 @@ async function runEntityOverviewPrimary(prompt: string): Promise<{
         'The Tiger primary entity overview path was skipped because the prompt did not resolve to a stable entity.'
       )
     );
-    return { attempts, request: null, response: null };
+    return {
+      attempts,
+      clarificationText: selectionState ? renderSelectionClarification(selectionState) : null,
+      request: null,
+      response: null,
+      selectionState,
+    };
   }
 
   const request = {
     entityKind: entity.entityKind as 'developer' | 'game' | 'publisher',
     gamesLimit: entity.entityKind === 'game' ? 0 : 5,
-    gamesSortBy: /\b(?:top|best)\b/i.test(prompt) ? 'reviews' as const : 'release_date' as const,
+    gamesSortBy: /\b(?:top|best)\b/i.test(params.prompt) ? 'reviews' as const : 'release_date' as const,
     platformEntityId: entity.platformEntityId,
   };
 
@@ -3334,7 +4834,7 @@ async function runEntityOverviewPrimary(prompt: string): Promise<{
       status: 'error',
       timingMs,
     });
-    return { attempts, request, response: null };
+    return { attempts, request, response: null, selectionState };
   }
 
   const data = response.data;
@@ -3348,7 +4848,7 @@ async function runEntityOverviewPrimary(prompt: string): Promise<{
   });
 
   if (!data?.sufficientToAnswer) {
-    return { attempts, request, response: null };
+    return { attempts, request, response: null, selectionState };
   }
 
   return {
@@ -3356,8 +4856,9 @@ async function runEntityOverviewPrimary(prompt: string): Promise<{
     request,
     response: {
       ...data,
-      viewMode: inferEntityOverviewViewMode(prompt, data.entity.entityKind),
+      viewMode: inferEntityOverviewViewMode(params.prompt, data.entity.entityKind),
     },
+    selectionState,
   };
 }
 
@@ -3524,8 +5025,10 @@ async function runCompareEntitiesPrimary(params: {
   sessionContext: SessionChatContext | null;
 }): Promise<{
   attempts: TigerShadowAttempt[];
+  clarificationText?: string | null;
   request: CompareEntitiesShadowRequest | null;
   response: CompareEntitiesResponse | null;
+  selectionState: SessionChatSelectionState | null;
 }> {
   const builtRequest = await buildCompareRequestFromPrompt({
     prompt: params.prompt,
@@ -3535,7 +5038,13 @@ async function runCompareEntitiesPrimary(params: {
   const attempts = [...builtRequest.attempts];
 
   if (!builtRequest.request || builtRequest.request.entityUids.length < 2) {
-    return { attempts, request: null, response: null };
+    return {
+      attempts,
+      clarificationText: builtRequest.clarificationText ?? (builtRequest.selectionState ? renderSelectionClarification(builtRequest.selectionState) : null),
+      request: null,
+      response: null,
+      selectionState: builtRequest.selectionState ?? params.sessionContext?.selectionState ?? null,
+    };
   }
 
   const request: CompareEntitiesShadowRequest = builtRequest.request;
@@ -3556,7 +5065,12 @@ async function runCompareEntitiesPrimary(params: {
       status: 'error',
       timingMs,
     });
-    return { attempts, request, response: null };
+    return {
+      attempts,
+      request,
+      response: null,
+      selectionState: builtRequest.selectionState ?? params.sessionContext?.selectionState ?? null,
+    };
   }
 
   attempts.push({
@@ -3575,17 +5089,25 @@ async function runCompareEntitiesPrimary(params: {
       (response.data?.items?.length ?? 0) >= 2 && response.data?.sufficientToAnswer
         ? response.data ?? null
         : null,
+    selectionState: builtRequest.selectionState ?? params.sessionContext?.selectionState ?? null,
   };
 }
 
 async function runMetricHistoryPrimary(params: {
   entityQuery: string | null;
   prompt: string;
+  selectionState?: SessionChatSelectionState | null;
 }): Promise<{
   attempts: TigerShadowAttempt[];
+  clarificationText?: string | null;
   response: TraceMetricHistoryResponse | null;
+  selectionState: SessionChatSelectionState | null;
 }> {
-  const { attempt: resolveAttempt, entityUid } = await resolveGameEntityAttempt(params.entityQuery);
+  const { attempt: resolveAttempt, entityUid, selectionState } = await resolveGameEntityAttempt({
+    family: 'metric_history',
+    query: params.entityQuery,
+    selectionState: params.selectionState,
+  });
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
   if (!entityUid) {
@@ -3595,7 +5117,12 @@ async function runMetricHistoryPrimary(params: {
         'The Tiger primary metric history path was skipped because no game entity could be resolved.'
       )
     );
-    return { attempts, response: null };
+    return {
+      attempts,
+      clarificationText: selectionState ? renderSelectionClarification(selectionState) : null,
+      response: null,
+      selectionState,
+    };
   }
 
   const request: TraceMetricHistoryShadowRequest = {
@@ -3621,7 +5148,7 @@ async function runMetricHistoryPrimary(params: {
       status: 'error',
       timingMs,
     });
-    return { attempts, response: null };
+    return { attempts, response: null, selectionState };
   }
 
   attempts.push({
@@ -3639,7 +5166,57 @@ async function runMetricHistoryPrimary(params: {
       (response.data?.series?.length ?? 0) > 0 && response.data?.sufficientToAnswer
         ? response.data ?? null
         : null,
+    selectionState,
   };
+}
+
+function isSingleEntityFollowUpFamily(
+  family: string | null | undefined
+): family is Extract<TigerPrimaryMatchedIntent, 'change_explanation' | 'entity_overview' | 'metric_history' | 'news_search'> {
+  return family === 'change_explanation'
+    || family === 'entity_overview'
+    || family === 'metric_history'
+    || family === 'news_search';
+}
+
+function resolvePrimaryFollowUpContext(params: {
+  prompt: string;
+  sessionContext: SessionChatContext | null;
+}): {
+  clarificationText?: string | null;
+  entityQuery?: string | null;
+  explicitKindHint?: SessionSelectionEntityKind | null;
+  matchedIntent: TigerPrimaryMatchedIntent;
+  selectionState?: SessionChatSelectionState | null;
+} | null {
+  const priorSelectionState = params.sessionContext?.selectionState ?? null;
+  const priorFamily = priorSelectionState?.family ?? params.sessionContext?.lastAnswer?.family ?? null;
+
+  if (priorSelectionState && inferSelectionFollowUpIntent(params.prompt, params.sessionContext)) {
+    const updatedSelection = applySelectionFollowUpState({
+      prompt: params.prompt,
+      selectionState: priorSelectionState,
+    });
+
+    return {
+      clarificationText: updatedSelection.clarificationText,
+      explicitKindHint: inferEntityKindCorrection(params.prompt),
+      matchedIntent: priorSelectionState.family as TigerPrimaryMatchedIntent,
+      selectionState: updatedSelection.selectionState,
+    };
+  }
+
+  const followUpQuery = extractSameFamilyEntityFollowUpQuery(params.prompt);
+  if (followUpQuery && isSingleEntityFollowUpFamily(priorFamily)) {
+    return {
+      entityQuery: followUpQuery,
+      explicitKindHint: inferEntityKindCorrection(params.prompt),
+      matchedIntent: priorFamily,
+      selectionState: null,
+    };
+  }
+
+  return null;
 }
 
 export async function runTigerPrimaryEvaluation(params: {
@@ -3663,10 +5240,17 @@ export async function runTigerPrimaryEvaluation(params: {
         route: 'disabled',
       },
       renderedText: null,
+      sessionState: null,
     };
   }
 
+  const followUpContext = resolvePrimaryFollowUpContext({
+    prompt: params.prompt,
+    sessionContext: params.sessionContext,
+  });
+  const priorSelectionState = params.sessionContext?.selectionState ?? null;
   const matchedIntent = inferPrimaryMatchedIntent(params.prompt)
+    ?? followUpContext?.matchedIntent
     ?? (inferCompareFollowUpIntent(params.prompt, params.sessionContext) ? 'entity_compare' : null);
   if (!matchedIntent) {
     return {
@@ -3681,18 +5265,70 @@ export async function runTigerPrimaryEvaluation(params: {
         route: 'unmatched',
       },
       renderedText: null,
+      sessionState: null,
     };
   }
 
+  if (followUpContext?.clarificationText) {
+    const answerBrief = buildTigerClarificationBrief({
+      clarificationText: followUpContext.clarificationText,
+      intent: matchedIntent,
+      selectionState: followUpContext.selectionState ?? null,
+    });
+
+    return {
+      answerBrief,
+      contractResult: null,
+      followUpSuggestions: answerBrief.followUpSuggestions,
+      info: {
+        attempts: [],
+        cohort,
+        enabled: true,
+        matchedIntent,
+        mode,
+        renderMode: 'deterministic',
+        route: 'primary_success',
+      },
+      renderedText: renderTigerAnswerBrief(answerBrief),
+      sessionState: {
+        lastAnswer: buildTigerSelectionLastAnswer({
+          family: matchedIntent,
+          clarificationNeeded: true,
+        }),
+        selectionState: followUpContext.selectionState ?? null,
+      },
+    };
+  }
+
+  const activeSelectionState =
+    followUpContext?.entityQuery
+      ? (followUpContext.selectionState ?? null)
+      : (
+        followUpContext?.selectionState
+        ?? (priorSelectionState?.family === matchedIntent ? priorSelectionState : null)
+      );
   const entityQuery =
-    extractGameNameFromSessionContext(params.sessionContext) ??
-    extractEntityQueryFromPrompt(params.prompt);
+    followUpContext?.entityQuery
+    ?? extractGameNameFromSessionContext(params.sessionContext)
+    ?? extractEntityQueryFromPrompt(params.prompt);
 
   try {
     const outcome = matchedIntent === 'change_discovery'
       ? await runChangeDiscoveryPrimary(params.prompt)
+      : matchedIntent === 'user_context'
+      ? await runUserContextPrimary({
+          prompt: params.prompt,
+          userId: params.userId,
+        })
+      : matchedIntent === 'momentum_discovery'
+      ? await runMomentumPrimary(params.prompt)
       : matchedIntent === 'entity_overview'
-      ? await runEntityOverviewPrimary(params.prompt)
+      ? await runEntityOverviewPrimary({
+          explicitKindHint: followUpContext?.explicitKindHint ?? null,
+          prompt: params.prompt,
+          queryOverride: followUpContext?.entityQuery ?? null,
+          selectionState: activeSelectionState,
+        })
       : matchedIntent === 'catalog_search'
       ? await runCatalogSearchPrimary(params.prompt)
       : matchedIntent === 'entity_ranking'
@@ -3706,15 +5342,53 @@ export async function runTigerPrimaryEvaluation(params: {
             ? await runMetricHistoryPrimary({
                 entityQuery,
                 prompt: params.prompt,
+                selectionState: activeSelectionState,
               })
             : matchedIntent === 'news_search'
               ? await runSearchDocumentsPrimary({
                   entityQuery,
                   prompt: params.prompt,
+                  selectionState: activeSelectionState,
                 })
               : matchedIntent === 'semantic_search'
                 ? await runSemanticSearchPrimary(params.prompt)
-                : await runExplainChangesPrimary(entityQuery);
+                : await runExplainChangesPrimary({
+                    entityQuery,
+                    selectionState: activeSelectionState,
+                  });
+
+    if ('clarificationText' in outcome && outcome.clarificationText) {
+      const selectionState =
+        'selectionState' in outcome ? (outcome.selectionState ?? null) : activeSelectionState;
+      const answerBrief = buildTigerClarificationBrief({
+        clarificationText: outcome.clarificationText,
+        intent: matchedIntent,
+        selectionState,
+      });
+
+      return {
+        answerBrief,
+        contractResult: null,
+        followUpSuggestions: answerBrief.followUpSuggestions,
+        info: {
+          attempts: outcome.attempts,
+          cohort,
+          enabled: true,
+          matchedIntent,
+          mode,
+          renderMode: 'deterministic',
+          route: 'primary_success',
+        },
+        renderedText: renderTigerAnswerBrief(answerBrief),
+        sessionState: {
+          lastAnswer: buildTigerSelectionLastAnswer({
+            family: matchedIntent,
+            clarificationNeeded: true,
+          }),
+          selectionState,
+        },
+      };
+    }
 
     if (!outcome.response) {
       return {
@@ -3731,6 +5405,13 @@ export async function runTigerPrimaryEvaluation(params: {
             : 'fallback_to_legacy',
         },
         renderedText: null,
+        sessionState: {
+          lastAnswer: buildTigerSelectionLastAnswer({
+            family: matchedIntent,
+            clarificationNeeded: false,
+          }),
+          selectionState: 'selectionState' in outcome ? (outcome.selectionState ?? null) : activeSelectionState,
+        },
       };
     }
 
@@ -3771,7 +5452,17 @@ export async function runTigerPrimaryEvaluation(params: {
       };
     }
 
+    const selectionState =
+      'selectionState' in outcome ? (outcome.selectionState ?? null) : activeSelectionState;
+    const answerBrief = buildTigerSuccessBrief({
+      fallbackMarkdown: renderedText,
+      intent: matchedIntent,
+      response: outcome.response,
+      selectionState,
+    });
+
     return {
+      answerBrief,
       contractResult:
         matchedIntent === 'entity_overview' && 'request' in outcome && outcome.request
           ? {
@@ -3780,11 +5471,19 @@ export async function runTigerPrimaryEvaluation(params: {
               response: outcome.response,
             }
           : matchedIntent === 'catalog_search' && 'request' in outcome && outcome.request
-          ? {
-              contractName: 'searchCatalog',
-              request: outcome.request as unknown as Record<string, unknown>,
-              response: outcome.response,
-            }
+        ? {
+            contractName: 'searchCatalog',
+            request: outcome.request as unknown as Record<string, unknown>,
+            response: outcome.response,
+          }
+          : matchedIntent === 'user_context'
+            ? null
+          : matchedIntent === 'momentum_discovery' && 'request' in outcome && outcome.request
+            ? {
+                contractName: 'discoverMomentum',
+                request: outcome.request as unknown as Record<string, unknown>,
+                response: outcome.response,
+              }
           : matchedIntent === 'semantic_search' && 'request' in outcome && outcome.request
             ? {
                 contractName: 'semanticSearch',
@@ -3807,7 +5506,15 @@ export async function runTigerPrimaryEvaluation(params: {
         renderMode: 'deterministic',
         route: 'primary_success',
       },
-      renderedText,
+      followUpSuggestions: answerBrief.followUpSuggestions,
+      renderedText: renderTigerAnswerBrief(answerBrief),
+      sessionState: {
+        lastAnswer: buildTigerSelectionLastAnswer({
+          family: matchedIntent,
+          clarificationNeeded: false,
+        }),
+        selectionState,
+      },
     };
   } catch (error) {
     return {
@@ -3820,8 +5527,12 @@ export async function runTigerPrimaryEvaluation(params: {
             ? 'rankEntities'
           : matchedIntent === 'entity_compare'
             ? 'compareEntities'
+          : matchedIntent === 'momentum_discovery'
+            ? 'discoverMomentum'
           : matchedIntent === 'change_discovery'
             ? 'searchChangeActivity'
+            : matchedIntent === 'user_context'
+              ? 'getUserContext'
             : matchedIntent === 'metric_history'
               ? 'traceMetricHistory'
               : matchedIntent === 'news_search'
@@ -3842,6 +5553,7 @@ export async function runTigerPrimaryEvaluation(params: {
         route: 'error',
       },
       renderedText: null,
+      sessionState: null,
     };
   }
 }
@@ -3885,6 +5597,8 @@ export async function runTigerShadowEvaluation(params: {
 
   const attempts = matchedIntent === 'change_discovery'
     ? await runChangeDiscoveryShadow(params.prompt)
+    : matchedIntent === 'momentum_discovery'
+      ? await runMomentumShadow(params.prompt)
     : matchedIntent === 'entity_overview'
     ? await runEntityOverviewShadow(params.prompt)
     : matchedIntent === 'change_explanation'
@@ -3919,6 +5633,7 @@ export async function runTigerShadowEvaluation(params: {
         attempt.contractName === 'explainChanges'
         || attempt.contractName === 'getEntityOverview'
         || attempt.contractName === 'compareEntities'
+        || attempt.contractName === 'discoverMomentum'
         || attempt.contractName === 'discoverChangePatterns'
         || attempt.contractName === 'rankEntities'
         || attempt.contractName === 'searchCatalog'

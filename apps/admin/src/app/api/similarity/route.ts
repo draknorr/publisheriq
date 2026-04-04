@@ -1,13 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   findSimilarWithTimeout,
-  QDRANT_TIMEOUT_ERROR,
+  SEMANTIC_SEARCH_TIMEOUT_ERROR,
   type FindSimilarArgs,
-} from '@/lib/qdrant/search-service';
-import type { PopularityComparison, ReviewComparison } from '@publisheriq/qdrant';
+  type SemanticSearchPopularityComparison,
+  type SemanticSearchReviewComparison,
+} from '@/lib/semantic-search/query-api-service';
 import { createServerClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
+
+function collectRequestedUnsupportedFilters(params: {
+  genres: string[];
+  steamDeck: string[];
+  tags: string[];
+}): string[] {
+  const unsupported: string[] = [];
+
+  if (params.genres.length > 0) {
+    unsupported.push('genres');
+  }
+  if (params.tags.length > 0) {
+    unsupported.push('tags');
+  }
+  if (params.steamDeck.length > 0) {
+    unsupported.push('steam_deck');
+  }
+
+  return unsupported;
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -28,8 +49,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const referenceIdStr = searchParams.get('reference_id');
     const referenceName = searchParams.get('reference_name');
     const limitStr = searchParams.get('limit');
-    const popularityComparison = searchParams.get('popularity_comparison') as PopularityComparison | null;
-    const reviewComparison = searchParams.get('review_comparison') as ReviewComparison | null;
+    const popularityComparison =
+      searchParams.get('popularity_comparison') as SemanticSearchPopularityComparison | null;
+    const reviewComparison =
+      searchParams.get('review_comparison') as SemanticSearchReviewComparison | null;
     const maxPriceCents = searchParams.get('max_price_cents');
     const isFree = searchParams.get('is_free');
     const platforms = searchParams.getAll('platforms');
@@ -107,11 +130,36 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       limit,
     });
 
+    const unsupportedFilters = collectRequestedUnsupportedFilters({
+      genres,
+      steamDeck,
+      tags,
+    });
+
+    if (
+      !result.success &&
+      result.errorCode === 'CONTRACT_RUNTIME_UNAVAILABLE' &&
+      unsupportedFilters.length > 0
+    ) {
+      return NextResponse.json(
+        {
+          code: 'UNSUPPORTED_FILTER',
+          error:
+            'Tiger similarity search does not support one or more requested feature filters yet.',
+          success: false,
+          unsupportedFilters,
+        },
+        { status: 400 }
+      );
+    }
+
     const status = result.success
       ? 200
-      : result.error === QDRANT_TIMEOUT_ERROR
+      : result.error === SEMANTIC_SEARCH_TIMEOUT_ERROR
         ? 504
-        : 200;
+        : result.httpStatus && result.httpStatus >= 400
+          ? result.httpStatus
+          : 502;
 
     return NextResponse.json(result, { status });
   } catch (error) {

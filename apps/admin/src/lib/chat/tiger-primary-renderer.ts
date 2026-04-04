@@ -8,8 +8,10 @@ type TigerPrimaryRenderableIntent =
   | 'entity_overview'
   | 'entity_ranking'
   | 'metric_history'
+  | 'momentum_discovery'
   | 'news_search'
-  | 'semantic_search';
+  | 'semantic_search'
+  | 'user_context';
 
 interface TigerPrimaryCatalogItem {
   appid: number;
@@ -78,7 +80,7 @@ interface TigerPrimaryEntityOverviewResponse {
     };
   };
   games: TigerPrimaryEntityOverviewGameItem[];
-  viewMode: 'company_count' | 'company_games' | 'game_overview';
+  viewMode: 'company_count' | 'company_games' | 'company_metrics' | 'game_overview';
 }
 
 interface TigerPrimaryRankedEntity {
@@ -156,6 +158,44 @@ interface TigerPrimaryTraceMetricHistoryResponse {
   };
   series: TigerPrimaryTraceMetricHistorySeries[];
   startDate: string;
+}
+
+interface TigerPrimaryDiscoverMomentumItem {
+  appid: number;
+  ccuPeak: number | null;
+  matchedSteamDeck?: 'playable' | 'verified' | null;
+  momentumScore: number | null;
+  name: string;
+  platformSupport: string[];
+  reviewPercentage: number | null;
+  reviewsAdded30d: number | null;
+  reviewsAdded7d: number | null;
+  supportLevel: 'high' | 'low' | 'medium';
+  supportReasons: string[];
+  totalReviews: number | null;
+  trendDirection: 'down' | 'stable' | 'up' | null;
+  velocityAcceleration: number | null;
+}
+
+interface TigerPrimaryDiscoverMomentumResponse {
+  filtersApplied: string[];
+  items: TigerPrimaryDiscoverMomentumItem[];
+  rankingDefinition: string;
+  rankingLabel: string;
+  sortBy?:
+    | 'ccu_peak'
+    | 'momentum_score'
+    | 'review_score'
+    | 'reviews_added_30d'
+    | 'reviews_added_7d'
+    | 'sentiment_delta'
+    | 'total_reviews'
+    | 'velocity_7d'
+    | 'velocity_acceleration';
+  sufficientToAnswer: boolean;
+  timeframe: '7d' | '30d' | 'current';
+  timeframeLabel: string;
+  trendType?: 'accelerating' | 'breaking_out' | 'declining' | 'review_momentum' | null;
 }
 
 interface TigerPrimarySearchDocumentItem {
@@ -239,6 +279,48 @@ interface TigerPrimarySemanticSearchResponse {
     type: string;
   };
   results?: TigerPrimarySemanticSearchResult[];
+}
+
+interface TigerPrimaryUserContextPin {
+  displayName: string;
+  entityKind: 'developer' | 'game' | 'publisher';
+  metrics: {
+    ccuPeak: number | null;
+    gameCount: number | null;
+    ownersMidpoint: number | null;
+    reviewScore: number | null;
+    totalReviews: number | null;
+  };
+  pinId: string;
+  pinOrder: number;
+  pinnedAt: string;
+}
+
+interface TigerPrimaryUserContextAlert {
+  alertId: string;
+  alertType: string;
+  createdAt: string;
+  description: string;
+  entity: {
+    displayName: string;
+    entityKind: 'developer' | 'game' | 'publisher';
+  };
+  isRead: boolean;
+  severity: 'high' | 'low' | 'medium';
+  title: string;
+}
+
+interface TigerPrimaryUserContextResponse {
+  alertPreferences: {
+    alertsEnabled: boolean;
+    emailDigestEnabled: boolean;
+    emailDigestFrequency: string | null;
+  } | null;
+  alerts: TigerPrimaryUserContextAlert[];
+  pins: TigerPrimaryUserContextPin[];
+  totalAlerts: number;
+  totalPins: number;
+  unreadAlertCount: number;
 }
 
 interface TigerPrimaryExplainChangesEvent {
@@ -350,7 +432,7 @@ function buildMarkdownTable(columns: string[], rows: string[][]): string {
 function formatCatalogIntro(response: TigerPrimaryCatalogResponse): string {
   const company = response.interpretedFilters.developerQuery || response.interpretedFilters.publisherQuery;
   if (company) {
-    return `Here are the matching games for **${company}** from Tiger.`;
+    return `Here are the matching games for **${company}**.`;
   }
 
   const qualifiers: string[] = [];
@@ -377,8 +459,8 @@ function formatCatalogIntro(response: TigerPrimaryCatalogResponse): string {
   }
 
   return qualifiers.length > 0
-    ? `Here are the matching ${qualifiers.join(', ')} games from Tiger.`
-    : 'Here are the matching games from Tiger.';
+    ? `Here are the matching ${qualifiers.join(', ')} games.`
+    : 'Here are the matching games.';
 }
 
 function renderCatalogSearch(response: TigerPrimaryCatalogResponse): string {
@@ -478,9 +560,13 @@ function renderRankEntities(response: TigerPrimaryRankEntitiesResponse): string 
       secondaryValue,
     ];
   });
+  const leader = response.items[0];
+  const intro = leader
+    ? `**${leader.displayName}** currently leads this ranking by **${metricLabel(response.metric)}**.`
+    : `Here are the top ${response.entityKind === 'game' ? 'games' : `${response.entityKind}s`} by **${metricLabel(response.metric)}**.`;
 
   return [
-    `Here are the top ${response.entityKind === 'game' ? 'games' : `${response.entityKind}s`} by **${metricLabel(response.metric)}** from Tiger.`,
+    intro,
     '',
     buildMarkdownTable(
       ['Rank', nameColumn, metricLabel(response.metric), secondaryColumn],
@@ -542,9 +628,15 @@ function renderCompareEntities(response: TigerPrimaryCompareEntitiesResponse): s
   const highlights = response.highlights
     .slice(0, 3)
     .map((highlight) => `- **${metricLabel(highlight.metric)}** leader: ${highlight.displayName} (${renderCompareScalarValue(highlight.metric, highlight.value)})`);
+  const comparisonSummary = response.highlights.slice(0, 2).map((highlight) => {
+    return `${highlight.displayName} leads on ${metricLabel(highlight.metric).toLowerCase()}`;
+  });
+  const intro = comparisonSummary.length > 0
+    ? `${comparisonSummary.join(', while ')}.`
+    : `Here is the comparison for ${compareTarget}.`;
 
   return [
-    `Here is the Tiger comparison for ${compareTarget}.`,
+    intro,
     '',
     buildMarkdownTable(columns, rows),
     ...(highlights.length > 0 ? ['', ...highlights] : []),
@@ -606,11 +698,172 @@ function renderMetricHistory(response: TigerPrimaryTraceMetricHistoryResponse): 
     return `- **${historyMetricLabel(series.metric)}**: ${startValue} -> ${latestValue} (${deltaAbs}${deltaPct ? `, ${deltaPct}` : ''})`;
   });
 
+  const firstSeries = response.series[0];
+  const intro = firstSeries
+    ? `Over this window, **${response.entity.displayName}** moved from **${formatHistoryValue(firstSeries.metric, firstSeries.summary.startValue)}** to **${formatHistoryValue(firstSeries.metric, firstSeries.summary.latestValue)}** on **${historyMetricLabel(firstSeries.metric)}**.`
+    : `Here is the recent history for **${response.entity.displayName}**.`;
+
   return [
-    `Here is the Tiger metric history for **${response.entity.displayName}** from **${response.startDate}** through **${response.endDate}**.`,
+    `${intro} The window runs from **${response.startDate}** through **${response.endDate}**.`,
     '',
     ...bullets,
   ].join('\n');
+}
+
+function formatMomentumSupportLevel(value: TigerPrimaryDiscoverMomentumItem['supportLevel']): string {
+  return value === 'high' || value === 'medium' || value === 'low' ? value : 'n/a';
+}
+
+function formatMomentumSupportReason(item: TigerPrimaryDiscoverMomentumItem): string {
+  const supportReasons = Array.isArray(item.supportReasons) ? item.supportReasons : [];
+  return supportReasons[0] ?? 'Momentum evidence supports this ranking.';
+}
+
+function formatMomentumTrendDirection(
+  value: TigerPrimaryDiscoverMomentumItem['trendDirection']
+): string {
+  switch (value) {
+    case 'up':
+      return 'up';
+    case 'down':
+      return 'down';
+    case 'stable':
+      return 'stable';
+    default:
+      return 'n/a';
+  }
+}
+
+function getMomentumTableMode(
+  response: TigerPrimaryDiscoverMomentumResponse
+): 'current_players' | 'review_momentum' | 'momentum' {
+  if (response.sortBy === 'ccu_peak' && response.timeframe === 'current') {
+    return 'current_players';
+  }
+
+  if (
+    response.sortBy === 'review_score'
+    || response.sortBy === 'reviews_added_7d'
+    || response.sortBy === 'reviews_added_30d'
+    || response.sortBy === 'sentiment_delta'
+    || response.sortBy === 'velocity_7d'
+    || response.trendType === 'review_momentum'
+  ) {
+    return 'review_momentum';
+  }
+
+  return 'momentum';
+}
+
+function renderMomentumDiscovery(response: TigerPrimaryDiscoverMomentumResponse): string {
+  const leader = response.items[0] ?? null;
+  const leaderReason = leader ? formatMomentumSupportReason(leader) : null;
+  const intro = leader
+    ? `**${leader.name}** currently leads this set by **${response.rankingLabel}** for **${response.timeframeLabel}**.${leaderReason ? ` ${leaderReason}` : ''}`
+    : `Here are the leading games by **${response.rankingLabel}** for **${response.timeframeLabel}**.`;
+  const tableMode = getMomentumTableMode(response);
+  const reviewDeltaColumn = response.timeframe === '30d' ? 'Reviews Added (30d)' : 'Reviews Added (7d)';
+  const rows = response.items.slice(0, 10).map((item) => {
+    if (tableMode === 'current_players') {
+      return [
+        formatGameLink(item.name, item.appid),
+        formatNumber(item.ccuPeak),
+        formatMomentumTrendDirection(item.trendDirection),
+        formatNumber(item.totalReviews),
+        (Array.isArray(item.platformSupport) ? item.platformSupport : []).join(', ') || 'n/a',
+      ];
+    }
+
+    if (tableMode === 'review_momentum') {
+      return [
+        formatGameLink(item.name, item.appid),
+        formatNumber(response.timeframe === '30d' ? item.reviewsAdded30d : item.reviewsAdded7d),
+        formatPercent(item.reviewPercentage),
+        formatNumber(item.totalReviews),
+        formatNumber(item.ccuPeak),
+        (Array.isArray(item.platformSupport) ? item.platformSupport : []).join(', ') || 'n/a',
+      ];
+    }
+
+    return [
+      formatGameLink(item.name, item.appid),
+      formatMomentumSupportLevel(item.supportLevel),
+      formatMomentumTrendDirection(item.trendDirection),
+      formatNumber(item.ccuPeak),
+      formatNumber(response.timeframe === '30d' ? item.reviewsAdded30d : item.reviewsAdded7d),
+      (Array.isArray(item.platformSupport) ? item.platformSupport : []).join(', ') || 'n/a',
+    ];
+  });
+
+  const headers =
+    tableMode === 'current_players'
+      ? ['Game', 'Peak CCU', 'Trend', 'Total Reviews', 'Platforms']
+      : tableMode === 'review_momentum'
+        ? ['Game', reviewDeltaColumn, 'Review %', 'Total Reviews', 'Peak CCU', 'Platforms']
+        : ['Game', 'Support', 'Trend', 'Peak CCU', reviewDeltaColumn, 'Platforms'];
+
+  return [
+    intro,
+    '',
+    buildMarkdownTable(headers, rows),
+    '',
+    response.rankingDefinition,
+  ].join('\n');
+}
+
+function renderUserContext(response: TigerPrimaryUserContextResponse): string {
+  const sections: string[] = [];
+  const unreadIntro = response.unreadAlertCount > 0
+    ? `You currently have **${formatNumber(response.unreadAlertCount)} unread alerts** across **${formatNumber(response.totalPins)} pinned items**.`
+    : response.totalPins > 0
+      ? `You currently have **${formatNumber(response.totalPins)} pinned items** and no unread alerts.`
+      : 'You do not have any pinned items or alerts yet.';
+
+  sections.push(unreadIntro);
+
+  if (response.pins.length > 0) {
+    const pinRows = response.pins.slice(0, 8).map((pin) => [
+      pin.displayName,
+      pin.entityKind,
+      formatNumber(pin.metrics.gameCount),
+      formatPercent(pin.metrics.reviewScore),
+      formatNumber(pin.metrics.totalReviews),
+      formatNumber(pin.metrics.ccuPeak),
+    ]);
+
+    sections.push(
+      '',
+      'Pinned items:',
+      '',
+      buildMarkdownTable(['Name', 'Kind', 'Game Count', 'Review %', 'Total Reviews', 'Peak CCU'], pinRows),
+    );
+  }
+
+  if (response.alerts.length > 0) {
+    const alertRows = response.alerts.slice(0, 6).map((alert) => [
+      formatDate(alert.createdAt),
+      alert.entity.displayName,
+      alert.severity,
+      alert.title,
+    ]);
+
+    sections.push(
+      '',
+      'Recent alerts:',
+      '',
+      buildMarkdownTable(['Date', 'Entity', 'Severity', 'Title'], alertRows),
+    );
+  }
+
+  if (response.alertPreferences) {
+    sections.push(
+      '',
+      `Alert preferences: ${response.alertPreferences.alertsEnabled ? 'enabled' : 'disabled'}`
+      + `${response.alertPreferences.emailDigestEnabled ? `, ${response.alertPreferences.emailDigestFrequency ?? 'digest'} email digest on` : ', email digest off'}.`,
+    );
+  }
+
+  return sections.join('\n');
 }
 
 function renderSearchDocuments(response: TigerPrimarySearchDocumentsResponse): string {
@@ -618,12 +871,12 @@ function renderSearchDocuments(response: TigerPrimarySearchDocumentsResponse): s
   const topic = response.interpretedFilters.query?.trim() ?? null;
   const mode = response.interpretedFilters.mode ?? 'topic_search';
   const intro = response.entity
-    ? `Here are the most relevant recent documents for **${response.entity.displayName}** from Tiger.`
+    ? `Here are the most relevant recent documents for **${response.entity.displayName}**.`
     : mode === 'digest' && uniqueGames.length >= 2
-      ? `Here is the Tiger news digest across **${uniqueGames.slice(0, 3).join(', ')}**.`
+      ? `Here is a recent news digest across **${uniqueGames.slice(0, 3).join(', ')}**.`
       : topic
-        ? `Here are the most relevant recent documents for **${topic}** from Tiger.`
-        : 'Here are the most relevant recent Tiger news documents.';
+        ? `Here are the most relevant recent documents for **${topic}**.`
+        : 'Here are the most relevant recent news documents.';
 
   const rows = response.items.slice(0, 8).map((item) => [
     formatDate(item.publishedAt || item.sortTime),
@@ -657,7 +910,7 @@ function renderChangeDiscovery(
     ]);
 
     return [
-      'Here are the Tiger change-pattern matches.',
+      'Here are the strongest recent change-pattern matches.',
       '',
       buildMarkdownTable(['Game', 'Confidence', 'Date', 'Evidence'], rows),
     ].join('\n');
@@ -672,7 +925,7 @@ function renderChangeDiscovery(
   ]);
 
   return [
-    'Here are the Tiger change-activity matches.',
+    'Here are the strongest recent change-activity matches.',
     '',
     buildMarkdownTable(['Game', 'Change Type', 'Date', 'Details'], rows),
   ].join('\n');
@@ -708,7 +961,7 @@ function renderEntityOverview(response: TigerPrimaryEntityOverviewResponse): str
 
   if (entity.entityKind === 'game') {
     return [
-      `Here is the Tiger overview for **${entity.displayName}**.`,
+      `Here is the latest snapshot for **${entity.displayName}**.`,
       '',
       `- **Release date**: ${formatDate(details.releaseDate)}`,
       `- **Release status**: ${formatReleaseStatus(details)}`,
@@ -725,8 +978,10 @@ function renderEntityOverview(response: TigerPrimaryEntityOverviewResponse): str
 
   const intro =
     response.viewMode === 'company_count'
-      ? `**${entity.displayName}** currently has **${formatNumber(entity.metrics.gameCount)}** games in the Tiger catalog.`
-      : `Here is the Tiger overview for **${entity.displayName}**.`;
+      ? `**${entity.displayName}** currently has **${formatNumber(entity.metrics.gameCount)}** games in the catalog.`
+      : response.viewMode === 'company_metrics'
+        ? `Here are the main portfolio metrics for **${entity.displayName}**.`
+      : `Here is the current overview for **${entity.displayName}**.`;
 
   const games = response.games.slice(0, 5).map((game) => [
     formatGameLink(game.name, game.appid),
@@ -749,7 +1004,9 @@ function renderEntityOverview(response: TigerPrimaryEntityOverviewResponse): str
   if (games.length > 0) {
     sections.push(
       '',
-      response.viewMode === 'company_count' ? 'Sample titles:' : 'Top titles:',
+      response.viewMode === 'company_count' || response.viewMode === 'company_metrics'
+        ? 'Sample titles:'
+        : 'Top titles:',
       '',
       buildMarkdownTable(['Game', 'Year', 'Review %', 'Total Reviews', 'Owners'], games)
     );
@@ -771,10 +1028,10 @@ function renderSemanticSearch(response: TigerPrimarySemanticSearchResponse): str
   ]);
 
   const intro = response.reference
-    ? `Here are the closest Tiger matches for **${response.reference.name}**.`
+    ? `Here are the closest matches for **${response.reference.name}**.`
     : response.query_description
-      ? `Here are the closest Tiger matches for **${response.query_description}**.`
-      : 'Here are the closest Tiger matches.';
+      ? `Here are the closest matches for **${response.query_description}**.`
+      : 'Here are the closest matches.';
 
   return [
     intro,
@@ -810,7 +1067,7 @@ function renderExplainChanges(response: TigerPrimaryExplainChangesResponse): str
       .join(' ');
 
     const detailParts = [
-      `${moment.eventCount} event${moment.eventCount === 1 ? '' : 's'} from ${moment.sources.join(', ')}`,
+      `${moment.eventCount} event${moment.eventCount === 1 ? '' : 's'} from ${(moment.sources ?? []).join(', ') || 'unknown sources'}`,
       changeSummary ? `(${changeSummary})` : '',
       eventSummary ? `${eventSummary}.` : '',
       newsSummary,
@@ -819,10 +1076,20 @@ function renderExplainChanges(response: TigerPrimaryExplainChangesResponse): str
     return `- **${formatDate(moment.windowStart)}**: ${detailParts.join(' ')}`;
   });
 
+  const entityName = response.entity?.displayName ?? 'the selected title';
+  const startLabel = response.timeWindow?.startTime ? formatDate(response.timeWindow.startTime) : null;
+  const endLabel = response.timeWindow?.endTime ? formatDate(response.timeWindow.endTime) : null;
+  const eventCount = response.summary?.eventCount ?? response.moments.reduce((sum, moment) => sum + (moment.eventCount ?? 0), 0);
+  const momentCount = response.summary?.momentCount ?? response.moments.length;
+  const newsCount = response.summary?.newsCount ?? response.moments.reduce((sum, moment) => sum + (moment.linkedNews?.length ?? 0), 0);
+  const intro = startLabel && endLabel
+    ? `Here are the main change moments for **${entityName}** from **${startLabel}** through **${endLabel}**.`
+    : `Here are the main change moments for **${entityName}**.`;
+
   return [
-    `Here are the main Tiger change moments for **${response.entity.displayName}** from **${formatDate(response.timeWindow.startTime)}** through **${formatDate(response.timeWindow.endTime)}**.`,
+    intro,
     '',
-    `Summary: ${formatNumber(response.summary.eventCount)} events across ${formatNumber(response.summary.momentCount)} moments and ${formatNumber(response.summary.newsCount)} linked news items.`,
+    `Summary: ${formatNumber(eventCount)} events across ${formatNumber(momentCount)} moments and ${formatNumber(newsCount)} linked news items.`,
     '',
     ...bullets,
   ].join('\n');
@@ -858,12 +1125,20 @@ export function renderTigerPrimaryResult(params: {
     return renderMetricHistory(params.response as TigerPrimaryTraceMetricHistoryResponse);
   }
 
+  if (params.matchedIntent === 'momentum_discovery') {
+    return renderMomentumDiscovery(params.response as TigerPrimaryDiscoverMomentumResponse);
+  }
+
   if (params.matchedIntent === 'news_search') {
     return renderSearchDocuments(params.response as TigerPrimarySearchDocumentsResponse);
   }
 
   if (params.matchedIntent === 'semantic_search') {
     return renderSemanticSearch(params.response as TigerPrimarySemanticSearchResponse);
+  }
+
+  if (params.matchedIntent === 'user_context') {
+    return renderUserContext(params.response as TigerPrimaryUserContextResponse);
   }
 
   return renderExplainChanges(params.response as TigerPrimaryExplainChangesResponse);

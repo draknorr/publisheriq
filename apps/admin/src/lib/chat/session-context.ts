@@ -4,7 +4,9 @@ import type {
   SessionChatConstraint,
   SessionChatContext,
   SessionChatEntity,
+  SessionChatLastAnswer,
   SessionChatResultSet,
+  SessionChatSelectionState,
   ToolAnswerContractSummary,
 } from '@/lib/chat/chat-context-types';
 import { buildChatEntityUid } from '@/lib/chat/entity-uid';
@@ -338,6 +340,30 @@ function extractEntitiesFromCandidateSet(candidateSet: SessionChatCandidateSet, 
   });
 }
 
+function extractEntitiesFromSelectionState(
+  selectionState: SessionChatSelectionState | null | undefined,
+  entities: SessionChatEntity[]
+): void {
+  if (!selectionState) {
+    return;
+  }
+
+  for (const slot of selectionState.slots) {
+    const selected = slot.candidates.find((candidate) => candidate.entityUid === slot.selectedEntityUid);
+    if (!selected) {
+      continue;
+    }
+
+    pushUniqueEntity(entities, {
+      kind: selected.entityKind,
+      name: selected.displayName,
+      id: selected.platformEntityId ?? selected.entityUid,
+      confidence: slot.requiresClarification ? 'medium' : 'high',
+      sourceTool: 'tigerPrimarySelection',
+    });
+  }
+}
+
 export function buildSessionContextPrompt(context: SessionChatContext | null | undefined): string {
   if (!context) {
     return '';
@@ -368,6 +394,17 @@ export function buildSessionContextPrompt(context: SessionChatContext | null | u
       `Current candidate set (${context.candidateSet.kind}): ${context.candidateSet.names
         .slice(0, 8)
         .join(', ')}`
+    );
+  }
+
+  if (context.selectionState?.slots?.length) {
+    sections.push(
+      `Tiger selection state (${context.selectionState.family}): ${context.selectionState.slots
+        .map((slot) => {
+          const selected = slot.candidates.find((candidate) => candidate.entityUid === slot.selectedEntityUid);
+          return `${slot.label}=${selected?.displayName ?? slot.query}`;
+        })
+        .join('; ')}`
     );
   }
 
@@ -449,6 +486,7 @@ export function buildSessionContextFromTurn(params: {
     entities,
     constraints,
     candidateSet,
+    selectionState: previousContext?.selectionState ?? null,
     resultSet,
     lastAnswer: terminalContract
       ? {
@@ -484,9 +522,22 @@ export function summarizeSessionContextForLog(context: SessionChatContext | null
       ? {
           entityUids: context.candidateSet.entityUids?.slice(0, 12) ?? null,
           kind: context.candidateSet.kind,
-          ids: context.candidateSet.ids.slice(0, 12),
-          names: context.candidateSet.names.slice(0, 12),
-          totalFound: context.candidateSet.totalFound ?? null,
+        ids: context.candidateSet.ids.slice(0, 12),
+        names: context.candidateSet.names.slice(0, 12),
+        totalFound: context.candidateSet.totalFound ?? null,
+      }
+      : null,
+    selectionState: context.selectionState
+      ? {
+          family: context.selectionState.family,
+          slots: context.selectionState.slots.map((slot) => ({
+            candidates: slot.candidates.length,
+            label: slot.label,
+            query: slot.query,
+            requiresClarification: slot.requiresClarification,
+            selectedEntityUid: slot.selectedEntityUid,
+            slotId: slot.slotId,
+          })),
         }
       : null,
     resultSet: context.resultSet
@@ -505,4 +556,53 @@ export function summarizeSessionContextForLog(context: SessionChatContext | null
     lastAnswer: context.lastAnswer ?? null,
     updatedAt: context.updatedAt,
   };
+}
+
+export function applyTigerPrimarySessionState(params: {
+  baseContext?: SessionChatContext | null;
+  lastAnswer?: SessionChatLastAnswer | null;
+  selectionState?: SessionChatSelectionState | null;
+  timestamp?: string;
+}): SessionChatContext | null {
+  const {
+    baseContext,
+    lastAnswer = null,
+    selectionState = null,
+    timestamp = new Date().toISOString(),
+  } = params;
+
+  if (!baseContext && !lastAnswer && !selectionState) {
+    return null;
+  }
+
+  const context: SessionChatContext = baseContext
+    ? {
+        ...baseContext,
+        entities: [...baseContext.entities],
+        constraints: [...baseContext.constraints],
+      }
+    : {
+        version: 1,
+        entities: [],
+        constraints: [],
+        candidateSet: null,
+        selectionState: null,
+        resultSet: null,
+        lastAnswer: null,
+        updatedAt: timestamp,
+      };
+
+  if (selectionState) {
+    context.selectionState = selectionState;
+    extractEntitiesFromSelectionState(selectionState, context.entities);
+  } else if (selectionState === null) {
+    context.selectionState = null;
+  }
+
+  if (lastAnswer) {
+    context.lastAnswer = lastAnswer;
+  }
+
+  context.updatedAt = timestamp;
+  return context;
 }

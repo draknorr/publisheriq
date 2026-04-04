@@ -27,7 +27,7 @@ The TypeScript workers in `packages/ingestion` handle the regular warehouse pipe
 | `calculate-velocity` | Review velocity tiers |
 | `interpolate-reviews` | Fill review gaps |
 | `ccu-sync` / `ccu-tiered-sync` / `ccu-daily-sync` | Exact CCU collection |
-| `embedding-sync` | Qdrant embeddings |
+| `embedding-sync` | Tiger semantic retrieval embeddings |
 | `refresh-views` | Materialized view refreshes |
 | `change-intel-backfill-projection` | Seed projection refresh jobs for change-intel backfills |
 

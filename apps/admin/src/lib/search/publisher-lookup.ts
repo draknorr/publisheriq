@@ -43,7 +43,7 @@ interface ResolveEntitiesResponse {
       reviewScore: number | null;
       totalReviews: number | null;
     };
-    matchQuality: 'exact' | 'prefix' | 'substring';
+    matchQuality: 'exact' | 'prefix' | 'substring' | 'fuzzy';
     platformEntityId: string;
     signals?: {
       gameCount?: number | null;
@@ -162,7 +162,7 @@ function inferResolutionConfidence(score: number | undefined): ResolutionConfide
 }
 
 function mapMatchKind(
-  matchQuality: 'exact' | 'prefix' | 'substring'
+  matchQuality: 'exact' | 'prefix' | 'substring' | 'fuzzy'
 ): CompanyResolutionCandidate['matchKind'] {
   if (matchQuality === 'exact') {
     return 'exact';
@@ -170,6 +170,10 @@ function mapMatchKind(
 
   if (matchQuality === 'prefix') {
     return 'prefix';
+  }
+
+  if (matchQuality === 'fuzzy') {
+    return 'fuzzy';
   }
 
   return 'substring';

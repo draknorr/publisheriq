@@ -1,6 +1,6 @@
 # CLAUDE.md - PublisherIQ
 
-> Steam data analytics platform with AI chat interface. Next.js 15 + Supabase + Cube.js + Qdrant. Last updated: March 15, 2026.
+> Steam data analytics platform with AI chat interface. Next.js 15 + Supabase + Cube.js + Tiger query-api. Last updated: April 3, 2026.
 
 ## When Uncertain, Ask
 
@@ -151,10 +151,11 @@ For full schema details (tables, views, enums, RPC functions, column schemas), s
 | Service | Platform |
 |---------|----------|
 | Dashboard | Vercel |
+| Query API | Railway |
 | PICS Service | Railway |
 | Cube.js | Fly.io |
 | Database | Supabase |
-| Vector DB | Qdrant Cloud |
+| Tiger Data Plane | Tiger / Timescale |
 
 Environment variables: see `.env.example` files in `apps/admin/`, `packages/cube/`, `services/pics-service/`, and root `.env`.
 

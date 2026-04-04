@@ -12,6 +12,7 @@ import {
   DataPlaneService,
   type ExplainChangesRequest,
   type GetEntityOverviewRequest,
+  type GetUserContextRequest,
   loadQueryApiConfig,
   type RankEntitiesRequest,
   type ResolveEntitiesRequest,
@@ -80,6 +81,7 @@ interface QueryApiService {
   continueResultSet: DataPlaneService['continueResultSet'];
   explainChanges: DataPlaneService['explainChanges'];
   getEntityOverview: DataPlaneService['getEntityOverview'];
+  getUserContext: DataPlaneService['getUserContext'];
   healthCheck: DataPlaneService['healthCheck'];
   rankEntities: DataPlaneService['rankEntities'];
   readinessCheck: DataPlaneService['readinessCheck'];
@@ -182,6 +184,13 @@ export function createQueryApiRequestHandler(params: {
       if (request.method === 'POST' && url.pathname === '/v1/contracts/get-entity-overview') {
         const body = await readJsonBody<GetEntityOverviewRequest>(request);
         const result = await dataPlane.getEntityOverview(body);
+        sendJson(response, 200, result);
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/v1/contracts/get-user-context') {
+        const body = await readJsonBody<GetUserContextRequest>(request);
+        const result = await dataPlane.getUserContext(body);
         sendJson(response, 200, result);
         return;
       }

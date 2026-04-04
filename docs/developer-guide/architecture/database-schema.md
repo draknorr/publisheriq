@@ -66,7 +66,7 @@ Steam game publishers.
 | steam_vanity_url | TEXT | YES | NULL | Steam store vanity URL slug |
 | first_game_release_date | DATE | YES | NULL | Earliest game release date |
 | game_count | INTEGER | NO | 0 | Number of games published |
-| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
+| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to the Tiger semantic retrieval pipeline |
 | embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
 | created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
 | updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
@@ -89,7 +89,7 @@ Steam game developers.
 | steam_vanity_url | TEXT | YES | NULL | Steam store vanity URL slug |
 | first_game_release_date | DATE | YES | NULL | Earliest game release date |
 | game_count | INTEGER | NO | 0 | Number of games developed |
-| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
+| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to the Tiger semantic retrieval pipeline |
 | embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
 | created_at | TIMESTAMPTZ | NO | NOW() | Record creation time |
 | updated_at | TIMESTAMPTZ | NO | NOW() | Last update time |
@@ -414,7 +414,7 @@ Per-app sync tracking and scheduling.
 | last_histogram_sync | TIMESTAMPTZ | YES | NULL | Last Histogram sync time |
 | last_pics_sync | TIMESTAMPTZ | YES | NULL | Last PICS data sync time |
 | pics_change_number | BIGINT | YES | NULL | Last processed PICS change number |
-| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to Qdrant |
+| last_embedding_sync | TIMESTAMPTZ | YES | NULL | Last embedding sync to the Tiger semantic retrieval pipeline |
 | embedding_hash | TEXT | YES | NULL | Hash of embedding text for change detection |
 | priority_score | INTEGER | NO | 0 | Sync priority (higher = more frequent) |
 | priority_calculated_at | TIMESTAMPTZ | YES | NULL | When priority was calculated |

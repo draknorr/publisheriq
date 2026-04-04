@@ -66,20 +66,18 @@ ANTHROPIC_API_KEY=sk-ant-...
 | `CUBE_API_URL` | Yes | Cube.js API endpoint (e.g., `https://your-app.fly.dev/cubejs-api/v1`) |
 | `CUBE_API_SECRET` | Yes | Secret for JWT token signing |
 
-### Qdrant Cloud (Vector Search)
+### Tiger Query API / Tiger Data Plane
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `QDRANT_URL` | Yes | Qdrant cluster URL (e.g., `https://xxx.aws.cloud.qdrant.io:6333`) |
-| `QDRANT_API_KEY` | Yes | Qdrant API key |
+| `QUERY_API_BASE_URL` | Yes for admin chat | Base URL for the Tiger query-api |
+| `QUERY_API_BEARER_TOKEN` | Yes for protected query-api routes | Shared bearer token between admin and query-api |
+| `TIGER_PRIMARY_URL` | Yes for query-api | Tiger / Timescale Postgres connection string |
 
-### OpenAI Embeddings
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key for embeddings |
-
-**Embedding Model:** text-embedding-3-small (1536 dimensions)
+**Notes:**
+- `/chat` and `/api/similarity` now use the Tiger query-api for semantic retrieval and contract execution.
+- `QUERY_API_BASE_URL` / `QUERY_API_BEARER_TOKEN` belong in `apps/admin/.env.local`.
+- `TIGER_PRIMARY_URL` belongs in the query-api / data-plane runtime environment.
 
 ### Authentication (v2.1+)
 
@@ -176,8 +174,10 @@ For dashboard deployment, add these in Vercel project settings:
 | `LLM_PROVIDER` | `openai` |
 | `CUBE_API_URL` | Cube.js API endpoint |
 | `CUBE_API_SECRET` | Cube.js JWT secret |
-| `QDRANT_URL` | Qdrant cluster URL |
-| `QDRANT_API_KEY` | Qdrant API key |
+| `QUERY_API_BASE_URL` | Tiger query-api endpoint |
+| `QUERY_API_BEARER_TOKEN` | Tiger query-api bearer token |
+| `CHAT_TIGER_PRIMARY_MODE` | `all` for Tiger-first chat |
+| `CHAT_TIGER_SHADOW_MODE` | `off` for Tiger-first chat |
 
 ---
 
@@ -215,9 +215,11 @@ OPENAI_API_KEY=sk-...
 CUBE_API_URL=https://publisheriq-cube.fly.dev/cubejs-api/v1
 CUBE_API_SECRET=your-cube-api-secret
 
-# Qdrant (vector search)
-QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io:6333
-QDRANT_API_KEY=your-qdrant-api-key
+# Tiger query-api / query contracts
+QUERY_API_BASE_URL=http://127.0.0.1:4318
+QUERY_API_BEARER_TOKEN=your-query-api-bearer-token
+CHAT_TIGER_PRIMARY_MODE=all
+CHAT_TIGER_SHADOW_MODE=off
 
 # OpenAI (embeddings)
 OPENAI_API_KEY=sk-...
@@ -238,9 +240,9 @@ OPENAI_API_KEY=sk-...
 CUBE_API_URL=https://publisheriq-cube.fly.dev/cubejs-api/v1
 CUBE_API_SECRET=your-cube-api-secret
 
-# Qdrant (vector search)
-QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io:6333
-QDRANT_API_KEY=your-qdrant-api-key
+# Tiger query-api / Tiger data plane
+TIGER_PRIMARY_URL=postgres://tsdbadmin:password@host:5432/tsdb?sslmode=require
+QUERY_API_BEARER_TOKEN=your-query-api-bearer-token
 ```
 
 ### `services/pics-service/.env`
