@@ -166,6 +166,7 @@ export type RelatedEntityKind = 'dlc' | 'franchise_games';
 export type CatalogFacetKind = 'tags' | 'genres' | 'categories';
 export type DataPlaneRelationKey =
   | 'apps'
+  | 'ccu_snapshots'
   | 'developers'
   | 'publishers'
   | 'app_dlc'
@@ -806,6 +807,7 @@ export interface DiscoverMomentumItem {
   ccuGrowth30dPercent: number | null;
   ccuGrowth7dPercent: number | null;
   ccuPeak: number | null;
+  ccuSparkline?: number[] | null;
   developerName: string | null;
   discountPercent: number | null;
   entityUid: string;

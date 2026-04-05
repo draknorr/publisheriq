@@ -451,6 +451,12 @@ interface MomentumRow extends QueryResultRow {
   velocity_acceleration: number | null;
 }
 
+interface CCUSparklinePeakRow extends QueryResultRow {
+  appid: number;
+  peak_ccu: number;
+  snapshot_date: string;
+}
+
 interface ChangeWindowMetricRow extends QueryResultRow {
   ccu_peak: number | null;
   discount_percent: number | null;
@@ -811,6 +817,7 @@ const RELATION_LOCATIONS: Record<
     app_steam_deck: { schema: 'public', sql: 'public.app_steam_deck', table: 'app_steam_deck' },
     app_steam_tags: { schema: 'public', sql: 'public.app_steam_tags', table: 'app_steam_tags' },
     apps: { schema: 'public', sql: 'public.apps', table: 'apps' },
+    ccu_snapshots: { schema: 'public', sql: 'public.ccu_snapshots', table: 'ccu_snapshots' },
     developers: { schema: 'public', sql: 'public.developers', table: 'developers' },
     latest_daily_metrics: {
       schema: 'public',
@@ -869,6 +876,7 @@ const RELATION_LOCATIONS: Record<
     app_steam_deck: { schema: 'legacy', sql: 'legacy.app_steam_deck', table: 'app_steam_deck' },
     app_steam_tags: { schema: 'legacy', sql: 'legacy.app_steam_tags', table: 'app_steam_tags' },
     apps: { schema: 'legacy', sql: 'legacy.apps', table: 'apps' },
+    ccu_snapshots: { schema: 'metrics', sql: 'metrics.ccu_snapshots', table: 'ccu_snapshots' },
     developers: { schema: 'legacy', sql: 'legacy.developers', table: 'developers' },
     latest_daily_metrics: {
       schema: 'legacy',
@@ -930,6 +938,23 @@ function normalizeLimit(value: number | undefined, fallback: number, max: number
 
 function normalizeLikeValue(value: string): string {
   return `%${value.trim().toLowerCase()}%`;
+}
+
+function buildLexicalLikePatterns(value: string): string[] {
+  const normalized = normalizeSemanticTextToken(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const patterns = new Set<string>([normalizeLikeValue(normalized)]);
+
+  for (const term of normalized.split(' ')) {
+    if (term.length >= 3) {
+      patterns.add(`%${term}%`);
+    }
+  }
+
+  return [...patterns];
 }
 
 function sanitizeTitleFamilyValue(value: string): string {
@@ -1263,6 +1288,20 @@ function matchConfidence(matchQuality: MatchQuality): number {
   }
 }
 
+function choosePreferredResolvedEntity(left: ResolvedEntity, right: ResolvedEntity): ResolvedEntity {
+  if (right.confidence !== left.confidence) {
+    return right.confidence > left.confidence ? right : left;
+  }
+
+  const rightReviews = right.latestMetrics?.totalReviews ?? 0;
+  const leftReviews = left.latestMetrics?.totalReviews ?? 0;
+  if (rightReviews !== leftReviews) {
+    return rightReviews > leftReviews ? right : left;
+  }
+
+  return right.displayName.localeCompare(left.displayName) < 0 ? right : left;
+}
+
 function normalizeSemanticTextToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
 }
@@ -1504,12 +1543,18 @@ export class DataPlaneService {
     const entities: ResolvedEntity[] = [];
 
     if (requestedKinds.has('game')) {
-      const gameRows = await this.queryGames(query, limit);
+      const gameRows = [
+        ...await this.queryGames(query, limit),
+        ...await this.queryGamesLexical(query, limit),
+      ];
       entities.push(...gameRows.map((row) => this.mapResolvedEntity('game', 'steam', row, query, includeMetrics)));
     }
 
     if (requestedKinds.has('publisher')) {
-      const publisherRows = await this.queryCompanies('publisher', query, limit);
+      const publisherRows = [
+        ...await this.queryCompanies('publisher', query, limit),
+        ...await this.queryCompaniesLexical('publisher', query, limit),
+      ];
       entities.push(
         ...publisherRows.map((row) =>
           this.mapResolvedEntity('publisher', 'publisheriq', row, query, includeMetrics)
@@ -1518,7 +1563,10 @@ export class DataPlaneService {
     }
 
     if (requestedKinds.has('developer')) {
-      const developerRows = await this.queryCompanies('developer', query, limit);
+      const developerRows = [
+        ...await this.queryCompanies('developer', query, limit),
+        ...await this.queryCompaniesLexical('developer', query, limit),
+      ];
       entities.push(
         ...developerRows.map((row) =>
           this.mapResolvedEntity('developer', 'publisheriq', row, query, includeMetrics)
@@ -1526,7 +1574,16 @@ export class DataPlaneService {
       );
     }
 
-    const sortedEntities = entities
+    const sortedEntities = [...entities
+      .reduce<Map<string, ResolvedEntity>>((deduped, entity) => {
+        const existing = deduped.get(entity.entityUid);
+        deduped.set(
+          entity.entityUid,
+          existing ? choosePreferredResolvedEntity(existing, entity) : entity
+        );
+        return deduped;
+      }, new Map())
+      .values()]
       .sort((left, right) => {
         if (right.confidence !== left.confidence) {
           return right.confidence - left.confidence;
@@ -2176,6 +2233,10 @@ export class DataPlaneService {
       ? rows.filter((row) => !excludedAppIds.has(row.appid))
       : rows;
     const pageRows = uniqueRows.slice(0, limit);
+    const ccuSparklines =
+      timeframe === 'current' && pageRows.length > 0
+        ? await this.queryMomentumSparklineData(pageRows.map((row) => row.appid), 10)
+        : new Map<number, number[]>();
 
     return {
       filtersApplied: this.buildMomentumFiltersApplied(request, timeframe),
@@ -2183,7 +2244,7 @@ export class DataPlaneService {
         sortBy: request.sortBy,
         timeframe,
         trendType: request.trendType ?? null,
-      })),
+      }, ccuSparklines.get(row.appid) ?? null)),
       provenance: buildProvenance(this.config.source, [
         this.relation('apps').sql,
         this.relation('latest_daily_metrics').sql,
@@ -2834,6 +2895,18 @@ export class DataPlaneService {
         endTime,
         feedScopes,
         limit,
+        startTime,
+      });
+    }
+
+    if (rows.length === 0 && mode === 'topic_search' && query) {
+      rows = await this.querySearchDocumentRowsLexicalFallback({
+        appidFilter,
+        appids: appids.length > 0 ? appids : null,
+        endTime,
+        feedScopes,
+        limit,
+        query,
         startTime,
       });
     }
@@ -3703,6 +3776,7 @@ export class DataPlaneService {
     rows: SemanticGameCandidateRow[]
   ): RankedSemanticItem[] {
     const descriptionTerms = tokenizeSemanticConcept(description);
+    const normalizedDescription = normalizeSemanticTextToken(description);
 
     return rows
       .map((row) => {
@@ -3712,11 +3786,24 @@ export class DataPlaneService {
           ...profile.genres,
           ...profile.tags,
         ].join(' ').toLowerCase();
+        const normalizedName = normalizeSemanticTextToken(profile.name);
         const matchedTerms = descriptionTerms.filter((term) => payloadTerms.includes(term));
+        const termCoverage = descriptionTerms.length > 0
+          ? matchedTerms.length / descriptionTerms.length
+          : 0;
+        const exactNamePhrase =
+          normalizedDescription.length >= 4 &&
+          normalizedName.length > 0 &&
+          normalizedName.includes(normalizedDescription);
 
         let score = Math.min(matchedTerms.length * 0.18, 0.72);
+        score += Math.min(termCoverage * 0.18, 0.18);
         score += semanticReviewSupportBonus(profile.totalReviews, profile.reviewPercentage);
         score -= semanticLowSignalPenalty(profile.totalReviews, profile.reviewPercentage);
+
+        if (exactNamePhrase) {
+          score += 0.08;
+        }
 
         if (descriptionTerms.length >= 2 && matchedTerms.length === 0) {
           score -= 0.18;
@@ -3727,6 +3814,11 @@ export class DataPlaneService {
           reasons.push(`${matchedTerms[0]} + ${matchedTerms[1]} fit`);
         } else if (matchedTerms.length === 1) {
           reasons.push(`${matchedTerms[0]} fit`);
+        }
+        if (termCoverage >= 0.75) {
+          reasons.push('High term coverage');
+        } else if (exactNamePhrase) {
+          reasons.push('Strong lexical fit');
         }
         if ((profile.totalReviews ?? 0) >= 100 && (profile.reviewPercentage ?? 0) >= 80) {
           reasons.push('Well-supported reviews');
@@ -3740,7 +3832,7 @@ export class DataPlaneService {
             matchReasons: reasons.length > 0 ? reasons : undefined,
             name: profile.name,
             price_cents: profile.priceCents,
-            rawScore: Math.round(Math.min(matchedTerms.length * 0.18, 0.72) * 100),
+            rawScore: Math.round(Math.min((matchedTerms.length * 0.18) + Math.min(termCoverage * 0.18, 0.18), 1) * 100),
             review_percentage: profile.reviewPercentage,
             score: Math.round(Math.max(0, Math.min(score, 1)) * 100),
             steam_deck: normalizeSemanticSteamDeckCategory(row.steam_deck_category),
@@ -4701,6 +4793,63 @@ export class DataPlaneService {
     return result.rows;
   }
 
+  private async queryGamesLexical(query: string, limit: number): Promise<EntityRow[]> {
+    const appsTable = this.relation('apps').sql;
+    const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
+    const lexicalPatterns = buildLexicalLikePatterns(query);
+    if (lexicalPatterns.length === 0) {
+      return [];
+    }
+
+    const sql = `
+      SELECT
+        a.appid AS entity_id,
+        a.name AS display_name,
+        EXTRACT(YEAR FROM a.release_date)::int AS release_year,
+        ldm.total_reviews,
+        ${reviewPercentageSql('ldm')} AS review_score,
+        ldm.owners_midpoint,
+        ldm.ccu_peak,
+        CASE
+          WHEN lower(a.name) = lower($1) THEN 'exact'
+          WHEN lower(a.name) LIKE lower($2) THEN 'prefix'
+          WHEN to_tsvector('simple', lower(a.name)) @@ websearch_to_tsquery('simple', $1) THEN 'substring'
+          ELSE 'fuzzy'
+        END AS match_quality,
+        GREATEST(
+          COALESCE(ts_rank_cd(to_tsvector('simple', lower(a.name)), websearch_to_tsquery('simple', $1)), 0),
+          COALESCE(similarity(lower(a.name), lower($1)), 0)
+        ) AS similarity_score
+      FROM ${appsTable} a
+      LEFT JOIN ${latestDailyMetricsTable} ldm ON ldm.appid = a.appid
+      WHERE a.is_delisted = false
+        AND ${GAME_TYPE_PREDICATE[this.config.source]}
+        AND (
+          to_tsvector('simple', lower(a.name)) @@ websearch_to_tsquery('simple', $1)
+          OR lower(a.name) LIKE ANY($3::text[])
+        )
+      ORDER BY
+        CASE
+          WHEN lower(a.name) = lower($1) THEN 4
+          WHEN lower(a.name) LIKE lower($2) THEN 3
+          WHEN to_tsvector('simple', lower(a.name)) @@ websearch_to_tsquery('simple', $1) THEN 2
+          ELSE 1
+        END DESC,
+        similarity_score DESC,
+        COALESCE(ldm.total_reviews, 0) DESC,
+        a.name ASC
+      LIMIT $4
+    `;
+
+    const result = await runQuery<EntityRow>(
+      sql,
+      [query, `${query}%`, lexicalPatterns, limit],
+      this.config
+    );
+
+    return result.rows;
+  }
+
   private async queryChangeEvents(
     appid: number,
     startTime: string,
@@ -5043,6 +5192,111 @@ export class DataPlaneService {
           title_phrase_hit DESC,
           app_name_hit DESC,
           rank DESC,
+          projection.sort_time DESC,
+          projection.gid DESC
+        LIMIT $${limitParam}
+      `,
+      sqlParams,
+      this.config
+    );
+
+    return result.rows;
+  }
+
+  private async querySearchDocumentRowsLexicalFallback(params: {
+    appidFilter: number | null;
+    appids?: number[] | null;
+    endTime: string;
+    feedScopes: string[];
+    limit: number;
+    query: string;
+    startTime: string;
+  }): Promise<SearchDocumentRow[]> {
+    const projectionTable = this.relation('docs_steam_news_search_projection').sql;
+    const newsItemsTable = this.relation('docs_steam_news_items').sql;
+    const appsTable = this.relation('apps').sql;
+    const normalizedQuery = params.query.replace(/\s+/g, ' ').trim().toLowerCase();
+    const lexicalPatterns = buildLexicalLikePatterns(normalizedQuery);
+    if (!normalizedQuery || lexicalPatterns.length === 0) {
+      return [];
+    }
+
+    const sqlParams: unknown[] = [normalizedQuery, params.startTime, params.endTime, lexicalPatterns];
+    const conditions = [
+      'projection.sort_time BETWEEN $2::timestamptz AND $3::timestamptz',
+      `(
+        lower(COALESCE(projection.title, '')) LIKE ANY($4::text[])
+        OR lower(COALESCE(apps.name, '')) LIKE ANY($4::text[])
+      )`,
+    ];
+
+    if (params.feedScopes.length > 0) {
+      sqlParams.push(params.feedScopes);
+      conditions.push(`lower(projection.feed_scope) = ANY($${sqlParams.length}::text[])`);
+    }
+
+    if (params.appidFilter !== null) {
+      sqlParams.push(params.appidFilter);
+      conditions.push(`projection.appid = $${sqlParams.length}`);
+    } else if (params.appids && params.appids.length > 0) {
+      sqlParams.push(params.appids);
+      conditions.push(`projection.appid = ANY($${sqlParams.length}::int[])`);
+    }
+
+    sqlParams.push(normalizeLikeValue(normalizedQuery));
+    const phraseParam = sqlParams.length;
+    sqlParams.push(params.limit);
+    const limitParam = sqlParams.length;
+
+    const result = await runQuery<SearchDocumentRow>(
+      `
+        SELECT
+          projection.gid,
+          projection.appid,
+          apps.name AS app_name,
+          projection.published_at::text,
+          projection.first_seen_at::text,
+          projection.sort_time::text,
+          projection.feed_scope,
+          projection.title,
+          news.feedlabel,
+          news.feedname,
+          news.url,
+          0.35::double precision AS rank,
+          lower(COALESCE(projection.title, '')) = $1 AS title_exact_hit,
+          lower(COALESCE(projection.title, '')) LIKE $${phraseParam} AS title_phrase_hit,
+          lower(COALESCE(apps.name, '')) LIKE $${phraseParam} AS app_name_hit,
+          NULL::text AS body_preview,
+          NULLIF(
+            BTRIM(
+              CONCAT_WS(
+                ' — ',
+                NULLIF(BTRIM(projection.title), ''),
+                NULLIF(BTRIM(COALESCE(news.feedlabel, news.feedname)), ''),
+                NULLIF(BTRIM(apps.name), '')
+              )
+            ),
+            ''
+          ) AS content_preview,
+          NULLIF(BTRIM(COALESCE(projection.title, apps.name)), '') AS excerpt,
+          CASE
+            WHEN lower(COALESCE(projection.title, '')) = $1 THEN 'matched_exact_title'
+            WHEN lower(COALESCE(projection.title, '')) LIKE $${phraseParam} THEN 'matched_title_phrase'
+            ELSE 'matched_app_name'
+          END AS match_reason,
+          CASE
+            WHEN lower(COALESCE(projection.title, '')) = $1 THEN 'lexical exact title fallback'
+            WHEN lower(COALESCE(projection.title, '')) LIKE $${phraseParam} THEN 'lexical title fallback'
+            ELSE 'lexical app-name fallback'
+          END AS ranking_reason
+        FROM ${projectionTable} projection
+        JOIN ${newsItemsTable} news ON news.gid = projection.gid
+        JOIN ${appsTable} apps ON apps.appid = projection.appid
+        WHERE ${conditions.join('\n          AND ')}
+        ORDER BY
+          title_exact_hit DESC,
+          title_phrase_hit DESC,
+          app_name_hit DESC,
           projection.sort_time DESC,
           projection.gid DESC
         LIMIT $${limitParam}
@@ -6495,6 +6749,56 @@ export class DataPlaneService {
     return result.rows;
   }
 
+  private async queryCompaniesLexical(
+    kind: Extract<EntityKind, 'publisher' | 'developer'>,
+    query: string,
+    limit: number
+  ): Promise<EntityRow[]> {
+    const table = this.relation(kind === 'publisher' ? 'publishers' : 'developers').sql;
+    const lexicalPatterns = buildLexicalLikePatterns(query);
+    if (lexicalPatterns.length === 0) {
+      return [];
+    }
+
+    const result = await runQuery<EntityRow>(
+      `
+        SELECT
+          id AS entity_id,
+          name AS display_name,
+          game_count,
+          CASE
+            WHEN lower(name) = lower($1) THEN 'exact'
+            WHEN lower(name) LIKE lower($2) THEN 'prefix'
+            WHEN to_tsvector('simple', lower(name)) @@ websearch_to_tsquery('simple', $1) THEN 'substring'
+            ELSE 'fuzzy'
+          END AS match_quality,
+          GREATEST(
+            COALESCE(ts_rank_cd(to_tsvector('simple', lower(name)), websearch_to_tsquery('simple', $1)), 0),
+            COALESCE(similarity(lower(name), lower($1)), 0)
+          ) AS similarity_score
+        FROM ${table}
+        WHERE
+          to_tsvector('simple', lower(name)) @@ websearch_to_tsquery('simple', $1)
+          OR lower(name) LIKE ANY($3::text[])
+        ORDER BY
+          CASE
+            WHEN lower(name) = lower($1) THEN 4
+            WHEN lower(name) LIKE lower($2) THEN 3
+            WHEN to_tsvector('simple', lower(name)) @@ websearch_to_tsquery('simple', $1) THEN 2
+            ELSE 1
+          END DESC,
+          similarity_score DESC,
+          COALESCE(game_count, 0) DESC,
+          name ASC
+        LIMIT $4
+      `,
+      [query, `${query}%`, lexicalPatterns, limit],
+      this.config
+    );
+
+    return result.rows;
+  }
+
   private async queryGameOverview(appid: number): Promise<EntityOverviewRow | null> {
     const appsTable = this.relation('apps').sql;
     const latestDailyMetricsTable = this.relation('latest_daily_metrics').sql;
@@ -7749,7 +8053,8 @@ export class DataPlaneService {
       sortBy: DiscoverMomentumRequest['sortBy'];
       timeframe: '7d' | '30d' | 'current';
       trendType: DiscoverMomentumRequest['trendType'];
-    }
+    },
+    ccuSparkline: number[] | null = null
   ): DiscoverMomentumItem {
     const ccuGrowth30dPercent = coerceNullableNumber(row.ccu_growth_30d_percent);
     const ccuGrowth7dPercent = coerceNullableNumber(row.ccu_growth_7d_percent);
@@ -7796,6 +8101,7 @@ export class DataPlaneService {
       ccuGrowth30dPercent,
       ccuGrowth7dPercent,
       ccuPeak: normalizedCcuPeak,
+      ccuSparkline: ccuSparkline ?? undefined,
       developerName: row.developer_name,
       discountPercent,
       entityUid: buildEntityUid('steam', 'game', String(row.appid)),
@@ -7894,6 +8200,72 @@ export class DataPlaneService {
     }
 
     return reasons.length > 0 ? reasons.slice(0, 4) : ['Current-state momentum evidence is limited.'];
+  }
+
+  private async queryMomentumSparklineData(
+    appids: number[],
+    pointCount: number
+  ): Promise<Map<number, number[]>> {
+    const uniqueAppids = [...new Set(
+      appids.filter((appid): appid is number => Number.isInteger(appid) && appid > 0)
+    )];
+    const pointsByApp = new Map<number, number[]>();
+
+    if (uniqueAppids.length === 0) {
+      return pointsByApp;
+    }
+
+    const metricsDailyMetricsTable = this.relation('metrics_daily_metrics').sql;
+    const result = await runQuery<CCUSparklinePeakRow>(
+      `
+        WITH daily_points AS (
+          SELECT
+            dm.appid,
+            dm.metric_date::text AS snapshot_date,
+            MAX(dm.ccu_peak)::double precision AS peak_ccu
+          FROM ${metricsDailyMetricsTable} dm
+          WHERE dm.appid = ANY($1::int[])
+            AND dm.ccu_peak IS NOT NULL
+          GROUP BY dm.appid, dm.metric_date
+        ),
+        ranked_points AS (
+          SELECT
+            dp.appid,
+            dp.snapshot_date,
+            dp.peak_ccu,
+            ROW_NUMBER() OVER (
+              PARTITION BY dp.appid
+              ORDER BY dp.snapshot_date DESC
+            ) AS point_rank
+          FROM daily_points dp
+        )
+        SELECT
+          rp.appid,
+          rp.snapshot_date,
+          rp.peak_ccu
+        FROM ranked_points rp
+        WHERE rp.point_rank <= $2::int
+        ORDER BY rp.appid ASC, rp.snapshot_date ASC
+      `,
+      [uniqueAppids, pointCount],
+      this.config
+    );
+
+    for (const row of result.rows) {
+      const point = coerceNullableNumber(row.peak_ccu);
+      if (point == null) {
+        continue;
+      }
+
+      const existing = pointsByApp.get(row.appid);
+      if (existing) {
+        existing.push(point);
+      } else {
+        pointsByApp.set(row.appid, [point]);
+      }
+    }
+
+    return pointsByApp;
   }
 
   private async queryMomentumRows(params: {

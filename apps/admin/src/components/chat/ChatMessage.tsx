@@ -7,10 +7,13 @@ import { Card } from '@/components/ui/Card';
 import type { ChatToolCall, ChatTiming } from '@/lib/llm/types';
 import type { StreamDebugInfo } from '@/lib/llm/streaming-types';
 import type { TigerPrimaryInfo, TigerShadowInfo } from '@/lib/chat/tiger-shadow-types';
+import type { ChatRenderData } from '@/lib/chat/chat-render-data';
 import { StreamingContent, CopyButton, CodeBlock } from './content';
+import { removeMarkdownTables } from './content/parsers';
 import { EntityLinkProvider } from './content/EntityLinkContext';
 import { SuggestionChips } from './SuggestionChips';
 import type { QuerySuggestion } from '@/lib/chat/query-templates';
+import { ChatStructuredVisuals } from './ChatStructuredVisuals';
 
 const CHAT_TIGER_DEBUG = process.env.NEXT_PUBLIC_CHAT_TIGER_DEBUG === 'true';
 
@@ -22,6 +25,7 @@ interface DisplayMessage {
   timing?: ChatTiming;
   debug?: StreamDebugInfo;
   followUpSuggestions?: QuerySuggestion[];
+  renderData?: ChatRenderData;
   tigerPrimary?: TigerPrimaryInfo;
   tigerShadow?: TigerShadowInfo;
   timestamp: Date;
@@ -712,6 +716,10 @@ export function ChatMessage({
     pendingToolCallNames.map((name) => ({ name }))
   );
   const querySummary = message.toolCalls ? summarizeToolCalls(message.toolCalls) : null;
+  const visibleAssistantContent =
+    !isUser && message.renderData?.kind === 'momentum_current_players'
+      ? removeMarkdownTables(message.content)
+      : message.content;
 
   return (
     <div
@@ -752,8 +760,9 @@ export function ChatMessage({
               data-testid="chat-message-assistant-content"
               className="space-y-4 pr-10 sm:pr-12"
             >
+              {!isStreaming && <ChatStructuredVisuals renderData={message.renderData} />}
               <EntityLinkProvider toolCalls={message.toolCalls}>
-                <StreamingContent content={message.content} isStreaming={isStreaming} />
+                <StreamingContent content={visibleAssistantContent} isStreaming={isStreaming} />
               </EntityLinkProvider>
 
               <TrustStrip

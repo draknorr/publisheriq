@@ -771,6 +771,7 @@ interface TigerPrimaryEvaluationResult {
       | 'getRelatedEntities'
       | 'rankEntities'
       | 'searchCatalog'
+      | 'traceMetricHistory'
       | 'semanticSearch';
     request: Record<string, unknown>;
     response: unknown;
@@ -8760,6 +8761,7 @@ async function runMetricHistoryPrimary(params: {
 }): Promise<{
   attempts: TigerShadowAttempt[];
   clarificationText?: string | null;
+  request?: TraceMetricHistoryShadowRequest | null;
   response: TraceMetricHistoryResponse | null;
   selectionState: SessionChatSelectionState | null;
 }> {
@@ -8780,6 +8782,7 @@ async function runMetricHistoryPrimary(params: {
     return {
       attempts,
       clarificationText: selectionState ? renderSelectionClarification(selectionState) : null,
+      request: null,
       response: null,
       selectionState,
     };
@@ -8822,6 +8825,7 @@ async function runMetricHistoryPrimary(params: {
 
   return {
     attempts,
+    request,
     response:
       (response.data?.series?.length ?? 0) > 0 && response.data?.sufficientToAnswer
         ? response.data ?? null
@@ -9340,6 +9344,12 @@ export async function runTigerPrimaryEvaluation(params: {
                 request: outcome.request as unknown as Record<string, unknown>,
                 response: outcome.response,
               }
+            : matchedIntent === 'metric_history' && 'request' in outcome && outcome.request
+              ? {
+                  contractName: 'traceMetricHistory',
+                  request: outcome.request as unknown as Record<string, unknown>,
+                  response: outcome.response,
+                }
             : matchedIntent === 'entity_compare' && 'request' in outcome && outcome.request
               ? {
                   contractName: 'compareEntities',

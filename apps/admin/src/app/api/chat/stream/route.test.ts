@@ -79,6 +79,67 @@ test('chat route returns 401 when the request is unauthenticated', async () => {
   });
 });
 
+test('chat route uses the prompt interpreter before Tiger primary when enabled', async (t) => {
+  setScopedEnv(t, 'CHAT_NLU_ENABLED', 'true');
+  setScopedEnv(t, 'CHAT_NLU_MIN_CONFIDENCE', 'medium');
+
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'what do you know about assetto corsa' }],
+    },
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    providerChats: [
+      {
+        assertInvocation: ({ tools }) => {
+          assert.equal(tools, undefined);
+        },
+        response: {
+          content: JSON.stringify({
+            confidence: 'high',
+            continuationAction: 'none',
+            contractCandidates: ['resolveEntities', 'getEntityOverview'],
+            entities: [{ kindHint: 'game', query: 'Assetto Corsa', role: 'primary' }],
+            intent: 'entity_overview',
+          }),
+        },
+      },
+    ],
+    tigerPrimaryCalls: [
+      {
+        assertRequest: ({ interpretation, prompt }) => {
+          assert.equal(prompt, 'what do you know about assetto corsa');
+          assert.equal(interpretation?.intent, 'entity_overview');
+          assert.equal(interpretation?.entities[0]?.query, 'Assetto Corsa');
+        },
+        response: {
+          contractResult: null,
+          info: {
+            attempts: [{ contractName: 'getEntityOverview', status: 'success', timingMs: 5 }],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'entity_overview',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'primary_success',
+          },
+          renderedText: 'Assetto Corsa overview',
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  assert.ok(getTextEvents(events).some((event) => event.delta.includes('Assetto Corsa overview')));
+  assertExhausted();
+});
+
 test('chat route strips tool debug and message debug for non-admin users', async () => {
   const request = createJsonNextRequest({
     body: {
@@ -1156,7 +1217,7 @@ test('chat route includes execution trace metadata for local audit-trace request
             attempts: [{ contractName: 'compareEntities', status: 'success', timingMs: 7 }],
             cohort: 'default',
             enabled: true,
-            matchedIntent: 'compare_entities',
+            matchedIntent: 'entity_compare',
             mode: 'all',
             renderMode: 'deterministic',
             route: 'primary_success',
@@ -1395,7 +1456,7 @@ const TIGER_PRIMARY_SUCCESS_CASES = [
   {
     attemptContract: 'compareEntities',
     contractResult: {
-      contractName: 'compareEntities',
+      contractName: 'compareEntities' as const,
       request: {
         entityUids: ['steam:game:1145360', 'steam:game:588650'],
       },
@@ -1447,7 +1508,50 @@ const TIGER_PRIMARY_SUCCESS_CASES = [
   },
   {
     attemptContract: 'traceMetricHistory',
-    contractResult: null,
+    contractResult: {
+      contractName: 'traceMetricHistory' as const,
+      request: {
+        endDate: '2026-04-05',
+        entityUid: '29e00ab0-9557-57e7-bae5-19d19d27c711',
+        metrics: ['review_score'],
+        startDate: '2026-03-01',
+      },
+      response: {
+        endDate: '2026-04-05',
+        entity: {
+          displayName: 'Hades',
+          entityKind: 'game',
+          entityUid: '29e00ab0-9557-57e7-bae5-19d19d27c711',
+          platform: 'steam',
+          platformEntityId: '1145360',
+        },
+        metrics: ['review_score'],
+        provenance: {
+          capturedAt: '2026-04-05T00:00:00.000Z',
+          dataSources: ['query_api:traceMetricHistory'],
+        },
+        series: [
+          {
+            metric: 'review_score',
+            points: [
+              { date: '2026-03-01', value: 96 },
+              { date: '2026-04-05', value: 97 },
+            ],
+            summary: {
+              deltaAbs: 1,
+              deltaPct: 1.04,
+              firstDate: '2026-03-01',
+              lastDate: '2026-04-05',
+              latestValue: 97,
+              pointCount: 2,
+              startValue: 96,
+            },
+          },
+        ],
+        startDate: '2026-03-01',
+        sufficientToAnswer: true,
+      },
+    },
     matchedIntent: 'metric_history' as const,
     prompt: 'how has Hades review score changed',
     renderedText: 'Here is the Tiger metric history for Hades.',
@@ -1469,7 +1573,7 @@ const TIGER_PRIMARY_SUCCESS_CASES = [
     renderedText: 'Here are the main Tiger change moments for Hades II.',
     testName: 'change explanation',
   },
-];
+] as const;
 
 for (const testCase of TIGER_PRIMARY_SUCCESS_CASES) {
   test(`chat route can return a Tiger primary ${testCase.testName} answer`, async (t) => {
@@ -1521,6 +1625,32 @@ for (const testCase of TIGER_PRIMARY_SUCCESS_CASES) {
     assert.ok(endEvent);
     assert.equal(endEvent.tigerPrimary?.route, 'primary_success');
     assert.equal(endEvent.tigerPrimary?.matchedIntent, testCase.matchedIntent);
+    if (testCase.contractResult?.contractName === 'traceMetricHistory') {
+      assert.deepEqual(endEvent.renderData, {
+        endDate: '2026-04-05',
+        entityName: 'Hades',
+        kind: 'metric_history',
+        series: [
+          {
+            metric: 'review_score',
+            points: [
+              { date: '2026-03-01', value: 96 },
+              { date: '2026-04-05', value: 97 },
+            ],
+            summary: {
+              deltaAbs: 1,
+              deltaPct: 1.04,
+              firstDate: '2026-03-01',
+              lastDate: '2026-04-05',
+              latestValue: 97,
+              pointCount: 2,
+              startValue: 96,
+            },
+          },
+        ],
+        startDate: '2026-03-01',
+      });
+    }
     if (testCase.contractResult?.contractName === 'compareEntities') {
       assert.equal(endEvent.sessionContext?.candidateSet?.sourceTool, 'compareEntities');
       assert.deepEqual(endEvent.sessionContext?.candidateSet?.names, ['Hades', 'Dead Cells']);

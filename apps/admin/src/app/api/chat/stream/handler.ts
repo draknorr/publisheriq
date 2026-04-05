@@ -29,6 +29,14 @@ import {
   type BroadDiscoveryState,
 } from '@/lib/chat/discovery-guardrails';
 import { buildRedundantNewsToolSkipResult } from '@/lib/chat/news-tool-guardrails';
+import { buildTigerChatRenderData } from '@/lib/chat/chat-render-data';
+import {
+  buildTigerPromptInterpreterMessages,
+  parseTigerPromptInterpretation,
+  tigerInterpretationMeetsThreshold,
+  type TigerInterpretationConfidence,
+  type TigerPromptInterpretation,
+} from '@/lib/chat/tiger-prompt-interpreter';
 import { runTigerPrimaryEvaluation, runTigerShadowEvaluation } from '@/lib/chat/tiger-shadow';
 import {
   buildTigerAttemptTraceEntries,
@@ -207,6 +215,27 @@ function readTigerNarratorEnabled(): boolean {
 function readTigerNarratorTimeoutMs(): number {
   const parsed = Number(process.env.CHAT_TIGER_NARRATOR_TIMEOUT_MS ?? '3000');
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 3000;
+}
+
+function readChatNluEnabled(): boolean {
+  return process.env.CHAT_NLU_ENABLED === 'true';
+}
+
+function readChatNluTimeoutMs(): number {
+  const parsed = Number(process.env.CHAT_NLU_TIMEOUT_MS ?? '2500');
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2500;
+}
+
+function readChatNluModel(): string | undefined {
+  const value = process.env.CHAT_NLU_MODEL?.trim();
+  return value ? value : undefined;
+}
+
+function readChatNluMinConfidence(): TigerInterpretationConfidence {
+  const value = process.env.CHAT_NLU_MIN_CONFIDENCE?.trim().toLowerCase();
+  return value === 'low' || value === 'medium' || value === 'high'
+    ? value
+    : 'medium';
 }
 
 interface QueryAnalyticsArgs {
@@ -430,13 +459,10 @@ function sanitizeMessageEndEventForClient(
     return event;
   }
 
-  const {
-    debug: _debug,
-    tigerPrimary: _tigerPrimary,
-    tigerShadow: _tigerShadow,
-    ...sanitizedEvent
-  } = event;
-
+  const sanitizedEvent = { ...event };
+  delete sanitizedEvent.debug;
+  delete sanitizedEvent.tigerPrimary;
+  delete sanitizedEvent.tigerShadow;
   return sanitizedEvent;
 }
 
@@ -1050,6 +1076,80 @@ function buildTigerOnlyFallbackReply(params: {
   }
 }
 
+const DATE_TOKEN_PATTERN = /\b\d{4}-\d{2}-\d{2}\b/g;
+const NUMERIC_TOKEN_PATTERN = /\b\d[\d,]*(?:\.\d+)?%?\b/g;
+
+function collectGroundingTokens(values: Array<string | null | undefined>): {
+  dates: Set<string>;
+  numerics: Set<string>;
+} {
+  const dates = new Set<string>();
+  const numerics = new Set<string>();
+
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+
+    for (const match of value.match(DATE_TOKEN_PATTERN) ?? []) {
+      dates.add(match);
+      numerics.add(match);
+    }
+
+    for (const match of value.match(NUMERIC_TOKEN_PATTERN) ?? []) {
+      numerics.add(match);
+    }
+  }
+
+  return { dates, numerics };
+}
+
+async function interpretTigerPrompt(params: {
+  deps: Pick<ChatRouteDependencies, 'createProvider' | 'now'>;
+  prompt: string;
+  sessionContext: SessionChatContext | null;
+}): Promise<{ durationMs: number; interpretation: TigerPromptInterpretation | null }> {
+  if (!readChatNluEnabled()) {
+    return { durationMs: 0, interpretation: null };
+  }
+
+  const startedAt = params.deps.now();
+
+  try {
+    const provider = params.deps.createProvider(undefined, readChatNluModel());
+    const response = await Promise.race([
+      provider.chat(buildTigerPromptInterpreterMessages({
+        prompt: params.prompt,
+        sessionContext: params.sessionContext,
+      })),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Prompt interpreter timed out')), readChatNluTimeoutMs())
+      ),
+    ]);
+    const durationMs = params.deps.now() - startedAt;
+    const interpretation = parseTigerPromptInterpretation(response.content);
+
+    if (!interpretation) {
+      return { durationMs, interpretation: null };
+    }
+
+    const minConfidence = readChatNluMinConfidence();
+    const usable =
+      tigerInterpretationMeetsThreshold(interpretation, minConfidence)
+      || (interpretation.confidence === 'low' && Boolean(interpretation.clarificationQuestion));
+
+    return {
+      durationMs,
+      interpretation: usable ? interpretation : null,
+    };
+  } catch {
+    return {
+      durationMs: params.deps.now() - startedAt,
+      interpretation: null,
+    };
+  }
+}
+
 function buildTigerNarrationMessages(params: {
   brief: TigerAnswerBrief;
   prompt: string;
@@ -1067,7 +1167,9 @@ function buildTigerNarrationMessages(params: {
         `Answer brief:\n${JSON.stringify({
           answerKind: params.brief.answerKind,
           directAnswer: params.brief.directAnswer,
-          keyFacts: params.brief.keyFacts,
+          narrationConfidence: params.brief.narrationConfidence ?? 'medium',
+          narrationFacts: params.brief.narrationFacts ?? params.brief.keyFacts,
+          provenanceSummary: params.brief.provenanceSummary ?? null,
           selectionNote: params.brief.selectionNote ?? null,
         }, null, 2)}`,
       ].join('\n'),
@@ -1075,7 +1177,10 @@ function buildTigerNarrationMessages(params: {
   ];
 }
 
-function isUsableTigerNarration(value: string | null | undefined): value is string {
+function isUsableTigerNarration(
+  brief: TigerAnswerBrief,
+  value: string | null | undefined
+): value is string {
   if (!value) {
     return false;
   }
@@ -1098,6 +1203,26 @@ function isUsableTigerNarration(value: string | null | undefined): value is stri
     || /\b(?:titles?|metrics?|details?)\s+(?:weren't|were not|wasn't|was not|didn't)\s+(?:provided|specified)\b/i.test(normalized)
   ) {
     return false;
+  }
+
+  const groundingSource = [
+    brief.directAnswer,
+    ...(brief.narrationFacts ?? brief.keyFacts),
+    brief.selectionNote ?? null,
+  ];
+  const allowed = collectGroundingTokens(groundingSource);
+  const candidate = collectGroundingTokens([normalized]);
+
+  for (const date of allowed.dates) {
+    if (!candidate.dates.has(date)) {
+      return false;
+    }
+  }
+
+  for (const numeric of candidate.numerics) {
+    if (!allowed.numerics.has(numeric)) {
+      return false;
+    }
   }
 
   return true;
@@ -1132,7 +1257,7 @@ async function narrateTigerAnswer(params: {
       : null;
 
     return {
-      content: isUsableTigerNarration(content) ? content.trim() : null,
+      content: isUsableTigerNarration(params.brief, content) ? content.trim() : null,
       durationMs,
     };
   } catch {
@@ -1449,8 +1574,17 @@ export async function handleChatStreamRequest(
         const lastUserPrompt = body.messages.filter((message) => message.role === 'user').pop()?.content ?? '';
         lastUserMessageContent = lastUserPrompt || null;
         updatedSessionContext = sessionContext;
+        const tigerPromptInterpretation = lastUserPrompt
+          ? await interpretTigerPrompt({
+              deps,
+              prompt: lastUserPrompt,
+              sessionContext,
+            })
+          : { durationMs: 0, interpretation: null };
+        totalLlmMs += tigerPromptInterpretation.durationMs;
 
         const tigerPrimaryEvaluation = await deps.runTigerPrimaryEvaluation({
+          interpretation: tigerPromptInterpretation.interpretation,
           isEvalRequest,
           prompt: lastUserPrompt,
           sessionContext,
@@ -1459,6 +1593,12 @@ export async function handleChatStreamRequest(
         const tigerPrimaryInfo = tigerPrimaryEvaluation.info;
         totalToolsMs += sumTigerAttemptTimingMs(tigerPrimaryInfo.attempts);
         tigerPrimaryResult = tigerPrimaryInfo;
+        const tigerRenderData = tigerPrimaryEvaluation.contractResult
+          ? buildTigerChatRenderData({
+              contractName: tigerPrimaryEvaluation.contractResult.contractName,
+              response: tigerPrimaryEvaluation.contractResult.response,
+            })
+          : null;
         recordExecutionTrace(
           buildTigerAttemptTraceEntries({
             attempts: tigerPrimaryInfo.attempts,
@@ -1506,12 +1646,15 @@ export async function handleChatStreamRequest(
                     })
                   : null;
 
-            const syntheticToolCall = buildTigerSyntheticToolCall({
-              contractName: contractResult.contractName,
-              request: contractResult.request,
-              response: contractResult.response as Record<string, unknown>,
-              resultSet,
-            });
+            const syntheticToolCall =
+              contractResult.contractName === 'traceMetricHistory'
+                ? null
+                : buildTigerSyntheticToolCall({
+                    contractName: contractResult.contractName,
+                    request: contractResult.request,
+                    response: contractResult.response as Record<string, unknown>,
+                    resultSet,
+                  });
 
             if (syntheticToolCall) {
               updatedSessionContext = buildSessionContextFromTurn({
@@ -1608,6 +1751,7 @@ export async function handleChatStreamRequest(
             sessionContext: updatedSessionContext,
             executionTrace: captureExecutionTrace ? executionTrace : undefined,
             followUpSuggestions: tigerFollowUpSuggestions,
+            renderData: tigerRenderData ?? undefined,
             tigerPrimary: tigerPrimaryResult,
             usage: {
               inputTokens: totalInputTokens,

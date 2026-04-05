@@ -12,6 +12,80 @@ function createService(): DataPlaneService {
   });
 }
 
+function createEntityRow(params: {
+  ccu_peak: number | null;
+  display_name: string;
+  entity_id: number;
+  match_quality: 'exact' | 'prefix' | 'substring' | 'fuzzy';
+  owners_midpoint: number | null;
+  review_score: number | null;
+  total_reviews: number | null;
+  game_count?: number | null;
+  release_year?: number | null;
+}): Record<string, unknown> {
+  return {
+    ccu_peak: params.ccu_peak,
+    display_name: params.display_name,
+    entity_id: params.entity_id,
+    game_count: params.game_count ?? null,
+    match_quality: params.match_quality,
+    owners_midpoint: params.owners_midpoint,
+    release_year: params.release_year ?? null,
+    review_score: params.review_score,
+    similarity_score: 0.9,
+    total_reviews: params.total_reviews,
+  };
+}
+
+function createSearchDocumentRow(params: {
+  appName: string;
+  appid: number;
+  content_preview: string | null;
+  excerpt: string | null;
+  feed_scope: string;
+  feedlabel: string | null;
+  feedname: string | null;
+  first_seen_at: string;
+  gid: string;
+  match_reason:
+    | 'matched_app_name'
+    | 'matched_exact_title'
+    | 'matched_title_phrase'
+    | 'matched_topic_terms'
+    | 'recent_entity_news';
+  published_at: string | null;
+  rank: number;
+  ranking_reason: string | null;
+  sort_time: string;
+  title: string | null;
+  title_exact_hit: boolean;
+  title_phrase_hit: boolean;
+  url: string;
+}): Record<string, unknown> {
+  return {
+    app_name: params.appName,
+    appid: params.appid,
+    app_name_hit: false,
+    body_preview: null,
+    content_preview: params.content_preview,
+    excerpt: params.excerpt,
+    feed_scope: params.feed_scope,
+    feedlabel: params.feedlabel,
+    feedname: params.feedname,
+    first_seen_at: params.first_seen_at,
+    gid: params.gid,
+    match_reason: params.match_reason,
+    published_at: params.published_at,
+    rank: params.rank,
+    ranking_reason: params.ranking_reason,
+    sort_time: params.sort_time,
+    title: params.title,
+    title_exact_hit: params.title_exact_hit,
+    title_phrase_hit: params.title_phrase_hit,
+    url: params.url,
+  };
+}
+
 test('getUserContext returns Tiger-backed pins, alerts, and preferences', async () => {
   const service = createService();
   let receivedUserId: string | null = null;
@@ -327,6 +401,7 @@ test('discoverMomentum returns Tiger momentum rows as typed items', async () => 
       velocity_acceleration: '12',
     },
   ];
+  (service as any).queryMomentumSparklineData = async () => new Map();
   const result = await service.discoverMomentum({
     filters: { isFree: true },
     sortBy: 'ccu_peak',
@@ -340,6 +415,97 @@ test('discoverMomentum returns Tiger momentum rows as typed items', async () => 
   assert.equal(result.items[0]?.momentumScore, 9006);
   assert.equal(result.rankingLabel, 'Peak CCU');
   assert.equal(result.timeframe, 'current');
+});
+
+test('discoverMomentum attaches CCU sparkline data for current-player answers', async () => {
+  const service = createService();
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).queryMomentumRows = async () => [
+    {
+      appid: 730,
+      ccu_growth_30d_percent: '12',
+      ccu_growth_7d_percent: '8',
+      ccu_peak: '1500000',
+      developer_name: 'Valve',
+      discount_percent: '0',
+      is_free: true,
+      is_self_published: true,
+      name: 'Counter-Strike 2',
+      owners_midpoint: 100000000,
+      platforms: 'windows',
+      positive_percentage: '88.4',
+      price_cents: '0',
+      publisher_name: 'Valve',
+      release_date: '2023-09-27',
+      release_year: '2023',
+      reviews_added_30d: '42000',
+      reviews_added_7d: '9000',
+      sentiment_delta: '1.4',
+      total_reviews: '9000000',
+      trend_direction: 'up',
+      velocity_30d: '1400',
+      velocity_7d: '1285',
+      velocity_acceleration: '12',
+    },
+  ];
+  (service as any).queryMomentumSparklineData = async () => new Map([
+    [730, [1200000, 1275000, 1310000, 1404982]],
+  ]);
+
+  const result = await service.discoverMomentum({
+    sortBy: 'ccu_peak',
+    timeframe: 'current',
+  });
+
+  assert.deepEqual(result.items[0]?.ccuSparkline, [1200000, 1275000, 1310000, 1404982]);
+});
+
+test('discoverMomentum skips sparkline enrichment for non-current windows', async () => {
+  const service = createService();
+  let sparklineCalled = false;
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).queryMomentumRows = async () => [
+    {
+      appid: 1145360,
+      ccu_growth_30d_percent: 30,
+      ccu_growth_7d_percent: 18,
+      ccu_peak: 50000,
+      developer_name: 'Supergiant Games',
+      discount_percent: 0,
+      is_free: false,
+      is_self_published: true,
+      name: 'Hades II',
+      owners_midpoint: 5000000,
+      platforms: 'windows',
+      positive_percentage: 96,
+      price_cents: 2999,
+      publisher_name: 'Supergiant Games',
+      release_date: '2024-05-06',
+      release_year: 2024,
+      reviews_added_30d: 5200,
+      reviews_added_7d: 2400,
+      sentiment_delta: 2.2,
+      total_reviews: 75000,
+      trend_direction: 'up',
+      velocity_30d: 173,
+      velocity_7d: 342,
+      velocity_acceleration: 40,
+    },
+  ];
+  (service as any).queryMomentumSparklineData = async () => {
+    sparklineCalled = true;
+    return new Map();
+  };
+
+  const result = await service.discoverMomentum({
+    sortBy: 'reviews_added_7d',
+    timeframe: '7d',
+  });
+
+  assert.equal(sparklineCalled, false);
+  assert.equal(result.items[0]?.ccuSparkline, undefined);
 });
 
 test('discoverMomentum aligns support reasons with the visible review window and drops zero-ccu evidence', async () => {
@@ -800,6 +966,7 @@ test('discoverMomentum excludes previously shown appids before slicing the next 
       velocity_acceleration: 0.5,
     },
   ];
+  (service as any).queryMomentumSparklineData = async () => new Map();
   const result = await service.discoverMomentum({
     excludeAppIds: [730],
     limit: 2,
@@ -1109,6 +1276,108 @@ test('searchDocuments returns explicit ranking reasons and usable previews', asy
   assert.equal(result.items[0]?.rankingReason, 'exact title match');
   assert.equal(result.items[0]?.excerpt, 'Primeval roadmap update');
   assert.equal(result.items[0]?.bodyPreview, 'Primeval roadmap update — Community Announcements — Primeval');
+});
+
+test('searchDocuments uses lexical fallback when topic search returns no rows', async () => {
+  const service = createService();
+
+  (service as any).getBlockingTables = async () => [];
+  (service as any).querySearchDocumentRows = async () => [];
+  (service as any).querySearchDocumentRowsLexicalFallback = async () => [
+    createSearchDocumentRow({
+      appName: 'Primeval',
+      appid: 1234,
+      content_preview: 'Primeval roadmap update — Community Announcements — Primeval',
+      excerpt: 'Primeval roadmap update',
+      feed_scope: 'community_announcements',
+      feedlabel: 'Community Announcements',
+      feedname: 'Steam News',
+      first_seen_at: '2026-04-02T12:00:00.000Z',
+      gid: 'gid-lex-1',
+      match_reason: 'matched_title_phrase',
+      published_at: '2026-04-02T12:00:00.000Z',
+      rank: 0.35,
+      ranking_reason: 'lexical title fallback',
+      sort_time: '2026-04-02T12:00:00.000Z',
+      title: 'Primeval roadmap update',
+      title_exact_hit: false,
+      title_phrase_hit: true,
+      url: 'https://store.steampowered.com/news/app/1234/view/1',
+    }),
+  ];
+
+  const result = await service.searchDocuments({
+    mode: 'topic_search',
+    query: 'Primeval roadmap update',
+  });
+
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.matchReason, 'matched_title_phrase');
+  assert.equal(result.items[0]?.rankingReason, 'lexical title fallback');
+  assert.equal(result.items[0]?.appName, 'Primeval');
+  assert.equal(result.sufficientToAnswer, true);
+});
+
+test('resolveEntities prefers lexical exact hits and deduplicates duplicate entity rows', async () => {
+  const service = createService();
+  const receivedCalls: string[] = [];
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).queryGames = async () => {
+    receivedCalls.push('queryGames');
+    return [
+      createEntityRow({
+        ccu_peak: 22000,
+        display_name: 'Assetto Corsa',
+        entity_id: 201,
+        match_quality: 'fuzzy',
+        owners_midpoint: 1250000,
+        release_year: 2014,
+        review_score: 91,
+        total_reviews: 120000,
+      }),
+      createEntityRow({
+        ccu_peak: 8000,
+        display_name: 'RaceRoom Racing Experience',
+        entity_id: 202,
+        match_quality: 'fuzzy',
+        owners_midpoint: 300000,
+        release_year: 2013,
+        review_score: 87,
+        total_reviews: 50000,
+      }),
+    ];
+  };
+  (service as any).queryGamesLexical = async () => {
+    receivedCalls.push('queryGamesLexical');
+    return [
+      createEntityRow({
+        ccu_peak: 22000,
+        display_name: 'Assetto Corsa',
+        entity_id: 201,
+        match_quality: 'exact',
+        owners_midpoint: 1250000,
+        release_year: 2014,
+        review_score: 91,
+        total_reviews: 120000,
+      }),
+    ];
+  };
+  (service as any).queryCompanies = async () => [];
+  (service as any).queryCompaniesLexical = async () => [];
+
+  const result = await service.resolveEntities({
+    entityKinds: ['game'],
+    query: 'assetto corsa',
+  });
+
+  assert.deepEqual(receivedCalls, ['queryGames', 'queryGamesLexical']);
+  assert.equal(result.entities.length, 2);
+  assert.equal(result.entities[0]?.displayName, 'Assetto Corsa');
+  assert.equal(result.entities[0]?.matchQuality, 'exact');
+  assert.equal(result.entities[0]?.confidence, 0.99);
+  assert.equal(result.entities[1]?.displayName, 'RaceRoom Racing Experience');
+  assert.equal(result.ambiguity.requiresClarification, false);
 });
 
 test('searchChangeActivity annotates strong commercial bursts with relevance evidence', async () => {

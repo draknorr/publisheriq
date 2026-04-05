@@ -157,6 +157,32 @@ function extractTables(content: string): TableMatch[] {
   return matches;
 }
 
+export function removeMarkdownTables(content: string): string {
+  const tableMatches = extractTables(content);
+  if (tableMatches.length === 0) {
+    return content;
+  }
+
+  let currentPos = 0;
+  const segments: string[] = [];
+
+  for (const match of tableMatches) {
+    if (match.start > currentPos) {
+      segments.push(content.slice(currentPos, match.start));
+    }
+    currentPos = match.end;
+  }
+
+  if (currentPos < content.length) {
+    segments.push(content.slice(currentPos));
+  }
+
+  return segments
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /**
  * Main parser: converts raw message content into structured blocks
  */
