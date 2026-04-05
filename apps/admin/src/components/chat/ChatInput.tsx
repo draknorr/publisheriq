@@ -20,6 +20,7 @@ interface ChatInputProps {
 // Debounce delay for API search
 const SEARCH_DEBOUNCE_MS = 150;
 const MIN_SEARCH_LENGTH = 2;
+const INPUT_AUTOCOMPLETE_ENABLED = false;
 
 export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
   const [input, setInput] = useState('');
@@ -50,6 +51,10 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
 
   // Generate instant suggestions (no API call)
   const instantSuggestions = useMemo((): AutocompleteSuggestion[] => {
+    if (!INPUT_AUTOCOMPLETE_ENABLED) {
+      return [];
+    }
+
     const trimmedInput = input.trim();
 
     // Empty input - show example prompts
@@ -106,6 +111,12 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
 
   // Debounced entity search
   const searchEntities = useCallback(async (query: string) => {
+    if (!INPUT_AUTOCOMPLETE_ENABLED) {
+      setEntityResults([]);
+      setIsSearching(false);
+      return;
+    }
+
     // Cancel previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -258,7 +269,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
   };
 
   const handleFocus = () => {
-    setIsDropdownOpen(true);
+    setIsDropdownOpen(false);
   };
 
   const handleBlur = (e: React.FocusEvent) => {
@@ -272,11 +283,12 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-    setIsDropdownOpen(true);
+    setIsDropdownOpen(false);
   };
 
   const trimmedInput = input.trim();
   const isDropdownVisible =
+    INPUT_AUTOCOMPLETE_ENABLED &&
     isDropdownOpen &&
     (trimmedInput.length === 0 || trimmedInput.length >= MIN_SEARCH_LENGTH);
 
@@ -307,10 +319,10 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
           disabled={disabled}
           rows={1}
           autoComplete="off"
-          role="combobox"
-          aria-expanded={isDropdownOpen}
-          aria-haspopup="listbox"
-          aria-autocomplete="list"
+          role={INPUT_AUTOCOMPLETE_ENABLED ? 'combobox' : undefined}
+          aria-expanded={INPUT_AUTOCOMPLETE_ENABLED ? isDropdownOpen : undefined}
+          aria-haspopup={INPUT_AUTOCOMPLETE_ENABLED ? 'listbox' : undefined}
+          aria-autocomplete={INPUT_AUTOCOMPLETE_ENABLED ? 'list' : undefined}
           className="
             w-full min-h-[40px] max-h-[200px] py-2.5 px-4 rounded-lg resize-none
             bg-surface-elevated border border-border-muted
