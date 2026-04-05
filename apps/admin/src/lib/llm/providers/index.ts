@@ -4,7 +4,7 @@ import { AnthropicProvider } from './anthropic';
 
 export type ProviderType = 'openai' | 'anthropic';
 
-export function createProvider(type?: ProviderType): LLMProvider {
+export function createProvider(type?: ProviderType, modelOverride?: string): LLMProvider {
   const providerType = type || (process.env.LLM_PROVIDER as ProviderType) || 'openai';
 
   switch (providerType) {
@@ -13,7 +13,7 @@ export function createProvider(type?: ProviderType): LLMProvider {
       if (!apiKey) {
         throw new Error('OPENAI_API_KEY environment variable is required');
       }
-      return new OpenAIProvider(apiKey);
+      return new OpenAIProvider(apiKey, modelOverride);
     }
 
     case 'anthropic': {
@@ -21,7 +21,7 @@ export function createProvider(type?: ProviderType): LLMProvider {
       if (!apiKey) {
         throw new Error('ANTHROPIC_API_KEY environment variable is required');
       }
-      return new AnthropicProvider(apiKey);
+      return new AnthropicProvider(apiKey, modelOverride);
     }
 
     default:
