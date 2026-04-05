@@ -1403,16 +1403,18 @@ export async function handleChatStreamRequest(
   const creditsEnabled = readCreditsEnabled() && !skipUsageAccounting;
   let reservationId: string | null = null;
   const serviceSupabase = deps.getServiceClient();
+  type ChatProfileLookup = {
+    data: { credit_balance: number; role: string | null } | null;
+    error: { message?: string } | null;
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: chatProfile } = userId
+  const chatProfileLookup: ChatProfileLookup = userId
     ? await ((serviceSupabase.from('user_profiles') as any)
         .select('credit_balance, role')
         .eq('id', userId)
-        .maybeSingle() as Promise<{
-          data: { credit_balance: number; role: string | null } | null;
-          error: { message?: string } | null;
-        }>)
+        .maybeSingle() as Promise<ChatProfileLookup>)
     : { data: null, error: null };
+  const { data: chatProfile } = chatProfileLookup;
   const canViewAdminDebug = chatProfile?.role === 'admin';
 
   // Check credits if enabled

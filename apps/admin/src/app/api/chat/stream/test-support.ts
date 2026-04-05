@@ -6,6 +6,7 @@ import {
   attachToolExecutionProvenance,
   extractToolExecutionProvenance,
 } from '@/lib/chat/execution-trace';
+import type { TigerPromptInterpretation } from '@/lib/chat/tiger-prompt-interpreter';
 import type { SessionChatContext } from '@/lib/chat/chat-context-types';
 import type { TigerShadowInfo } from '@/lib/chat/tiger-shadow-types';
 import type { StreamChunk } from '@/lib/llm/streaming-types';
@@ -33,6 +34,16 @@ export interface ProviderInvocationPlan {
   label?: string;
 }
 
+export interface ProviderChatPlan {
+  assertInvocation?: (params: { messages: Message[]; tools: Tool[] | undefined }) => void;
+  label?: string;
+  response: {
+    content: string | null;
+    finishReason?: 'error' | 'length' | 'stop' | 'tool_calls';
+    toolCalls?: ToolCall[] | null;
+  };
+}
+
 export interface ToolExecutionPlan {
   assertArguments?: (argumentsShape: Record<string, unknown>) => void;
   expectedName: string;
@@ -49,6 +60,7 @@ export interface QueryApiPlan {
 
 export interface TigerPrimaryPlan {
   assertRequest?: (params: {
+    interpretation?: TigerPromptInterpretation | null;
     isEvalRequest: boolean;
     prompt: string;
     sessionContext: SessionChatContext | null;
@@ -162,6 +174,7 @@ export function createServerClientStub(
 }
 
 export function createScriptedChatDeps(params: {
+  providerChats?: ProviderChatPlan[];
   providerInvocations?: ProviderInvocationPlan[];
   queryApiCalls?: QueryApiPlan[];
   tigerPrimaryCalls?: TigerPrimaryPlan[];
@@ -176,6 +189,7 @@ export function createScriptedChatDeps(params: {
   deps: Partial<ChatRouteDependencies>;
   trace: ScriptedChatTrace;
 } {
+  const providerChats = [...(params.providerChats ?? [])];
   const providerInvocations = [...(params.providerInvocations ?? [])];
   const queryApiCalls = [...(params.queryApiCalls ?? [])];
   const tigerPrimaryCalls = [...(params.tigerPrimaryCalls ?? [])];
@@ -197,8 +211,29 @@ export function createScriptedChatDeps(params: {
   const deps: Partial<ChatRouteDependencies> = {
     createProvider: () =>
       ({
-        chat: async () => {
-          throw new Error('chat() should not be used in scripted chat tests');
+        chat: async (messages: Message[], tools?: Tool[]) => {
+          const plan = providerChats.shift();
+          assert.ok(plan, 'Unexpected provider chat invocation');
+
+          const messageSnapshot = cloneValue(messages);
+          const toolSnapshot = tools ? cloneValue(tools) : undefined;
+          trace.providerCalls.push({
+            label: plan.label,
+            messages: messageSnapshot,
+            toolNames: (toolSnapshot ?? []).map((tool) => tool.function.name),
+            toolsProvided: (toolSnapshot?.length ?? 0) > 0,
+          });
+
+          plan.assertInvocation?.({
+            messages: messageSnapshot,
+            tools: toolSnapshot,
+          });
+
+          return {
+            content: plan.response.content,
+            finishReason: plan.response.finishReason ?? 'stop',
+            toolCalls: plan.response.toolCalls ?? null,
+          };
         },
         async *chatStream(messages: Message[], tools?: Tool[], _options?: { signal?: AbortSignal }) {
           const plan = providerInvocations.shift();
@@ -282,7 +317,7 @@ export function createScriptedChatDeps(params: {
             },
           };
         },
-      }) as ReturnType<ChatRouteDependencies['getServiceClient']>) as ChatRouteDependencies['getServiceClient'],
+      }) as unknown as ReturnType<ChatRouteDependencies['getServiceClient']>) as ChatRouteDependencies['getServiceClient'],
     logChatQuery: async () => undefined,
     now: () => {
       nowTick += 5;
@@ -311,6 +346,7 @@ export function createScriptedChatDeps(params: {
     runTigerPrimaryEvaluation: async (request) => {
       const plan = tigerPrimaryCalls.shift();
       const snapshot = {
+        interpretation: cloneValue(request.interpretation),
         isEvalRequest: request.isEvalRequest,
         label: plan?.label,
         prompt: request.prompt,
@@ -324,6 +360,7 @@ export function createScriptedChatDeps(params: {
       }
 
       plan.assertRequest?.({
+        interpretation: snapshot.interpretation,
         isEvalRequest: request.isEvalRequest,
         prompt: request.prompt,
         sessionContext: snapshot.sessionContext,
@@ -360,6 +397,7 @@ export function createScriptedChatDeps(params: {
 
   return {
     assertExhausted: () => {
+      assert.equal(providerChats.length, 0, 'Unconsumed scripted provider chat calls remain');
       assert.equal(providerInvocations.length, 0, 'Unconsumed scripted provider invocations remain');
       assert.equal(toolExecutions.length, 0, 'Unconsumed scripted tool executions remain');
       assert.equal(queryApiCalls.length, 0, 'Unconsumed scripted query-api calls remain');

@@ -1413,7 +1413,7 @@ function renderMomentumDiscovery(params: {
   const establishedTitlesSuffix = establishedTitlesNote ? ` ${establishedTitlesNote}` : '';
   const broadeningSuffix = broadeningNote ? ` ${broadeningNote}` : '';
   const shortfallSuffix = shortfallNote ? ` ${shortfallNote}` : '';
-  const itemsForSignalCheck = response.items as Array<Record<string, unknown>>;
+  const itemsForSignalCheck = response.items as unknown as Array<Record<string, unknown>>;
   const hasPeakCcuSignal = hasPositiveMetric(itemsForSignalCheck, 'ccuPeak');
   const intro = leader
     ? response.timeframe === 'current'

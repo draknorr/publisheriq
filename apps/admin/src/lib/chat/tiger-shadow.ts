@@ -7887,7 +7887,7 @@ function buildSparseSearchDocumentsFallbackRequest(params: {
     return null;
   }
 
-  if (params.request.mode === 'topic_search' && !params.request.entityUids?.length) {
+  if (!params.request.entityUids?.length) {
     return null;
   }
 

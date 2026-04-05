@@ -3,6 +3,19 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "AUTH_PASSWORD",
+        "CHAT_PHASE1_QUALITY_ENABLED",
+        "CUBE_API_SECRET",
+        "CUBE_API_URL",
+        "LLM_PROVIDER",
+        "OPENAI_API_KEY",
+        "QDRANT_API_KEY",
+        "QDRANT_URL",
+        "SUPABASE_SERVICE_KEY",
+        "SUPABASE_URL",
+        "USE_CUBE_CHAT"
+      ],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": {
