@@ -196,8 +196,8 @@ const versions: Version[] = [
     name: 'Change Feed & Auth Hardening',
     date: 'March 2026',
     headline: 'Track what changed, trust the session flow, and run change intelligence with better operational guardrails',
-    accentColor: 'bg-accent-blue/10',
-    icon: <Zap className="h-6 w-6 text-accent-blue" />,
+    accentColor: 'bg-accent-primary/10',
+    icon: <Zap className="h-6 w-6 text-accent-primary" />,
     highlights: [
       'New /changes page for grouped storefront, media, PICS, and news activity',
       'OTP-first login hardened with authoritative session establishment before redirect',
@@ -309,8 +309,8 @@ const versions: Version[] = [
     name: 'Games Page',
     date: 'January 2026',
     headline: 'Discover and analyze games like never before',
-    accentColor: 'bg-accent-blue/10',
-    icon: <Gamepad2 className="h-6 w-6 text-accent-blue" />,
+    accentColor: 'bg-accent-primary/10',
+    icon: <Gamepad2 className="h-6 w-6 text-accent-primary" />,
     highlights: [
       '12 preset views for instant discovery patterns',
       '6 computed insight metrics including Momentum and Sentiment Delta',

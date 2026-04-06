@@ -209,7 +209,7 @@ export default async function AdminUsagePage({
 
         <Card variant="default" padding="md">
           <div className="flex items-center gap-3">
-            <BarChart3 className="h-5 w-5 text-accent-blue" />
+            <BarChart3 className="h-5 w-5 text-accent-primary" />
             <div>
               <p className="text-body-sm text-text-secondary">Total Credits Used</p>
               <p className="text-display-sm text-text-primary">
@@ -324,7 +324,7 @@ export default async function AdminUsagePage({
                   </div>
                   <div className="h-2 bg-surface-raised rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-accent-blue rounded-full transition-all"
+                      className="h-full bg-accent-primary rounded-full transition-all"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>

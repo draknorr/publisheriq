@@ -114,7 +114,7 @@ function WaitlistForm() {
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
       <Card variant="elevated" padding="lg" className="w-full max-w-md">
         <div className="flex flex-col items-center mb-6">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-blue mb-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-primary mb-4">
             <Gamepad2 className="h-6 w-6 text-white" />
           </div>
           <h1 className="text-heading text-text-primary">
@@ -170,7 +170,7 @@ function WaitlistForm() {
               value={formData.howIPlanToUse}
               onChange={handleChange}
               placeholder="Example: I track launch timing, pricing, and publisher moves for our portfolio."
-              className="w-full min-h-[100px] px-3 py-2 rounded-lg border border-border-subtle bg-surface text-body text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-blue focus:border-transparent transition-shadow resize-none"
+              className="w-full min-h-[100px] px-3 py-2 rounded-lg border border-border-subtle bg-surface text-body text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-shadow resize-none"
             />
           </div>
 
@@ -191,7 +191,7 @@ function WaitlistForm() {
         <div className="mt-6 text-center">
           <p className="text-body-xs text-text-tertiary">
             Already approved?{" "}
-            <Link href="/login" className="text-accent-blue hover:underline">
+            <Link href="/login" className="text-accent-primary hover:underline">
               Sign in
             </Link>
           </p>
@@ -208,7 +208,7 @@ export default function WaitlistPage() {
         <div className="min-h-screen bg-surface flex items-center justify-center p-4">
           <Card variant="elevated" padding="lg" className="w-full max-w-md">
             <div className="flex flex-col items-center mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-blue mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-primary mb-4">
                 <Gamepad2 className="h-6 w-6 text-white" />
               </div>
               <h1 className="text-heading text-text-primary">

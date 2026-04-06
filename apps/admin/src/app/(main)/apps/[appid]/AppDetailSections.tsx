@@ -408,7 +408,7 @@ export function AppDetailSections({
               onClick={() => scrollToSection(section.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm font-medium transition-colors ${
                 activeSection === section.id
-                  ? 'bg-accent-blue/10 text-accent-blue'
+                  ? 'bg-accent-primary/10 text-accent-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
               }`}
             >
@@ -590,7 +590,7 @@ function SummarySection({
                     href={`https://store.steampowered.com/search/?tags=${tag.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2 py-0.5 rounded text-caption bg-accent-blue/10 border border-accent-blue/20 text-accent-blue hover:bg-accent-blue/20 transition-colors"
+                    className="px-2 py-0.5 rounded text-caption bg-accent-primary/10 border border-accent-primary/20 text-accent-primary hover:bg-accent-primary/20 transition-colors"
                     title={`Rank #${tag.rank}`}
                   >
                     {tag.name}
@@ -599,7 +599,7 @@ function SummarySection({
                 {namedTags.length > TAG_LIMIT && (
                   <button
                     onClick={() => setTagsExpanded(!tagsExpanded)}
-                    className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                    className="px-2 py-0.5 rounded text-caption text-accent-primary hover:bg-accent-primary/10 transition-colors"
                   >
                     {tagsExpanded ? 'Show less' : `+${namedTags.length - TAG_LIMIT} more`}
                   </button>
@@ -657,7 +657,7 @@ function SummarySection({
                   <Link
                     key={dev.id}
                     href={`/developers/${dev.id}`}
-                    className="px-2 py-0.5 rounded text-body-sm text-accent-blue bg-accent-blue/10 hover:bg-accent-blue/20 transition-colors"
+                    className="px-2 py-0.5 rounded text-body-sm text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 transition-colors"
                   >
                     {dev.name}
                   </Link>
@@ -814,7 +814,7 @@ function SummarySection({
             {app.parent_appid !== null && (
               <div>
                 <p className="text-caption text-text-tertiary">Parent App</p>
-                <Link href={`/apps/${app.parent_appid}`} className="text-body-sm text-accent-blue hover:underline">
+                <Link href={`/apps/${app.parent_appid}`} className="text-body-sm text-accent-primary hover:underline">
                   {app.parent_appid}
                 </Link>
               </div>
@@ -846,7 +846,7 @@ function SummarySection({
             {app.homepage_url && (
               <div className="col-span-2">
                 <p className="text-caption text-text-tertiary flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Homepage</p>
-                <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body-sm text-accent-blue hover:underline truncate block">
+                <a href={app.homepage_url} target="_blank" rel="noopener noreferrer" className="text-body-sm text-accent-primary hover:underline truncate block">
                   {app.homepage_url.replace(/^https?:\/\//, '')}
                 </a>
               </div>
@@ -866,7 +866,7 @@ function SummarySection({
             {categories.length > CATEGORY_LIMIT && (
               <button
                 onClick={() => setCategoriesExpanded(!categoriesExpanded)}
-                className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                className="px-2 py-0.5 rounded text-caption text-accent-primary hover:bg-accent-primary/10 transition-colors"
               >
                 {categoriesExpanded ? 'Show less' : `+${categories.length - CATEGORY_LIMIT} more`}
               </button>
@@ -882,7 +882,7 @@ function SummarySection({
               {dlcs.length > DLC_LIMIT && (
                 <button
                   onClick={() => setDlcsExpanded(!dlcsExpanded)}
-                  className="text-caption text-accent-blue hover:bg-accent-blue/10 px-2 py-0.5 rounded transition-colors"
+                  className="text-caption text-accent-primary hover:bg-accent-primary/10 px-2 py-0.5 rounded transition-colors"
                 >
                   {dlcsExpanded ? 'Show less' : `+${dlcs.length - DLC_LIMIT} more`}
                 </button>
@@ -893,7 +893,7 @@ function SummarySection({
                 <Link
                   key={dlc.appid}
                   href={`/apps/${dlc.appid}`}
-                  className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors truncate max-w-48"
+                  className="px-2 py-0.5 rounded text-caption bg-surface-elevated border border-border-subtle text-text-secondary hover:text-accent-primary hover:border-accent-primary/30 transition-colors truncate max-w-48"
                   title={dlc.name}
                 >
                   {dlc.name}
@@ -918,7 +918,7 @@ function SummarySection({
               {languageKeys.length > LANGUAGE_LIMIT && (
                 <button
                   onClick={() => setLanguagesExpanded(!languagesExpanded)}
-                  className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                  className="px-2 py-0.5 rounded text-caption text-accent-primary hover:bg-accent-primary/10 transition-colors"
                 >
                   {languagesExpanded ? 'Show less' : `+${languageKeys.length - LANGUAGE_LIMIT} more`}
                 </button>
@@ -946,7 +946,7 @@ function SummarySection({
               {contentDescriptors.length > CONTENT_DESCRIPTOR_LIMIT && (
                 <button
                   onClick={() => setContentDescriptorsExpanded(!contentDescriptorsExpanded)}
-                  className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                  className="px-2 py-0.5 rounded text-caption text-accent-primary hover:bg-accent-primary/10 transition-colors"
                 >
                   {contentDescriptorsExpanded ? 'Show less' : `+${contentDescriptors.length - CONTENT_DESCRIPTOR_LIMIT} more`}
                 </button>
@@ -1271,7 +1271,7 @@ function ReviewsSection({
                 <div className="p-2 bg-surface-elevated border-t border-border-subtle">
                   <button
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="w-full flex items-center justify-center gap-1 py-1.5 text-caption text-accent-blue hover:bg-accent-blue/10 rounded transition-colors"
+                    className="w-full flex items-center justify-center gap-1 py-1.5 text-caption text-accent-primary hover:bg-accent-primary/10 rounded transition-colors"
                   >
                     {isExpanded ? 'Show less' : `Show ${Math.min(histogram.length, 12) - REVIEW_MONTHS_LIMIT} more months`}
                     <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -1336,7 +1336,7 @@ function DataCoverageSection({
             </span>
             <button
               onClick={onJumpToSync}
-              className="ml-auto text-caption text-accent-blue hover:bg-accent-blue/10 px-2 py-1 rounded transition-colors"
+              className="ml-auto text-caption text-accent-primary hover:bg-accent-primary/10 px-2 py-1 rounded transition-colors"
             >
               Jump to Sync Status
             </button>

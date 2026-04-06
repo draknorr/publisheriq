@@ -608,7 +608,7 @@ function ActivityCard({
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/apps/${row.appid}`}
-              className="truncate text-body font-medium text-text-primary transition-colors hover:text-accent-blue"
+              className="truncate text-body font-medium text-text-primary transition-colors hover:text-accent-primary"
             >
               {row.appName}
             </Link>
@@ -715,7 +715,7 @@ function ActivityCard({
               <div className="flex flex-wrap items-center gap-3">
                 <Link
                   href={`/apps/${detail.appid}`}
-                  className="inline-flex items-center gap-1 text-body-sm text-accent-blue transition-colors hover:text-accent-blue/80"
+                  className="inline-flex items-center gap-1 text-body-sm text-accent-primary transition-colors hover:text-accent-primary/80"
                 >
                   Open app page
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -725,7 +725,7 @@ function ActivityCard({
                     href={detail.externalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-body-sm text-accent-blue transition-colors hover:text-accent-blue/80"
+                    className="inline-flex items-center gap-1 text-body-sm text-accent-primary transition-colors hover:text-accent-primary/80"
                   >
                     Open on Steam
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -810,7 +810,7 @@ function ActivityCard({
                                 href={announcement.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="mt-2 inline-flex items-center gap-1 text-accent-blue transition-colors hover:text-accent-blue/80"
+                                className="mt-2 inline-flex items-center gap-1 text-accent-primary transition-colors hover:text-accent-primary/80"
                               >
                                 Open
                                 <ExternalLink className="h-3.5 w-3.5" />

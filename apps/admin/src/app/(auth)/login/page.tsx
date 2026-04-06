@@ -438,7 +438,7 @@ function LoginPageContent() {
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
         <Card variant="elevated" padding="lg" className="w-full max-w-sm">
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-blue mb-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-primary mb-4">
               <KeyRound className="h-6 w-6 text-white" />
             </div>
             <h1 className="text-heading text-text-primary">Check your email</h1>
@@ -516,7 +516,7 @@ function LoginPageContent() {
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
       <Card variant="elevated" padding="lg" className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-blue mb-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-primary mb-4">
             <Gamepad2 className="h-6 w-6 text-white" />
           </div>
           <h1 className="text-heading text-text-primary">
@@ -555,7 +555,7 @@ function LoginPageContent() {
         <div className="mt-6 text-center">
           <p className="text-body-xs text-text-tertiary">
             Need access first?{" "}
-            <Link href="/waitlist" className="text-accent-blue hover:underline">
+            <Link href="/waitlist" className="text-accent-primary hover:underline">
               Request access
             </Link>
           </p>
@@ -570,7 +570,7 @@ function LoginLoadingFallback() {
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
       <Card variant="elevated" padding="lg" className="w-full max-w-sm">
         <div className="flex flex-col items-center">
-          <Loader2 className="h-8 w-8 text-accent-blue animate-spin mb-4" />
+          <Loader2 className="h-8 w-8 text-accent-primary animate-spin mb-4" />
           <p className="text-body-sm text-text-secondary">
             Preparing sign-in...
           </p>

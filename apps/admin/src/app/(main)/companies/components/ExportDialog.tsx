@@ -109,7 +109,7 @@ export function ExportDialog({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
           <div className="flex items-center gap-3">
-            <FileSpreadsheet className="w-5 h-5 text-accent-blue" />
+            <FileSpreadsheet className="w-5 h-5 text-accent-primary" />
             <h2 id="export-modal-title" className="text-heading-sm font-semibold text-text-primary">
               Export Companies
             </h2>
@@ -136,7 +136,7 @@ export function ExportDialog({
                   name="format"
                   checked
                   readOnly
-                  className="w-4 h-4 text-accent-blue"
+                  className="w-4 h-4 text-accent-primary"
                 />
                 <span className="text-body-sm text-text-primary">CSV</span>
               </label>
@@ -157,7 +157,7 @@ export function ExportDialog({
                   name="scope"
                   checked={scope === 'filtered'}
                   onChange={() => setScope('filtered')}
-                  className="w-4 h-4 text-accent-blue"
+                  className="w-4 h-4 text-accent-primary"
                 />
                 <span className="text-body-sm text-text-primary">
                   Filtered results ({companies.length.toLocaleString()} companies)
@@ -172,7 +172,7 @@ export function ExportDialog({
                   checked={scope === 'selected'}
                   onChange={() => hasSelection && setScope('selected')}
                   disabled={!hasSelection}
-                  className="w-4 h-4 text-accent-blue"
+                  className="w-4 h-4 text-accent-primary"
                 />
                 <span className="text-body-sm text-text-primary">
                   Selected only ({selectedCompanies.length} companies)
@@ -190,7 +190,7 @@ export function ExportDialog({
                   type="checkbox"
                   checked={includeVisibleOnly}
                   onChange={(e) => setIncludeVisibleOnly(e.target.checked)}
-                  className="w-4 h-4 rounded text-accent-blue"
+                  className="w-4 h-4 rounded text-accent-primary"
                 />
                 <span className="text-body-sm text-text-primary">
                   Visible columns only ({visibleColumns.length} columns)

@@ -283,8 +283,8 @@ function RowActions({
         disabled={isPinning}
         className={`p-1.5 rounded transition-colors ${
           isPinned
-            ? 'text-accent-blue bg-accent-blue/10 hover:bg-accent-blue/20'
-            : 'text-text-muted hover:text-accent-blue hover:bg-surface-overlay'
+            ? 'text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20'
+            : 'text-text-muted hover:text-accent-primary hover:bg-surface-overlay'
         } ${isPinning ? 'opacity-50 cursor-wait' : ''}`}
         title={isPinned ? 'Pinned to dashboard' : 'Pin to dashboard'}
       >
@@ -297,7 +297,7 @@ function RowActions({
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="p-1.5 rounded text-text-muted hover:text-accent-blue hover:bg-surface-overlay transition-colors"
+        className="p-1.5 rounded text-text-muted hover:text-accent-primary hover:bg-surface-overlay transition-colors"
         title="Open on Steam"
       >
         <ExternalLink className="w-3.5 h-3.5" />
@@ -465,7 +465,7 @@ export function CompaniesTable({
               <Card
                 variant="interactive"
                 padding="sm"
-                className={isSelected ? 'ring-2 ring-accent-blue/50' : ''}
+                className={isSelected ? 'ring-2 ring-accent-primary/50' : ''}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-text-muted text-caption">
@@ -630,7 +630,7 @@ export function CompaniesTable({
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/${company.type}s/${company.id}`}
-                      className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+                      className="text-body font-medium text-text-primary hover:text-accent-primary transition-colors"
                     >
                       {company.name}
                     </Link>

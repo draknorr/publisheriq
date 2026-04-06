@@ -77,7 +77,7 @@ export function TabsTrigger({
       className={`
         px-3 py-1.5 rounded-md text-body-sm font-medium
         transition-all duration-150
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue focus-visible:ring-offset-1 focus-visible:ring-offset-surface-elevated
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface-elevated
         disabled:opacity-50 disabled:cursor-not-allowed
         ${
           isActive
@@ -136,7 +136,7 @@ export function UnderlineTabs({
             onClick={() => onChange(tab.id)}
             className={`
               relative py-3 text-body font-medium transition-colors
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue focus-visible:ring-offset-2
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2
               ${
                 activeTab === tab.id
                   ? 'text-text-primary'
@@ -152,7 +152,7 @@ export function UnderlineTabs({
                     px-1.5 py-0.5 rounded text-caption
                     ${
                       activeTab === tab.id
-                        ? 'bg-accent-blue/15 text-accent-blue'
+                        ? 'bg-accent-primary/15 text-accent-primary'
                         : 'bg-surface-overlay text-text-tertiary'
                     }
                   `}
@@ -162,7 +162,7 @@ export function UnderlineTabs({
               )}
             </span>
             {activeTab === tab.id && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-blue rounded-full" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-primary rounded-full" />
             )}
           </button>
         ))}

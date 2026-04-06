@@ -126,7 +126,7 @@ export function CompareMode({
                       <div className="flex flex-col gap-1 min-w-0 flex-1">
                         <Link
                           href={`/apps/${app.appid}`}
-                          className="text-body-sm font-medium text-text-primary truncate hover:text-accent-blue transition-colors"
+                          className="text-body-sm font-medium text-text-primary truncate hover:text-accent-primary transition-colors"
                           title={app.name}
                         >
                           {app.name}

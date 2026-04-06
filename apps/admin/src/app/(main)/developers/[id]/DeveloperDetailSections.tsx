@@ -216,7 +216,7 @@ export function DeveloperDetailSections({
               onClick={() => scrollToSection(section.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm font-medium transition-colors ${
                 activeSection === section.id
-                  ? 'bg-accent-blue/10 text-accent-blue'
+                  ? 'bg-accent-primary/10 text-accent-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
               }`}
             >
@@ -328,7 +328,7 @@ function SummarySection({
                 {tags.length > TAG_LIMIT && (
                   <button
                     onClick={() => setTagsExpanded(!tagsExpanded)}
-                    className="px-2 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                    className="px-2 py-0.5 rounded text-caption text-accent-primary hover:bg-accent-primary/10 transition-colors"
                   >
                     {tagsExpanded ? 'Show less' : `+${tags.length - TAG_LIMIT} more`}
                   </button>
@@ -412,7 +412,7 @@ function SummarySection({
                   {picsData.categories.length > FEATURE_LIMIT && (
                     <button
                       onClick={() => setFeaturesExpanded(!featuresExpanded)}
-                      className="px-2 py-1 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                      className="px-2 py-1 rounded text-caption text-accent-primary hover:bg-accent-primary/10 transition-colors"
                     >
                       {featuresExpanded ? 'Show less' : `+${picsData.categories.length - FEATURE_LIMIT} more`}
                     </button>
@@ -446,7 +446,7 @@ function SummarySection({
                   {picsData.languages.length > LANGUAGE_LIMIT && (
                     <button
                       onClick={() => setLanguagesExpanded(!languagesExpanded)}
-                      className="px-1.5 py-0.5 rounded text-caption text-accent-blue hover:bg-accent-blue/10 transition-colors"
+                      className="px-1.5 py-0.5 rounded text-caption text-accent-primary hover:bg-accent-primary/10 transition-colors"
                     >
                       {languagesExpanded ? 'Show less' : `+${picsData.languages.length - LANGUAGE_LIMIT}`}
                     </button>
@@ -484,14 +484,14 @@ function SummarySection({
 // ============================================================================
 
 const GENRE_BAR_COLORS = [
-  'bg-violet-500',
-  'bg-blue-500',
-  'bg-cyan-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-orange-500',
-  'bg-rose-500',
-  'bg-pink-500',
+  'bg-chart-5',
+  'bg-chart-4',
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-accent-orange',
+  'bg-accent-red',
+  'bg-chart-6',
 ];
 
 interface GenreBarChartProps {
@@ -581,7 +581,7 @@ function PlatformBar({ label, count, total }: { label: string; count: number; to
       <div className="w-16 text-body-sm text-text-secondary">{label}</div>
       <div className="flex-1 h-3 bg-surface-elevated rounded-full overflow-hidden">
         <div
-          className="h-full bg-accent-blue/60 rounded-full"
+          className="h-full bg-accent-primary/60 rounded-full"
           style={{ width: `${percentage}%` }}
         />
       </div>
@@ -785,7 +785,7 @@ function ReviewsSection({
               {histogram.length > 6 && (
                 <button
                   onClick={() => setIsExpanded(!isExpanded)}
-                  className="w-full px-4 py-3 text-body-sm text-accent-blue hover:bg-surface-elevated transition-colors flex items-center justify-center gap-2 border-t border-border-subtle"
+                  className="w-full px-4 py-3 text-body-sm text-accent-primary hover:bg-surface-elevated transition-colors flex items-center justify-center gap-2 border-t border-border-subtle"
                 >
                   <motion.span
                     animate={{ rotate: isExpanded ? 180 : 0 }}
@@ -894,7 +894,7 @@ function GamesSection({
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/apps/${app.appid}`}
-                          className="text-body-sm font-medium text-text-primary hover:text-accent-blue transition-colors"
+                          className="text-body-sm font-medium text-text-primary hover:text-accent-primary transition-colors"
                         >
                           {app.name}
                         </Link>
@@ -995,7 +995,7 @@ function NetworkSection({
                   href={`/publishers/${pub.id}`}
                   className="flex items-center justify-between p-1.5 rounded hover:bg-surface-elevated transition-colors group"
                 >
-                  <span className="text-body-sm text-text-primary group-hover:text-accent-blue transition-colors">
+                  <span className="text-body-sm text-text-primary group-hover:text-accent-primary transition-colors">
                     {pub.name}
                   </span>
                   <span className="text-caption text-text-tertiary">
@@ -1023,7 +1023,7 @@ function NetworkSection({
                   href={`/developers/${dev.id}`}
                   className="flex items-center justify-between p-1.5 rounded hover:bg-surface-elevated transition-colors group"
                 >
-                  <span className="text-body-sm text-text-primary group-hover:text-accent-blue transition-colors">
+                  <span className="text-body-sm text-text-primary group-hover:text-accent-primary transition-colors">
                     {dev.name}
                   </span>
                   <span className="text-caption text-text-tertiary">

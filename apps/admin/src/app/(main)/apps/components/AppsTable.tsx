@@ -160,7 +160,7 @@ function DelistedBadge() {
  */
 function VariesBadge() {
   return (
-    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent-blue/15 text-accent-blue rounded">
+    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent-primary/15 text-accent-primary rounded">
       Varies
     </span>
   );
@@ -189,7 +189,7 @@ function MobileAppCard({
         <span className="text-text-muted text-caption">#{rank}</span>
         <Link
           href={`/apps/${app.appid}`}
-          className="text-body font-medium text-text-primary hover:text-accent-blue truncate flex-1"
+          className="text-body font-medium text-text-primary hover:text-accent-primary truncate flex-1"
         >
           {app.name}
         </Link>
@@ -200,8 +200,8 @@ function MobileAppCard({
             disabled={isPinning}
             className={`p-1.5 rounded transition-colors ${
               isPinned
-                ? 'text-accent-blue bg-accent-blue/10'
-                : 'text-text-muted hover:text-accent-blue'
+                ? 'text-accent-primary bg-accent-primary/10'
+                : 'text-text-muted hover:text-accent-primary'
             } ${isPinning ? 'opacity-50 cursor-wait' : ''}`}
             title={isPinned ? 'Pinned' : 'Pin'}
           >
@@ -211,7 +211,7 @@ function MobileAppCard({
             href={`https://store.steampowered.com/app/${app.appid}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-1.5 rounded text-text-muted hover:text-accent-blue transition-colors"
+            className="p-1.5 rounded text-text-muted hover:text-accent-primary transition-colors"
             title="Open on Steam"
           >
             <ExternalLink className="w-4 h-4" />
@@ -318,7 +318,7 @@ function renderCell(
       return (
         <Link
           href={`/apps/${app.appid}`}
-          className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+          className="text-body font-medium text-text-primary hover:text-accent-primary transition-colors"
         >
           {app.name}
         </Link>
@@ -435,7 +435,7 @@ function renderCell(
       return app.publisher_name && app.publisher_id ? (
         <Link
           href={`/publishers/${app.publisher_id}`}
-          className="text-text-secondary hover:text-accent-blue transition-colors truncate block max-w-[140px]"
+          className="text-text-secondary hover:text-accent-primary transition-colors truncate block max-w-[140px]"
           title={app.publisher_name}
         >
           {app.publisher_name}
@@ -447,7 +447,7 @@ function renderCell(
       return app.developer_name && app.developer_id ? (
         <Link
           href={`/developers/${app.developer_id}`}
-          className="text-text-secondary hover:text-accent-blue transition-colors truncate block max-w-[140px]"
+          className="text-text-secondary hover:text-accent-primary transition-colors truncate block max-w-[140px]"
           title={app.developer_name}
         >
           {app.developer_name}
@@ -555,8 +555,8 @@ function RowActions({
         disabled={isPinning}
         className={`p-1.5 rounded transition-colors ${
           isPinned
-            ? 'text-accent-blue bg-accent-blue/10 hover:bg-accent-blue/20'
-            : 'text-text-muted hover:text-accent-blue hover:bg-surface-overlay'
+            ? 'text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20'
+            : 'text-text-muted hover:text-accent-primary hover:bg-surface-overlay'
         } ${isPinning ? 'opacity-50 cursor-wait' : ''}`}
         title={isPinned ? 'Pinned to dashboard' : 'Pin to dashboard'}
       >
@@ -569,7 +569,7 @@ function RowActions({
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="p-1.5 rounded text-text-muted hover:text-accent-blue hover:bg-surface-overlay transition-colors"
+        className="p-1.5 rounded text-text-muted hover:text-accent-primary hover:bg-surface-overlay transition-colors"
         title="Open on Steam"
       >
         <ExternalLink className="w-3.5 h-3.5" />

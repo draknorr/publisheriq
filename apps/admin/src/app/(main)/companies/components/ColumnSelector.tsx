@@ -92,7 +92,7 @@ export function ColumnSelector({
             <button
               onClick={resetToDefault}
               disabled={isDefault}
-              className="flex items-center gap-1 text-caption text-accent-blue hover:underline disabled:text-text-muted disabled:no-underline disabled:cursor-default"
+              className="flex items-center gap-1 text-caption text-accent-primary hover:underline disabled:text-text-muted disabled:no-underline disabled:cursor-default"
             >
               <RotateCcw className="w-3 h-3" />
               Reset
@@ -121,7 +121,7 @@ export function ColumnSelector({
                     <div
                       className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
                         isVisible
-                          ? 'bg-accent-blue border-accent-blue'
+                          ? 'bg-accent-primary border-accent-primary'
                           : 'border-border-subtle'
                       }`}
                     >

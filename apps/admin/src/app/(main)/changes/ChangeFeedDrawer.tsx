@@ -241,7 +241,7 @@ export function ChangeFeedDrawer({
                 )}
                 <Link
                   href={`/apps/${detail.appid}`}
-                  className="inline-flex items-center gap-1 text-body-sm text-accent-blue transition-colors hover:text-accent-blue/80"
+                  className="inline-flex items-center gap-1 text-body-sm text-accent-primary transition-colors hover:text-accent-primary/80"
                 >
                   Open app page
                   <ExternalLink className="h-3.5 w-3.5" />

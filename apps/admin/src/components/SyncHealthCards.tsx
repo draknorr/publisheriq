@@ -16,10 +16,12 @@ function StatCard({
   color?: 'blue' | 'green' | 'yellow' | 'red';
 }) {
   const colorClasses = {
-    blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    green: 'bg-green-500/20 text-green-400 border-green-500/30',
-    yellow: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-    red: 'bg-red-500/20 text-red-400 border-red-500/30',
+    blue: 'bg-semantic-info-subtle text-semantic-info border-semantic-info/30',
+    green:
+      'bg-semantic-success-subtle text-semantic-success border-semantic-success/30',
+    yellow:
+      'bg-semantic-warning-subtle text-semantic-warning border-semantic-warning/30',
+    red: 'bg-semantic-error-subtle text-semantic-error border-semantic-error/30',
   };
 
   return (

@@ -68,7 +68,7 @@ export function ColumnCustomizer<T>({
                   transition-colors
                   ${
                     isVisible
-                      ? 'bg-accent-blue border-accent-blue'
+                      ? 'bg-accent-primary border-accent-primary'
                       : 'border-border-muted'
                   }
                 `}

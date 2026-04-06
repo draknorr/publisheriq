@@ -152,7 +152,7 @@ export function ExportDialog({
                   checked={format === 'csv'}
                   onChange={() => setFormat('csv')}
                   disabled={isExporting}
-                  className="w-4 h-4 text-accent-blue focus:ring-accent-blue focus:ring-offset-0"
+                  className="w-4 h-4 text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
                 />
                 <FileSpreadsheet className="w-4 h-4 text-text-muted" />
                 <span className="text-body-sm text-text-primary">CSV</span>
@@ -165,7 +165,7 @@ export function ExportDialog({
                   checked={format === 'json'}
                   onChange={() => setFormat('json')}
                   disabled={isExporting}
-                  className="w-4 h-4 text-accent-blue focus:ring-accent-blue focus:ring-offset-0"
+                  className="w-4 h-4 text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
                 />
                 <FileJson className="w-4 h-4 text-text-muted" />
                 <span className="text-body-sm text-text-primary">JSON</span>
@@ -187,7 +187,7 @@ export function ExportDialog({
                   checked={scope === 'filtered'}
                   onChange={() => setScope('filtered')}
                   disabled={isExporting}
-                  className="w-4 h-4 text-accent-blue focus:ring-accent-blue focus:ring-offset-0"
+                  className="w-4 h-4 text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
                 />
                 <span className="text-body-sm text-text-primary">
                   All filtered results ({apps.length.toLocaleString()} games)
@@ -205,7 +205,7 @@ export function ExportDialog({
                   checked={scope === 'selected'}
                   onChange={() => setScope('selected')}
                   disabled={isExporting || !hasSelectedApps}
-                  className="w-4 h-4 text-accent-blue focus:ring-accent-blue focus:ring-offset-0"
+                  className="w-4 h-4 text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
                 />
                 <span className="text-body-sm text-text-primary">
                   Selected only ({selectedApps.length} games)
@@ -222,7 +222,7 @@ export function ExportDialog({
                 checked={includeVisibleOnly}
                 onChange={(e) => setIncludeVisibleOnly(e.target.checked)}
                 disabled={isExporting}
-                className="w-4 h-4 rounded border-border-subtle text-accent-blue focus:ring-accent-blue focus:ring-offset-0"
+                className="w-4 h-4 rounded border-border-subtle text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
               />
               <span className="text-body-sm text-text-primary">
                 Visible columns only ({visibleColumns.filter((c) => c !== 'sparkline').length} columns)
@@ -234,7 +234,7 @@ export function ExportDialog({
                 checked={includeFilterMetadata}
                 onChange={(e) => setIncludeFilterMetadata(e.target.checked)}
                 disabled={isExporting}
-                className="w-4 h-4 rounded border-border-subtle text-accent-blue focus:ring-accent-blue focus:ring-offset-0"
+                className="w-4 h-4 rounded border-border-subtle text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
               />
               <span className="text-body-sm text-text-primary">
                 Include filter metadata

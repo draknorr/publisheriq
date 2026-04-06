@@ -66,7 +66,7 @@ export function EmptyState({
                 key={index}
                 className="flex items-start gap-2 text-body-sm text-text-secondary"
               >
-                <span className="text-accent-blue mt-0.5">•</span>
+                <span className="text-accent-primary mt-0.5">•</span>
                 {suggestion}
               </li>
             ))}

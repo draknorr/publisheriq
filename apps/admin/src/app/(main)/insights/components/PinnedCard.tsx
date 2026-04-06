@@ -93,7 +93,7 @@ export function PinnedCard({ pin }: PinnedCardProps) {
   const isGame = pin.entity_type === 'game';
 
   return (
-    <div className="rounded-lg bg-surface-elevated border border-border-subtle hover:border-accent-blue/50 transition-colors overflow-hidden">
+    <div className="rounded-lg bg-surface-elevated border border-border-subtle hover:border-accent-primary/50 transition-colors overflow-hidden">
       <Link href={href} className="block p-4">
         {/* Header: Name + Type Badge + Settings */}
         <div className="flex items-start justify-between gap-2 mb-3">

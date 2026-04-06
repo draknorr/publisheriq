@@ -822,9 +822,9 @@ export default async function AppDetailPage({
           href={`https://store.steampowered.com/app/${app.appid}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-text-tertiary text-body-sm hover:text-accent-blue transition-colors"
+          className="text-text-tertiary text-body-sm hover:text-accent-primary transition-colors"
         >
-          ID: <span className="font-mono text-text-secondary hover:text-accent-blue">{app.appid}</span>
+          ID: <span className="font-mono text-text-secondary hover:text-accent-primary">{app.appid}</span>
         </a>
         <span className="text-text-tertiary">·</span>
         <div className="flex items-center gap-2">

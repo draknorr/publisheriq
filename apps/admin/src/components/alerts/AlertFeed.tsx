@@ -50,7 +50,7 @@ function getAlertIcon(alertType: string) {
     case 'price_change':
       return <DollarSign className="h-4 w-4 text-accent-green" />;
     case 'new_release':
-      return <Rocket className="h-4 w-4 text-accent-blue" />;
+      return <Rocket className="h-4 w-4 text-accent-primary" />;
     case 'milestone':
       return <Award className="h-4 w-4 text-accent-purple" />;
     default:
@@ -213,7 +213,7 @@ export function AlertFeed({ limit = 5, onCountChange }: AlertFeedProps) {
         return (
           <div
             key={alert.id}
-            className={`group relative flex items-start gap-3 px-3 py-2.5 rounded-lg border-l-2 ${getSeverityStyles(alert.severity)} bg-surface-elevated hover:bg-surface-overlay transition-colors ${!alert.is_read ? 'bg-accent-blue/5' : ''}`}
+            className={`group relative flex items-start gap-3 px-3 py-2.5 rounded-lg border-l-2 ${getSeverityStyles(alert.severity)} bg-surface-elevated hover:bg-surface-overlay transition-colors ${!alert.is_read ? 'bg-accent-primary/5' : ''}`}
           >
             <Link
               href={href}

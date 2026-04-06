@@ -359,10 +359,10 @@ export function GlobalSearch() {
                 <Command.Item
                   value={`action-chat-${query}`}
                   onSelect={handleAskInChat}
-                  className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-blue/10 hover:bg-surface-overlay transition-colors"
+                  className="mx-2 px-3 py-2.5 rounded-lg cursor-pointer flex items-center gap-3 data-[selected=true]:bg-accent-primary/10 hover:bg-surface-overlay transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-accent-blue/10 flex items-center justify-center shrink-0">
-                    <MessageSquare className="w-4 h-4 text-accent-blue" />
+                  <div className="w-8 h-8 rounded-lg bg-accent-primary/10 flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-4 h-4 text-accent-primary" />
                   </div>
                   <span className="text-[14px] text-text-primary">
                     Ask about <span className="font-medium">&ldquo;{query}&rdquo;</span> in chat

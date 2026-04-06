@@ -369,7 +369,7 @@ export function CommandPaletteHome({
                        hover:border-border-prominent transition-colors group"
           >
             <div className="flex items-center gap-2">
-              <Tag className="w-4 h-4 text-accent-blue" />
+              <Tag className="w-4 h-4 text-accent-primary" />
               <span className="text-body-sm font-medium text-text-primary">All Tags</span>
             </div>
             <ChevronRight className="w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />

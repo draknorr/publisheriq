@@ -73,11 +73,11 @@ function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded:
           <span
             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
               job.status === 'completed'
-                ? 'bg-green-500/20 text-green-400'
+                ? 'bg-semantic-success-subtle text-semantic-success'
                 : job.status === 'running'
-                ? 'bg-blue-500/20 text-blue-400'
+                ? 'bg-semantic-info-subtle text-semantic-info'
                 : job.status === 'failed'
-                ? 'bg-red-500/20 text-red-400'
+                ? 'bg-semantic-error-subtle text-semantic-error'
                 : 'bg-gray-500/20 text-gray-400'
             }`}
           >
@@ -85,10 +85,10 @@ function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded:
           </span>
         </td>
         <td className="px-4 py-3 text-sm">
-          <span className="text-green-400">{job.items_succeeded ?? 0}</span>
+          <span className="text-semantic-success">{job.items_succeeded ?? 0}</span>
           <span className="text-gray-500"> / {job.items_processed ?? 0}</span>
           {(job.items_failed ?? 0) > 0 && (
-            <span className="text-red-400 ml-1">({job.items_failed} failed)</span>
+            <span className="text-semantic-error ml-1">({job.items_failed} failed)</span>
           )}
         </td>
         <td className="px-4 py-3 text-sm text-gray-400">{duration}</td>
@@ -124,17 +124,17 @@ function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded:
                 <span className="ml-2">
                   {(job.items_created !== null || job.items_updated !== null) ? (
                     <>
-                      <span className="text-blue-400">{job.items_created ?? 0} new</span>
+                      <span className="text-semantic-info">{job.items_created ?? 0} new</span>
                       <span className="text-gray-500"> | </span>
-                      <span className="text-green-400">{job.items_updated ?? 0} updated</span>
+                      <span className="text-semantic-success">{job.items_updated ?? 0} updated</span>
                     </>
                   ) : (
-                    <span className="text-green-400">{job.items_succeeded ?? 0} succeeded</span>
+                    <span className="text-semantic-success">{job.items_succeeded ?? 0} succeeded</span>
                   )}
                   {(job.items_failed ?? 0) > 0 && (
                     <>
                       <span className="text-gray-500"> | </span>
-                      <span className="text-red-400">{job.items_failed} failed</span>
+                      <span className="text-semantic-error">{job.items_failed} failed</span>
                     </>
                   )}
                   <span className="text-gray-500"> of </span>
@@ -145,7 +145,7 @@ function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded:
               {/* Error message */}
               {job.error_message && (
                 <div className="text-sm">
-                  <span className="text-red-400">Error:</span>
+                  <span className="text-semantic-error">Error:</span>
                   <p className="mt-1 text-red-300 bg-red-500/10 rounded p-2 font-mono text-xs">
                     {job.error_message}
                   </p>
@@ -159,7 +159,7 @@ function JobRow({ job, isExpanded, onToggle }: { job: SyncJobDetail; isExpanded:
                     href={`https://github.com/draknorr/publisheriq/actions/runs/${job.github_run_id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
+                    className="inline-flex items-center gap-1 text-accent-primary hover:text-accent-primary-hover"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
@@ -202,7 +202,7 @@ export function ExpandableJobsTable({ jobs }: { jobs: SyncJobDetail[] }) {
         <h3 className="text-lg font-semibold text-white">Recent Jobs</h3>
         <Link
           href="/jobs"
-          className="text-sm text-blue-400 hover:text-blue-300"
+          className="text-sm text-accent-primary hover:text-accent-primary-hover"
         >
           View all jobs →
         </Link>

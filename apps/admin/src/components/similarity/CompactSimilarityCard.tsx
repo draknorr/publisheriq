@@ -68,7 +68,7 @@ export function CompactSimilarityCard({
       {/* Row 1: Name + Score */}
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="flex-1 min-w-0">
-          <h4 className="text-body-sm font-medium text-text-primary line-clamp-1 group-hover:text-accent-blue transition-colors">
+          <h4 className="text-body-sm font-medium text-text-primary line-clamp-1 group-hover:text-accent-primary transition-colors">
             {name}
           </h4>
           {type && type !== 'game' && (
@@ -105,7 +105,7 @@ export function CompactSimilarityCard({
                 key={`${reason}-${i}`}
                 className={`px-1 py-0.5 rounded text-caption truncate max-w-[5rem] ${
                   isRelationship
-                    ? 'bg-accent-blue/15 text-accent-blue'
+                    ? 'bg-accent-primary/15 text-accent-primary'
                     : 'bg-surface-overlay text-text-tertiary'
                 }`}
               >

@@ -69,7 +69,7 @@ export function ReviewBreakdownPopover({
             className="flex items-center gap-3 p-2 -mx-2 rounded hover:bg-surface-raised transition-colors group"
           >
             <div className="flex-1 min-w-0">
-              <p className="text-body-sm text-text-primary truncate group-hover:text-accent-blue transition-colors">
+              <p className="text-body-sm text-text-primary truncate group-hover:text-accent-primary transition-colors">
                 {game.name}
               </p>
               <div className="flex items-center gap-2 text-caption text-text-tertiary">
@@ -163,7 +163,7 @@ export function MonthlyReviewBreakdownPopover({
             className="flex items-center gap-3 p-2 -mx-2 rounded hover:bg-surface-raised transition-colors group"
           >
             <div className="flex-1 min-w-0">
-              <p className="text-body-sm text-text-primary truncate group-hover:text-accent-blue transition-colors">
+              <p className="text-body-sm text-text-primary truncate group-hover:text-accent-primary transition-colors">
                 {game.name}
               </p>
               <div className="flex items-center gap-2 text-caption text-text-tertiary">

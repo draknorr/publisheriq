@@ -50,7 +50,7 @@ export function AdvancedFilters({ filters, basePath }: AdvancedFiltersProps) {
           <Filter className="h-4 w-4 text-text-tertiary" />
           <span className="text-body-sm font-medium text-text-secondary">Advanced Filters</span>
           {activeFilterCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-caption font-medium bg-accent-blue/20 text-accent-blue">
+            <span className="px-1.5 py-0.5 rounded-full text-caption font-medium bg-accent-primary/20 text-accent-primary">
               {activeFilterCount}
             </span>
           )}

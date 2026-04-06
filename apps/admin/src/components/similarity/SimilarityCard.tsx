@@ -122,7 +122,7 @@ export function SimilarityCard({
                   key={`${reason}-${i}`}
                   className={`px-1.5 py-0.5 rounded text-caption ${
                     isRelationship
-                      ? 'bg-accent-blue/15 text-accent-blue'
+                      ? 'bg-accent-primary/15 text-accent-primary'
                       : 'bg-surface-overlay text-text-tertiary'
                   }`}
                 >

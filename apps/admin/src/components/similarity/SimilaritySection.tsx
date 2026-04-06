@@ -178,7 +178,7 @@ export function SimilaritySection({
                   onClick={() => setPopularityFilter(option.value)}
                   className={`px-2 py-1 rounded text-caption transition-colors ${
                     popularityFilter === option.value
-                      ? 'bg-accent-blue/15 text-accent-blue'
+                      ? 'bg-accent-primary/15 text-accent-primary'
                       : 'bg-surface-elevated text-text-secondary hover:text-text-primary'
                   }`}
                 >

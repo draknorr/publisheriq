@@ -209,7 +209,7 @@ function SortHeader({
     <th className={`px-3 py-2 text-left text-caption font-medium text-text-tertiary ${className}`}>
       <Link
         href={`?${newParams.toString()}`}
-        className={`hover:text-text-primary transition-colors ${isActive ? 'text-accent-blue' : ''}`}
+        className={`hover:text-text-primary transition-colors ${isActive ? 'text-accent-primary' : ''}`}
       >
         {label}{arrow}
       </Link>
@@ -353,7 +353,7 @@ export default async function PublishersPage({
               name="search"
               defaultValue={search}
               placeholder="Search publishers by name..."
-              className="w-full h-10 rounded-md bg-surface-elevated border border-border-muted px-4 pl-10 text-body text-text-primary placeholder:text-text-muted transition-colors hover:border-border-prominent focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue"
+              className="w-full h-10 rounded-md bg-surface-elevated border border-border-muted px-4 pl-10 text-body text-text-primary placeholder:text-text-muted transition-colors hover:border-border-prominent focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary"
             />
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary"
@@ -375,7 +375,7 @@ export default async function PublishersPage({
             href="/publishers"
             className={`px-3 py-2 rounded-md text-body-sm font-medium transition-colors ${
               !filter && !hasAdvancedFilters
-                ? 'bg-accent-blue text-white'
+                ? 'bg-accent-primary text-white'
                 : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-overlay border border-border-subtle'
             }`}
           >
@@ -582,7 +582,7 @@ export default async function PublishersPage({
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/publishers/${publisher.id}`}
-                          className="text-body font-medium text-text-primary hover:text-accent-blue transition-colors"
+                          className="text-body font-medium text-text-primary hover:text-accent-primary transition-colors"
                         >
                           {publisher.name}
                         </Link>
@@ -632,7 +632,7 @@ export default async function PublishersPage({
                           href={`https://store.steampowered.com/publisher/${publisher.steam_vanity_url}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-body-sm text-accent-blue hover:text-accent-blue/80 transition-colors"
+                          className="inline-flex items-center gap-1 text-body-sm text-accent-primary hover:text-accent-primary/80 transition-colors"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <ExternalLink className="h-3.5 w-3.5" />

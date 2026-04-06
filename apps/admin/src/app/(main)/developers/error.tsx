@@ -27,7 +27,7 @@ export default function DevelopersError({
         </pre>
         <button
           onClick={reset}
-          className="mt-4 px-4 py-2 bg-accent-blue text-white rounded-md text-body-sm font-medium hover:bg-accent-blue/90"
+          className="mt-4 px-4 py-2 bg-accent-primary text-white rounded-md text-body-sm font-medium hover:bg-accent-primary-hover"
         >
           Try again
         </button>

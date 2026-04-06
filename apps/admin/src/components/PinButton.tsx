@@ -78,7 +78,7 @@ export function PinButton({
     'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm font-medium transition-colors border';
 
   const stateStyles = isPinned
-    ? 'bg-accent-blue/10 text-accent-blue border-accent-blue/30 hover:bg-accent-blue/20'
+    ? 'bg-accent-primary/10 text-accent-primary border-accent-primary/30 hover:bg-accent-primary/20'
     : 'text-text-secondary hover:text-text-primary bg-surface-elevated hover:bg-surface-overlay border-border-subtle';
 
   const disabledStyles = !isAuthenticated || isPending ? 'opacity-50 cursor-not-allowed' : '';
