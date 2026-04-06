@@ -1,0 +1,313 @@
+day_pt,theme,adds,removes,net_apps,cumulative_net_apps,total_moves
+2026-03-14,Action & Combat,5,5,0,0,10
+2026-03-15,Action & Combat,10,8,2,2,18
+2026-03-16,Action & Combat,2,2,0,2,4
+2026-03-17,Action & Combat,4,1,3,5,5
+2026-03-18,Action & Combat,22,11,11,16,33
+2026-03-19,Action & Combat,9,5,4,20,14
+2026-03-20,Action & Combat,12,9,3,23,21
+2026-03-21,Action & Combat,13,15,-2,21,28
+2026-03-22,Action & Combat,10,4,6,27,14
+2026-03-23,Action & Combat,13,5,8,35,18
+2026-03-24,Action & Combat,10,7,3,38,17
+2026-03-25,Action & Combat,11,15,-4,34,26
+2026-03-26,Action & Combat,13,13,0,34,26
+2026-03-27,Action & Combat,20,17,3,37,37
+2026-03-28,Action & Combat,10,10,0,37,20
+2026-03-29,Action & Combat,12,12,0,37,24
+2026-03-30,Action & Combat,13,10,3,40,23
+2026-03-31,Action & Combat,16,14,2,42,30
+2026-04-01,Action & Combat,4,3,1,43,7
+2026-04-02,Action & Combat,4,2,2,45,6
+2026-04-03,Action & Combat,3,1,2,47,4
+2026-04-04,Action & Combat,3,1,2,49,4
+2026-04-05,Action & Combat,0,1,-1,48,1
+2026-04-06,Action & Combat,10,11,-1,47,21
+2026-03-14,Adventure & Story,4,5,-1,-1,9
+2026-03-15,Adventure & Story,9,5,4,3,14
+2026-03-16,Adventure & Story,1,1,0,3,2
+2026-03-17,Adventure & Story,6,3,3,6,9
+2026-03-18,Adventure & Story,19,14,5,11,33
+2026-03-19,Adventure & Story,12,9,3,14,21
+2026-03-20,Adventure & Story,9,7,2,16,16
+2026-03-21,Adventure & Story,8,5,3,19,13
+2026-03-22,Adventure & Story,7,3,4,23,10
+2026-03-23,Adventure & Story,12,8,4,27,20
+2026-03-24,Adventure & Story,5,13,-8,19,18
+2026-03-25,Adventure & Story,15,5,10,29,20
+2026-03-26,Adventure & Story,15,13,2,31,28
+2026-03-27,Adventure & Story,20,17,3,34,37
+2026-03-28,Adventure & Story,7,13,-6,28,20
+2026-03-29,Adventure & Story,15,9,6,34,24
+2026-03-30,Adventure & Story,12,7,5,39,19
+2026-03-31,Adventure & Story,9,15,-6,33,24
+2026-04-01,Adventure & Story,6,0,6,39,6
+2026-04-02,Adventure & Story,6,4,2,41,10
+2026-04-03,Adventure & Story,2,2,0,41,4
+2026-04-04,Adventure & Story,5,1,4,45,6
+2026-04-05,Adventure & Story,4,1,3,48,5
+2026-04-06,Adventure & Story,9,5,4,52,14
+2026-03-14,Atmosphere & Horror,3,3,0,0,6
+2026-03-15,Atmosphere & Horror,3,3,0,0,6
+2026-03-16,Atmosphere & Horror,0,0,0,0,0
+2026-03-17,Atmosphere & Horror,0,0,0,0,0
+2026-03-18,Atmosphere & Horror,7,5,2,2,12
+2026-03-19,Atmosphere & Horror,4,3,1,3,7
+2026-03-20,Atmosphere & Horror,6,4,2,5,10
+2026-03-21,Atmosphere & Horror,7,4,3,8,11
+2026-03-22,Atmosphere & Horror,5,5,0,8,10
+2026-03-23,Atmosphere & Horror,10,1,9,17,11
+2026-03-24,Atmosphere & Horror,3,2,1,18,5
+2026-03-25,Atmosphere & Horror,4,4,0,18,8
+2026-03-26,Atmosphere & Horror,5,4,1,19,9
+2026-03-27,Atmosphere & Horror,9,9,0,19,18
+2026-03-28,Atmosphere & Horror,8,7,1,20,15
+2026-03-29,Atmosphere & Horror,9,3,6,26,12
+2026-03-30,Atmosphere & Horror,4,4,0,26,8
+2026-03-31,Atmosphere & Horror,3,2,1,27,5
+2026-04-01,Atmosphere & Horror,0,0,0,27,0
+2026-04-02,Atmosphere & Horror,0,0,0,27,0
+2026-04-03,Atmosphere & Horror,0,0,0,27,0
+2026-04-04,Atmosphere & Horror,0,0,0,27,0
+2026-04-05,Atmosphere & Horror,0,0,0,27,0
+2026-04-06,Atmosphere & Horror,3,2,1,28,5
+2026-03-14,Indie & Casual,15,6,9,9,21
+2026-03-15,Indie & Casual,16,9,7,16,25
+2026-03-16,Indie & Casual,11,2,9,25,13
+2026-03-17,Indie & Casual,12,7,5,30,19
+2026-03-18,Indie & Casual,34,27,7,37,61
+2026-03-19,Indie & Casual,24,19,5,42,43
+2026-03-20,Indie & Casual,25,19,6,48,44
+2026-03-21,Indie & Casual,22,13,9,57,35
+2026-03-22,Indie & Casual,19,13,6,63,32
+2026-03-23,Indie & Casual,21,17,4,67,38
+2026-03-24,Indie & Casual,20,16,4,71,36
+2026-03-25,Indie & Casual,24,16,8,79,40
+2026-03-26,Indie & Casual,29,21,8,87,50
+2026-03-27,Indie & Casual,33,28,5,92,61
+2026-03-28,Indie & Casual,22,16,6,98,38
+2026-03-29,Indie & Casual,19,15,4,102,34
+2026-03-30,Indie & Casual,16,20,-4,98,36
+2026-03-31,Indie & Casual,32,18,14,112,50
+2026-04-01,Indie & Casual,15,3,12,124,18
+2026-04-02,Indie & Casual,8,6,2,126,14
+2026-04-03,Indie & Casual,5,2,3,129,7
+2026-04-04,Indie & Casual,5,2,3,132,7
+2026-04-05,Indie & Casual,7,6,1,133,13
+2026-04-06,Indie & Casual,21,14,7,140,35
+2026-03-14,Lifecycle & Business Model,2,4,-2,-2,6
+2026-03-15,Lifecycle & Business Model,6,4,2,0,10
+2026-03-16,Lifecycle & Business Model,5,12,-7,-7,17
+2026-03-17,Lifecycle & Business Model,13,15,-2,-9,28
+2026-03-18,Lifecycle & Business Model,14,22,-8,-17,36
+2026-03-19,Lifecycle & Business Model,15,10,5,-12,25
+2026-03-20,Lifecycle & Business Model,14,18,-4,-16,32
+2026-03-21,Lifecycle & Business Model,5,4,1,-15,9
+2026-03-22,Lifecycle & Business Model,16,2,14,-1,18
+2026-03-23,Lifecycle & Business Model,18,3,15,14,21
+2026-03-24,Lifecycle & Business Model,11,10,1,15,21
+2026-03-25,Lifecycle & Business Model,6,8,-2,13,14
+2026-03-26,Lifecycle & Business Model,12,17,-5,8,29
+2026-03-27,Lifecycle & Business Model,14,15,-1,7,29
+2026-03-28,Lifecycle & Business Model,8,8,0,7,16
+2026-03-29,Lifecycle & Business Model,5,5,0,7,10
+2026-03-30,Lifecycle & Business Model,13,15,-2,5,28
+2026-03-31,Lifecycle & Business Model,17,16,1,6,33
+2026-04-01,Lifecycle & Business Model,13,10,3,9,23
+2026-04-02,Lifecycle & Business Model,7,9,-2,7,16
+2026-04-03,Lifecycle & Business Model,8,8,0,7,16
+2026-04-04,Lifecycle & Business Model,2,3,-1,6,5
+2026-04-05,Lifecycle & Business Model,7,4,3,9,11
+2026-04-06,Lifecycle & Business Model,9,6,3,12,15
+2026-03-14,Other,20,21,-1,-1,41
+2026-03-15,Other,37,34,3,2,71
+2026-03-16,Other,0,0,0,2,0
+2026-03-17,Other,0,0,0,2,0
+2026-03-18,Other,72,63,9,11,135
+2026-03-19,Other,62,61,1,12,123
+2026-03-20,Other,52,52,0,12,104
+2026-03-21,Other,41,42,-1,11,83
+2026-03-22,Other,28,35,-7,4,63
+2026-03-23,Other,56,49,7,11,105
+2026-03-24,Other,49,46,3,14,95
+2026-03-25,Other,54,60,-6,8,114
+2026-03-26,Other,58,54,4,12,112
+2026-03-27,Other,76,72,4,16,148
+2026-03-28,Other,55,44,11,27,99
+2026-03-29,Other,49,40,9,36,89
+2026-03-30,Other,66,59,7,43,125
+2026-03-31,Other,49,36,13,56,85
+2026-04-01,Other,0,2,-2,54,2
+2026-04-02,Other,0,0,0,54,0
+2026-04-03,Other,0,0,0,54,0
+2026-04-04,Other,0,0,0,54,0
+2026-04-05,Other,0,0,0,54,0
+2026-04-06,Other,53,38,15,69,91
+2026-03-14,Play Modes & Social,3,3,0,0,6
+2026-03-15,Play Modes & Social,7,1,6,6,8
+2026-03-16,Play Modes & Social,0,1,-1,5,1
+2026-03-17,Play Modes & Social,2,2,0,5,4
+2026-03-18,Play Modes & Social,16,10,6,11,26
+2026-03-19,Play Modes & Social,15,13,2,13,28
+2026-03-20,Play Modes & Social,11,15,-4,9,26
+2026-03-21,Play Modes & Social,13,3,10,19,16
+2026-03-22,Play Modes & Social,6,3,3,22,9
+2026-03-23,Play Modes & Social,10,6,4,26,16
+2026-03-24,Play Modes & Social,13,5,8,34,18
+2026-03-25,Play Modes & Social,12,12,0,34,24
+2026-03-26,Play Modes & Social,18,11,7,41,29
+2026-03-27,Play Modes & Social,12,10,2,43,22
+2026-03-28,Play Modes & Social,9,10,-1,42,19
+2026-03-29,Play Modes & Social,12,9,3,45,21
+2026-03-30,Play Modes & Social,15,6,9,54,21
+2026-03-31,Play Modes & Social,9,12,-3,51,21
+2026-04-01,Play Modes & Social,0,2,-2,49,2
+2026-04-02,Play Modes & Social,0,0,0,49,0
+2026-04-03,Play Modes & Social,0,1,-1,48,1
+2026-04-04,Play Modes & Social,0,0,0,48,0
+2026-04-05,Play Modes & Social,0,1,-1,47,1
+2026-04-06,Play Modes & Social,11,6,5,52,17
+2026-03-14,RPG & Fantasy,4,5,-1,-1,9
+2026-03-15,RPG & Fantasy,9,6,3,2,15
+2026-03-16,RPG & Fantasy,3,3,0,2,6
+2026-03-17,RPG & Fantasy,3,3,0,2,6
+2026-03-18,RPG & Fantasy,12,11,1,3,23
+2026-03-19,RPG & Fantasy,7,8,-1,2,15
+2026-03-20,RPG & Fantasy,6,3,3,5,9
+2026-03-21,RPG & Fantasy,6,8,-2,3,14
+2026-03-22,RPG & Fantasy,8,4,4,7,12
+2026-03-23,RPG & Fantasy,4,7,-3,4,11
+2026-03-24,RPG & Fantasy,17,4,13,17,21
+2026-03-25,RPG & Fantasy,9,4,5,22,13
+2026-03-26,RPG & Fantasy,11,5,6,28,16
+2026-03-27,RPG & Fantasy,14,14,0,28,28
+2026-03-28,RPG & Fantasy,8,5,3,31,13
+2026-03-29,RPG & Fantasy,10,5,5,36,15
+2026-03-30,RPG & Fantasy,13,14,-1,35,27
+2026-03-31,RPG & Fantasy,4,6,-2,33,10
+2026-04-01,RPG & Fantasy,4,1,3,36,5
+2026-04-02,RPG & Fantasy,2,1,1,37,3
+2026-04-03,RPG & Fantasy,1,0,1,38,1
+2026-04-04,RPG & Fantasy,1,0,1,39,1
+2026-04-05,RPG & Fantasy,2,2,0,39,4
+2026-04-06,RPG & Fantasy,12,6,6,45,18
+2026-03-14,Simulation & Sandbox,1,1,0,0,2
+2026-03-15,Simulation & Sandbox,5,6,-1,-1,11
+2026-03-16,Simulation & Sandbox,1,3,-2,-3,4
+2026-03-17,Simulation & Sandbox,5,4,1,-2,9
+2026-03-18,Simulation & Sandbox,17,11,6,4,28
+2026-03-19,Simulation & Sandbox,12,7,5,9,19
+2026-03-20,Simulation & Sandbox,7,6,1,10,13
+2026-03-21,Simulation & Sandbox,6,4,2,12,10
+2026-03-22,Simulation & Sandbox,5,3,2,14,8
+2026-03-23,Simulation & Sandbox,7,3,4,18,10
+2026-03-24,Simulation & Sandbox,6,3,3,21,9
+2026-03-25,Simulation & Sandbox,7,12,-5,16,19
+2026-03-26,Simulation & Sandbox,9,5,4,20,14
+2026-03-27,Simulation & Sandbox,10,5,5,25,15
+2026-03-28,Simulation & Sandbox,8,6,2,27,14
+2026-03-29,Simulation & Sandbox,8,1,7,34,9
+2026-03-30,Simulation & Sandbox,8,5,3,37,13
+2026-03-31,Simulation & Sandbox,11,3,8,45,14
+2026-04-01,Simulation & Sandbox,2,1,1,46,3
+2026-04-02,Simulation & Sandbox,3,4,-1,45,7
+2026-04-03,Simulation & Sandbox,3,1,2,47,4
+2026-04-04,Simulation & Sandbox,0,1,-1,46,1
+2026-04-05,Simulation & Sandbox,2,3,-1,45,5
+2026-04-06,Simulation & Sandbox,5,7,-2,43,12
+2026-03-14,Sports & Racing,0,0,0,0,0
+2026-03-15,Sports & Racing,2,1,1,1,3
+2026-03-16,Sports & Racing,0,1,-1,0,1
+2026-03-17,Sports & Racing,0,2,-2,-2,2
+2026-03-18,Sports & Racing,1,4,-3,-5,5
+2026-03-19,Sports & Racing,0,0,0,-5,0
+2026-03-20,Sports & Racing,1,2,-1,-6,3
+2026-03-21,Sports & Racing,1,3,-2,-8,4
+2026-03-22,Sports & Racing,1,0,1,-7,1
+2026-03-23,Sports & Racing,2,0,2,-5,2
+2026-03-24,Sports & Racing,1,1,0,-5,2
+2026-03-25,Sports & Racing,0,2,-2,-7,2
+2026-03-26,Sports & Racing,1,0,1,-6,1
+2026-03-27,Sports & Racing,1,2,-1,-7,3
+2026-03-28,Sports & Racing,1,2,-1,-8,3
+2026-03-29,Sports & Racing,2,0,2,-6,2
+2026-03-30,Sports & Racing,4,2,2,-4,6
+2026-03-31,Sports & Racing,2,2,0,-4,4
+2026-04-01,Sports & Racing,0,0,0,-4,0
+2026-04-02,Sports & Racing,0,2,-2,-6,2
+2026-04-03,Sports & Racing,1,0,1,-5,1
+2026-04-04,Sports & Racing,0,1,-1,-6,1
+2026-04-05,Sports & Racing,0,0,0,-6,0
+2026-04-06,Sports & Racing,0,1,-1,-7,1
+2026-03-14,Strategy & Management,3,1,2,2,4
+2026-03-15,Strategy & Management,5,5,0,2,10
+2026-03-16,Strategy & Management,1,2,-1,1,3
+2026-03-17,Strategy & Management,4,1,3,4,5
+2026-03-18,Strategy & Management,10,1,9,13,11
+2026-03-19,Strategy & Management,9,5,4,17,14
+2026-03-20,Strategy & Management,5,4,1,18,9
+2026-03-21,Strategy & Management,3,3,0,18,6
+2026-03-22,Strategy & Management,5,4,1,19,9
+2026-03-23,Strategy & Management,8,3,5,24,11
+2026-03-24,Strategy & Management,3,6,-3,21,9
+2026-03-25,Strategy & Management,3,4,-1,20,7
+2026-03-26,Strategy & Management,12,5,7,27,17
+2026-03-27,Strategy & Management,6,9,-3,24,15
+2026-03-28,Strategy & Management,4,2,2,26,6
+2026-03-29,Strategy & Management,5,2,3,29,7
+2026-03-30,Strategy & Management,7,1,6,35,8
+2026-03-31,Strategy & Management,3,6,-3,32,9
+2026-04-01,Strategy & Management,2,2,0,32,4
+2026-04-02,Strategy & Management,3,0,3,35,3
+2026-04-03,Strategy & Management,2,1,1,36,3
+2026-04-04,Strategy & Management,1,1,0,36,2
+2026-04-05,Strategy & Management,0,2,-2,34,2
+2026-04-06,Strategy & Management,2,0,2,36,2
+2026-03-14,Tech & AI,0,1,-1,-1,1
+2026-03-15,Tech & AI,0,0,0,-1,0
+2026-03-16,Tech & AI,0,0,0,-1,0
+2026-03-17,Tech & AI,0,0,0,-1,0
+2026-03-18,Tech & AI,3,3,0,-1,6
+2026-03-19,Tech & AI,1,0,1,0,1
+2026-03-20,Tech & AI,0,1,-1,-1,1
+2026-03-21,Tech & AI,1,1,0,-1,2
+2026-03-22,Tech & AI,4,0,4,3,4
+2026-03-23,Tech & AI,2,2,0,3,4
+2026-03-24,Tech & AI,2,1,1,4,3
+2026-03-25,Tech & AI,2,1,1,5,3
+2026-03-26,Tech & AI,0,0,0,5,0
+2026-03-27,Tech & AI,1,1,0,5,2
+2026-03-28,Tech & AI,3,1,2,7,4
+2026-03-29,Tech & AI,3,3,0,7,6
+2026-03-30,Tech & AI,0,1,-1,6,1
+2026-03-31,Tech & AI,1,0,1,7,1
+2026-04-01,Tech & AI,0,0,0,7,0
+2026-04-02,Tech & AI,0,0,0,7,0
+2026-04-03,Tech & AI,0,0,0,7,0
+2026-04-04,Tech & AI,0,0,0,7,0
+2026-04-05,Tech & AI,0,0,0,7,0
+2026-04-06,Tech & AI,0,0,0,7,0
+2026-03-14,Visual & Format,4,3,1,1,7
+2026-03-15,Visual & Format,8,5,3,4,13
+2026-03-16,Visual & Format,0,0,0,4,0
+2026-03-17,Visual & Format,0,0,0,4,0
+2026-03-18,Visual & Format,9,9,0,4,18
+2026-03-19,Visual & Format,8,13,-5,-1,21
+2026-03-20,Visual & Format,12,6,6,5,18
+2026-03-21,Visual & Format,8,5,3,8,13
+2026-03-22,Visual & Format,9,6,3,11,15
+2026-03-23,Visual & Format,12,6,6,17,18
+2026-03-24,Visual & Format,7,7,0,17,14
+2026-03-25,Visual & Format,8,11,-3,14,19
+2026-03-26,Visual & Format,10,11,-1,13,21
+2026-03-27,Visual & Format,10,11,-1,12,21
+2026-03-28,Visual & Format,8,9,-1,11,17
+2026-03-29,Visual & Format,9,9,0,11,18
+2026-03-30,Visual & Format,16,11,5,16,27
+2026-03-31,Visual & Format,6,6,0,16,12
+2026-04-01,Visual & Format,0,0,0,16,0
+2026-04-02,Visual & Format,0,0,0,16,0
+2026-04-03,Visual & Format,0,0,0,16,0
+2026-04-04,Visual & Format,0,0,0,16,0
+2026-04-05,Visual & Format,0,0,0,16,0
+2026-04-06,Visual & Format,9,10,-1,15,19
