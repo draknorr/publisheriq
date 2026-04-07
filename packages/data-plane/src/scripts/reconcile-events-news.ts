@@ -618,7 +618,9 @@ async function prepareProjectionStageTable(tigerPool: Pool): Promise<void> {
     `
       DROP TABLE IF EXISTS ${PROJECTION_STAGE_RELATION};
       CREATE UNLOGGED TABLE ${PROJECTION_STAGE_RELATION}
-      (LIKE docs.steam_news_search_projection INCLUDING DEFAULTS)
+      (LIKE docs.steam_news_search_projection INCLUDING DEFAULTS);
+      CREATE UNIQUE INDEX steam_news_search_projection_reconcile_stage_gid_idx
+        ON ${PROJECTION_STAGE_RELATION} (gid)
     `
   );
 }
@@ -725,6 +727,8 @@ async function reconcileProjectionMonth(
     cursorSortTime = lastRow.sort_time;
     cursorGid = lastRow.gid;
   }
+
+  await tigerPool.query(`ANALYZE ${PROJECTION_STAGE_RELATION}`);
 
   const deleteResult = await tigerPool.query(
     `
