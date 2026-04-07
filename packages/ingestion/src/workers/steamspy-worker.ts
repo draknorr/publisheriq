@@ -24,6 +24,8 @@ import { withRetry } from '../utils/retry.js';
 const log = logger.child({ worker: 'steamspy-sync' });
 const MAX_REASONABLE_PRICE_CENTS = 50000;
 const AVAILABILITY_UPDATE_MAX_RETRIES = 2;
+const AVAILABILITY_UPDATE_BATCH_SIZE = 500;
+const AVAILABILITY_UPDATE_PROGRESS_INTERVAL = 10;
 
 interface SerializedError {
   message: string;
@@ -45,6 +47,8 @@ interface SyncStats {
   appsProcessed: number;
   errors: number;
 }
+
+type ServiceClient = ReturnType<typeof getServiceClient>;
 
 function stringifyUnknownError(error: unknown): string {
   try {
@@ -89,6 +93,46 @@ function formatUnknownError(error: unknown): string {
   ]
     .filter(Boolean)
     .join(' | ');
+}
+
+function isRetryableAvailabilityUpdateError(error: unknown): boolean {
+  const serialized = serializeUnknownError(error);
+  const record =
+    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null;
+  const status = typeof record?.status === 'number' ? record.status : undefined;
+  const message = [
+    serialized.message,
+    serialized.details,
+    serialized.hint,
+    serialized.raw,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(' ')
+    .toLowerCase();
+
+  if (serialized.code === '57014' || message.includes('statement timeout')) {
+    return false;
+  }
+
+  if (status && [408, 429, 500, 502, 503, 504].includes(status)) {
+    return true;
+  }
+
+  return [
+    'fetch failed',
+    'timeout',
+    'timed out',
+    'bad gateway',
+    'gateway timeout',
+    'temporarily unavailable',
+    'service unavailable',
+    'econnreset',
+    'econnrefused',
+    'enotfound',
+    'etimedout',
+    'eai_again',
+    'socket hang up',
+  ].some((pattern) => message.includes(pattern));
 }
 
 function parseSteamSpyDiscount(discount: string): number {
@@ -246,7 +290,7 @@ interface SupplementaryStats {
  * Uses the appdetails endpoint (1 req/sec) for apps with significant reviews.
  */
 async function processSupplementaryFetches(
-  supabase: ReturnType<typeof getServiceClient>,
+  supabase: ServiceClient,
   maxApps: number = 100
 ): Promise<SupplementaryStats> {
   const today = new Date().toISOString().split('T')[0];
@@ -365,6 +409,116 @@ async function processSupplementaryFetches(
   return stats;
 }
 
+async function listPendingSteamSpyAvailabilityAppids(
+  supabase: ServiceClient,
+  afterAppid: number,
+  batchSize: number
+): Promise<number[]> {
+  const { data, error } = await supabase
+    .from('sync_status')
+    .select('appid')
+    .eq('is_syncable', true)
+    .is('last_steamspy_sync', null)
+    .or('steamspy_available.is.null,steamspy_available.eq.true')
+    .gt('appid', afterAppid)
+    .order('appid', { ascending: true })
+    .limit(batchSize);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => row.appid);
+}
+
+async function markSteamSpyAvailabilityBatch(
+  supabase: ServiceClient,
+  appids: number[]
+): Promise<void> {
+  if (appids.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('sync_status')
+    .update({ steamspy_available: false })
+    .eq('is_syncable', true)
+    .is('last_steamspy_sync', null)
+    .or('steamspy_available.is.null,steamspy_available.eq.true')
+    .in('appid', appids);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function markUnavailableSteamSpyApps(supabase: ServiceClient): Promise<number> {
+  let afterAppid = 0;
+  let batchCount = 0;
+  let totalMarked = 0;
+
+  log.info('Starting SteamSpy availability backfill', {
+    batchSize: AVAILABILITY_UPDATE_BATCH_SIZE,
+  });
+
+  while (true) {
+    // Paginate by primary key so each update stays under the statement timeout.
+    const appids = await listPendingSteamSpyAvailabilityAppids(
+      supabase,
+      afterAppid,
+      AVAILABILITY_UPDATE_BATCH_SIZE
+    );
+
+    if (appids.length === 0) {
+      break;
+    }
+
+    const lastAppidInBatch = appids[appids.length - 1]!;
+
+    await withRetry(
+      () => markSteamSpyAvailabilityBatch(supabase, appids),
+      {
+        maxRetries: AVAILABILITY_UPDATE_MAX_RETRIES,
+        initialDelayMs: 1000,
+        maxDelayMs: 5000,
+        shouldRetry: isRetryableAvailabilityUpdateError,
+        onRetry: (error, attempt, delayMs) => {
+          log.warn('Retrying SteamSpy availability batch update', {
+            attempt,
+            delayMs,
+            batchSize: appids.length,
+            lastAppidInBatch,
+            error: serializeUnknownError(error),
+          });
+        },
+      }
+    );
+
+    batchCount += 1;
+    totalMarked += appids.length;
+    afterAppid = lastAppidInBatch;
+
+    if (
+      batchCount === 1 ||
+      batchCount % AVAILABILITY_UPDATE_PROGRESS_INTERVAL === 0
+    ) {
+      log.info('SteamSpy availability backfill progress', {
+        batchCount,
+        batchSize: appids.length,
+        lastAppidInBatch,
+        totalMarked,
+      });
+    }
+  }
+
+  log.info('SteamSpy availability backfill completed', {
+    batchCount,
+    totalMarked,
+  });
+
+  return totalMarked;
+}
+
 async function main(): Promise<void> {
   const startTime = Date.now();
   const githubRunId = process.env.GITHUB_RUN_ID;
@@ -407,37 +561,8 @@ async function main(): Promise<void> {
 
     // Mark apps not in SteamSpy as unavailable (only if we did a full sync)
     if (maxPages === 0) {
-      const unavailableRows = await withRetry(
-        async () => {
-          const { data, error } = await supabase
-            .from('sync_status')
-            .update({ steamspy_available: false })
-            .is('last_steamspy_sync', null)
-            .eq('is_syncable', true)
-            .select('appid');
-
-          if (error) {
-            throw error;
-          }
-
-          return data;
-        },
-        {
-          maxRetries: AVAILABILITY_UPDATE_MAX_RETRIES,
-          initialDelayMs: 1000,
-          maxDelayMs: 5000,
-          shouldRetry: () => true,
-          onRetry: (error, attempt, delayMs) => {
-            log.warn('Retrying SteamSpy availability update', {
-              attempt,
-              delayMs,
-              error: serializeUnknownError(error),
-            });
-          },
-        }
-      );
-
-      log.info('Marked apps as not in SteamSpy catalog', { count: unavailableRows?.length ?? 0 });
+      const unavailableCount = await markUnavailableSteamSpyApps(supabase);
+      log.info('Marked apps as not in SteamSpy catalog', { count: unavailableCount });
 
       // Supplementary individual fetches for popular apps not in pagination
       const supplementaryLimit = parseInt(process.env.SUPPLEMENTARY_LIMIT || '100', 10);
