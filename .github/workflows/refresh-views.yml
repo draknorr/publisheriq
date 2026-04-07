@@ -35,8 +35,10 @@ jobs:
             echo "Refreshing ${view} (statement_timeout=${statement_timeout}, lock_timeout=${lock_timeout})..."
             start_time=$(date +%s)
 
-            PGOPTIONS="-c statement_timeout=${statement_timeout} -c lock_timeout=${lock_timeout}" \
-              psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -c "REFRESH MATERIALIZED VIEW CONCURRENTLY ${view};"
+            psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+              -c "SET statement_timeout TO '${statement_timeout}'" \
+              -c "SET lock_timeout TO '${lock_timeout}'" \
+              -c "REFRESH MATERIALIZED VIEW CONCURRENTLY ${view};"
 
             end_time=$(date +%s)
             duration=$((end_time - start_time))
