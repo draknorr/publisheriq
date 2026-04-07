@@ -27,6 +27,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
+      NEXT_PUBLIC_CHAT_TIGER_DEBUG: process.env.NEXT_PUBLIC_CHAT_TIGER_DEBUG ?? 'true',
       NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? baseURL,
       NEXT_PUBLIC_SUPABASE_URL:
         process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://example.supabase.co',
