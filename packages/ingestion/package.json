@@ -22,6 +22,7 @@
     "change-intel-worker": "tsx src/workers/change-intel-worker.ts",
     "change-intel-backfill-projection": "tsx src/scripts/backfill-change-activity-projection.ts",
     "repair-current-ccu-state": "tsx src/scripts/repair-current-ccu-state.ts",
+    "requeue-hero-asset-404-dead-letters": "tsx src/scripts/requeue-hero-asset-404-dead-letters.ts",
     "repair-dlc-discovered-apps": "tsx src/scripts/repair-dlc-discovered-apps.ts",
     "hydrate-storefront-apps": "tsx src/scripts/hydrate-storefront-apps.ts",
     "repair-review-truth": "tsx src/scripts/repair-review-truth.ts",

@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { logger } from '@publisheriq/shared';
+import { ApiError, logger } from '@publisheriq/shared';
 import type { TypedSupabaseClient } from '@publisheriq/database';
 import { getArchiveEligibility, getLatestMediaVersion } from './repository.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
+import { withRetry } from '../utils/retry.js';
 import type { HeroAssetDescriptor, NormalizedMediaVersion } from './types.js';
 
 const log = logger.child({ component: 'hero-asset-archive' });
@@ -14,6 +15,9 @@ const TIGHTEN_BYTES = 35 * 1024 * 1024 * 1024;
 const PAUSE_BYTES = 50 * 1024 * 1024 * 1024;
 const DAILY_DOWNLOAD_BUDGET_BYTES = 10 * 1024 * 1024 * 1024;
 const USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const HERO_ASSET_RETRY_MAX_RETRIES = 2;
+const HERO_ASSET_RETRY_INITIAL_DELAY_MS = 250;
+const HERO_ASSET_RETRY_MAX_DELAY_MS = 1000;
 
 const downloadLimiter = new RateLimiter({ requestsPerSecond: 1, burst: 2 });
 
@@ -21,6 +25,65 @@ interface ImageMeta {
   width: number | null;
   height: number | null;
   mimeType: string | null;
+}
+
+const RETRYABLE_STORAGE_ERROR_PATTERNS = [
+  /unexpected token/i,
+  /not valid json/i,
+  /5\d{2}/,
+  /bad gateway/i,
+  /service unavailable/i,
+  /temporar/i,
+  /timed out/i,
+  /timeout/i,
+  /connection reset/i,
+  /econnreset/i,
+  /socket hang up/i,
+  /network/i,
+  /fetch failed/i,
+] as const;
+
+interface AssetArchivalFailure {
+  asset: HeroAssetDescriptor;
+  message: string;
+}
+
+export class MissingHeroAssetError extends Error {
+  constructor(
+    readonly asset: HeroAssetDescriptor,
+    readonly statusCode: number
+  ) {
+    super(`Failed to download ${asset.kind} asset: ${statusCode}`);
+    this.name = 'MissingHeroAssetError';
+  }
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
+function isMissingHeroAssetStatus(statusCode: number): boolean {
+  return statusCode === 403 || statusCode === 404;
+}
+
+function isAlreadyExistsStorageError(error: unknown): boolean {
+  return formatUnknownError(error).toLowerCase().includes('already exists');
+}
+
+export function isRetryableHeroAssetStorageErrorMessage(message: string): boolean {
+  return RETRYABLE_STORAGE_ERROR_PATTERNS.some((pattern) => pattern.test(message));
 }
 
 function getExtension(url: string, mimeType: string | null): string {
@@ -195,12 +258,37 @@ export class HeroAssetArchiver {
   }
 
   private async uploadAsset(appid: number, asset: HeroAssetDescriptor): Promise<void> {
-    await downloadLimiter.acquire();
+    const response = await withRetry(
+      async () => {
+        await downloadLimiter.acquire();
 
-    const response = await fetch(asset.url);
-    if (!response.ok) {
-      throw new Error(`Failed to download ${asset.kind} asset: ${response.status}`);
-    }
+        const currentResponse = await fetch(asset.url);
+        if (isMissingHeroAssetStatus(currentResponse.status)) {
+          throw new MissingHeroAssetError(asset, currentResponse.status);
+        }
+
+        if (!currentResponse.ok) {
+          throw new ApiError(`Failed to download ${asset.kind} asset: ${currentResponse.status}`, currentResponse.status, asset.url);
+        }
+
+        return currentResponse;
+      },
+      {
+        maxRetries: HERO_ASSET_RETRY_MAX_RETRIES,
+        initialDelayMs: HERO_ASSET_RETRY_INITIAL_DELAY_MS,
+        maxDelayMs: HERO_ASSET_RETRY_MAX_DELAY_MS,
+        onRetry: (error, attempt, delayMs) => {
+          log.warn('Retrying hero asset download', {
+            appid,
+            attempt,
+            delayMs,
+            error: formatUnknownError(error),
+            kind: asset.kind,
+            url: asset.url,
+          });
+        },
+      }
+    );
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -222,14 +310,35 @@ export class HeroAssetArchiver {
     const objectPath = `${asset.kind}/${sha256}.${extension}`;
 
     const storage = this.supabase.storage.from(HERO_BUCKET);
-    const { error: uploadError } = await storage.upload(objectPath, buffer, {
-      contentType: meta.mimeType ?? 'application/octet-stream',
-      upsert: false,
-    });
+    await withRetry(
+      async () => {
+        const { error: uploadError } = await storage.upload(objectPath, buffer, {
+          contentType: meta.mimeType ?? 'application/octet-stream',
+          upsert: false,
+        });
 
-    if (uploadError && !String(uploadError.message).toLowerCase().includes('already exists')) {
-      throw uploadError;
-    }
+        if (uploadError && !isAlreadyExistsStorageError(uploadError)) {
+          throw new Error(uploadError.message);
+        }
+      },
+      {
+        maxRetries: HERO_ASSET_RETRY_MAX_RETRIES,
+        initialDelayMs: HERO_ASSET_RETRY_INITIAL_DELAY_MS,
+        maxDelayMs: HERO_ASSET_RETRY_MAX_DELAY_MS,
+        shouldRetry: (error) => error instanceof Error && isRetryableHeroAssetStorageErrorMessage(error.message),
+        onRetry: (error, attempt, delayMs) => {
+          log.warn('Retrying hero asset storage upload', {
+            appid,
+            attempt,
+            delayMs,
+            error: formatUnknownError(error),
+            kind: asset.kind,
+            objectPath,
+            url: asset.url,
+          });
+        },
+      }
+    );
 
     const db = this.supabase as any;
     const now = new Date().toISOString();
@@ -293,9 +402,38 @@ export class HeroAssetArchiver {
 
     const latestMediaVersion = await getLatestMediaVersion(this.supabase, appid);
     const assets = extractHeroAssets(latestMediaVersion);
+    const failures: AssetArchivalFailure[] = [];
 
     for (const asset of assets) {
-      await this.uploadAsset(appid, asset);
+      try {
+        await this.uploadAsset(appid, asset);
+      } catch (error) {
+        if (error instanceof MissingHeroAssetError) {
+          log.warn('Skipping missing hero asset', {
+            appid,
+            kind: asset.kind,
+            statusCode: error.statusCode,
+            url: asset.url,
+          });
+          continue;
+        }
+
+        failures.push({
+          asset,
+          message: formatUnknownError(error),
+        });
+        log.error('Failed to archive hero asset', {
+          appid,
+          error,
+          kind: asset.kind,
+          url: asset.url,
+        });
+      }
+    }
+
+    if (failures.length > 0) {
+      const summary = failures.map((failure) => `${failure.asset.kind}: ${failure.message}`).join('; ');
+      throw new Error(`Failed to archive hero assets for app ${appid}: ${summary}`);
     }
   }
 }

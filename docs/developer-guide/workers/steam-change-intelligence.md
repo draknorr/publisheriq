@@ -77,6 +77,8 @@ Rollback guidance:
 
 - Bucket: `steam-hero-assets`
 - Archive only `header` and `capsule` binaries.
+- Treat Steam `403`/`404` responses for current hero asset URLs as terminal
+  missing assets: log and continue without dead-lettering the queue item.
 - Reject assets larger than `2 MB`.
 - Warn when bucket usage reaches `20 GB`.
 - Tighten archival behavior at `35 GB`.
@@ -88,6 +90,7 @@ Rollback guidance:
 - `.github/workflows/app-change-hints.yml`: scheduled hourly hint sweep plus manual dispatch.
 - `.github/workflows/news-catchup.yml`: manual bounded news catch-up using `QUEUE_SOURCES=news` and `MAX_IDLE_POLLS`.
 - `.github/workflows/storefront-initial-sync.yml`: existing manual storefront bootstrap workflow.
+- `pnpm --filter @publisheriq/ingestion requeue-hero-asset-404-dead-letters`: dry-run-by-default helper that requeues current `hero_asset` dead letters caused by Steam `404`s.
 
 ## Read Surfaces
 
