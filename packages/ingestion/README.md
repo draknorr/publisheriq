@@ -68,6 +68,8 @@ TigerData refresh and parity workflows are not run from this package, but they a
 
 The ingestion workers continue to own the live source side of the pipeline. TigerData owns the query-serving slice.
 
+`pnpm --filter @publisheriq/ingestion refresh-views` refreshes the heavyweight materialized-view chain only. `app_filter_data` and the Games page filter-count views are scheduled separately.
+
 ## Railway Worker Deployment
 
 The production `change-intel-*` Railway services should use the dedicated worker

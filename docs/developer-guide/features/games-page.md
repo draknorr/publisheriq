@@ -397,6 +397,11 @@ Seven materialized views provide instant filter dropdown counts:
 | `mv_velocity_tier_counts` | Velocity tier counts | <10ms |
 | `mv_apps_aggregate_stats` | Pre-computed summary stats | <10ms |
 
+Refresh ownership:
+- `app_filter_data` refreshes every 6 hours via GitHub Actions `refresh-app-filter-data.yml`.
+- `mv_tag_counts`, `mv_genre_counts`, `mv_category_counts`, `mv_steam_deck_counts`, `mv_ccu_tier_counts`, and `mv_velocity_tier_counts` refresh every 4 hours via `pg_cron` and `refresh_filter_count_views()`.
+- `mv_apps_aggregate_stats` refreshes daily via GitHub Actions `refresh-views.yml`.
+
 **Fast vs Slow Path for Counts:**
 - Fast path (<10ms): No metric filters → read from materialized views
 - Slow path (~4s): Metric filters applied → compute on-the-fly

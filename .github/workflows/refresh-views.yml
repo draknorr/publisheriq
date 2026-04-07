@@ -2,15 +2,13 @@ name: Refresh Materialized Views
 
 on:
   schedule:
-    # Run at 5:00 AM UTC daily (after steamspy-sync at 2:15 AM and histogram-sync at 4:15 AM)
+    # Run at 5:00 AM UTC daily for the heavy dependency chain.
     - cron: '0 5 * * *'
-    # Also run every 6 hours for app_filter_data (content changes rarely but need periodic refresh)
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # Allow manual trigger
-  workflow_run:
-    workflows: ["SteamSpy Sync", "Trends Calculation"]
-    types:
-      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-materialized-views
+  cancel-in-progress: false
 
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -18,53 +16,44 @@ env:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # Only run if the triggering workflow succeeded (or if manually triggered/scheduled)
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    timeout-minutes: 60
 
     steps:
       - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
 
-      - name: Refresh materialized views
+      - name: Refresh heavy materialized view chain
         run: |
-          echo "Refreshing materialized views..."
+          set -euo pipefail
 
-          # Refresh views in dependency order with 5 minute timeout each
-          # app_filter_data is refreshed every 6 hours for Games page performance
-          VIEWS=(
-            "latest_daily_metrics"
-            "app_filter_data"
-            "publisher_metrics"
-            "developer_metrics"
-            "publisher_year_metrics"
-            "developer_year_metrics"
-            "publisher_game_metrics"
-            "developer_game_metrics"
-            "monthly_game_metrics"
-            # Filter option count views (for Games page filter dropdowns)
-            "mv_tag_counts"
-            "mv_genre_counts"
-            "mv_category_counts"
-            "mv_steam_deck_counts"
-            "mv_ccu_tier_counts"
-            "mv_velocity_tier_counts"
-            "mv_apps_aggregate_stats"
-          )
+          refresh_view() {
+            local view="$1"
+            local statement_timeout="$2"
+            local lock_timeout="${3:-15s}"
+            local start_time end_time duration
 
-          for view in "${VIEWS[@]}"; do
-            echo "Refreshing $view..."
+            echo "Refreshing ${view} (statement_timeout=${statement_timeout}, lock_timeout=${lock_timeout})..."
             start_time=$(date +%s)
 
-            # Try concurrent refresh first, fall back to regular if it fails
-            if ! psql "$DATABASE_URL" -c "SET statement_timeout = '300000'; REFRESH MATERIALIZED VIEW CONCURRENTLY $view;" 2>/dev/null; then
-              echo "Concurrent refresh failed for $view, trying regular refresh..."
-              psql "$DATABASE_URL" -c "SET statement_timeout = '300000'; REFRESH MATERIALIZED VIEW $view;"
-            fi
+            PGOPTIONS="-c statement_timeout=${statement_timeout} -c lock_timeout=${lock_timeout}" \
+              psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -c "REFRESH MATERIALIZED VIEW CONCURRENTLY ${view};"
 
             end_time=$(date +%s)
             duration=$((end_time - start_time))
-            echo "Refreshed $view in ${duration}s"
-          done
+            echo "Refreshed ${view} in ${duration}s"
+          }
 
-          echo "All views refreshed successfully!"
+          echo "Refreshing heavy materialized views..."
+
+          # Refresh in dependency order. Small filter-count views stay on pg_cron.
+          refresh_view latest_daily_metrics 10min
+          refresh_view publisher_metrics 10min
+          refresh_view developer_metrics 10min
+          refresh_view publisher_year_metrics 10min
+          refresh_view developer_year_metrics 10min
+          refresh_view publisher_game_metrics 10min
+          refresh_view developer_game_metrics 10min
+          refresh_view monthly_game_metrics 5min
+          refresh_view mv_apps_aggregate_stats 2min
+
+          echo "Heavy materialized views refreshed successfully."

@@ -73,6 +73,8 @@ export interface RecalculateCcuTiersResult {
 
 export interface RefreshMaterializedViewOptions {
   concurrently?: boolean;
+  fallbackToNonConcurrent?: boolean;
+  lockTimeoutMs?: number;
   timeoutMs?: number;
 }
 
@@ -242,6 +244,7 @@ const VELOCITY_UPDATE_TIMEOUT_MS = 600_000;
 const CCU_TIER_RECALC_TIMEOUT_MS = 300_000;
 const CCU_QUALITY_REFRESH_TIMEOUT_MS = 600_000;
 const MATVIEW_REFRESH_TIMEOUT_MS = 900_000;
+const MATVIEW_LOCK_TIMEOUT_MS = 15_000;
 
 let ingestionPool: Pool | null = null;
 
@@ -371,6 +374,27 @@ async function setLocalStatementTimeout(
   await client.query("SELECT set_config('statement_timeout', $1, true)", [`${timeoutMs}ms`]);
 }
 
+async function withSessionConfig<T>(
+  client: PoolClient,
+  settingName: string,
+  value: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const { rows } = await client.query<{ current_value: string }>(
+    'SELECT current_setting($1) AS current_value',
+    [settingName]
+  );
+  const previousValue = rows[0]?.current_value ?? '0';
+
+  await client.query('SELECT set_config($1, $2, false)', [settingName, value]);
+
+  try {
+    return await fn();
+  } finally {
+    await client.query('SELECT set_config($1, $2, false)', [settingName, previousValue]);
+  }
+}
+
 async function withTransaction<T>(
   timeoutMs: number,
   fn: (client: PoolClient) => Promise<T>
@@ -395,17 +419,14 @@ async function withSessionStatementTimeout<T>(
   fn: (client: PoolClient) => Promise<T>
 ): Promise<T> {
   return withClient(async (client) => {
-    const { rows } = await client.query<{ statement_timeout: string }>('SHOW statement_timeout');
-    const previousTimeout = rows[0]?.statement_timeout ?? '0';
-
-    await client.query("SELECT set_config('statement_timeout', $1, false)", [`${timeoutMs}ms`]);
-
-    try {
-      return await fn(client);
-    } finally {
-      await client.query("SELECT set_config('statement_timeout', $1, false)", [previousTimeout]);
-    }
+    return withSessionConfig(client, 'statement_timeout', `${timeoutMs}ms`, async () => fn(client));
   });
+}
+
+function assertSafeIdentifier(identifier: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
+    throw new Error(`Invalid SQL identifier: ${identifier}`);
+  }
 }
 
 function isStatementTimeoutError(error: unknown): error is { code?: string; message?: string } {
@@ -567,34 +588,37 @@ export async function refreshReviewVelocityStats(
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? VELOCITY_REFRESH_TIMEOUT_MS;
 
-  await withSessionStatementTimeout(timeoutMs, async (client) => {
-    try {
-      await client.query('REFRESH MATERIALIZED VIEW CONCURRENTLY review_velocity_stats');
-    } catch {
-      await client.query('REFRESH MATERIALIZED VIEW review_velocity_stats');
-    }
-  });
+  await refreshMaterializedView('review_velocity_stats', { timeoutMs });
 }
 
 export async function refreshMaterializedView(
   viewName: string,
   options: RefreshMaterializedViewOptions = {}
 ): Promise<void> {
+  assertSafeIdentifier(viewName);
+
   const timeoutMs = options.timeoutMs ?? MATVIEW_REFRESH_TIMEOUT_MS;
+  const lockTimeoutMs = options.lockTimeoutMs ?? MATVIEW_LOCK_TIMEOUT_MS;
+  const useConcurrentRefresh = options.concurrently !== false;
+  const allowNonConcurrentFallback = useConcurrentRefresh && options.fallbackToNonConcurrent === true;
+  const concurrentRefreshSql = `REFRESH MATERIALIZED VIEW CONCURRENTLY ${viewName}`;
+  const regularRefreshSql = `REFRESH MATERIALIZED VIEW ${viewName}`;
   const refreshSql = options.concurrently === false
-    ? `REFRESH MATERIALIZED VIEW ${viewName}`
-    : `REFRESH MATERIALIZED VIEW CONCURRENTLY ${viewName}`;
+    ? regularRefreshSql
+    : concurrentRefreshSql;
 
   await withSessionStatementTimeout(timeoutMs, async (client) => {
-    try {
-      await client.query(refreshSql);
-    } catch (error) {
-      if (options.concurrently === false) {
-        throw error;
-      }
+    await withSessionConfig(client, 'lock_timeout', `${lockTimeoutMs}ms`, async () => {
+      try {
+        await client.query(refreshSql);
+      } catch (error) {
+        if (!allowNonConcurrentFallback) {
+          throw error;
+        }
 
-      await client.query(`REFRESH MATERIALIZED VIEW ${viewName}`);
-    }
+        await client.query(regularRefreshSql);
+      }
+    });
   });
 }
 

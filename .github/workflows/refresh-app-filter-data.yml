@@ -1,0 +1,37 @@
+name: Refresh App Filter Data
+
+on:
+  schedule:
+    # Run every 6 hours for the Games page filter surface.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-app-filter-data
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Refresh app_filter_data
+        run: |
+          set -euo pipefail
+
+          echo "Refreshing app_filter_data (statement_timeout=8min, lock_timeout=15s)..."
+          start_time=$(date +%s)
+
+          PGOPTIONS="-c statement_timeout=8min -c lock_timeout=15s" \
+            psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -c "REFRESH MATERIALIZED VIEW CONCURRENTLY app_filter_data;"
+
+          end_time=$(date +%s)
+          duration=$((end_time - start_time))
+          echo "Refreshed app_filter_data in ${duration}s"

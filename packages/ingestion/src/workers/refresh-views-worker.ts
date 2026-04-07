@@ -1,53 +1,43 @@
 /**
  * Materialized View Refresh Worker
  *
- * Refreshes all materialized views in the correct dependency order.
- * Should be run after sync jobs complete to update aggregated metrics.
+ * Refreshes the heavyweight materialized view chain in dependency order.
+ * app_filter_data and filter-count views are refreshed on separate schedules.
  *
  * Run with: pnpm --filter @publisheriq/ingestion refresh-views
  */
 
 import { getServiceClient } from '@publisheriq/database';
+import { refreshMaterializedView } from '@publisheriq/database/ingestion';
 import { logger } from '@publisheriq/shared';
 
 const log = logger.child({ worker: 'refresh-views' });
 
-// Materialized views in dependency order (refresh parents before children)
+const DEFAULT_LOCK_TIMEOUT_MS = 15_000;
+
 const MATERIALIZED_VIEWS = [
-  // Level 1: Depends on daily_metrics
-  'latest_daily_metrics',
-
-  // Level 2: Depends on latest_daily_metrics and apps
-  'publisher_metrics',
-  'developer_metrics',
-
-  // Level 3: Depends on publisher_metrics/developer_metrics or apps directly
-  'publisher_year_metrics',
-  'developer_year_metrics',
-  'publisher_game_metrics',
-  'developer_game_metrics',
-
-  // Level 4: Monthly aggregations
-  'monthly_game_metrics',
-];
+  { name: 'latest_daily_metrics', timeoutMs: 600_000 },
+  { name: 'publisher_metrics', timeoutMs: 600_000 },
+  { name: 'developer_metrics', timeoutMs: 600_000 },
+  { name: 'publisher_year_metrics', timeoutMs: 600_000 },
+  { name: 'developer_year_metrics', timeoutMs: 600_000 },
+  { name: 'publisher_game_metrics', timeoutMs: 600_000 },
+  { name: 'developer_game_metrics', timeoutMs: 600_000 },
+  { name: 'monthly_game_metrics', timeoutMs: 300_000 },
+  { name: 'mv_apps_aggregate_stats', timeoutMs: 120_000 },
+] as const;
 
 async function refreshView(
-  supabase: ReturnType<typeof getServiceClient>,
-  viewName: string
+  viewName: string,
+  timeoutMs: number
 ): Promise<{ success: boolean; durationMs: number; error?: string }> {
   const startTime = Date.now();
 
   try {
-    // Use CONCURRENTLY to avoid locking the view during refresh
-    const { error } = await supabase.rpc('refresh_materialized_view', {
-      view_name: viewName,
+    await refreshMaterializedView(viewName, {
+      lockTimeoutMs: DEFAULT_LOCK_TIMEOUT_MS,
+      timeoutMs,
     });
-
-    if (error) {
-      // Format the error properly
-      const errorMessage = typeof error === 'object' ? JSON.stringify(error) : String(error);
-      throw new Error(errorMessage);
-    }
 
     const durationMs = Date.now() - startTime;
     return { success: true, durationMs };
@@ -93,48 +83,22 @@ async function main(): Promise<void> {
   const results: Array<{ view: string; success: boolean; durationMs: number; error?: string }> = [];
 
   try {
-    // Check if the refresh_materialized_view function exists
-    // If not, we'll need to create it or use a different approach
-    const { error: checkError } = await supabase.rpc('refresh_materialized_view', {
-      view_name: 'latest_daily_metrics',
-    });
-
-    if (checkError && checkError.message.includes('function') && checkError.message.includes('does not exist')) {
-      log.warn('refresh_materialized_view function not found, creating it...');
-
-      // The function needs to be created via migration
-      // For now, skip and log instructions
-      log.error(
-        'Please create the refresh_materialized_view function. ' +
-          'Run: CREATE OR REPLACE FUNCTION refresh_materialized_view(view_name TEXT) RETURNS VOID AS $$ ' +
-          "BEGIN EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY ' || quote_ident(view_name); END; $$ LANGUAGE plpgsql;"
-      );
-
-      if (job) {
-        await supabase
-          .from('sync_jobs')
-          .update({
-            status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: 'refresh_materialized_view function does not exist',
-          })
-          .eq('id', job.id);
-      }
-
-      process.exit(1);
-    }
-
     // Refresh each view in order
-    for (const viewName of MATERIALIZED_VIEWS) {
-      log.info('Refreshing view', { view: viewName });
+    for (const { name, timeoutMs } of MATERIALIZED_VIEWS) {
+      log.info('Refreshing view', {
+        lockTimeoutMs: DEFAULT_LOCK_TIMEOUT_MS,
+        statementTimeoutMs: timeoutMs,
+        view: name,
+      });
 
-      const result = await refreshView(supabase, viewName);
-      results.push({ view: viewName, ...result });
+      const result = await refreshView(name, timeoutMs);
+      results.push({ view: name, ...result });
 
       if (result.success) {
-        log.info('View refreshed', { view: viewName, durationMs: result.durationMs });
+        log.info('View refreshed', { view: name, durationMs: result.durationMs });
       } else {
-        log.error('View refresh failed', { view: viewName, error: result.error });
+        log.error('View refresh failed', { view: name, error: result.error });
+        throw new Error(`Failed to refresh ${name}: ${result.error ?? 'unknown error'}`);
       }
     }
 

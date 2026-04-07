@@ -48,7 +48,8 @@ All times are UTC:
 | Priority Calculation | `priority-calculation.yml` | 22:30 daily | Priority scores |
 | Velocity Calculation | `velocity-calculation.yml` | 08,16,00:00 | Velocity stats (v2.1) |
 | Interpolation | `interpolation.yml` | 05:00 daily | Fill data gaps (v2.1) |
-| Refresh Views | `refresh-views.yml` | 05:00 daily | Refresh materialized views (v2.1) |
+| Refresh Views | `refresh-views.yml` | 05:00 daily | Refresh heavy materialized view chain |
+| Refresh App Filter Data | `refresh-app-filter-data.yml` | 00,06,12,18:00 | Refresh `app_filter_data` independently |
 | CCU Sync | `ccu-sync.yml` | :00 hourly | Tier 1+2 CCU (v2.2) |
 | CCU Daily Sync | `ccu-daily-sync.yml` | 04:30, 12:30, 20:30 (3x daily) | Tier 3 CCU rotation (v2.2) |
 | CCU Cleanup | `ccu-cleanup.yml` | Sun 03:00 | Aggregate + cleanup snapshots (v2.2) |
@@ -57,6 +58,8 @@ All times are UTC:
 | Tiger Production Sync | `tiger-production-sync.yml` | 07:45 daily | Refresh production Tiger chat-serving data |
 | Tiger Preview Sync | `tiger-preview-sync.yml` | Manual | Refresh preview Tiger chat-serving data |
 | CI | `ci.yml` | On push/PR | Type checking |
+
+Games page filter-count views are not GitHub-owned. `mv_tag_counts`, `mv_genre_counts`, `mv_category_counts`, `mv_steam_deck_counts`, `mv_ccu_tier_counts`, and `mv_velocity_tier_counts` refresh every 4 hours via `pg_cron` and `refresh_filter_count_views()`.
 
 ## Workflow Structure
 

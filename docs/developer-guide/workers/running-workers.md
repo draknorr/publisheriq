@@ -26,6 +26,8 @@ pnpm --filter @publisheriq/ingestion change-intel-worker
 pnpm --filter @publisheriq/ingestion change-intel-backfill-projection
 ```
 
+`refresh-views` refreshes the heavyweight materialized-view chain only. `app_filter_data` is refreshed by GitHub Actions, and the small Games page filter-count views are refreshed by `pg_cron`.
+
 ## Useful Environment Overrides
 
 ```bash

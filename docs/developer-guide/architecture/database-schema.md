@@ -1258,7 +1258,7 @@ FROM daily_metrics
 ORDER BY appid, metric_date DESC;
 ```
 
-**Refreshed**: Every 6 hours via `REFRESH MATERIALIZED VIEW CONCURRENTLY`
+**Refreshed**: Daily via GitHub Actions `refresh-views.yml`
 
 **Used by**: Discovery cube, LatestMetrics cube
 
@@ -1395,7 +1395,7 @@ Pre-computed content arrays for O(1) filtering in `get_apps_with_filters()`.
 - `idx_app_filter_data_category_ids` on `category_ids`
 - `idx_app_filter_data_platform_array` on `platform_array`
 
-**Refreshed**: Every 6 hours via GitHub Action
+**Refreshed**: Every 6 hours via GitHub Actions `refresh-app-filter-data.yml`
 
 **Query Pattern**:
 ```sql
@@ -1419,7 +1419,7 @@ Pre-computed counts for fast filter dropdown options (<10ms).
 | `mv_ccu_tier_counts` | app_type, ccu_tier, app_count | CCU tier filter options |
 | `mv_velocity_tier_counts` | app_type, velocity_tier, app_count | Velocity tier filter options |
 
-**Refreshed**: Daily via `refresh_filter_count_views()`
+**Refreshed**: Every 4 hours via `pg_cron` calling `refresh_filter_count_views()`
 
 ---
 
@@ -1440,7 +1440,7 @@ Pre-computed summary statistics for the Games page stats bar.
 | `sentiment_declining_count` | INTEGER | Games with <-3% sentiment delta |
 | `avg_value_score` | DECIMAL | Average value score |
 
-**Refreshed**: Daily via `refresh_filter_count_views()`
+**Refreshed**: Daily via GitHub Actions `refresh-views.yml`
 
 ---
 
