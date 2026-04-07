@@ -42,8 +42,8 @@
     "ccu-daily-sync": "tsx src/workers/ccu-daily-worker.ts",
     "alert-detection": "tsx src/workers/alert-detection-worker.ts",
     "test-steamspy-individual": "tsx src/scripts/test-steamspy-individual.ts",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "test:change-intel": "node --import tsx --test src/change-intel/**/*.test.ts"
+    "test": "node --import tsx --test $(find src -name '*.test.ts' -type f | sort)",
+    "test:change-intel": "node --import tsx --test $(find src/change-intel -name '*.test.ts' -type f | sort)"
   },
   "dependencies": {
     "@publisheriq/database": "workspace:*",
