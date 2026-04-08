@@ -146,7 +146,9 @@ const ENTITY_QUERY_PATTERNS = [
 ];
 const YOUTUBE_ENTITY_QUERY_PATTERNS = [
   /\b(?:videos?|uploads?|shorts?|creators?|channels?)\s+(?:for|about|on)\s+(.+?)(?:\s+\b(?:on youtube|youtube|right now|today|this week|this month|in the last|over the last|sorted by|with|that)\b|[?!.]|$)/i,
-  /\b(?:creators?|channels?)\s+(?:covering|posting about|making content for)\s+(.+?)(?:\s+\b(?:on youtube|youtube|right now|today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
+  /\b(?:creators?|channels?)\s+(?:are\s+)?(?:covering|posting about|making content for)\s+(.+?)(?:\s+\b(?:on youtube|youtube|right now|today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
+  /\bwhich\s+(?:creators?|channels?)\s+(?:are\s+)?(?:covering|posting about|making content for)\s+(.+?)(?:\s+\b(?:on youtube|youtube|right now|today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
+  /\bwhich\s+(.+?)\s+youtube\s+(?:videos?|uploads?|shorts?|livestreams?|live\s+videos?)\s+are\s+(?:growing|growing fastest|fastest-growing|taking off|breaking out)\b/i,
   /\bwhat\s+does\s+the\s+youtube\s+content\s+mix\s+look\s+like\s+for\s+(.+?)(?:[?!.]|$)/i,
   /\bhow\s+many\s+.+?\s+did\s+(.+?)\s+get\s+in\s+the\s+last\s+\d+\s+days?(?:[?!.]|$)/i,
   /\bwhich\s+.+?\s+for\s+(.+?)\s+on\s+youtube\b/i,
@@ -1783,7 +1785,7 @@ function inferYoutubeCoverageView(prompt: string): YoutubeCoverageView {
 }
 
 function inferYoutubeCoverageWindow(prompt: string): YoutubeCoverageWindow | null {
-  if (/\b(?:today|last 24 hours?|past 24 hours?)\b/i.test(prompt)) {
+  if (/\b(?:today|last 24 hours?|past 24 hours?|(?:last|past)\s+1\s+day)\b/i.test(prompt)) {
     return '1d';
   }
 
@@ -2240,7 +2242,16 @@ function extractYoutubeEntityQuery(prompt: string): string | null {
     }
   }
 
-  return extractEntityQueryFromPrompt(prompt);
+  const fallbackCandidate = extractEntityQueryFromPrompt(prompt);
+  if (
+    !fallbackCandidate
+    || /\byoutube\b/i.test(fallbackCandidate)
+    || /^(?:right now|today|this week|this month)$/i.test(fallbackCandidate)
+  ) {
+    return null;
+  }
+
+  return fallbackCandidate;
 }
 
 function extractEntityOverviewQuery(prompt: string): string | null {

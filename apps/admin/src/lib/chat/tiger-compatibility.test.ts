@@ -5788,6 +5788,191 @@ test('Tiger primary routes explicit YouTube latest-video prompts through get-you
   assert.match(result.renderedText ?? '', /ARC Raiders Just Buffed This Key Room/);
 });
 
+test('Tiger primary resolves creator coverage prompts phrased as "Which creators are covering"', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(request.query, 'Palworld');
+      return jsonResponse({
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'Palworld',
+          entityKind: 'game',
+          entityUid: '22222222-2222-4222-8222-222222222222',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '1623730',
+        }],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-youtube-game-coverage');
+    assert.equal(request.entityUid, '22222222-2222-4222-8222-222222222222');
+    assert.equal(request.view, 'creator_coverage');
+    assert.equal(request.window, null);
+    return jsonResponse({
+      availability: {
+        blockingTables: [],
+        reason: null,
+        state: 'ready',
+      },
+      cadence: null,
+      contentClass: null,
+      contentMix: [],
+      creators: [{
+        channelSubscriberCount: 512000,
+        channelTitle: 'Pocketpair Clips',
+        latestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        matchedVideoCount: 12,
+        totalMatchedViews: 845000,
+      }],
+      entity: {
+        displayName: 'Palworld',
+        entityKind: 'game',
+        entityUid: '22222222-2222-4222-8222-222222222222',
+        platform: 'steam',
+        platformEntityId: '1623730',
+      },
+      items: [],
+      limit: 10,
+      provenance: {
+        generatedAt: '2026-04-07T08:00:32.000Z',
+        source: 'tiger',
+      },
+      resolvedWindow: 'current',
+      sufficientToAnswer: true,
+      summary: {
+        distinctUploadChannels30d: 96,
+        distinctUploadChannels7d: 37,
+        freshestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        latestSnapshotAt: '2026-04-07T08:00:32.000Z',
+        matchedPrimaryVideoCount: 144,
+        matchedVideoViewDelta1d: 984221,
+        matchedVideoViewDelta7d: 3221991,
+        newMatchedVideos1d: 19,
+        newMatchedVideos30d: 144,
+        newMatchedVideos7d: 62,
+      },
+      view: 'creator_coverage',
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'Which creators are covering Palworld on YouTube right now?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'youtube_game_activity');
+  assert.equal(result.info.route, 'primary_success');
+  assert.match(result.renderedText ?? '', /YouTube creator coverage for Palworld/);
+  assert.match(result.renderedText ?? '', /Pocketpair Clips/);
+});
+
+test('Tiger primary resolves game-first YouTube growth prompts and maps last 1 day to the 1d window', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(request.query, 'Hollow Knight');
+      return jsonResponse({
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'Hollow Knight',
+          entityKind: 'game',
+          entityUid: '33333333-3333-4333-8333-333333333333',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '367520',
+        }],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-youtube-game-coverage');
+    assert.equal(request.entityUid, '33333333-3333-4333-8333-333333333333');
+    assert.equal(request.view, 'video_growth');
+    assert.equal(request.window, '1d');
+    return jsonResponse({
+      availability: {
+        blockingTables: [],
+        reason: null,
+        state: 'ready',
+      },
+      cadence: null,
+      contentClass: null,
+      contentMix: [],
+      creators: [],
+      entity: {
+        displayName: 'Hollow Knight',
+        entityKind: 'game',
+        entityUid: '33333333-3333-4333-8333-333333333333',
+        platform: 'steam',
+        platformEntityId: '367520',
+      },
+      items: [{
+        channelTitle: 'Silksong Watch',
+        growthPct: 0.41,
+        publishedAt: '2026-04-07T05:14:00.000Z',
+        title: 'Hollow Knight Lore Theory Just Exploded',
+        viewCount: 145000,
+        viewDelta: 42000,
+      }],
+      limit: 10,
+      provenance: {
+        generatedAt: '2026-04-07T08:00:32.000Z',
+        source: 'tiger',
+      },
+      resolvedWindow: '1d',
+      sufficientToAnswer: true,
+      summary: {
+        distinctUploadChannels30d: 58,
+        distinctUploadChannels7d: 21,
+        freshestMatchedUploadAt: '2026-04-07T05:14:00.000Z',
+        latestSnapshotAt: '2026-04-07T08:00:32.000Z',
+        matchedPrimaryVideoCount: 73,
+        matchedVideoViewDelta1d: 621104,
+        matchedVideoViewDelta7d: 1112120,
+        newMatchedVideos1d: 9,
+        newMatchedVideos30d: 73,
+        newMatchedVideos7d: 28,
+      },
+      view: 'video_growth',
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'Which Hollow Knight YouTube videos are growing fastest in the last 1 day?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'youtube_game_activity');
+  assert.equal(result.info.route, 'primary_success');
+  assert.match(result.renderedText ?? '', /Fastest-growing YouTube videos for Hollow Knight/);
+  assert.match(result.renderedText ?? '', /Hollow Knight Lore Theory Just Exploded/);
+});
+
 test('Tiger primary does not silently route generic latest-video prompts to YouTube', async (t) => {
   setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
   setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
