@@ -9747,24 +9747,24 @@ export async function runTigerPrimaryEvaluation(params: {
     }
 
     if (matchedIntent === 'youtube_game_activity') {
-      const selectionState =
-        'selectionState' in outcome ? (outcome.selectionState ?? null) : activeSelectionState;
+      const youtubeOutcome = outcome as YoutubeGameCoveragePrimaryOutcome;
+      const selectionState = youtubeOutcome.selectionState ?? activeSelectionState;
 
-      if (outcome.renderedText?.trim()) {
+      if (youtubeOutcome.renderedText?.trim()) {
         const answerBrief = buildTigerSuccessBrief({
           allowNarration: false,
-          fallbackMarkdown: outcome.renderedText,
+          fallbackMarkdown: youtubeOutcome.renderedText,
           intent: matchedIntent,
-          response: outcome.response,
+          response: youtubeOutcome.response,
           selectionState,
         });
 
         return {
           answerBrief,
           contractResult: null,
-          followUpSuggestions: outcome.followUpSuggestions ?? answerBrief.followUpSuggestions,
+          followUpSuggestions: youtubeOutcome.followUpSuggestions ?? answerBrief.followUpSuggestions,
           info: {
-            attempts: outcome.attempts,
+            attempts: youtubeOutcome.attempts,
             cohort,
             enabled: true,
             matchedIntent,
@@ -9786,13 +9786,13 @@ export async function runTigerPrimaryEvaluation(params: {
       return {
         contractResult: null,
         info: {
-          attempts: outcome.attempts,
+          attempts: youtubeOutcome.attempts,
           cohort,
           enabled: true,
           matchedIntent,
           mode,
           renderMode: 'deterministic',
-          route: outcome.attempts.some((attempt) => attempt.status === 'error')
+          route: youtubeOutcome.attempts.some((attempt) => attempt.status === 'error')
             ? 'error'
             : 'fallback_to_legacy',
         },
