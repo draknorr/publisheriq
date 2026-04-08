@@ -22,6 +22,7 @@
     "sync-refresh": "tsx src/scripts/sync-refresh.ts",
     "rollup-daily": "tsx src/scripts/rollup-daily.ts",
     "mirror-preview": "tsx src/scripts/mirror-preview.ts",
+    "verify-preview-mirror": "tsx src/scripts/verify-preview-mirror.ts",
     "test": "node --import tsx --test $(find src -name '*.test.ts' -type f | sort)"
   },
   "dependencies": {
