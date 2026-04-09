@@ -3875,6 +3875,320 @@ test('Tiger primary reuses the prior family for "what about" single-entity follo
   assert.match(result.renderedText ?? '', /DVD Survivors/);
 });
 
+test('Tiger primary reuses a bound request selection for single-entity overview prompts', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  let getEntityOverviewCalls = 0;
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.fail(`expected request binding reuse, but resolve-entities was called with ${JSON.stringify(body)}`);
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-entity-overview');
+    getEntityOverviewCalls += 1;
+    assert.deepEqual(body, {
+      entityKind: 'game',
+      entityUid: 'game:steam:3321460',
+      gamesLimit: 0,
+      gamesSortBy: 'release_date',
+      platformEntityId: '3321460',
+    });
+
+    return jsonResponse({
+      entity: {
+        details: {
+          developers: ['Pearl Abyss'],
+          platforms: ['windows', 'macos'],
+          priceCents: 6999,
+          publishers: ['Pearl Abyss'],
+          releaseDate: '2026-03-19',
+          releaseState: 'released',
+          releaseYear: 2026,
+        },
+        displayName: 'Crimson Desert',
+        entityKind: 'game',
+        metrics: {
+          ccuPeak: 16701,
+          gameCount: null,
+          ownersMidpoint: 10000,
+          reviewScore: 83.4,
+          totalReviews: 16572,
+        },
+        platformEntityId: '3321460',
+      },
+      games: [],
+      sufficientToAnswer: true,
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'show Crimson Desert ccu',
+    sessionContext: {
+      version: 1,
+      entities: [{
+        kind: 'game',
+        name: 'Crimson Desert',
+        id: 'game:steam:3321460',
+        platform: 'steam',
+        platformEntityId: '3321460',
+        sourceTool: 'tigerPrimarySelection',
+      }],
+      constraints: [],
+      candidateSet: null,
+      requestState: null,
+      selectionState: {
+        family: 'request_binding',
+        slots: [{
+          candidates: [{
+            displayName: 'Crimson Desert',
+            entityKind: 'game',
+            entityUid: 'game:steam:3321460',
+            matchQuality: 'exact',
+            ordinal: 1,
+            platform: 'steam',
+            platformEntityId: '3321460',
+            score: 100,
+          }],
+          expectedEntityKind: 'game',
+          label: 'Crimson Desert',
+          query: 'Crimson Desert',
+          requiresClarification: false,
+          selectedEntityUid: 'game:steam:3321460',
+          slotId: 'bound-1',
+        }],
+      },
+      resultSet: null,
+      lastAnswer: {
+        family: 'entity_overview',
+        summary: 'Tiger answered entity_overview.',
+      },
+      updatedAt: '2026-04-09T00:00:00.000Z',
+    },
+    userId: 'user-1',
+  });
+
+  assert.equal(getEntityOverviewCalls, 1);
+  assert.equal(result.info.matchedIntent, 'entity_overview');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.info.attempts[0]?.reason, 'Reused the current entity selection from session context.');
+  assert.equal(result.contractResult?.contractName, 'getEntityOverview');
+  assert.match(result.renderedText ?? '', /Crimson Desert/);
+});
+
+test('Tiger primary reuses a bound request selection for metric history prompts', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.fail(`expected request binding reuse, but resolve-entities was called with ${JSON.stringify(body)}`);
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/trace-metric-history');
+    assert.equal(body.entityUid, 'game:steam:3321460');
+    assert.deepEqual(body.metrics, ['ccu_peak']);
+    assert.equal(typeof body.startDate, 'string');
+    assert.equal(typeof body.endDate, 'string');
+
+    return jsonResponse({
+      endDate: body.endDate,
+      entity: {
+        displayName: 'Crimson Desert',
+        entityKind: 'game',
+        entityUid: 'game:steam:3321460',
+        platform: 'steam',
+        platformEntityId: '3321460',
+      },
+      metrics: ['ccu_peak'],
+      series: [
+        {
+          metric: 'ccu_peak',
+          points: [
+            { date: body.startDate, value: 12000 },
+            { date: body.endDate, value: 16701 },
+          ],
+          summary: {
+            deltaAbs: 4701,
+            deltaPct: 39.18,
+            firstDate: body.startDate,
+            lastDate: body.endDate,
+            latestValue: 16701,
+            pointCount: 2,
+            startValue: 12000,
+          },
+        },
+      ],
+      startDate: body.startDate,
+      sufficientToAnswer: true,
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'show Crimson Desert ccu over the last 30 days',
+    sessionContext: {
+      version: 1,
+      entities: [],
+      constraints: [],
+      candidateSet: null,
+      requestState: null,
+      selectionState: {
+        family: 'request_binding',
+        slots: [{
+          candidates: [{
+            displayName: 'Crimson Desert',
+            entityKind: 'game',
+            entityUid: 'game:steam:3321460',
+            matchQuality: 'exact',
+            ordinal: 1,
+            platform: 'steam',
+            platformEntityId: '3321460',
+            score: 100,
+          }],
+          expectedEntityKind: 'game',
+          label: 'Crimson Desert',
+          query: 'Crimson Desert',
+          requiresClarification: false,
+          selectedEntityUid: 'game:steam:3321460',
+          slotId: 'bound-1',
+        }],
+      },
+      resultSet: null,
+      lastAnswer: {
+        family: 'metric_history',
+        summary: 'Tiger answered metric_history.',
+      },
+      updatedAt: '2026-04-09T00:00:00.000Z',
+    },
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'metric_history');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.info.attempts[0]?.reason, 'Reused the current entity selection from session context.');
+  assert.equal(result.contractResult?.contractName, 'traceMetricHistory');
+  assert.match(result.renderedText ?? '', /Crimson Desert/);
+});
+
+test('Tiger primary does not let a bound request selection override a different named game', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  let resolveEntitiesCalls = 0;
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      resolveEntitiesCalls += 1;
+      assert.equal(body.query, 'Hades');
+      return jsonResponse({
+        ambiguity: {
+          requiresClarification: false,
+        },
+        entities: [
+          {
+            confidence: 0.99,
+            displayName: 'Hades',
+            entityKind: 'game',
+            entityUid: 'game:steam:1145360',
+            matchQuality: 'exact',
+            platform: 'steam',
+            platformEntityId: '1145360',
+          },
+        ],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-entity-overview');
+    assert.deepEqual(body, {
+      entityKind: 'game',
+      entityUid: 'game:steam:1145360',
+      gamesLimit: 0,
+      gamesSortBy: 'release_date',
+      platformEntityId: '1145360',
+    });
+    return jsonResponse({
+      entity: {
+        details: {
+          developers: ['Supergiant Games'],
+          platforms: ['windows', 'macos'],
+          publishers: ['Supergiant Games'],
+          releaseDate: '2020-09-17',
+          releaseState: 'released',
+          releaseYear: 2020,
+        },
+        displayName: 'Hades',
+        entityKind: 'game',
+        metrics: {
+          ccuPeak: 37600,
+          gameCount: null,
+          ownersMidpoint: 9000000,
+          reviewScore: 98,
+          totalReviews: 260000,
+        },
+        platformEntityId: '1145360',
+      },
+      games: [],
+      sufficientToAnswer: true,
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'tell me about Hades',
+    sessionContext: {
+      version: 1,
+      entities: [],
+      constraints: [],
+      candidateSet: null,
+      requestState: null,
+      selectionState: {
+        family: 'request_binding',
+        slots: [{
+          candidates: [{
+            displayName: 'Crimson Desert',
+            entityKind: 'game',
+            entityUid: 'game:steam:3321460',
+            matchQuality: 'exact',
+            ordinal: 1,
+            platform: 'steam',
+            platformEntityId: '3321460',
+            score: 100,
+          }],
+          expectedEntityKind: 'game',
+          label: 'Crimson Desert',
+          query: 'Crimson Desert',
+          requiresClarification: false,
+          selectedEntityUid: 'game:steam:3321460',
+          slotId: 'bound-1',
+        }],
+      },
+      resultSet: null,
+      lastAnswer: {
+        family: 'entity_overview',
+        summary: 'Tiger answered entity_overview.',
+      },
+      updatedAt: '2026-04-09T00:00:00.000Z',
+    },
+    userId: 'user-1',
+  });
+
+  assert.equal(resolveEntitiesCalls, 1);
+  assert.equal(result.info.matchedIntent, 'entity_overview');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'getEntityOverview');
+  assert.match(result.renderedText ?? '', /Hades/);
+});
+
 test('Tiger primary routes recent Steam change prompts through explainChanges', async (t) => {
   setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
   setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');

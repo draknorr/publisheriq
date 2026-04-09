@@ -143,11 +143,11 @@ const RANKING_BASE_PROMPT_PATTERN =
 const METRIC_HISTORY_DISALLOWED_PATTERN =
   /\b(?:compare|versus|vs\.?|publishers?|developers?|studios?|why did)\b/i;
 const ENTITY_QUERY_PATTERNS = [
-  /(?:about|for|on)\s+(.+?)(?:\s+(?:this|last|over|in|during|from)\b|[?!.]|$)/i,
-  /(?:happened to|changed for)\s+(.+?)(?:\s+(?:this|last|over|in|during|from)\b|[?!.]|$)/i,
-  /(?:news|announcements|updates?)\s+(?:for|about|on)\s+(.+?)(?:\s+(?:this|last|over|in|during|from)\b|[?!.]|$)/i,
   /how have\s+(.+?)\s+(?:reviews?|review score|sentiment|owners?|sales|ccu|concurrent players?|price|discount|playtime)\b/i,
   /show\s+(.+?)\s+(?:ccu|owners?|reviews?|review score|sentiment|price|discount|playtime)\b/i,
+  /\b(?:news|announcements|updates?)\b\s+(?:for|about|on)\s+(.+?)(?:\s+(?:this|last|over|in|during|from)\b|[?!.]|$)/i,
+  /\b(?:happened to|changed for)\b\s+(.+?)(?:\s+(?:this|last|over|in|during|from)\b|[?!.]|$)/i,
+  /\b(?:about|for|on)\b\s+(.+?)(?:\s+(?:this|last|over|in|during|from)\b|[?!.]|$)/i,
 ];
 
 interface ResolveEntitiesResponse {
@@ -1038,6 +1038,23 @@ function selectionReferenceMatchesQuery(reference: string | null | undefined, qu
   const referenceCore = normalizeOrganizationCore(reference);
   const queryCore = normalizeOrganizationCore(query);
   return Boolean(referenceCore) && referenceCore === queryCore;
+}
+
+function promptReferencesEntityName(
+  prompt: string | null | undefined,
+  entityName: string | null | undefined
+): boolean {
+  if (!prompt || !entityName) {
+    return false;
+  }
+
+  const promptTokens = tokenizeFollowUpPrompt(prompt);
+  const entityTokens = normalizeForLooseMatch(entityName)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  return includesApproxPhrase(promptTokens, entityTokens);
 }
 
 function matchQualityBaseScore(matchQuality: SessionSelectionMatchQuality | null | undefined): number {
@@ -5802,6 +5819,7 @@ async function resolvePrimaryEntityAttempt(params: {
   expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
   family?: TigerPrimaryMatchedIntent;
   preferredEntityKinds?: SessionSelectionEntityKind[] | null;
+  prompt?: string | null;
   query: string | null;
   resolutionPreference?: EntityResolutionPreference;
   selectionState?: SessionChatSelectionState | null;
@@ -5809,14 +5827,28 @@ async function resolvePrimaryEntityAttempt(params: {
 }): Promise<PrimaryEntityResolutionResult> {
   const selectedCandidate = pickSelectedCandidateFromSelectionState(params.selectionState);
   const selectedSlot = params.selectionState?.slots[0] ?? null;
-  const canReuseSelectedCandidate =
+  const canReuseBoundRequestSelection =
     selectedCandidate
+    && params.selectionState?.family === 'request_binding'
+    && params.selectionState.slots.length === 1
     && (!params.expectedEntityKind || selectedCandidate.entityKind === params.expectedEntityKind)
     && (
       !params.query
-      || selectionReferenceMatchesQuery(selectedSlot?.query, params.query)
-      || selectionReferenceMatchesQuery(selectedSlot?.label, params.query)
-      || selectionReferenceMatchesQuery(selectedCandidate.displayName, params.query)
+      || promptReferencesEntityName(params.prompt, selectedSlot?.query)
+      || promptReferencesEntityName(params.prompt, selectedSlot?.label)
+      || promptReferencesEntityName(params.prompt, selectedCandidate.displayName)
+    );
+  const canReuseSelectedCandidate =
+    canReuseBoundRequestSelection
+    || (
+      selectedCandidate
+      && (!params.expectedEntityKind || selectedCandidate.entityKind === params.expectedEntityKind)
+      && (
+        !params.query
+        || selectionReferenceMatchesQuery(selectedSlot?.query, params.query)
+        || selectionReferenceMatchesQuery(selectedSlot?.label, params.query)
+        || selectionReferenceMatchesQuery(selectedCandidate.displayName, params.query)
+      )
     );
 
   if (canReuseSelectedCandidate) {
@@ -5878,6 +5910,7 @@ async function resolvePrimaryEntityAttempt(params: {
 async function resolveEntityOverviewPrimaryEntityAttempt(params: {
   family?: TigerPrimaryMatchedIntent;
   expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
+  prompt?: string | null;
   query: string | null;
   resolutionPreference?: EntityResolutionPreference;
   selectionState?: SessionChatSelectionState | null;
@@ -5924,6 +5957,7 @@ async function resolveEntityOverviewPrimaryEntityAttempt(params: {
 
 async function resolveGameEntityAttempt(params: {
   family?: TigerPrimaryMatchedIntent;
+  prompt?: string | null;
   query: string | null;
   selectionState?: SessionChatSelectionState | null;
 }): Promise<{
@@ -5935,6 +5969,7 @@ async function resolveGameEntityAttempt(params: {
   const resolved = await resolvePrimaryEntityAttempt({
     expectedEntityKind: 'game',
     family: params.family,
+    prompt: params.prompt,
     query: params.query,
     resolutionPreference: 'game',
     selectionState: params.selectionState,
@@ -6028,6 +6063,7 @@ async function buildRelatedEntitiesRequest(params: {
   const sourceQuery = extractRelatedEntityQuery(params.prompt);
   const resolved = await resolveGameEntityAttempt({
     family: 'relation_lookup',
+    prompt: params.prompt,
     query: sourceQuery,
     selectionState: params.selectionState,
   });
@@ -6650,6 +6686,7 @@ async function runExplainChangesShadow(entityQuery: string | null): Promise<Tige
 
 async function runExplainChangesPrimary(params: {
   entityQuery: string | null;
+  prompt?: string | null;
   selectionState?: SessionChatSelectionState | null;
 }): Promise<{
   attempts: TigerShadowAttempt[];
@@ -6659,6 +6696,7 @@ async function runExplainChangesPrimary(params: {
 }> {
   const { attempt: resolveAttempt, entity, entityUid, selectionState } = await resolveGameEntityAttempt({
     family: 'change_explanation',
+    prompt: params.prompt,
     query: params.entityQuery,
     selectionState: params.selectionState,
   });
@@ -7878,6 +7916,7 @@ async function buildSearchDocumentsRequest(params: {
     if (resolvedTargets.length === 1) {
       const resolved = await resolveGameEntityAttempt({
         family: 'news_search',
+        prompt: params.prompt,
         query: resolvedTargets[0] ?? null,
         selectionState: params.selectionState,
       });
@@ -8430,6 +8469,7 @@ async function runEntityOverviewShadow(prompt: string): Promise<TigerShadowAttem
   const resolutionPreference = inferEntityOverviewResolutionPreference(prompt, expectedEntityKind);
   const { attempt: resolveAttempt, entity } = await resolveEntityOverviewPrimaryEntityAttempt({
     expectedEntityKind,
+    prompt,
     query,
     resolutionPreference,
   });
@@ -8511,6 +8551,7 @@ async function runEntityOverviewPrimary(params: {
   const { attempt: resolveAttempt, entity, selectionState } = await resolveEntityOverviewPrimaryEntityAttempt({
     expectedEntityKind,
     family: 'entity_overview',
+    prompt: params.prompt,
     query,
     resolutionPreference,
     selectionState: params.selectionState,
@@ -9024,6 +9065,7 @@ async function runMetricHistoryPrimary(params: {
 }> {
   const { attempt: resolveAttempt, entityUid, selectionState } = await resolveGameEntityAttempt({
     family: 'metric_history',
+    prompt: params.prompt,
     query: params.entityQuery,
     selectionState: params.selectionState,
   });
@@ -9386,6 +9428,7 @@ export async function runTigerPrimaryEvaluation(params: {
                 ? await runSemanticSearchPrimary(params.prompt)
                 : await runExplainChangesPrimary({
                     entityQuery,
+                    prompt: params.prompt,
                     selectionState: activeSelectionState,
                   });
 

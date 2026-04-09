@@ -140,6 +140,138 @@ test('chat route uses the prompt interpreter before Tiger primary when enabled',
   assertExhausted();
 });
 
+test('chat route forwards selected entities into Tiger primary request-binding state', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'show Crimson Desert ccu' }],
+      selectedEntities: [
+        {
+          displayName: 'Crimson Desert',
+          entityKind: 'game',
+          entityUid: 'game:steam:3321460',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '3321460',
+        },
+      ],
+    },
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        assertRequest: ({ prompt, sessionContext }) => {
+          assert.equal(prompt, 'show Crimson Desert ccu');
+          assert.equal(sessionContext?.selectionState?.family, 'request_binding');
+          assert.equal(sessionContext?.selectionState?.slots[0]?.query, 'Crimson Desert');
+          assert.equal(sessionContext?.selectionState?.slots[0]?.selectedEntityUid, 'game:steam:3321460');
+          assert.equal(sessionContext?.entities[0]?.name, 'Crimson Desert');
+          assert.equal(sessionContext?.entities[0]?.platformEntityId, '3321460');
+        },
+        response: {
+          contractResult: {
+            contractName: 'getEntityOverview',
+            request: {
+              entityKind: 'game',
+              entityUid: 'game:steam:3321460',
+              gamesLimit: 0,
+              gamesSortBy: 'release_date',
+              platformEntityId: '3321460',
+            },
+            response: {
+              entity: {
+                details: {
+                  developers: ['Pearl Abyss'],
+                  platforms: ['windows', 'macos'],
+                  publishers: ['Pearl Abyss'],
+                  releaseDate: '2026-03-19',
+                  releaseState: 'released',
+                  releaseYear: 2026,
+                },
+                displayName: 'Crimson Desert',
+                entityKind: 'game',
+                metrics: {
+                  ccuPeak: 16701,
+                  gameCount: null,
+                  ownersMidpoint: 10000,
+                  reviewScore: 83.4,
+                  totalReviews: 16572,
+                },
+                platformEntityId: '3321460',
+              },
+              games: [],
+              sufficientToAnswer: true,
+            },
+          },
+          info: {
+            attempts: [{
+              contractName: 'resolveEntities',
+              reason: 'Reused the current entity selection from session context.',
+              status: 'success',
+              sufficientToAnswer: true,
+              timingMs: 1,
+            }],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'entity_overview',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'primary_success',
+          },
+          renderedText: 'Crimson Desert overview',
+          sessionState: {
+            lastAnswer: {
+              family: 'entity_overview',
+              summary: 'Tiger answered entity_overview.',
+            },
+            selectionState: {
+              family: 'entity_overview',
+              slots: [{
+                candidates: [{
+                  displayName: 'Crimson Desert',
+                  entityKind: 'game',
+                  entityUid: 'game:steam:3321460',
+                  matchQuality: 'exact',
+                  matchSource: null,
+                  ordinal: 1,
+                  platform: 'steam',
+                  platformEntityId: '3321460',
+                  releaseYear: 2026,
+                  resolutionTier: 'canonical_exact',
+                  score: 100,
+                  totalReviews: 16572,
+                }],
+                continuationToken: null,
+                expectedEntityKind: 'game',
+                label: 'Crimson Desert',
+                query: 'Crimson Desert',
+                requiresClarification: false,
+                selectedEntityUid: 'game:steam:3321460',
+                slotId: 'primary',
+                totalCandidates: 1,
+              }],
+            },
+          },
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const textEvents = getTextEvents(events);
+  const endEvent = getEndEvent(events);
+
+  assert.equal(textEvents[0]?.delta, 'Crimson Desert overview');
+  assert.ok(endEvent);
+  assert.equal(endEvent.sessionContext?.selectionState?.family, 'entity_overview');
+  assertExhausted();
+});
+
 test('chat route strips tool debug and message debug for non-admin users', async () => {
   const request = createJsonNextRequest({
     body: {
