@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NextRequest } from 'next/server';
 
-import { handleChatEntityRequest, type ChatEntityRouteDeps } from './route';
+import { handleChatEntityRequest, type ChatEntityRouteDeps } from './handler';
 import type { ChatEntityPickerResults } from '@/lib/chat/chat-entity-picker';
 
 function makeRequest(body: unknown): NextRequest {
