@@ -46,8 +46,10 @@ test('chat entity route returns 401 when unauthenticated', async () => {
     message: null,
     requiresClarification: false,
   });
+  assert.equal(payload.results.continuationToken, null);
   assert.deepEqual(payload.results.entities, []);
   assert.equal(payload.results.provenance.source, 'tiger');
+  assert.equal(payload.results.totalCandidates, 0);
 });
 
 test('chat entity route proxies resolve-entities and trims the query', async () => {
@@ -81,6 +83,8 @@ test('chat entity route proxies resolve-entities and trims the query', async () 
       source: 'tiger',
       tables: ['core.entities'],
     },
+    continuationToken: 'cursor-2',
+    totalCandidates: 18,
   };
 
   const queryApiCalls: Array<{ path: string; body: unknown }> = [];
@@ -103,7 +107,12 @@ test('chat entity route proxies resolve-entities and trims the query', async () 
   };
 
   const response = await handleChatEntityRequest(
-    makeRequest({ query: '  Counter-Strike 2  ', limit: 3, includeMetrics: true }),
+    makeRequest({
+      query: '  Counter-Strike 2  ',
+      limit: 3,
+      includeMetrics: true,
+      continuationToken: 'cursor-1',
+    }),
     deps
   );
 
@@ -113,6 +122,7 @@ test('chat entity route proxies resolve-entities and trims the query', async () 
       path: '/v1/contracts/resolve-entities',
       body: {
         entityKinds: ['game', 'publisher', 'developer'],
+        continuationToken: 'cursor-1',
         includeMetrics: true,
         limit: 3,
         query: 'Counter-Strike 2',
@@ -130,5 +140,7 @@ test('chat entity route proxies resolve-entities and trims the query', async () 
   assert.equal(payload.success, true);
   assert.equal(payload.query, 'Counter-Strike 2');
   assert.equal(payload.results.entities[0]?.displayName, 'Counter-Strike 2');
+  assert.equal(payload.results.continuationToken, 'cursor-2');
+  assert.equal(payload.results.totalCandidates, 18);
   assert.equal(typeof payload.timing.total_ms, 'number');
 });

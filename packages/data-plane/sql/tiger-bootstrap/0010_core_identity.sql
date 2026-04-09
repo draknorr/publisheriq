@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS core.entities (
     platform_entity_id text NOT NULL,
     canonical_name text NOT NULL,
     normalized_name text NOT NULL,
+    loose_normalized_name text NOT NULL DEFAULT '',
+    compact_normalized_name text NOT NULL DEFAULT '',
     parent_entity_uid uuid,
     source_table text,
     source_pk text,
@@ -30,14 +32,27 @@ COMMENT ON COLUMN core.entities.source_pk IS 'Primary key value in the live sour
 CREATE INDEX IF NOT EXISTS idx_entities_kind_name ON core.entities (entity_kind, canonical_name);
 CREATE INDEX IF NOT EXISTS idx_entities_platform_identity ON core.entities (platform, platform_entity_id);
 CREATE INDEX IF NOT EXISTS idx_entities_normalized_name ON core.entities (normalized_name);
+CREATE INDEX IF NOT EXISTS idx_entities_loose_normalized_name_pattern ON core.entities (
+    entity_kind,
+    platform,
+    loose_normalized_name text_pattern_ops
+);
+CREATE INDEX IF NOT EXISTS idx_entities_compact_normalized_name_pattern ON core.entities (
+    entity_kind,
+    platform,
+    compact_normalized_name text_pattern_ops
+);
 CREATE INDEX IF NOT EXISTS idx_entities_parent ON core.entities (parent_entity_uid) WHERE parent_entity_uid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_entities_canonical_name_trgm ON core.entities USING gin (canonical_name public.gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_entities_canonical_name_lower_trgm ON core.entities USING gin (lower(canonical_name) public.gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_entities_loose_normalized_name_trgm ON core.entities USING gin (loose_normalized_name public.gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS core.entity_aliases (
     entity_uid uuid NOT NULL,
     alias text NOT NULL,
     normalized_alias text NOT NULL,
+    loose_normalized_alias text NOT NULL DEFAULT '',
+    compact_normalized_alias text NOT NULL DEFAULT '',
     alias_type text DEFAULT 'name'::text NOT NULL,
     is_primary boolean DEFAULT false NOT NULL,
     source_table text,
@@ -54,9 +69,16 @@ COMMENT ON TABLE core.entity_aliases IS 'Searchable aliases and alternate names 
 COMMENT ON COLUMN core.entity_aliases.alias_type IS 'Examples: canonical_name, storefront_name, normalized_name, imported_alias.';
 
 CREATE INDEX IF NOT EXISTS idx_entity_aliases_normalized_alias ON core.entity_aliases (normalized_alias);
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_loose_normalized_alias_pattern ON core.entity_aliases (
+    loose_normalized_alias text_pattern_ops
+);
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_compact_normalized_alias_pattern ON core.entity_aliases (
+    compact_normalized_alias text_pattern_ops
+);
 CREATE INDEX IF NOT EXISTS idx_entity_aliases_primary ON core.entity_aliases (entity_uid, is_primary);
 CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias_trgm ON core.entity_aliases USING gin (alias public.gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias_lower_trgm ON core.entity_aliases USING gin (lower(alias) public.gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_loose_normalized_alias_trgm ON core.entity_aliases USING gin (loose_normalized_alias public.gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS core.entity_external_ids (
     entity_uid uuid NOT NULL,

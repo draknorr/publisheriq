@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AreaChartComponent, PlatformIcons, TrendSparkline } from '@/components/data-display';
 import type {
@@ -9,6 +10,7 @@ import type {
   ChatMetricHistorySeries,
   ChatRenderData,
 } from '@/lib/chat/chat-render-data';
+import type { ChatEntityPickerEntity, ChatEntityPickerResponse } from '@/lib/chat/chat-entity-picker';
 import type { ChatRequestOptions } from '@/lib/llm/types';
 
 function formatNumber(value: number | null): string {
@@ -313,6 +315,48 @@ function clarificationTierLabel(candidate: ChatEntityClarificationCandidate): st
   }
 }
 
+function mapPickerEntityToClarificationCandidate(
+  entity: ChatEntityPickerEntity
+): ChatEntityClarificationCandidate {
+  return {
+    displayName: entity.displayName,
+    entityKind: entity.entityKind,
+    entityUid: entity.entityUid,
+    matchQuality: entity.matchQuality,
+    matchSource: entity.matchSource ?? null,
+    ordinal: 0,
+    platform: entity.platform,
+    platformEntityId: entity.platformEntityId,
+    releaseYear: entity.releaseYear ?? null,
+    resolutionTier: entity.resolutionTier ?? null,
+    selectedEntity: {
+      displayName: entity.displayName,
+      entityKind: entity.entityKind,
+      entityUid: entity.entityUid,
+      matchQuality: entity.matchQuality,
+      platform: entity.platform,
+      platformEntityId: entity.platformEntityId,
+    },
+    totalReviews: entity.latestMetrics?.totalReviews ?? null,
+  };
+}
+
+function mergeClarificationCandidates(
+  previous: ChatEntityClarificationCandidate[],
+  incoming: ChatEntityClarificationCandidate[]
+): ChatEntityClarificationCandidate[] {
+  const merged = new Map<string, ChatEntityClarificationCandidate>();
+
+  for (const candidate of [...previous, ...incoming]) {
+    merged.set(candidate.entityUid, candidate);
+  }
+
+  return [...merged.values()].map((candidate, index) => ({
+    ...candidate,
+    ordinal: index + 1,
+  }));
+}
+
 function ClarificationSlotVisual({
   onSuggestionClick,
   originalPrompt,
@@ -322,6 +366,52 @@ function ClarificationSlotVisual({
   originalPrompt: string;
   slot: Extract<ChatRenderData, { kind: 'entity_clarification' }>['slots'][number];
 }): ReactNode {
+  const [candidates, setCandidates] = useState(slot.candidates);
+  const [continuationToken, setContinuationToken] = useState(slot.continuationToken ?? null);
+  const [totalCandidates, setTotalCandidates] = useState(slot.totalCandidates ?? slot.candidates.length);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const handleLoadMore = useCallback(async () => {
+    if (!continuationToken || isLoadingMore) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+
+    try {
+      const response = await fetch('/api/chat/entities', {
+        body: JSON.stringify({
+          continuationToken,
+          entityKinds: slot.expectedEntityKind ? [slot.expectedEntityKind] : undefined,
+          includeMetrics: true,
+          limit: 5,
+          query: slot.query,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const payload = (await response.json()) as ChatEntityPickerResponse;
+      const appendedCandidates = payload.results.entities.map((entity) =>
+        mapPickerEntityToClarificationCandidate(entity)
+      );
+
+      setCandidates((previous) => mergeClarificationCandidates(previous, appendedCandidates));
+      setContinuationToken(payload.results.continuationToken ?? null);
+      setTotalCandidates(payload.results.totalCandidates ?? totalCandidates);
+    } catch {
+      // Ignore pagination failures and keep the current candidate set visible.
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [continuationToken, isLoadingMore, slot.expectedEntityKind, slot.query, totalCandidates]);
+
   return (
     <section className="space-y-3 rounded-2xl border border-border-subtle/80 bg-surface-raised/60 p-4">
       <div className="space-y-1">
@@ -329,14 +419,14 @@ function ClarificationSlotVisual({
           {slot.label}
         </p>
         <p className="text-body-sm text-text-secondary">
-          {slot.totalCandidates && slot.totalCandidates > slot.candidates.length
-            ? `Showing ${slot.candidates.length} of ${slot.totalCandidates} matches for ${slot.query}`
+          {totalCandidates > candidates.length
+            ? `Showing ${candidates.length} of ${totalCandidates} matches for ${slot.query}`
             : `Choose the correct match for ${slot.query}`}
         </p>
       </div>
 
       <div className="space-y-2">
-        {slot.candidates.map((candidate) => (
+        {candidates.map((candidate) => (
           <button
             key={`${slot.slotId}-${candidate.entityUid}`}
             type="button"
@@ -375,6 +465,28 @@ function ClarificationSlotVisual({
           </button>
         ))}
       </div>
+
+      {(continuationToken || totalCandidates > candidates.length) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-3">
+          <p className="text-caption text-text-muted">
+            {totalCandidates > 0
+              ? `Showing ${candidates.length} of ${totalCandidates} matches`
+              : 'More matches are available'}
+          </p>
+          {continuationToken && (
+            <button
+              type="button"
+              onClick={() => void handleLoadMore()}
+              className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-base px-3 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:border-border-muted hover:text-text-primary"
+            >
+              {isLoadingMore && (
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-accent-primary border-t-transparent animate-spin" />
+              )}
+              Show more matches
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -398,7 +510,7 @@ function EntityClarificationVisual({
         </p>
         <p className="text-body-sm text-text-secondary">
           {onSuggestionClick
-            ? 'Chat could not safely choose a single title. Pick the exact game below.'
+            ? 'Chat could not safely choose a single match. Pick the exact option below.'
             : 'Chat could not safely choose a single title. Reply with the numbered option below.'}
         </p>
       </div>

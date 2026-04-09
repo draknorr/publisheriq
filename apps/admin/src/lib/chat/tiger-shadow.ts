@@ -4797,6 +4797,12 @@ function renderSelectionClarification(selectionState: SessionChatSelectionState)
   return renderTigerAnswerBrief(brief);
 }
 
+function selectionStateRequiresClarification(
+  selectionState: SessionChatSelectionState | null | undefined
+): boolean {
+  return selectionState?.slots?.some((slot) => slot.requiresClarification) ?? false;
+}
+
 function buildTigerSelectionLastAnswer(params: {
   family: TigerPrimaryMatchedIntent;
   clarificationNeeded?: boolean;
@@ -5694,7 +5700,7 @@ async function resolveSelectionSlotAttempt(params: {
   });
   const resolverRequestedClarification = response.data?.ambiguity?.requiresClarification ?? false;
   const requiresClarification = params.strictResolver
-    ? resolverRequestedClarification
+    ? (resolverRequestedClarification || localRequiresClarification)
     : (
       localRequiresClarification
       || (
@@ -5741,7 +5747,7 @@ function pickSelectedEntityFromSlot(params: {
   entitiesByUid: Map<string, ResolvedCompareEntity>;
   slot: SessionChatSelectionSlot | RankedSelectionSlot;
 }): ResolvedCompareEntity | null {
-  if (!params.slot.selectedEntityUid) {
+  if (params.slot.requiresClarification || !params.slot.selectedEntityUid) {
     return null;
   }
 
@@ -5818,12 +5824,14 @@ async function resolvePrimaryEntityAttempt(params: {
     label: params.query ?? 'entity',
     query: params.query,
     resolutionPreference: params.resolutionPreference ?? null,
-    strictResolver: params.expectedEntityKind === 'game' && params.resolutionPreference === 'game',
+    strictResolver: params.expectedEntityKind != null,
     slotId: 'primary',
     timeoutMs,
   });
   const slotWithBestCandidate =
-    !resolved.slot.selectedEntityUid && resolved.slot.candidates[0]?.entityUid
+    !resolved.slot.requiresClarification
+    && !resolved.slot.selectedEntityUid
+    && resolved.slot.candidates[0]?.entityUid
       ? {
           ...resolved.slot,
           selectedEntityUid: resolved.slot.candidates[0].entityUid,
@@ -6595,12 +6603,14 @@ async function runExplainChangesPrimary(params: {
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
   if (!entityUid) {
-    attempts.push(
-      buildSkippedAttempt(
-        'explainChanges',
-        'The change explanation path was skipped because no game entity could be resolved.'
-      )
-    );
+    if (!selectionStateRequiresClarification(selectionState)) {
+      attempts.push(
+        buildSkippedAttempt(
+          'explainChanges',
+          'The change explanation path was skipped because no game entity could be resolved.'
+        )
+      );
+    }
     return {
       attempts,
       clarificationText: selectionState ? renderSelectionClarification(selectionState) : null,
@@ -7930,12 +7940,14 @@ async function runSearchDocumentsPrimary(params: {
   const attempts = [...builtRequest.attempts];
 
   if (!builtRequest.request) {
-    attempts.push(
-      buildSkippedAttempt(
-        'searchDocuments',
-        'The system could not build a supported news request from the prompt.'
-      )
-    );
+    if (!selectionStateRequiresClarification(builtRequest.selectionState)) {
+      attempts.push(
+        buildSkippedAttempt(
+          'searchDocuments',
+          'The system could not build a supported news request from the prompt.'
+        )
+      );
+    }
     return {
       attempts,
       clarificationText: builtRequest.selectionState ? renderSelectionClarification(builtRequest.selectionState) : null,

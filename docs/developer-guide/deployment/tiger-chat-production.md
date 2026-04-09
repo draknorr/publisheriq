@@ -25,16 +25,22 @@ Apply the Tiger bootstrap SQL in this order:
 
 1. `packages/data-plane/sql/tiger-bootstrap/0001_extensions_and_schemas.sql`
 2. `packages/data-plane/sql/tiger-bootstrap/0010_core_identity.sql`
-3. `packages/data-plane/sql/tiger-bootstrap/0020_legacy_compatibility.sql`
-4. `packages/data-plane/sql/tiger-bootstrap/0021_legacy_taxonomy.sql`
-5. `packages/data-plane/sql/tiger-bootstrap/0021_legacy_relationship_context.sql`
-6. `packages/data-plane/sql/tiger-bootstrap/0022_legacy_feature_and_user_context.sql`
-7. `packages/data-plane/sql/tiger-bootstrap/0040_metrics_daily_metrics.sql`
-8. `packages/data-plane/sql/tiger-bootstrap/0050_events_and_news.sql`
+3. `packages/data-plane/sql/tiger-bootstrap/0015_core_identity_loose_lookup.sql`
+4. `packages/data-plane/sql/tiger-bootstrap/0020_legacy_compatibility.sql`
+5. `packages/data-plane/sql/tiger-bootstrap/0021_legacy_taxonomy.sql`
+6. `packages/data-plane/sql/tiger-bootstrap/0021_legacy_relationship_context.sql`
+7. `packages/data-plane/sql/tiger-bootstrap/0022_legacy_feature_and_user_context.sql`
+8. `packages/data-plane/sql/tiger-bootstrap/0040_metrics_daily_metrics.sql`
+9. `packages/data-plane/sql/tiger-bootstrap/0050_events_and_news.sql`
 
 Then seed core identity:
 
-9. `packages/data-plane/sql/tiger-bootstrap/0030_seed_core_identity_from_legacy.sql`
+10. `packages/data-plane/sql/tiger-bootstrap/0030_seed_core_identity_from_legacy.sql`
+
+For an already-bootstrapped Tiger target, apply only the incremental identity delta:
+
+1. `packages/data-plane/sql/tiger-bootstrap/0015_core_identity_loose_lookup.sql`
+2. `packages/data-plane/sql/tiger-bootstrap/0030_seed_core_identity_from_legacy.sql`
 
 Use `pnpm tiger:target-baseline` before and after the bootstrap window so you
 have a recorded snapshot of the target service.

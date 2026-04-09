@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import type { Message, ChatRequestOptions, ChatToolCall, ChatTiming } from '@/lib/llm/types';
+import type {
+  ChatRequestOptions,
+  ChatSelectedEntity,
+  ChatTiming,
+  ChatToolCall,
+  Message,
+} from '@/lib/llm/types';
 import type { SessionChatContext } from '@/lib/chat/chat-context-types';
 import type { QuerySuggestion } from '@/lib/chat/query-templates';
 import type { StreamEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
@@ -12,6 +18,7 @@ export interface DisplayMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  selectedEntities?: ChatSelectedEntity[];
   toolCalls?: ChatToolCall[];
   timing?: ChatTiming;
   debug?: StreamDebugInfo;
@@ -50,6 +57,7 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
       id: crypto.randomUUID(),
       role: 'user',
       content: content.trim(),
+      selectedEntities: requestOptions?.selectedEntities,
       timestamp: new Date(),
     };
 

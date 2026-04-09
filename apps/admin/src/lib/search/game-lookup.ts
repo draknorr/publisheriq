@@ -19,32 +19,87 @@ export interface LookupGamesArgs {
   limit?: number;
 }
 
+export type LookupGameMatchQuality = 'exact' | 'prefix' | 'substring' | 'fuzzy';
+export type LookupGameMatchSource =
+  | 'platform_entity_id'
+  | 'canonical_name'
+  | 'normalized_name'
+  | 'alias'
+  | 'normalized_alias'
+  | 'legacy_name';
+export type LookupGameResolutionTier =
+  | 'platform_id_exact'
+  | 'canonical_exact'
+  | 'alias_exact'
+  | 'normalized_exact'
+  | 'canonical_prefix'
+  | 'alias_prefix'
+  | 'legacy_prefix'
+  | 'canonical_substring'
+  | 'alias_substring'
+  | 'legacy_substring'
+  | 'legacy_exact'
+  | 'fuzzy';
+
+export interface LookupGameCandidate {
+  appid: number;
+  name: string;
+  releaseYear: number | null;
+  similarityScore?: number;
+  isExactMatch?: boolean;
+  matchQuality?: LookupGameMatchQuality | null;
+  matchSource?: LookupGameMatchSource | null;
+  resolutionTier?: LookupGameResolutionTier | null;
+}
+
 /**
  * Result from lookup_games
  */
 export interface LookupGamesResult {
   success: boolean;
   query: string;
-  results: Array<{
+  results: LookupGameCandidate[];
+  candidates?: LookupGameCandidate[];
+  canonicalResult?: {
     appid: number;
+    confidence: 'high' | 'medium' | 'low';
     name: string;
-    releaseYear: number | null;
-    similarityScore?: number;
-    isExactMatch?: boolean;
-  }>;
+  };
+  ambiguity?: {
+    candidateNames: string[];
+    continuationToken?: string | null;
+    message: string | null;
+    requiresClarification: boolean;
+    totalCandidates?: number | null;
+  };
+  resolutionConfidence?: 'high' | 'medium' | 'low';
+  matchSource?: LookupGameMatchSource | null;
+  resolutionTier?: LookupGameResolutionTier | null;
+  needsDisambiguation?: boolean;
   error?: string;
   unavailable?: boolean;
 }
 
 interface ResolveEntitiesResponse {
+  ambiguity?: {
+    candidateNames?: string[];
+    continuationToken?: string | null;
+    message: string | null;
+    requiresClarification: boolean;
+    totalCandidates?: number | null;
+  };
+  continuationToken?: string | null;
   entities?: Array<{
     confidence: number;
     displayName: string;
     entityKind: 'developer' | 'game' | 'publisher';
     matchQuality: 'exact' | 'prefix' | 'substring' | 'fuzzy';
+    matchSource?: LookupGameMatchSource | null;
     platformEntityId: string;
     releaseYear?: number | null;
+    resolutionTier?: LookupGameResolutionTier | null;
   }>;
+  totalCandidates?: number;
 }
 
 const TIGER_GAME_LOOKUP_PROVENANCE: ChatExecutionProvenanceOverride = {
@@ -81,6 +136,54 @@ function parseAppId(value: string): number | null {
   return Number.isFinite(appid) ? appid : null;
 }
 
+function inferResolutionConfidence(score: number | undefined): 'high' | 'medium' | 'low' {
+  if (typeof score !== 'number' || !Number.isFinite(score)) {
+    return 'low';
+  }
+
+  if (score >= 0.9) {
+    return 'high';
+  }
+
+  if (score >= 0.75) {
+    return 'medium';
+  }
+
+  return 'low';
+}
+
+function buildAmbiguousGameError(query: string, candidates: LookupGameCandidate[]): string {
+  const labels = candidates
+    .slice(0, 5)
+    .map((candidate) => candidate.releaseYear ? `${candidate.name} (${candidate.releaseYear})` : candidate.name);
+
+  if (labels.length === 0) {
+    return `The game name "${query}" is ambiguous and needs clarification.`;
+  }
+
+  return `The game name "${query}" matched multiple Steam titles. Ask the user to clarify which one they mean: ${labels.join(', ')}.`;
+}
+
+function mapTigerGameCandidate(
+  entity: NonNullable<ResolveEntitiesResponse['entities']>[number]
+): LookupGameCandidate | null {
+  const appid = parseAppId(entity.platformEntityId);
+  if (appid == null) {
+    return null;
+  }
+
+  return {
+    appid,
+    isExactMatch: entity.matchQuality === 'exact',
+    matchQuality: entity.matchQuality,
+    matchSource: entity.matchSource ?? null,
+    name: entity.displayName,
+    releaseYear: entity.releaseYear ?? null,
+    resolutionTier: entity.resolutionTier ?? null,
+    similarityScore: entity.confidence,
+  };
+}
+
 /**
  * Search for matching game names using direct database query
  */
@@ -104,7 +207,9 @@ export async function lookupGames(args: LookupGamesArgs): Promise<LookupGamesRes
       '/v1/contracts/resolve-entities',
       {
         entityKinds: ['game'],
+        includeMetrics: false,
         limit: maxResults,
+        resolutionMode: 'chat_strict',
         query: trimmedQuery,
       }
     );
@@ -112,26 +217,47 @@ export async function lookupGames(args: LookupGamesArgs): Promise<LookupGamesRes
     if (tigerResponse.ok && tigerResponse.data) {
       const tigerResults = (tigerResponse.data.entities ?? [])
         .filter((entity) => entity.entityKind === 'game')
-        .map((entity): LookupGamesResult['results'][number] | null => {
-          const appid = parseAppId(entity.platformEntityId);
-          if (appid == null) {
-            return null;
-          }
+        .map((entity) => mapTigerGameCandidate(entity))
+        .filter((entity): entity is LookupGameCandidate => entity != null);
 
-          return {
-            appid,
-            isExactMatch: entity.matchQuality === 'exact',
-            name: entity.displayName,
-            releaseYear: entity.releaseYear ?? null,
-            similarityScore: entity.confidence,
-          };
-        })
-        .filter((entity): entity is LookupGamesResult['results'][number] => entity != null);
+      const topCandidate = tigerResults[0] ?? null;
+      const resolutionConfidence = inferResolutionConfidence(topCandidate?.similarityScore);
+      const tigerAmbiguity = tigerResponse.data.ambiguity ?? null;
+      const needsDisambiguation =
+        tigerAmbiguity?.requiresClarification === true
+        || (tigerResults.length > 1 && resolutionConfidence === 'low');
 
       return attachToolExecutionProvenance(
         {
+          ambiguity: tigerAmbiguity
+            ? {
+                candidateNames: tigerAmbiguity.candidateNames ?? tigerResults.map((candidate) => candidate.name),
+                continuationToken: tigerAmbiguity.continuationToken ?? tigerResponse.data.continuationToken ?? null,
+                message: tigerAmbiguity.message,
+                requiresClarification: tigerAmbiguity.requiresClarification,
+                totalCandidates: tigerAmbiguity.totalCandidates ?? tigerResponse.data.totalCandidates ?? tigerResults.length,
+              }
+            : {
+                candidateNames: needsDisambiguation ? tigerResults.map((candidate) => candidate.name) : [],
+                continuationToken: tigerResponse.data.continuationToken ?? null,
+                message: needsDisambiguation ? buildAmbiguousGameError(query, tigerResults) : null,
+                requiresClarification: needsDisambiguation,
+                totalCandidates: tigerResponse.data.totalCandidates ?? tigerResults.length,
+              },
+          canonicalResult: topCandidate
+            ? {
+                appid: topCandidate.appid,
+                confidence: resolutionConfidence,
+                name: topCandidate.name,
+              }
+            : undefined,
+          candidates: tigerResults,
+          matchSource: topCandidate?.matchSource ?? null,
+          needsDisambiguation,
           success: true,
           query,
+          resolutionConfidence,
+          resolutionTier: topCandidate?.resolutionTier ?? null,
           results: tigerResults,
         },
         TIGER_GAME_LOOKUP_PROVENANCE

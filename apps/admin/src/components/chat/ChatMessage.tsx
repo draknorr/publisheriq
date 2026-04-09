@@ -4,7 +4,12 @@ import { useState } from 'react';
 import { Bot, ChevronDown, ChevronRight, Clock, Database, ShieldCheck, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/Card';
-import type { ChatRequestOptions, ChatToolCall, ChatTiming } from '@/lib/llm/types';
+import type {
+  ChatRequestOptions,
+  ChatSelectedEntity,
+  ChatToolCall,
+  ChatTiming,
+} from '@/lib/llm/types';
 import type { StreamDebugInfo } from '@/lib/llm/streaming-types';
 import type { TigerPrimaryInfo, TigerShadowInfo } from '@/lib/chat/tiger-shadow-types';
 import type { ChatRenderData } from '@/lib/chat/chat-render-data';
@@ -21,6 +26,7 @@ interface DisplayMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  selectedEntities?: ChatSelectedEntity[];
   toolCalls?: ChatToolCall[];
   timing?: ChatTiming;
   debug?: StreamDebugInfo;
@@ -260,6 +266,15 @@ function ToolPanel({
     <div className="space-y-2 rounded-xl border border-border-subtle/70 bg-surface-raised/70 p-3">
       {children}
     </div>
+  );
+}
+
+function EntityBindingPill({ entity }: { entity: ChatSelectedEntity }): ReactNode {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-elevated px-2.5 py-1 text-caption font-medium text-text-secondary">
+      <span className="max-w-[18rem] truncate text-text-primary">{entity.displayName}</span>
+      <span className="uppercase tracking-[0.14em] text-text-muted">{entity.entityKind}</span>
+    </span>
   );
 }
 
@@ -720,6 +735,7 @@ export function ChatMessage({
     !isUser && message.renderData?.kind === 'momentum_current_players'
       ? removeMarkdownTables(message.content)
       : message.content;
+  const selectedEntities = isUser ? message.selectedEntities ?? [] : [];
 
   return (
     <div
@@ -749,11 +765,23 @@ export function ChatMessage({
           )}
 
           {isUser ? (
-            <div
-              data-testid="chat-message-user-content"
-              className="text-body whitespace-pre-wrap text-text-primary"
-            >
-              {message.content}
+            <div className="space-y-2">
+              {selectedEntities.length > 0 && (
+                <div
+                  data-testid="chat-message-user-selected-entities"
+                  className="flex flex-wrap gap-2"
+                >
+                  {selectedEntities.map((entity) => (
+                    <EntityBindingPill key={`${entity.entityUid}-${entity.platformEntityId ?? 'na'}`} entity={entity} />
+                  ))}
+                </div>
+              )}
+              <div
+                data-testid="chat-message-user-content"
+                className="text-body whitespace-pre-wrap text-text-primary"
+              >
+                {message.content}
+              </div>
             </div>
           ) : (
             <div

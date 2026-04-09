@@ -76,10 +76,13 @@ test('lookupGames uses Tiger resolve-entities when query-api returns a match', a
           displayName: 'Hades',
           entityKind: 'game',
           matchQuality: 'exact',
+          matchSource: 'canonical_name',
           platformEntityId: '1145360',
           releaseYear: 2020,
+          resolutionTier: 'canonical_exact',
         },
       ],
+      totalCandidates: 1,
     });
   });
 
@@ -92,12 +95,84 @@ test('lookupGames uses Tiger resolve-entities when query-api returns a match', a
       appid: 1145360,
       isExactMatch: true,
       name: 'Hades',
+      matchQuality: 'exact',
+      matchSource: 'canonical_name',
       releaseYear: 2020,
       similarityScore: 0.99,
+      resolutionTier: 'canonical_exact',
     },
   ]);
+  assert.deepEqual(result.ambiguity, {
+    candidateNames: ['Hades'],
+    continuationToken: null,
+    message: null,
+    requiresClarification: false,
+    totalCandidates: 1,
+  });
+  assert.equal(result.needsDisambiguation, false);
+  assert.equal(result.resolutionConfidence, 'high');
+  assert.equal(result.matchSource, 'canonical_name');
+  assert.equal(result.resolutionTier, 'canonical_exact');
   assert.ok(provenance);
   assert.ok(provenance.dataSources.includes('query_api:resolveEntities'));
+});
+
+test('lookupGames preserves Tiger ambiguity metadata for strict game resolution', async (t) => {
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/resolve-entities');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+    assert.equal(body.resolutionMode, 'chat_strict');
+
+    return jsonResponse({
+      ambiguity: {
+        candidateNames: ['Counter-Strike 2', 'Counter Strike 2'],
+        message: 'Multiple strong matches found. A follow-up disambiguation question may improve answer quality.',
+        requiresClarification: true,
+        totalCandidates: 2,
+      },
+      entities: [
+        {
+          confidence: 0.98,
+          displayName: 'Counter-Strike 2',
+          entityKind: 'game',
+          matchQuality: 'exact',
+          matchSource: 'canonical_name',
+          platformEntityId: '730',
+          releaseYear: 2023,
+          resolutionTier: 'canonical_exact',
+        },
+        {
+          confidence: 0.96,
+          displayName: 'Counter Strike 2',
+          entityKind: 'game',
+          matchQuality: 'prefix',
+          matchSource: 'normalized_name',
+          platformEntityId: '730',
+          releaseYear: 2023,
+          resolutionTier: 'normalized_exact',
+        },
+      ],
+      totalCandidates: 2,
+    });
+    throw new Error(`Unexpected query-api path: ${url.pathname}`);
+  });
+
+  const result = await lookupGames({ query: 'Counter Strike 2' });
+
+  assert.equal(result.success, true);
+  assert.equal(result.needsDisambiguation, true);
+  assert.deepEqual(result.ambiguity, {
+    candidateNames: ['Counter-Strike 2', 'Counter Strike 2'],
+    continuationToken: null,
+    message: 'Multiple strong matches found. A follow-up disambiguation question may improve answer quality.',
+    requiresClarification: true,
+    totalCandidates: 2,
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.results[0]?.name, 'Counter-Strike 2');
+  assert.equal(result.canonicalResult?.name, 'Counter-Strike 2');
 });
 
 test('lookupPublishers uses Tiger resolve-entities when query-api returns a canonical company', async (t) => {
@@ -387,10 +462,26 @@ test('lookupTags uses Tiger search-catalog facet lookup for taxonomy prompts', a
 test('getGameChangeTimeline uses Tiger explain-changes when the title resolves cleanly', async (t) => {
   setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
   let callCount = 0;
-  setScopedFetch(t, async (url) => {
+  setScopedFetch(t, async (url, init) => {
     callCount += 1;
 
     if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.ok(init?.body);
+      const body = JSON.parse(String(init.body)) as {
+        entityKinds?: string[];
+        includeMetrics?: boolean;
+        limit?: number;
+        query?: string;
+        resolutionMode?: string;
+      };
+      assert.deepEqual(body, {
+        entityKinds: ['game'],
+        includeMetrics: false,
+        limit: 5,
+        query: 'Hades',
+        resolutionMode: 'chat_strict',
+      });
+
       return jsonResponse({
         ambiguity: {
           message: null,
@@ -398,11 +489,15 @@ test('getGameChangeTimeline uses Tiger explain-changes when the title resolves c
         },
         entities: [
           {
+            confidence: 0.99,
             displayName: 'Hades',
             entityKind: 'game',
-            entityUid: 'steam:game:1145360',
+            platform: 'steam',
             matchQuality: 'exact',
+            matchSource: 'canonical_name',
             platformEntityId: '1145360',
+            releaseYear: 2020,
+            resolutionTier: 'canonical_exact',
           },
         ],
       });
@@ -802,8 +897,11 @@ test('Tiger primary keeps entity-scoped developer-diary prompts filtered to the 
             entityKind: 'game',
             entityUid: 'game:steam:1145350',
             matchQuality: 'exact',
+            matchSource: 'canonical_name',
             platform: 'steam',
             platformEntityId: '1145350',
+            releaseYear: 2025,
+            resolutionTier: 'canonical_exact',
           },
         ],
       });
@@ -885,8 +983,11 @@ test('Tiger primary does not broaden entity-scoped topic news searches to unrela
             entityKind: 'game',
             entityUid: 'game:steam:1145350',
             matchQuality: 'exact',
+            matchSource: 'canonical_name',
             platform: 'steam',
             platformEntityId: '1145350',
+            releaseYear: 2025,
+            resolutionTier: 'canonical_exact',
           },
         ],
       });
@@ -967,7 +1068,7 @@ test('Tiger primary routes "what do you know about" prompts into entity-overview
     if (url.pathname === '/v1/contracts/resolve-entities') {
       assert.ok(init?.body);
       const body = JSON.parse(String(init.body));
-      assert.equal(body.query, 'Hades II');
+      assert.equal(String(body.query).toLowerCase(), 'hades ii');
 
       return jsonResponse({
         ambiguity: {
@@ -980,8 +1081,11 @@ test('Tiger primary routes "what do you know about" prompts into entity-overview
             entityKind: 'game',
             entityUid: 'game:steam:1145350',
             matchQuality: 'exact',
+            matchSource: 'canonical_name',
             platform: 'steam',
             platformEntityId: '1145350',
+            releaseYear: 2025,
+            resolutionTier: 'canonical_exact',
           },
         ],
       });
@@ -1250,6 +1354,69 @@ test('Tiger primary routes "what CCU is <title>" prompts into entity-overview ha
   assert.equal(result.info.attempts[1]?.contractName, 'getEntityOverview');
   assert.match(result.renderedText ?? '', /Counter-Strike 2/);
   assert.doesNotMatch(result.renderedText ?? '', /stable momentum screen/i);
+});
+
+test('Tiger primary stops strict game resolution before downstream execution when clarification is still required', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.equal(url.pathname, '/v1/contracts/resolve-entities');
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body)) as { query?: string };
+    assert.equal(body.query, 'Counter Strike 2');
+
+    return jsonResponse({
+      ambiguity: {
+        candidateNames: ['Counter-Strike 2', 'Counter Strike 2'],
+        message: 'Multiple strong matches found. A follow-up disambiguation question may improve answer quality.',
+        requiresClarification: true,
+        totalCandidates: 2,
+      },
+      entities: [
+        {
+          confidence: 0.97,
+          displayName: 'Counter-Strike 2',
+          entityKind: 'game',
+          entityUid: 'game:steam:730',
+          matchQuality: 'exact',
+          matchSource: 'canonical_name',
+          platform: 'steam',
+          platformEntityId: '730',
+          resolutionTier: 'canonical_exact',
+        },
+        {
+          confidence: 0.96,
+          displayName: 'Counter Strike 2',
+          entityKind: 'game',
+          entityUid: 'game:steam:731',
+          matchQuality: 'exact',
+          matchSource: 'canonical_name',
+          platform: 'steam',
+          platformEntityId: '731',
+          releaseYear: 2023,
+          resolutionTier: 'canonical_exact',
+        },
+      ],
+    });
+    throw new Error(`Unexpected query-api path: ${url.pathname}`);
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'what CCU is Counter Strike 2?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'entity_overview');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.info.attempts[0]?.contractName, 'resolveEntities');
+  assert.equal(result.info.attempts[1]?.contractName, 'getEntityOverview');
+  assert.equal(result.info.attempts[1]?.status, 'skipped');
+  assert.match(result.renderedText ?? '', /multiple likely matches|choose the exact one below/i);
+  assert.equal(result.sessionState?.selectionState?.slots[0]?.requiresClarification, true);
+  assert.equal(result.sessionState?.selectionState?.slots[0]?.selectedEntityUid, null);
 });
 
 test('Tiger primary routes overview prompts through get-entity-overview', async (t) => {
@@ -3613,6 +3780,29 @@ test('Tiger primary routes recent Steam change prompts through explainChanges', 
     assert.ok(init?.body);
     const body = JSON.parse(String(init.body));
 
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(body.query, 'Hades II');
+      return jsonResponse({
+        ambiguity: {
+          requiresClarification: false,
+        },
+        entities: [
+          {
+            confidence: 0.99,
+            displayName: 'Hades II',
+            entityKind: 'game',
+            entityUid: 'game:steam:1145350',
+            matchQuality: 'exact',
+            matchSource: 'canonical_name',
+            platform: 'steam',
+            platformEntityId: '1145350',
+            releaseYear: 2025,
+            resolutionTier: 'canonical_exact',
+          },
+        ],
+      });
+    }
+
     if (url.pathname === '/v1/contracts/explain-changes') {
       assert.deepEqual(body, {
         entityUid: 'game:steam:1145350',
@@ -3897,51 +4087,7 @@ test('Tiger primary prefers exact title matches for news prompts before clarifyi
       });
     }
 
-    assert.equal(url.pathname, '/v1/contracts/search-documents');
-    assert.deepEqual(body.entityUids, ['game:steam:101']);
-    assert.equal(body.mode, 'latest_item');
-    assert.equal(body.query, undefined);
-
-    return jsonResponse({
-      entity: {
-        displayName: 'Primeval',
-        entityKind: 'game',
-        entityUid: 'game:steam:101',
-        platform: 'steam',
-        platformEntityId: '101',
-      },
-      interpretedFilters: {
-        endTime: '2026-04-04T00:00:00.000Z',
-        entityUids: ['game:steam:101'],
-        feedScopes: [],
-        mode: 'latest_item',
-        query: '',
-        startTime: '2026-01-04T00:00:00.000Z',
-      },
-      items: [
-        {
-          appName: 'Primeval',
-          appid: 101,
-          bodyPreview: 'The team announced a closed playtest and refreshed the store page.',
-          entityUid: 'game:steam:101',
-          excerpt: 'Closed playtest announced alongside a store-page refresh.',
-          feedLabel: 'Steam News',
-          feedName: 'Steam',
-          feedScope: 'steam_news',
-          firstSeenAt: '2026-04-02T12:00:00.000Z',
-          gid: 'news-1',
-          matchReason: 'matched_exact_title',
-          publishedAt: '2026-04-02T12:00:00.000Z',
-          rank: 1,
-          rankingReason: 'Exact title match with recent entity news.',
-          sortTime: '2026-04-02T12:00:00.000Z',
-          title: 'Primeval announces closed playtest',
-          url: 'https://example.com/primeval-news',
-        },
-      ],
-      latestItem: null,
-      sufficientToAnswer: true,
-    });
+    throw new Error(`Unexpected query-api path: ${url.pathname}`);
   });
 
   const result = await runTigerPrimaryEvaluation({
@@ -3953,11 +4099,10 @@ test('Tiger primary prefers exact title matches for news prompts before clarifyi
 
   assert.equal(result.info.matchedIntent, 'news_search');
   assert.equal(result.info.route, 'primary_success');
-  assert.equal(result.info.attempts.at(-1)?.contractName, 'searchDocuments');
-  assert.match(result.renderedText ?? '', /Primeval announces closed playtest/);
-  assert.doesNotMatch(result.renderedText ?? '', /Which one did you mean/i);
-  assert.doesNotMatch(result.renderedText ?? '', /Another likely match is Primeval Genesis \(game\)\./);
-  assert.ok(result.followUpSuggestions?.some((suggestion) => suggestion.label.includes('Switch to Primeval Genesis')));
+  assert.equal(result.info.attempts[0]?.contractName, 'resolveEntities');
+  assert.equal(result.info.attempts.length, 1);
+  assert.match(result.renderedText ?? '', /multiple likely matches|choose the exact one below/i);
+  assert.ok(result.followUpSuggestions?.some((suggestion) => suggestion.label.includes('Primeval Genesis')));
 });
 
 test('Tiger primary retries sparse entity-scoped news lookups with broader topic search', async (t) => {
@@ -4155,54 +4300,7 @@ test('Tiger primary prefers exact title matches for change prompts before clarif
       });
     }
 
-    assert.equal(url.pathname, '/v1/contracts/explain-changes');
-    assert.deepEqual(body, {
-      entityUid: 'game:steam:101',
-      includeNews: true,
-      limit: 10,
-    });
-
-    return jsonResponse({
-      comparisonWindows: null,
-      entity: {
-        displayName: 'Primeval',
-        entityKind: 'game',
-        entityUid: 'game:steam:101',
-        platform: 'steam',
-        platformEntityId: '101',
-      },
-      mode: 'timeline',
-      moments: [
-        {
-          changeTypes: ['build', 'storefront'],
-          eventCount: 2,
-          events: [],
-          linkedNews: [],
-          reasons: ['A coordinated store-page and build update landed together.'],
-          sources: ['steam'],
-          windowEnd: '2026-04-02T00:00:00.000Z',
-          windowStart: '2026-04-01T00:00:00.000Z',
-        },
-      ],
-      selectedMoment: null,
-      sufficientToAnswer: true,
-      summary: {
-        countsByChangeType: {
-          build: 1,
-          storefront: 1,
-        },
-        countsBySource: {
-          steam: 2,
-        },
-        eventCount: 2,
-        momentCount: 1,
-        newsCount: 0,
-      },
-      timeWindow: {
-        endTime: '2026-04-04T00:00:00.000Z',
-        startTime: '2026-03-28T00:00:00.000Z',
-      },
-    });
+    throw new Error(`Unexpected query-api path: ${url.pathname}`);
   });
 
   const result = await runTigerPrimaryEvaluation({
@@ -4214,11 +4312,10 @@ test('Tiger primary prefers exact title matches for change prompts before clarif
 
   assert.equal(result.info.matchedIntent, 'change_explanation');
   assert.equal(result.info.route, 'primary_success');
-  assert.equal(result.info.attempts.at(-1)?.contractName, 'explainChanges');
-  assert.match(result.renderedText ?? '', /Primeval/);
-  assert.doesNotMatch(result.renderedText ?? '', /Which one did you mean/i);
-  assert.doesNotMatch(result.renderedText ?? '', /Another likely match is Primeval Genesis \(game\)\./);
-  assert.ok(result.followUpSuggestions?.some((suggestion) => suggestion.label.includes('Switch to Primeval Genesis')));
+  assert.equal(result.info.attempts[0]?.contractName, 'resolveEntities');
+  assert.equal(result.info.attempts.length, 1);
+  assert.match(result.renderedText ?? '', /multiple likely matches|choose the exact one below/i);
+  assert.ok(result.followUpSuggestions?.some((suggestion) => suggestion.label.includes('Primeval Genesis')));
 });
 
 test('Tiger primary lets users switch to the publisher alternative after an auto-selected company overview', async (t) => {
@@ -5692,17 +5789,23 @@ test('Tiger primary can drill from ranked results into change lookups for the to
       assert.ok(init?.body);
       assert.match(String(init.body), /Counter-Strike 2/);
       return jsonResponse({
-        items: [
+        ambiguity: {
+          requiresClarification: false,
+        },
+        entities: [
           {
             displayName: 'Counter-Strike 2',
             entityKind: 'game',
             entityUid: 'game:steam:730',
+            confidence: 0.99,
+            matchQuality: 'exact',
+            matchSource: 'canonical_name',
             platform: 'steam',
             platformEntityId: '730',
-            score: 120,
+            releaseYear: 2023,
+            resolutionTier: 'canonical_exact',
           },
         ],
-        sufficientToAnswer: true,
       });
     }
 

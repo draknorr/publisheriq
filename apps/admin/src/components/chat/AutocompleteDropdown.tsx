@@ -8,25 +8,33 @@ import type { ChatEntitySuggestion } from '@/lib/chat/chat-entity-picker';
 export type AutocompleteSuggestion = ChatEntitySuggestion;
 
 interface AutocompleteDropdownProps {
-  suggestions: AutocompleteSuggestion[];
-  selectedIndex: number;
-  onSelect: (suggestion: AutocompleteSuggestion) => void;
-  onHover: (index: number) => void;
+  continuationToken?: string | null;
   inputValue: string;
   isLoading?: boolean;
+  isLoadingMore?: boolean;
   isVisible: boolean;
+  suggestions: AutocompleteSuggestion[];
+  selectedIndex: number;
+  totalCandidates?: number | null;
+  onSelect: (suggestion: AutocompleteSuggestion) => void;
+  onHover: (index: number) => void;
+  onLoadMore?: () => void;
 }
 
 export const AutocompleteDropdown = forwardRef<HTMLDivElement, AutocompleteDropdownProps>(
   function AutocompleteDropdown(
     {
-      suggestions,
-      selectedIndex,
-      onSelect,
-      onHover,
+      continuationToken,
       inputValue,
       isLoading,
+      isLoadingMore,
       isVisible,
+      suggestions,
+      selectedIndex,
+      totalCandidates,
+      onSelect,
+      onHover,
+      onLoadMore,
     },
     ref
   ) {
@@ -68,11 +76,13 @@ export const AutocompleteDropdown = forwardRef<HTMLDivElement, AutocompleteDropd
               return (
                 <button
                   key={`${suggestion.category}-${suggestion.label}`}
+                  type="button"
                   className={`
                     w-full px-4 py-2 text-left text-body-sm
                     transition-colors cursor-pointer
                     ${isSelected ? 'chat-accent-soft text-text-primary' : 'text-text-secondary hover:bg-surface-elevated'}
                   `}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => onSelect(suggestion)}
                   onMouseEnter={() => onHover(globalIndex)}
                   role="option"
@@ -91,6 +101,31 @@ export const AutocompleteDropdown = forwardRef<HTMLDivElement, AutocompleteDropd
             })}
           </div>
         ))}
+
+        {(continuationToken || (typeof totalCandidates === 'number' && totalCandidates > suggestions.length)) && (
+          <div className="border-t border-border-subtle bg-surface-elevated px-3 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-caption text-text-muted">
+                {typeof totalCandidates === 'number' && totalCandidates > 0
+                  ? `Showing ${suggestions.length} of ${totalCandidates} matches`
+                  : 'More matches are available'}
+              </p>
+              {continuationToken && onLoadMore && (
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={onLoadMore}
+                  className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-base px-3 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:border-border-muted hover:text-text-primary"
+                >
+                  {isLoadingMore && (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-accent-primary border-t-transparent animate-spin" />
+                  )}
+                  Show more matches
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

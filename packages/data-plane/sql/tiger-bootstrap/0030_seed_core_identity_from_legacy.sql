@@ -11,6 +11,8 @@ INSERT INTO core.entities (
   platform_entity_id,
   canonical_name,
   normalized_name,
+  loose_normalized_name,
+  compact_normalized_name,
   parent_entity_uid,
   source_table,
   source_pk,
@@ -25,8 +27,10 @@ SELECT
   a.appid::text,
   a.name,
   regexp_replace(lower(trim(a.name)), '\s+', ' ', 'g'),
+  trim(regexp_replace(regexp_replace(lower(coalesce(a.name, '')), '[^[:alnum:]]+', ' ', 'g'), '\s+', ' ', 'g')),
+  replace(trim(regexp_replace(regexp_replace(lower(coalesce(a.name, '')), '[^[:alnum:]]+', ' ', 'g'), '\s+', ' ', 'g')), ' ', ''),
   CASE
-    WHEN a.parent_appid IS NOT NULL
+    WHEN parent.appid IS NOT NULL
       THEN public.uuid_generate_v5(constants.entity_namespace, 'steam:game:' || a.parent_appid::text)
     ELSE NULL
   END,
@@ -43,11 +47,15 @@ SELECT
   COALESCE(a.created_at, now()),
   COALESCE(a.updated_at, now())
 FROM legacy.apps a
+LEFT JOIN legacy.apps parent
+  ON parent.appid = a.parent_appid
 CROSS JOIN constants
 ON CONFLICT (entity_uid) DO UPDATE
 SET
   canonical_name = EXCLUDED.canonical_name,
   normalized_name = EXCLUDED.normalized_name,
+  loose_normalized_name = EXCLUDED.loose_normalized_name,
+  compact_normalized_name = EXCLUDED.compact_normalized_name,
   parent_entity_uid = EXCLUDED.parent_entity_uid,
   source_table = EXCLUDED.source_table,
   source_pk = EXCLUDED.source_pk,
@@ -64,6 +72,8 @@ INSERT INTO core.entities (
   platform_entity_id,
   canonical_name,
   normalized_name,
+  loose_normalized_name,
+  compact_normalized_name,
   parent_entity_uid,
   source_table,
   source_pk,
@@ -78,6 +88,8 @@ SELECT
   d.id::text,
   d.name,
   d.normalized_name,
+  trim(regexp_replace(regexp_replace(lower(coalesce(d.name, '')), '[^[:alnum:]]+', ' ', 'g'), '\s+', ' ', 'g')),
+  replace(trim(regexp_replace(regexp_replace(lower(coalesce(d.name, '')), '[^[:alnum:]]+', ' ', 'g'), '\s+', ' ', 'g')), ' ', ''),
   NULL,
   'legacy.developers',
   d.id::text,
@@ -94,6 +106,8 @@ ON CONFLICT (entity_uid) DO UPDATE
 SET
   canonical_name = EXCLUDED.canonical_name,
   normalized_name = EXCLUDED.normalized_name,
+  loose_normalized_name = EXCLUDED.loose_normalized_name,
+  compact_normalized_name = EXCLUDED.compact_normalized_name,
   source_table = EXCLUDED.source_table,
   source_pk = EXCLUDED.source_pk,
   metadata = EXCLUDED.metadata,
@@ -109,6 +123,8 @@ INSERT INTO core.entities (
   platform_entity_id,
   canonical_name,
   normalized_name,
+  loose_normalized_name,
+  compact_normalized_name,
   parent_entity_uid,
   source_table,
   source_pk,
@@ -123,6 +139,8 @@ SELECT
   p.id::text,
   p.name,
   p.normalized_name,
+  trim(regexp_replace(regexp_replace(lower(coalesce(p.name, '')), '[^[:alnum:]]+', ' ', 'g'), '\s+', ' ', 'g')),
+  replace(trim(regexp_replace(regexp_replace(lower(coalesce(p.name, '')), '[^[:alnum:]]+', ' ', 'g'), '\s+', ' ', 'g')), ' ', ''),
   NULL,
   'legacy.publishers',
   p.id::text,
@@ -139,6 +157,8 @@ ON CONFLICT (entity_uid) DO UPDATE
 SET
   canonical_name = EXCLUDED.canonical_name,
   normalized_name = EXCLUDED.normalized_name,
+  loose_normalized_name = EXCLUDED.loose_normalized_name,
+  compact_normalized_name = EXCLUDED.compact_normalized_name,
   source_table = EXCLUDED.source_table,
   source_pk = EXCLUDED.source_pk,
   metadata = EXCLUDED.metadata,
@@ -148,6 +168,8 @@ INSERT INTO core.entity_aliases (
   entity_uid,
   alias,
   normalized_alias,
+  loose_normalized_alias,
+  compact_normalized_alias,
   alias_type,
   is_primary,
   source_table,
@@ -160,6 +182,8 @@ SELECT
   entity_uid,
   canonical_name,
   normalized_name,
+  loose_normalized_name,
+  compact_normalized_name,
   'canonical_name',
   true,
   source_table,
@@ -168,9 +192,12 @@ SELECT
   created_at,
   updated_at
 FROM core.entities
+WHERE nullif(trim(canonical_name), '') IS NOT NULL
 ON CONFLICT (entity_uid, normalized_alias, alias_type) DO UPDATE
 SET
   alias = EXCLUDED.alias,
+  loose_normalized_alias = EXCLUDED.loose_normalized_alias,
+  compact_normalized_alias = EXCLUDED.compact_normalized_alias,
   is_primary = EXCLUDED.is_primary,
   source_table = EXCLUDED.source_table,
   source_pk = EXCLUDED.source_pk,
@@ -180,6 +207,8 @@ INSERT INTO core.entity_aliases (
   entity_uid,
   alias,
   normalized_alias,
+  loose_normalized_alias,
+  compact_normalized_alias,
   alias_type,
   is_primary,
   source_table,
@@ -192,6 +221,8 @@ SELECT
   entity_uid,
   normalized_name,
   normalized_name,
+  loose_normalized_name,
+  compact_normalized_name,
   'normalized_name',
   false,
   source_table,
@@ -200,9 +231,12 @@ SELECT
   created_at,
   updated_at
 FROM core.entities
+WHERE nullif(trim(normalized_name), '') IS NOT NULL
 ON CONFLICT (entity_uid, normalized_alias, alias_type) DO UPDATE
 SET
   alias = EXCLUDED.alias,
+  loose_normalized_alias = EXCLUDED.loose_normalized_alias,
+  compact_normalized_alias = EXCLUDED.compact_normalized_alias,
   is_primary = EXCLUDED.is_primary,
   source_table = EXCLUDED.source_table,
   source_pk = EXCLUDED.source_pk,

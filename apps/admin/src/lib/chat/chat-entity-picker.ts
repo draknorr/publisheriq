@@ -1,4 +1,8 @@
 import type { QuerySuggestion } from '@/lib/chat/query-templates';
+import type {
+  SessionSelectionMatchSource,
+  SessionSelectionResolutionTier,
+} from '@/lib/chat/chat-context-types';
 
 export type ChatEntityKind = 'game' | 'publisher' | 'developer';
 export type ChatEntityPlatform = 'steam' | 'publisheriq';
@@ -22,10 +26,12 @@ export interface ChatEntityPickerEntity {
   entityUid: string;
   latestMetrics?: ChatEntityLatestMetrics;
   matchQuality: ChatEntityMatchQuality;
+  matchSource?: SessionSelectionMatchSource | null;
   matchedName: string;
   platform: ChatEntityPlatform;
   platformEntityId: string;
   releaseYear?: number | null;
+  resolutionTier?: SessionSelectionResolutionTier | null;
   signals?: ChatEntitySignals;
 }
 
@@ -45,11 +51,14 @@ export interface ChatEntityPickerResults {
   ambiguity: ChatEntityPickerAmbiguity;
   entities: ChatEntityPickerEntity[];
   provenance: ChatEntityPickerProvenance;
+  continuationToken?: string | null;
+  totalCandidates?: number | null;
 }
 
 export interface ChatEntityPickerRequest {
   entityKinds?: ChatEntityKind[];
   includeMetrics?: boolean;
+  continuationToken?: string | null;
   limit?: number;
   query: string;
 }

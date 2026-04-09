@@ -32,12 +32,14 @@ function createEmptyResults(): ChatEntityPickerResults {
       message: null,
       requiresClarification: false,
     },
+    continuationToken: null,
     entities: [],
     provenance: {
       capturedAt: new Date().toISOString(),
       source: 'tiger',
       tables: [],
     },
+    totalCandidates: 0,
   };
 }
 
@@ -105,11 +107,15 @@ export async function handleChatEntityRequest(
     const limit = typeof body?.limit === 'number' ? Math.max(1, Math.min(body.limit, 10)) : 5;
     const entityKinds = normalizeEntityKinds(body?.entityKinds);
     const includeMetrics = body?.includeMetrics ?? true;
+    const continuationToken = typeof body?.continuationToken === 'string'
+      ? body.continuationToken.trim() || null
+      : null;
 
     const result = await deps.postToQueryApi<ChatEntityPickerResults>(
       '/v1/contracts/resolve-entities',
       {
         entityKinds,
+        continuationToken,
         includeMetrics,
         limit,
         query,

@@ -147,6 +147,8 @@ export function ChatContainer({
 
         {messages.map((message, idx) => {
           const isLastAssistant = message.id === lastAssistantMessage?.id;
+          const isClarificationMessage =
+            message.role === 'assistant' && message.renderData?.kind === 'entity_clarification';
           return (
             <ChatMessage
               key={message.id}
@@ -158,7 +160,7 @@ export function ChatContainer({
                   : undefined
               }
               suggestions={isLastAssistant ? followUpSuggestions : undefined}
-              onSuggestionClick={isLastAssistant ? handleSend : undefined}
+              onSuggestionClick={isLastAssistant || isClarificationMessage ? handleSend : undefined}
             />
           );
         })}

@@ -53,9 +53,6 @@ const DEFAULT_NEWS_TOPIC_FEED_SCOPE: ChangeRecentNewsFeedScope = 'community_anno
 const DEFAULT_PATTERN_LIMIT = 10;
 const MAX_PATTERN_LIMIT = 10;
 const DEFAULT_PATTERN_APP_TYPES: AppType[] = ['game'];
-const HIGH_CONFIDENCE_SIMILARITY = 0.72;
-const MINIMUM_CONFIDENCE_SIMILARITY = 0.45;
-const CLEAR_CONFIDENCE_MARGIN = 0.08;
 const MAX_AMBIGUITY_CANDIDATES = 3;
 const ENTITY_NAMESPACE = '8b8600d2-2b09-4f74-b95c-77f95fdf00f4';
 
@@ -213,20 +210,6 @@ interface NewsTopicDefinition {
 interface CheckedDateWindow {
   windowStart: string;
   windowEnd: string;
-}
-
-interface TigerResolveEntitiesResponse {
-  ambiguity?: {
-    message: string | null;
-    requiresClarification: boolean;
-  };
-  entities?: Array<{
-    displayName: string;
-    entityKind: 'developer' | 'game' | 'publisher';
-    entityUid: string;
-    matchQuality: 'exact' | 'prefix' | 'substring';
-    platformEntityId: string;
-  }>;
 }
 
 interface TigerGetEntityOverviewResponse {
@@ -585,31 +568,6 @@ function extractExplicitMultiTitleNewsTargets(userPrompt: string | undefined): s
   return [];
 }
 
-function isConfidentGameResolution(
-  query: string,
-  best: NonNullable<Awaited<ReturnType<typeof lookupGames>>['results'][number]>,
-  secondBest: Awaited<ReturnType<typeof lookupGames>>['results'][number] | undefined
-): boolean {
-  const normalizedQuery = normalizeEntityKey(query);
-  const normalizedBest = normalizeEntityKey(best.name);
-  const bestScore = best.similarityScore ?? 0;
-  const secondScore = secondBest?.similarityScore ?? 0;
-
-  if (best.isExactMatch || normalizedBest === normalizedQuery) {
-    return true;
-  }
-
-  if (bestScore >= HIGH_CONFIDENCE_SIMILARITY) {
-    return true;
-  }
-
-  if (bestScore < MINIMUM_CONFIDENCE_SIMILARITY) {
-    return false;
-  }
-
-  return bestScore - secondScore >= CLEAR_CONFIDENCE_MARGIN;
-}
-
 function formatCandidateLabel(candidate: {
   name: string;
   releaseYear: number | null;
@@ -746,7 +704,7 @@ async function resolveAppReference(args: {
     };
   }
 
-  if (!isConfidentGameResolution(appName, best, lookup.results[1])) {
+  if (lookup.needsDisambiguation === true || lookup.resolutionConfidence === 'low') {
     const candidates = lookup.results
       .slice(0, MAX_AMBIGUITY_CANDIDATES)
       .map((candidate) => ({
@@ -759,7 +717,7 @@ async function resolveAppReference(args: {
 
     return {
       app: null,
-      error: buildAmbiguousGameError(appName, candidates),
+      error: lookup.ambiguity?.message ?? buildAmbiguousGameError(appName, candidates),
       candidates,
     };
   }
@@ -871,8 +829,7 @@ function isExactSingleTitleChangeSearch(
 
   return (
     app.isExactMatch === true ||
-    normalizedSearch === normalizedAppName ||
-    (app.similarityScore ?? 0) >= HIGH_CONFIDENCE_SIMILARITY
+    normalizedSearch === normalizedAppName
   );
 }
 
@@ -1472,31 +1429,23 @@ async function tryTigerGameChangeTimeline(
       return null;
     }
 
-    const resolveResponse = await postToQueryApi<TigerResolveEntitiesResponse>(
-      '/v1/contracts/resolve-entities',
-      {
-        entityKinds: ['game'],
-        limit: 5,
-        query,
-      }
-    );
+    const lookup = await lookupGames({ query, limit: 5 });
+    const bestMatch = lookup.results[0];
 
-    if (!resolveResponse.ok || !resolveResponse.data) {
+    if (
+      !lookup.success
+      || !bestMatch
+      || lookup.needsDisambiguation === true
+      || lookup.resolutionConfidence === 'low'
+    ) {
       return null;
     }
 
-    const entities = (resolveResponse.data.entities ?? []).filter(
-      (entity) => entity.entityKind === 'game'
-    );
-
-    resolvedEntity =
-      (typeof args.appid === 'number'
-        ? entities.find((entity) => parseTigerAppId(entity.platformEntityId) === args.appid)
-        : undefined) ?? entities[0];
-
-    if (!resolvedEntity || resolveResponse.data.ambiguity?.requiresClarification === true) {
-      return null;
-    }
+    resolvedEntity = {
+      displayName: bestMatch.name,
+      entityUid: buildTigerGameEntityUid(bestMatch.appid),
+      platformEntityId: String(bestMatch.appid),
+    };
   }
 
   const appid = parseTigerAppId(resolvedEntity.platformEntityId);
