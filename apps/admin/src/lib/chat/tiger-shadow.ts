@@ -11,6 +11,8 @@ import type {
   SessionChatSelectionState,
   SessionSelectionEntityKind,
   SessionSelectionMatchQuality,
+  SessionSelectionMatchSource,
+  SessionSelectionResolutionTier,
 } from '@/lib/chat/chat-context-types';
 import { COMMON_TAGS, type QuerySuggestion } from '@/lib/chat/query-templates';
 import { buildChatEntityUid } from '@/lib/chat/entity-uid';
@@ -145,23 +147,33 @@ const ENTITY_QUERY_PATTERNS = [
 
 interface ResolveEntitiesResponse {
   ambiguity?: {
+    bestTier?: SessionSelectionResolutionTier;
+    bestTierCount?: number | null;
     candidateNames?: string[];
     message?: string | null;
     requiresClarification?: boolean;
   };
+  continuationToken?: string | null;
   entities?: Array<{
     confidence?: number;
     displayName: string;
     entityKind: string;
     entityUid: string;
     matchQuality?: SessionSelectionMatchQuality;
+    matchSource?: SessionSelectionMatchSource;
     matchedName?: string;
     platform: string;
     platformEntityId?: string;
+    releaseYear?: number | null;
+    resolutionTier?: SessionSelectionResolutionTier;
+    latestMetrics?: {
+      totalReviews?: number | null;
+    };
     signals?: {
       gameCount?: number | null;
     };
   }>;
+  totalCandidates?: number;
 }
 
 type ResolvedCompareEntity = NonNullable<ResolveEntitiesResponse['entities']>[number];
@@ -798,11 +810,19 @@ interface CompareRequestBuildResult {
   selectionState?: SessionChatSelectionState | null;
 }
 
-interface RankedSelectionCandidate extends SessionChatSelectionCandidate {
+interface RankedSelectionCandidate
+  extends Omit<
+    SessionChatSelectionCandidate,
+    'matchSource' | 'releaseYear' | 'resolutionTier' | 'totalReviews'
+  > {
   confidence: number;
   displayNameNormalized: string;
   gameCount: number;
+  matchSource: NonNullable<SessionChatSelectionCandidate['matchSource']> | null;
   organizationCore: string | null;
+  releaseYear: number | null;
+  resolutionTier: NonNullable<SessionChatSelectionCandidate['resolutionTier']> | null;
+  totalReviews: number | null;
 }
 
 interface RankedSelectionSlot extends SessionChatSelectionSlot {
@@ -1124,6 +1144,7 @@ function scoreResolvedEntity(params: {
 function buildRankedSelectionCandidates(params: {
   entities: ResolvedCompareEntity[];
   expectedEntityKind: SessionSelectionEntityKind | null;
+  preserveInputOrder?: boolean;
   query: string;
   resolutionPreference: EntityResolutionPreference;
 }): RankedSelectionCandidate[] {
@@ -1146,17 +1167,21 @@ function buildRankedSelectionCandidates(params: {
         entityKind,
         entityUid: entity.entityUid,
         gameCount,
+        matchSource: entity.matchSource ?? null,
         matchQuality: entity.matchQuality ?? null,
         ordinal: 0,
         organizationCore: entityKind === 'game' ? null : normalizeOrganizationCore(entity.displayName),
         platform: entity.platform,
         platformEntityId: entity.platformEntityId ?? null,
+        releaseYear: entity.releaseYear ?? null,
+        resolutionTier: entity.resolutionTier ?? null,
         score: scoreResolvedEntity({
           entity,
           expectedEntityKind: params.expectedEntityKind,
           query: params.query,
           resolutionPreference: params.resolutionPreference,
         }),
+        totalReviews: entity.latestMetrics?.totalReviews ?? null,
       };
     })
     .filter((candidate): candidate is RankedSelectionCandidate => Boolean(candidate));
@@ -1197,6 +1222,13 @@ function buildRankedSelectionCandidates(params: {
       const delta = maxGameCount - candidate.gameCount;
       candidate.score -= Math.min(22, Math.round(delta * 1.75));
     }
+  }
+
+  if (params.preserveInputOrder) {
+    return candidates.map((candidate, index) => ({
+      ...candidate,
+      ordinal: index + 1,
+    }));
   }
 
   return candidates
@@ -4662,11 +4694,15 @@ function toSelectionCandidate(candidate: RankedSelectionCandidate): SessionChatS
     displayName: candidate.displayName,
     entityKind: candidate.entityKind,
     entityUid: candidate.entityUid,
+    matchSource: candidate.matchSource ?? null,
     matchQuality: candidate.matchQuality,
     ordinal: candidate.ordinal,
     platform: candidate.platform,
     platformEntityId: candidate.platformEntityId,
+    releaseYear: candidate.releaseYear ?? null,
+    resolutionTier: candidate.resolutionTier ?? null,
     score: candidate.score,
+    totalReviews: candidate.totalReviews ?? null,
   };
 }
 
@@ -4682,12 +4718,14 @@ function buildSelectionState(params: {
     family: params.family,
     slots: params.slots.map((slot) => ({
       candidates: slot.candidates.map(toSelectionCandidate),
+      continuationToken: slot.continuationToken ?? null,
       expectedEntityKind: slot.expectedEntityKind ?? null,
       label: slot.label,
       query: slot.query,
       requiresClarification: slot.requiresClarification,
       selectedEntityUid: slot.selectedEntityUid,
       slotId: slot.slotId,
+      totalCandidates: slot.totalCandidates ?? slot.candidates.length,
     })),
   };
 }
@@ -5519,6 +5557,7 @@ async function resolveSelectionSlotAttempt(params: {
   label: string;
   query: string | null;
   resolutionPreference?: EntityResolutionPreference;
+  strictResolver?: boolean;
   slotId: string;
 }): Promise<{
   attempt: TigerShadowAttempt;
@@ -5550,8 +5589,9 @@ async function resolveSelectionSlotAttempt(params: {
       ? [params.expectedEntityKind]
       : ['game', 'publisher', 'developer'],
     includeMetrics: false,
-    limit: 6,
+    limit: params.strictResolver ? 25 : 6,
     query: params.query,
+    resolutionMode: params.strictResolver ? 'chat_strict' : 'default',
   });
   const timingMs = Math.round(performance.now() - startedAt);
 
@@ -5582,6 +5622,7 @@ async function resolveSelectionSlotAttempt(params: {
   const candidates = buildRankedSelectionCandidates({
     entities,
     expectedEntityKind: params.expectedEntityKind,
+    preserveInputOrder: params.strictResolver,
     query: params.query,
     resolutionPreference: params.resolutionPreference ?? null,
   });
@@ -5591,15 +5632,18 @@ async function resolveSelectionSlotAttempt(params: {
     resolutionPreference: params.resolutionPreference ?? null,
   });
   const resolverRequestedClarification = response.data?.ambiguity?.requiresClarification ?? false;
-  const requiresClarification =
-    localRequiresClarification
-    || (
-      resolverRequestedClarification
-      && !shouldOverrideResolverAmbiguity({
-        candidates,
-        query: params.query,
-        resolutionPreference: params.resolutionPreference ?? null,
-      })
+  const requiresClarification = params.strictResolver
+    ? resolverRequestedClarification
+    : (
+      localRequiresClarification
+      || (
+        resolverRequestedClarification
+        && !shouldOverrideResolverAmbiguity({
+          candidates,
+          query: params.query,
+          resolutionPreference: params.resolutionPreference ?? null,
+        })
+      )
     );
   const selectedEntityUid = !requiresClarification ? candidates[0]?.entityUid ?? null : null;
 
@@ -5620,12 +5664,14 @@ async function resolveSelectionSlotAttempt(params: {
     entitiesByUid: buildResolvedEntityByUidMap(entities),
     slot: {
       candidates,
+      continuationToken: response.data?.continuationToken ?? null,
       expectedEntityKind: params.expectedEntityKind,
       label: params.label,
       query: params.query,
       requiresClarification,
       selectedEntityUid,
       slotId: params.slotId,
+      totalCandidates: response.data?.totalCandidates ?? candidates.length,
     },
   };
 }
@@ -5649,9 +5695,16 @@ function buildResolvedEntityFromSelectionCandidate(
     displayName: candidate.displayName,
     entityKind: candidate.entityKind,
     entityUid: candidate.entityUid,
+    latestMetrics:
+      typeof candidate.totalReviews === 'number'
+        ? { totalReviews: candidate.totalReviews }
+        : undefined,
+    matchSource: candidate.matchSource ?? undefined,
     matchQuality: candidate.matchQuality ?? undefined,
     platform: candidate.platform,
     platformEntityId: candidate.platformEntityId ?? undefined,
+    releaseYear: candidate.releaseYear ?? undefined,
+    resolutionTier: candidate.resolutionTier ?? undefined,
   };
 }
 
@@ -5703,6 +5756,7 @@ async function resolvePrimaryEntityAttempt(params: {
     label: params.query ?? 'entity',
     query: params.query,
     resolutionPreference: params.resolutionPreference ?? null,
+    strictResolver: params.expectedEntityKind === 'game' && params.resolutionPreference === 'game',
     slotId: 'primary',
   });
   const slotWithBestCandidate =

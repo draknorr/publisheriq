@@ -3,10 +3,13 @@
  * These patterns enable instant suggestions without LLM calls.
  */
 
+import type { ChatRequestOptions } from '@/lib/llm/types';
+
 export interface QuerySuggestion {
   label: string;      // Display text (may be truncated)
   query: string;      // Full query to submit
   category: 'template' | 'tag' | 'game' | 'publisher' | 'developer';
+  requestOptions?: ChatRequestOptions;
 }
 
 // Tag-based query templates - {input} is replaced with user's typed text

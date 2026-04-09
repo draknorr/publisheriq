@@ -4,10 +4,12 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AreaChartComponent, PlatformIcons, TrendSparkline } from '@/components/data-display';
 import type {
+  ChatEntityClarificationCandidate,
   ChatHistoryMetric,
   ChatMetricHistorySeries,
   ChatRenderData,
 } from '@/lib/chat/chat-render-data';
+import type { ChatRequestOptions } from '@/lib/llm/types';
 
 function formatNumber(value: number | null): string {
   return typeof value === 'number' && Number.isFinite(value)
@@ -25,6 +27,17 @@ function formatCurrencyCents(value: number | null): string {
   return typeof value === 'number' && Number.isFinite(value)
     ? `$${(value / 100).toFixed(2)}`
     : 'n/a';
+}
+
+function formatCompactNumber(value: number | null): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: value >= 1000 ? 1 : 0,
+    notation: value >= 1000 ? 'compact' : 'standard',
+  }).format(value);
 }
 
 function parseUtcDate(value: string): Date {
@@ -274,9 +287,138 @@ function MomentumCurrentPlayersVisual({
   );
 }
 
-export function ChatStructuredVisuals({
+function clarificationTierLabel(candidate: ChatEntityClarificationCandidate): string {
+  switch (candidate.resolutionTier) {
+    case 'platform_id_exact':
+      return 'Exact ID';
+    case 'canonical_exact':
+      return 'Exact title';
+    case 'alias_exact':
+      return 'Exact alias';
+    case 'normalized_exact':
+      return 'Normalized exact';
+    case 'canonical_prefix':
+    case 'alias_prefix':
+    case 'legacy_prefix':
+      return 'Prefix match';
+    case 'canonical_substring':
+    case 'alias_substring':
+    case 'legacy_substring':
+      return 'Substring match';
+    case 'legacy_exact':
+      return 'Exact title';
+    case 'fuzzy':
+    default:
+      return candidate.matchQuality === 'fuzzy' ? 'Fuzzy match' : 'Possible match';
+  }
+}
+
+function ClarificationSlotVisual({
+  onSuggestionClick,
+  originalPrompt,
+  slot,
+}: {
+  onSuggestionClick?: (query: string, requestOptions?: ChatRequestOptions) => void;
+  originalPrompt: string;
+  slot: Extract<ChatRenderData, { kind: 'entity_clarification' }>['slots'][number];
+}): ReactNode {
+  return (
+    <section className="space-y-3 rounded-2xl border border-border-subtle/80 bg-surface-raised/60 p-4">
+      <div className="space-y-1">
+        <p className="text-caption font-medium uppercase tracking-[0.18em] text-text-muted">
+          {slot.label}
+        </p>
+        <p className="text-body-sm text-text-secondary">
+          {slot.totalCandidates && slot.totalCandidates > slot.candidates.length
+            ? `Showing ${slot.candidates.length} of ${slot.totalCandidates} matches for ${slot.query}`
+            : `Choose the correct match for ${slot.query}`}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {slot.candidates.map((candidate) => (
+          <button
+            key={`${slot.slotId}-${candidate.entityUid}`}
+            type="button"
+            onClick={() => onSuggestionClick?.(originalPrompt, {
+              selectedEntities: [candidate.selectedEntity],
+            })}
+            className="w-full rounded-2xl border border-border-subtle bg-surface-base/80 px-4 py-3 text-left transition-colors hover:border-border-muted hover:bg-surface-elevated"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-surface-elevated px-2 py-0.5 text-caption font-semibold text-text-secondary">
+                    {candidate.ordinal}
+                  </span>
+                  <span className="text-body font-medium text-text-primary">
+                    {candidate.displayName}
+                  </span>
+                  <span className="text-caption uppercase tracking-[0.14em] text-text-muted">
+                    {candidate.entityKind}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-text-muted">
+                  <span>{clarificationTierLabel(candidate)}</span>
+                  {typeof candidate.releaseYear === 'number' && <span>{candidate.releaseYear}</span>}
+                  <span>ID {candidate.platformEntityId}</span>
+                  {candidate.totalReviews != null && (
+                    <span>{formatCompactNumber(candidate.totalReviews)} reviews</span>
+                  )}
+                </div>
+              </div>
+              <span className="text-caption font-medium text-text-secondary">
+                Select
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function EntityClarificationVisual({
+  onSuggestionClick,
   renderData,
 }: {
+  onSuggestionClick?: (query: string, requestOptions?: ChatRequestOptions) => void;
+  renderData: Extract<ChatRenderData, { kind: 'entity_clarification' }>;
+}): ReactNode {
+  if (renderData.slots.length === 0 || !onSuggestionClick) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-border-subtle bg-surface-base/70 p-4">
+      <div className="space-y-1">
+        <p className="text-caption font-medium uppercase tracking-[0.18em] text-text-muted">
+          Select The Exact Match
+        </p>
+        <p className="text-body-sm text-text-secondary">
+          Chat could not safely choose a single title. Pick the exact game below.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {renderData.slots.map((slot) => (
+          <ClarificationSlotVisual
+            key={slot.slotId}
+            onSuggestionClick={onSuggestionClick}
+            originalPrompt={renderData.originalPrompt}
+            slot={slot}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ChatStructuredVisuals({
+  onSuggestionClick,
+  renderData,
+}: {
+  onSuggestionClick?: (query: string, requestOptions?: ChatRequestOptions) => void;
   renderData?: ChatRenderData;
 }): ReactNode {
   if (!renderData) {
@@ -289,6 +431,15 @@ export function ChatStructuredVisuals({
 
   if (renderData.kind === 'momentum_current_players') {
     return <MomentumCurrentPlayersVisual renderData={renderData} />;
+  }
+
+  if (renderData.kind === 'entity_clarification') {
+    return (
+      <EntityClarificationVisual
+        onSuggestionClick={onSuggestionClick}
+        renderData={renderData}
+      />
+    );
   }
 
   return null;

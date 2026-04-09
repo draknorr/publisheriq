@@ -1,10 +1,11 @@
 'use client';
 
 import type { QuerySuggestion } from '@/lib/chat/query-templates';
+import type { ChatRequestOptions } from '@/lib/llm/types';
 
 interface SuggestionChipsProps {
   suggestions: QuerySuggestion[];
-  onSuggestionClick: (query: string) => void;
+  onSuggestionClick: (query: string, requestOptions?: ChatRequestOptions) => void;
   isVisible?: boolean;
   label?: string;
 }
@@ -28,7 +29,7 @@ export function SuggestionChips({
         {suggestions.map((suggestion, index) => (
           <button
             key={index}
-            onClick={() => onSuggestionClick(suggestion.query)}
+            onClick={() => onSuggestionClick(suggestion.query, suggestion.requestOptions)}
             className="
               px-3 py-1.5 text-sm rounded-full
               bg-surface-elevated text-text-secondary

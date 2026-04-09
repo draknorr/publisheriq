@@ -18,8 +18,10 @@ function createEntityRow(params: {
   entity_id: number;
   match_quality: 'exact' | 'prefix' | 'substring' | 'fuzzy';
   match_rank?: number | null;
+  match_source?: string | null;
   matched_name?: string;
   owners_midpoint: number | null;
+  resolution_tier?: string | null;
   review_score: number | null;
   total_reviews: number | null;
   game_count?: number | null;
@@ -32,9 +34,11 @@ function createEntityRow(params: {
     game_count: params.game_count ?? null,
     match_quality: params.match_quality,
     match_rank: params.match_rank ?? null,
+    match_source: params.match_source ?? 'legacy_name',
     matched_name: params.matched_name ?? params.display_name,
     owners_midpoint: params.owners_midpoint,
     release_year: params.release_year ?? null,
+    resolution_tier: params.resolution_tier ?? null,
     review_score: params.review_score,
     similarity_score: 0.9,
     total_reviews: params.total_reviews,
@@ -1444,6 +1448,149 @@ test('resolveEntities prefers canonical alias matches before fuzzy legacy rows a
   assert.equal(result.entities[0]?.matchQuality, 'exact');
   assert.ok(result.entities[0]?.confidence && result.entities[0].confidence > 0.99);
   assert.equal(result.ambiguity.requiresClarification, false);
+});
+
+test('resolveEntities chat_strict keeps clarification when multiple games survive in the best lexical tier', async () => {
+  const service = createService();
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).queryCanonicalEntities = async () => [
+    createEntityRow({
+      ccu_peak: 42000,
+      display_name: 'Prey',
+      entity_id: 480490,
+      match_quality: 'exact',
+      match_rank: 0,
+      match_source: 'canonical_name',
+      owners_midpoint: 2500000,
+      release_year: 2017,
+      resolution_tier: 'canonical_exact',
+      review_score: 82,
+      total_reviews: 41000,
+    }),
+    createEntityRow({
+      ccu_peak: 1200,
+      display_name: 'Prey',
+      entity_id: 3970,
+      match_quality: 'exact',
+      match_rank: 0,
+      match_source: 'canonical_name',
+      owners_midpoint: 350000,
+      release_year: 2006,
+      resolution_tier: 'canonical_exact',
+      review_score: 90,
+      total_reviews: 7000,
+    }),
+  ];
+  (service as any).queryGames = async () => [];
+  (service as any).queryGamesLexical = async () => [];
+  (service as any).queryCompanies = async () => [];
+  (service as any).queryCompaniesLexical = async () => [];
+
+  const result = await service.resolveEntities({
+    entityKinds: ['game'],
+    query: 'Prey',
+    resolutionMode: 'chat_strict',
+  });
+
+  assert.equal(result.entities.length, 2);
+  assert.equal(result.ambiguity.bestTier, 'canonical_exact');
+  assert.equal(result.ambiguity.bestTierCount, 2);
+  assert.equal(result.ambiguity.requiresClarification, true);
+  assert.equal(result.entities[0]?.matchSource, 'canonical_name');
+  assert.equal(result.entities[0]?.resolutionTier, 'canonical_exact');
+});
+
+test('resolveEntities chat_strict paginates ranked game candidates without reordering tiers', async () => {
+  const service = createService();
+
+  (service as any).assertContractRuntime = async () => undefined;
+  (service as any).queryCanonicalEntities = async () => [
+    createEntityRow({
+      ccu_peak: 9000,
+      display_name: 'Warframe',
+      entity_id: 230410,
+      match_quality: 'prefix',
+      match_rank: 3,
+      match_source: 'canonical_name',
+      owners_midpoint: 10000000,
+      release_year: 2013,
+      resolution_tier: 'canonical_prefix',
+      review_score: 87,
+      total_reviews: 580000,
+    }),
+    createEntityRow({
+      ccu_peak: 3200,
+      display_name: 'Wargroove',
+      entity_id: 607050,
+      match_quality: 'prefix',
+      match_rank: 3,
+      match_source: 'canonical_name',
+      owners_midpoint: 750000,
+      release_year: 2019,
+      resolution_tier: 'canonical_prefix',
+      review_score: 84,
+      total_reviews: 18000,
+    }),
+    createEntityRow({
+      ccu_peak: 1100,
+      display_name: 'Warpips',
+      entity_id: 1291010,
+      match_quality: 'prefix',
+      match_rank: 3,
+      match_source: 'canonical_name',
+      owners_midpoint: 400000,
+      release_year: 2022,
+      resolution_tier: 'canonical_prefix',
+      review_score: 78,
+      total_reviews: 9000,
+    }),
+    createEntityRow({
+      ccu_peak: 250,
+      display_name: 'Warhammer Quest',
+      entity_id: 326670,
+      match_quality: 'prefix',
+      match_rank: 3,
+      match_source: 'canonical_name',
+      owners_midpoint: 120000,
+      release_year: 2015,
+      resolution_tier: 'canonical_prefix',
+      review_score: 72,
+      total_reviews: 2500,
+    }),
+  ];
+  (service as any).queryGames = async () => [];
+  (service as any).queryGamesLexical = async () => [];
+  (service as any).queryCompanies = async () => [];
+  (service as any).queryCompaniesLexical = async () => [];
+
+  const firstPage = await service.resolveEntities({
+    entityKinds: ['game'],
+    limit: 2,
+    query: 'war',
+    resolutionMode: 'chat_strict',
+  });
+
+  assert.deepEqual(
+    firstPage.entities.map((entity) => entity.displayName),
+    ['Warframe', 'Wargroove']
+  );
+  assert.equal(firstPage.totalCandidates, 4);
+  assert.ok(firstPage.continuationToken);
+
+  const secondPage = await service.resolveEntities({
+    continuationToken: firstPage.continuationToken,
+    entityKinds: ['game'],
+    limit: 2,
+    query: 'war',
+    resolutionMode: 'chat_strict',
+  });
+
+  assert.deepEqual(
+    secondPage.entities.map((entity) => entity.displayName),
+    ['Warpips', 'Warhammer Quest']
+  );
+  assert.equal(secondPage.continuationToken, null);
 });
 
 test('resolveEntities keeps clarification for ambiguous fuzzy-only game lookups', async () => {

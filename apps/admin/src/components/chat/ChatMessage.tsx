@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Bot, ChevronDown, ChevronRight, Clock, Database, ShieldCheck, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/Card';
-import type { ChatToolCall, ChatTiming } from '@/lib/llm/types';
+import type { ChatRequestOptions, ChatToolCall, ChatTiming } from '@/lib/llm/types';
 import type { StreamDebugInfo } from '@/lib/llm/streaming-types';
 import type { TigerPrimaryInfo, TigerShadowInfo } from '@/lib/chat/tiger-shadow-types';
 import type { ChatRenderData } from '@/lib/chat/chat-render-data';
@@ -696,7 +696,7 @@ interface ChatMessageProps {
   message: DisplayMessage;
   isStreaming?: boolean;
   suggestions?: QuerySuggestion[];
-  onSuggestionClick?: (query: string) => void;
+  onSuggestionClick?: (query: string, requestOptions?: ChatRequestOptions) => void;
   pendingToolCallNames?: string[];
 }
 
@@ -760,7 +760,12 @@ export function ChatMessage({
               data-testid="chat-message-assistant-content"
               className="space-y-4 pr-10 sm:pr-12"
             >
-              {!isStreaming && <ChatStructuredVisuals renderData={message.renderData} />}
+              {!isStreaming && (
+                <ChatStructuredVisuals
+                  onSuggestionClick={onSuggestionClick}
+                  renderData={message.renderData}
+                />
+              )}
               <EntityLinkProvider toolCalls={message.toolCalls}>
                 <StreamingContent content={visibleAssistantContent} isStreaming={isStreaming} />
               </EntityLinkProvider>

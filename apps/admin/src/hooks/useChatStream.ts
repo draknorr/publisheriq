@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import type { Message, ChatSelectedEntity, ChatToolCall, ChatTiming } from '@/lib/llm/types';
+import type { Message, ChatRequestOptions, ChatToolCall, ChatTiming } from '@/lib/llm/types';
 import type { SessionChatContext } from '@/lib/chat/chat-context-types';
 import type { QuerySuggestion } from '@/lib/chat/query-templates';
 import type { StreamEvent, StreamDebugInfo } from '@/lib/llm/streaming-types';
@@ -41,9 +41,7 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
 
   const sendMessage = useCallback(async (
     content: string,
-    requestOptions?: {
-      selectedEntities?: ChatSelectedEntity[];
-    }
+    requestOptions?: ChatRequestOptions
   ) => {
     if (!content.trim() || isStreaming) return;
 

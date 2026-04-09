@@ -12,6 +12,10 @@ export interface ChatSelectedEntity {
   platformEntityId: string;
 }
 
+export interface ChatRequestOptions {
+  selectedEntities?: ChatSelectedEntity[];
+}
+
 export interface ChatEntityLookupResponse {
   entities: ChatSelectedEntity[];
 }

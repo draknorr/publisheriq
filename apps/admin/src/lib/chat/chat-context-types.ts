@@ -9,6 +9,26 @@ export type ChatEntityKind =
 
 export type SessionSelectionEntityKind = 'game' | 'publisher' | 'developer';
 export type SessionSelectionMatchQuality = 'exact' | 'prefix' | 'substring' | 'fuzzy';
+export type SessionSelectionMatchSource =
+  | 'platform_entity_id'
+  | 'canonical_name'
+  | 'normalized_name'
+  | 'alias'
+  | 'normalized_alias'
+  | 'legacy_name';
+export type SessionSelectionResolutionTier =
+  | 'platform_id_exact'
+  | 'canonical_exact'
+  | 'alias_exact'
+  | 'normalized_exact'
+  | 'canonical_prefix'
+  | 'alias_prefix'
+  | 'legacy_prefix'
+  | 'canonical_substring'
+  | 'alias_substring'
+  | 'legacy_substring'
+  | 'legacy_exact'
+  | 'fuzzy';
 export type SessionCandidateKind = 'games' | 'publishers' | 'developers' | 'activities';
 export type SessionResultSetItemKind = 'games' | 'activities';
 export type SessionRequestStateFamily = 'entity_ranking' | 'momentum_discovery';
@@ -88,20 +108,26 @@ export interface SessionChatSelectionCandidate {
   entityKind: SessionSelectionEntityKind;
   entityUid: string;
   matchQuality: SessionSelectionMatchQuality | null;
+  matchSource?: SessionSelectionMatchSource | null;
   ordinal: number;
   platform: string;
   platformEntityId: string | null;
+  releaseYear?: number | null;
+  resolutionTier?: SessionSelectionResolutionTier | null;
   score: number;
+  totalReviews?: number | null;
 }
 
 export interface SessionChatSelectionSlot {
   candidates: SessionChatSelectionCandidate[];
+  continuationToken?: string | null;
   expectedEntityKind?: SessionSelectionEntityKind | null;
   label: string;
   query: string;
   requiresClarification: boolean;
   selectedEntityUid: string | null;
   slotId: string;
+  totalCandidates?: number | null;
 }
 
 export interface SessionChatSelectionState {

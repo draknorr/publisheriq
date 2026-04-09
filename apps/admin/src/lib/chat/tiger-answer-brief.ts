@@ -8,6 +8,7 @@ import type {
 } from '@/lib/chat/chat-context-types';
 import type { QuerySuggestion } from '@/lib/chat/query-templates';
 import type { TigerShadowMatchedIntent } from '@/lib/chat/tiger-shadow-types';
+import type { ChatSelectedEntity } from '@/lib/llm/types';
 
 type TigerAnswerIntent = Exclude<TigerShadowMatchedIntent, null>;
 
@@ -358,13 +359,33 @@ function buildCandidateSwitchQuery(
     : `switch ${slot.label} to ${candidate.displayName}`;
 }
 
+function buildSelectionSuggestionRequestOptions(
+  candidate: SessionChatSelectionCandidate
+): { selectedEntities: ChatSelectedEntity[] } | undefined {
+  if (!candidate.platformEntityId) {
+    return undefined;
+  }
+
+  return {
+    selectedEntities: [{
+      displayName: candidate.displayName,
+      entityKind: candidate.entityKind,
+      entityUid: candidate.entityUid,
+      matchQuality: candidate.matchQuality ?? 'exact',
+      platform: candidate.platform === 'steam' ? 'steam' : 'publisheriq',
+      platformEntityId: candidate.platformEntityId,
+    }],
+  };
+}
+
 function buildClarificationSuggestions(selectionState: SessionChatSelectionState): QuerySuggestion[] {
   if (selectionState.slots.length === 1) {
     const slot = selectionState.slots[0];
-    return slot.candidates.slice(0, 4).map((candidate) => ({
+    return slot.candidates.map((candidate) => ({
       category: candidate.entityKind,
       label: formatSelectionCandidateLabel(slot, candidate),
       query: buildCandidateSwitchQuery(selectionState, slot, candidate),
+      requestOptions: buildSelectionSuggestionRequestOptions(candidate),
     }));
   }
 
@@ -1817,16 +1838,15 @@ export function buildTigerClarificationBrief(params: {
   if (selectionState.slots.length === 1) {
     const slot = selectionState.slots[0];
     const labels = slot.candidates
-      .slice(0, 3)
       .map((candidate) => `${formatSelectionCandidateLabel(slot, candidate)} (${candidate.entityKind})`);
 
     const directAnswer = labels.length >= 2
-      ? `I found a few likely matches for ${slot.query}. Did you mean ${labels.slice(0, -1).join(', ')}${labels.length > 2 ? ',' : ''} or ${labels[labels.length - 1]}?`
-      : `I found a few likely matches for ${slot.query}. Which one did you mean?`;
+      ? `I found multiple likely matches for ${slot.query}. Choose the exact one below.`
+      : `I found a likely match for ${slot.query}. Choose the exact one below.`;
     const fallbackMarkdown = [
       directAnswer,
       '',
-      ...slot.candidates.slice(0, 4).map((candidate, index) => `${index + 1}. ${formatSelectionCandidateLabel(slot, candidate)} (${candidate.entityKind})`),
+      ...slot.candidates.map((candidate, index) => `${index + 1}. ${formatSelectionCandidateLabel(slot, candidate)} (${candidate.entityKind})`),
     ].join('\n');
 
     return {
@@ -1857,7 +1877,7 @@ export function buildTigerClarificationBrief(params: {
     '',
     ...selectionState.slots.flatMap((slot) => [
       `For ${slot.label}:`,
-      ...slot.candidates.slice(0, 4).map((candidate, index) => `${index + 1}. ${formatSelectionCandidateLabel(slot, candidate)} (${candidate.entityKind})`),
+      ...slot.candidates.map((candidate, index) => `${index + 1}. ${formatSelectionCandidateLabel(slot, candidate)} (${candidate.entityKind})`),
       '',
     ]),
   ].join('\n').trim();

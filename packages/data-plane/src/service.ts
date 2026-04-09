@@ -41,6 +41,9 @@ import type {
   RankedEntity,
   RelatedEntityKind,
   RelatedEntityResultItem,
+  ResolveEntitiesResolutionMode,
+  ResolveEntityMatchSource,
+  ResolveEntityResolutionTier,
   ResolveEntitiesRequest,
   ResolveEntitiesResponse,
   ResolvedEntity,
@@ -82,9 +85,11 @@ interface EntityRow extends QueryResultRow {
   game_count?: number | null;
   match_quality?: MatchQuality | null;
   match_rank?: number | null;
+  match_source?: ResolveEntityMatchSource | null;
   matched_name?: string | null;
   owners_midpoint: number | null;
   release_year?: number | null;
+  resolution_tier?: ResolveEntityResolutionTier | null;
   review_score: number | null;
   similarity_score?: number | null;
   total_reviews: number | null;
@@ -634,6 +639,7 @@ const DEFAULT_DOCUMENT_SEARCH_DAYS = 30;
 const DEFAULT_DOCUMENT_LIMIT = 8;
 const DEFAULT_USER_ALERT_LIMIT = 10;
 const MAX_ENTITY_LIMIT = 15;
+const MAX_CHAT_STRICT_ENTITY_LIMIT = 50;
 const MAX_CATALOG_LIMIT = 50;
 const MAX_ENTITY_GAMES_LIMIT = 25;
 const MAX_RELATED_LIMIT = 25;
@@ -643,6 +649,7 @@ const MAX_CONTINUE_LIMIT = 20;
 const MAX_CHANGE_ACTIVITY_DAYS = 180;
 const MAX_CHANGE_ACTIVITY_LIMIT = 25;
 const MAX_CHANGE_PATTERN_LIMIT = 10;
+const STRICT_ENTITY_SCAN_BUFFER = 25;
 const MAX_COMPARE_ENTITY_COUNT = 5;
 const MAX_TRACE_DAYS = 180;
 const MAX_TRACE_METRICS = 4;
@@ -1302,9 +1309,43 @@ function normalizeMatchQuality(value: unknown): MatchQuality | null {
     : null;
 }
 
+function normalizeResolveEntitiesResolutionMode(value: unknown): ResolveEntitiesResolutionMode {
+  return value === 'chat_strict' ? 'chat_strict' : 'default';
+}
+
+function normalizeResolveEntityMatchSource(value: unknown): ResolveEntityMatchSource | null {
+  return value === 'platform_entity_id'
+    || value === 'canonical_name'
+    || value === 'normalized_name'
+    || value === 'alias'
+    || value === 'normalized_alias'
+    || value === 'legacy_name'
+    ? value
+    : null;
+}
+
+function normalizeResolveEntityResolutionTier(value: unknown): ResolveEntityResolutionTier | null {
+  return value === 'platform_id_exact'
+    || value === 'canonical_exact'
+    || value === 'alias_exact'
+    || value === 'normalized_exact'
+    || value === 'canonical_prefix'
+    || value === 'alias_prefix'
+    || value === 'legacy_prefix'
+    || value === 'canonical_substring'
+    || value === 'alias_substring'
+    || value === 'legacy_substring'
+    || value === 'legacy_exact'
+    || value === 'fuzzy'
+    ? value
+    : null;
+}
+
 function matchConfidence(matchQuality: MatchQuality, matchRank?: number | null): number {
   if (matchRank !== null && matchRank !== undefined) {
     switch (matchRank) {
+      case -1:
+        return 0.999;
       case 0:
         return 0.995;
       case 1:
@@ -1334,18 +1375,128 @@ function matchConfidence(matchQuality: MatchQuality, matchRank?: number | null):
   }
 }
 
-function choosePreferredResolvedEntity(left: ResolvedEntity, right: ResolvedEntity): ResolvedEntity {
+function inferLegacyResolutionTier(matchQuality: MatchQuality): ResolveEntityResolutionTier {
+  switch (matchQuality) {
+    case 'exact':
+      return 'legacy_exact';
+    case 'prefix':
+      return 'legacy_prefix';
+    case 'substring':
+      return 'legacy_substring';
+    default:
+      return 'fuzzy';
+  }
+}
+
+function inferResolutionTierFromResolvedEntity(entity: Pick<ResolvedEntity, 'matchQuality' | 'resolutionTier'>): ResolveEntityResolutionTier {
+  return entity.resolutionTier
+    ?? inferLegacyResolutionTier(entity.matchQuality);
+}
+
+function resolutionTierRank(tier: ResolveEntityResolutionTier | null | undefined): number {
+  switch (tier) {
+    case 'platform_id_exact':
+      return 0;
+    case 'canonical_exact':
+      return 1;
+    case 'alias_exact':
+      return 2;
+    case 'normalized_exact':
+      return 3;
+    case 'legacy_exact':
+      return 4;
+    case 'canonical_prefix':
+      return 5;
+    case 'alias_prefix':
+      return 6;
+    case 'legacy_prefix':
+      return 7;
+    case 'canonical_substring':
+      return 8;
+    case 'alias_substring':
+      return 9;
+    case 'legacy_substring':
+      return 10;
+    case 'fuzzy':
+    default:
+      return 11;
+  }
+}
+
+function compareResolvedEntitiesByResolutionPriority(left: ResolvedEntity, right: ResolvedEntity): number {
+  const tierDelta = resolutionTierRank(inferResolutionTierFromResolvedEntity(left))
+    - resolutionTierRank(inferResolutionTierFromResolvedEntity(right));
+  if (tierDelta !== 0) {
+    return tierDelta;
+  }
+
   if (right.confidence !== left.confidence) {
-    return right.confidence > left.confidence ? right : left;
+    return right.confidence - left.confidence;
   }
 
   const rightReviews = right.latestMetrics?.totalReviews ?? 0;
   const leftReviews = left.latestMetrics?.totalReviews ?? 0;
   if (rightReviews !== leftReviews) {
-    return rightReviews > leftReviews ? right : left;
+    return rightReviews - leftReviews;
   }
 
-  return right.displayName.localeCompare(left.displayName) < 0 ? right : left;
+  return left.displayName.localeCompare(right.displayName);
+}
+
+function choosePreferredResolvedEntity(left: ResolvedEntity, right: ResolvedEntity): ResolvedEntity {
+  return compareResolvedEntitiesByResolutionPriority(left, right) <= 0 ? left : right;
+}
+
+function buildDefaultResolveAmbiguity(entities: ResolvedEntity[]): ResolveEntitiesResponse['ambiguity'] {
+  if (entities.length <= 1) {
+    return {
+      candidateNames: entities.map((entity) => entity.displayName),
+      message: null,
+      requiresClarification: false,
+    };
+  }
+
+  return {
+    candidateNames: entities.slice(0, 3).map((entity) => entity.displayName),
+    message:
+      entities[0].confidence - entities[1].confidence < 0.08
+        ? 'Multiple strong matches found. A follow-up disambiguation question may improve answer quality.'
+        : null,
+    requiresClarification:
+      entities[0].confidence - entities[1].confidence < 0.08,
+  };
+}
+
+function buildStrictGameResolveAmbiguity(entities: ResolvedEntity[]): ResolveEntitiesResponse['ambiguity'] {
+  const top = entities[0] ?? null;
+  if (!top) {
+    return {
+      bestTier: null,
+      bestTierCount: 0,
+      candidateNames: [],
+      message: 'I could not find a matching game title.',
+      requiresClarification: true,
+    };
+  }
+
+  const bestTier = inferResolutionTierFromResolvedEntity(top);
+  const bestTierEntities = entities.filter(
+    (entity) => inferResolutionTierFromResolvedEntity(entity) === bestTier
+  );
+  const requiresClarification = bestTier === 'fuzzy' || bestTierEntities.length > 1;
+
+  return {
+    bestTier,
+    bestTierCount: bestTierEntities.length,
+    candidateNames: bestTierEntities.slice(0, 10).map((entity) => entity.displayName),
+    message:
+      bestTier === 'fuzzy'
+        ? 'I could not confidently resolve this game title. Please choose the correct match.'
+        : requiresClarification
+          ? 'Multiple plausible game matches remain in the best lexical tier. Please choose the correct one.'
+          : null,
+    requiresClarification,
+  };
 }
 
 function normalizeSemanticTextToken(value: string): string {
@@ -1567,6 +1718,7 @@ export class DataPlaneService {
   async resolveEntities(request: ResolveEntitiesRequest): Promise<ResolveEntitiesResponse> {
     await this.assertContractRuntime('resolveEntities');
     const query = request.query.trim();
+    const resolutionMode = normalizeResolveEntitiesResolutionMode(request.resolutionMode);
 
     if (!query) {
       return {
@@ -1575,16 +1727,31 @@ export class DataPlaneService {
           message: 'Query text is required.',
           requiresClarification: true,
         },
+        continuationToken: null,
         entities: [],
         provenance: buildProvenance(this.config.source, []),
+        totalCandidates: 0,
       };
     }
 
-    const limit = normalizeLimit(request.limit, DEFAULT_ENTITY_LIMIT, MAX_ENTITY_LIMIT);
-    const includeMetrics = request.includeMetrics ?? true;
     const requestedKinds = new Set<EntityKind>(
       request.entityKinds?.length ? request.entityKinds : ['game', 'publisher', 'developer']
     );
+    const strictGameResolver =
+      resolutionMode === 'chat_strict'
+      && requestedKinds.size === 1
+      && requestedKinds.has('game');
+    const limit = normalizeLimit(
+      request.limit,
+      strictGameResolver ? Math.min(DEFAULT_ENTITY_LIMIT, MAX_CHAT_STRICT_ENTITY_LIMIT) : DEFAULT_ENTITY_LIMIT,
+      strictGameResolver ? MAX_CHAT_STRICT_ENTITY_LIMIT : MAX_ENTITY_LIMIT
+    );
+    const continuation = decodeContinuationToken(request.continuationToken);
+    const offset = continuation.offset;
+    const scanLimit = strictGameResolver
+      ? Math.min(MAX_CHAT_STRICT_ENTITY_LIMIT, offset + limit + STRICT_ENTITY_SCAN_BUFFER)
+      : limit;
+    const includeMetrics = request.includeMetrics ?? true;
 
     const entities: ResolvedEntity[] = [];
     const provenanceTables = new Set<string>();
@@ -1592,7 +1759,7 @@ export class DataPlaneService {
 
     if (requestedKinds.has('game')) {
       const canonicalRows = useCanonicalResolver
-        ? await this.queryCanonicalEntities('game', query, limit)
+        ? await this.queryCanonicalEntities('game', query, scanLimit)
         : [];
       const useLegacyFallback =
         canonicalRows.length === 0 ||
@@ -1600,8 +1767,8 @@ export class DataPlaneService {
       const gameRows = useLegacyFallback
         ? [
             ...canonicalRows,
-            ...await this.queryGames(query, limit),
-            ...await this.queryGamesLexical(query, limit),
+            ...await this.queryGames(query, scanLimit),
+            ...await this.queryGamesLexical(query, scanLimit),
           ]
         : canonicalRows;
       entities.push(
@@ -1617,7 +1784,7 @@ export class DataPlaneService {
 
     if (requestedKinds.has('publisher')) {
       const canonicalRows = useCanonicalResolver
-        ? await this.queryCanonicalEntities('publisher', query, limit)
+        ? await this.queryCanonicalEntities('publisher', query, scanLimit)
         : [];
       const useLegacyFallback =
         canonicalRows.length === 0 ||
@@ -1625,8 +1792,8 @@ export class DataPlaneService {
       const publisherRows = useLegacyFallback
         ? [
             ...canonicalRows,
-            ...await this.queryCompanies('publisher', query, limit),
-            ...await this.queryCompaniesLexical('publisher', query, limit),
+            ...await this.queryCompanies('publisher', query, scanLimit),
+            ...await this.queryCompaniesLexical('publisher', query, scanLimit),
           ]
         : canonicalRows;
       entities.push(
@@ -1643,7 +1810,7 @@ export class DataPlaneService {
 
     if (requestedKinds.has('developer')) {
       const canonicalRows = useCanonicalResolver
-        ? await this.queryCanonicalEntities('developer', query, limit)
+        ? await this.queryCanonicalEntities('developer', query, scanLimit)
         : [];
       const useLegacyFallback =
         canonicalRows.length === 0 ||
@@ -1651,8 +1818,8 @@ export class DataPlaneService {
       const developerRows = useLegacyFallback
         ? [
             ...canonicalRows,
-            ...await this.queryCompanies('developer', query, limit),
-            ...await this.queryCompaniesLexical('developer', query, limit),
+            ...await this.queryCompanies('developer', query, scanLimit),
+            ...await this.queryCompaniesLexical('developer', query, scanLimit),
           ]
         : canonicalRows;
       entities.push(
@@ -1677,52 +1844,42 @@ export class DataPlaneService {
         return deduped;
       }, new Map())
       .values()]
-      .sort((left, right) => {
-        if (right.confidence !== left.confidence) {
-          return right.confidence - left.confidence;
-        }
+      .sort((left, right) => strictGameResolver
+        ? compareResolvedEntitiesByResolutionPriority(left, right)
+        : (
+          right.confidence !== left.confidence
+            ? right.confidence - left.confidence
+            : (right.latestMetrics?.totalReviews ?? 0) !== (left.latestMetrics?.totalReviews ?? 0)
+              ? (right.latestMetrics?.totalReviews ?? 0) - (left.latestMetrics?.totalReviews ?? 0)
+              : left.displayName.localeCompare(right.displayName)
+        ));
 
-        const rightReviews = right.latestMetrics?.totalReviews ?? 0;
-        const leftReviews = left.latestMetrics?.totalReviews ?? 0;
-        if (rightReviews !== leftReviews) {
-          return rightReviews - leftReviews;
-        }
-
-        return left.displayName.localeCompare(right.displayName);
-      })
-      .slice(0, limit);
-
-    const ambiguity =
-      sortedEntities.length <= 1
-        ? {
-            candidateNames: sortedEntities.map((entity) => entity.displayName),
-            message: null,
-            requiresClarification: false,
-          }
-        : {
-            candidateNames: sortedEntities.slice(0, 3).map((entity) => entity.displayName),
-            message:
-              sortedEntities[0].confidence - sortedEntities[1].confidence < 0.08
-                ? 'Multiple strong matches found. A follow-up disambiguation question may improve answer quality.'
-                : null,
-            requiresClarification:
-              sortedEntities[0].confidence - sortedEntities[1].confidence < 0.08,
-          };
-
+    const totalCandidates = sortedEntities.length;
+    const pagedEntities = sortedEntities.slice(offset, offset + limit);
+    const ambiguity = strictGameResolver
+      ? buildStrictGameResolveAmbiguity(sortedEntities)
+      : buildDefaultResolveAmbiguity(pagedEntities);
     if (
-      requestedKinds.size === 1 &&
-      requestedKinds.has('game') &&
-      sortedEntities[0]?.matchQuality === 'fuzzy'
+      !strictGameResolver
+      && requestedKinds.size === 1
+      && requestedKinds.has('game')
+      && pagedEntities[0]?.matchQuality === 'fuzzy'
     ) {
       ambiguity.message =
         'I could not confidently resolve this game title. Please choose a more specific title.';
       ambiguity.requiresClarification = true;
     }
+    const continuationToken =
+      offset + limit < totalCandidates
+        ? encodeContinuationToken({ offset: offset + limit })
+        : null;
 
     return {
       ambiguity,
-      entities: sortedEntities,
+      continuationToken,
+      entities: pagedEntities,
       provenance: buildProvenance(this.config.source, [...provenanceTables]),
+      totalCandidates,
     };
   }
 
@@ -6891,6 +7048,13 @@ export class DataPlaneService {
             e.canonical_name AS display_name,
             e.canonical_name AS matched_name,
             CASE
+              WHEN e.platform_entity_id = q.raw_query THEN 'platform_entity_id'
+              WHEN lower(e.canonical_name) = q.raw_query THEN 'canonical_name'
+              WHEN e.normalized_name = q.normalized_query OR replace(e.normalized_name, ' ', '') = q.compact_query THEN 'normalized_name'
+              ELSE 'canonical_name'
+            END AS match_source,
+            CASE
+              WHEN e.platform_entity_id = q.raw_query THEN 'exact'
               WHEN lower(e.canonical_name) = q.raw_query THEN 'exact'
               WHEN e.normalized_name = q.normalized_query THEN 'exact'
               WHEN replace(e.normalized_name, ' ', '') = q.compact_query THEN 'exact'
@@ -6901,12 +7065,21 @@ export class DataPlaneService {
               ELSE 'fuzzy'
             END AS match_quality,
             CASE
+              WHEN e.platform_entity_id = q.raw_query THEN -1
               WHEN lower(e.canonical_name) = q.raw_query THEN 0
               WHEN e.normalized_name = q.normalized_query OR replace(e.normalized_name, ' ', '') = q.compact_query THEN 2
               WHEN lower(e.canonical_name) LIKE q.raw_prefix OR e.normalized_name LIKE q.normalized_prefix THEN 3
               WHEN lower(e.canonical_name) LIKE q.raw_substring OR e.normalized_name LIKE q.normalized_substring THEN 4
               ELSE 5
             END AS match_rank,
+            CASE
+              WHEN e.platform_entity_id = q.raw_query THEN 'platform_id_exact'
+              WHEN lower(e.canonical_name) = q.raw_query THEN 'canonical_exact'
+              WHEN e.normalized_name = q.normalized_query OR replace(e.normalized_name, ' ', '') = q.compact_query THEN 'normalized_exact'
+              WHEN lower(e.canonical_name) LIKE q.raw_prefix OR e.normalized_name LIKE q.normalized_prefix THEN 'canonical_prefix'
+              WHEN lower(e.canonical_name) LIKE q.raw_substring OR e.normalized_name LIKE q.normalized_substring THEN 'canonical_substring'
+              ELSE 'fuzzy'
+            END AS resolution_tier,
             GREATEST(
               COALESCE(similarity(lower(e.canonical_name), q.raw_query), 0),
               COALESCE(similarity(replace(lower(e.canonical_name), ' ', ''), q.compact_query), 0)
@@ -6919,6 +7092,8 @@ export class DataPlaneService {
           WHERE e.entity_kind = $9
             AND e.platform = $10
             AND (
+              e.platform_entity_id = q.raw_query
+              OR
               lower(e.canonical_name) = q.raw_query
               OR e.normalized_name = q.normalized_query
               OR replace(e.normalized_name, ' ', '') = q.compact_query
@@ -6939,6 +7114,11 @@ export class DataPlaneService {
             e.canonical_name AS display_name,
             a.alias AS matched_name,
             CASE
+              WHEN lower(a.alias) = q.raw_query THEN 'alias'
+              WHEN a.normalized_alias = q.normalized_query OR replace(a.normalized_alias, ' ', '') = q.compact_query THEN 'normalized_alias'
+              ELSE 'alias'
+            END AS match_source,
+            CASE
               WHEN lower(a.alias) = q.raw_query THEN 'exact'
               WHEN a.normalized_alias = q.normalized_query THEN 'exact'
               WHEN replace(a.normalized_alias, ' ', '') = q.compact_query THEN 'exact'
@@ -6955,6 +7135,13 @@ export class DataPlaneService {
               WHEN lower(a.alias) LIKE q.raw_substring OR a.normalized_alias LIKE q.normalized_substring THEN 4
               ELSE 5
             END AS match_rank,
+            CASE
+              WHEN lower(a.alias) = q.raw_query THEN 'alias_exact'
+              WHEN a.normalized_alias = q.normalized_query OR replace(a.normalized_alias, ' ', '') = q.compact_query THEN 'normalized_exact'
+              WHEN lower(a.alias) LIKE q.raw_prefix OR a.normalized_alias LIKE q.normalized_prefix THEN 'alias_prefix'
+              WHEN lower(a.alias) LIKE q.raw_substring OR a.normalized_alias LIKE q.normalized_substring THEN 'alias_substring'
+              ELSE 'fuzzy'
+            END AS resolution_tier,
             GREATEST(
               COALESCE(similarity(lower(a.alias), q.raw_query), 0),
               COALESCE(similarity(replace(lower(a.alias), ' ', ''), q.compact_query), 0)
@@ -6997,9 +7184,11 @@ export class DataPlaneService {
           game_count,
           match_quality,
           match_rank,
+          match_source,
           matched_name,
           owners_midpoint,
           release_year,
+          resolution_tier,
           review_score,
           similarity_score,
           total_reviews
@@ -10328,6 +10517,12 @@ export class DataPlaneService {
     const matchedName = row.matched_name?.trim() || row.display_name;
     const matchQuality =
       normalizeMatchQuality(row.match_quality) ?? inferMatchQuality(matchedName, query);
+    const matchSource =
+      normalizeResolveEntityMatchSource(row.match_source)
+      ?? (this.config.source === 'tiger' ? 'legacy_name' : 'legacy_name');
+    const resolutionTier =
+      normalizeResolveEntityResolutionTier(row.resolution_tier)
+      ?? inferLegacyResolutionTier(matchQuality);
 
     return {
       confidence: matchConfidence(matchQuality, row.match_rank ?? null),
@@ -10343,10 +10538,12 @@ export class DataPlaneService {
           }
         : undefined,
       matchQuality,
+      matchSource,
       matchedName,
       platform,
       platformEntityId: String(row.entity_id),
       releaseYear: row.release_year ?? null,
+      resolutionTier,
       signals:
         entityKind === 'game'
           ? undefined

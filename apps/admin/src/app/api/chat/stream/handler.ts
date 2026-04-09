@@ -29,7 +29,10 @@ import {
   type BroadDiscoveryState,
 } from '@/lib/chat/discovery-guardrails';
 import { buildRedundantNewsToolSkipResult } from '@/lib/chat/news-tool-guardrails';
-import { buildTigerChatRenderData } from '@/lib/chat/chat-render-data';
+import {
+  buildTigerChatRenderData,
+  buildTigerClarificationRenderData,
+} from '@/lib/chat/chat-render-data';
 import {
   buildTigerPromptInterpreterMessages,
   parseTigerPromptInterpretation,
@@ -506,11 +509,15 @@ function buildSelectedEntitySelectionState(
         displayName: entity.displayName,
         entityKind: entity.entityKind,
         entityUid: entity.entityUid,
+        matchSource: null,
         matchQuality: entity.matchQuality ?? 'exact',
         ordinal: index + 1,
         platform: entity.platform,
         platformEntityId: entity.platformEntityId,
+        releaseYear: null,
+        resolutionTier: null,
         score: 100,
+        totalReviews: null,
       }],
       expectedEntityKind: entity.entityKind,
       label: entity.displayName,
@@ -1707,7 +1714,10 @@ export async function handleChatStreamRequest(
               contractName: tigerPrimaryEvaluation.contractResult.contractName,
               response: tigerPrimaryEvaluation.contractResult.response,
             })
-          : null;
+          : buildTigerClarificationRenderData({
+              originalPrompt: lastUserPrompt,
+              selectionState: tigerPrimaryEvaluation.sessionState?.selectionState,
+            });
         recordExecutionTrace(
           buildTigerAttemptTraceEntries({
             attempts: tigerPrimaryInfo.attempts,

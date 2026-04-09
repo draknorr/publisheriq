@@ -1,3 +1,6 @@
+import type { SessionChatSelectionCandidate, SessionChatSelectionState } from '@/lib/chat/chat-context-types';
+import type { ChatSelectedEntity } from '@/lib/llm/types';
+
 export type ChatHistoryMetric =
   | 'ccu_peak'
   | 'discount_percent'
@@ -50,9 +53,43 @@ export interface ChatMomentumCurrentPlayersRenderData {
   rows: ChatMomentumCurrentPlayersRow[];
 }
 
+export interface ChatEntityClarificationCandidate {
+  displayName: string;
+  entityKind: ChatSelectedEntity['entityKind'];
+  entityUid: string;
+  matchQuality: NonNullable<ChatSelectedEntity['matchQuality']>;
+  matchSource: NonNullable<SessionChatSelectionCandidate['matchSource']> | null;
+  ordinal: number;
+  platform: ChatSelectedEntity['platform'];
+  platformEntityId: string;
+  releaseYear: number | null;
+  resolutionTier: NonNullable<SessionChatSelectionCandidate['resolutionTier']> | null;
+  selectedEntity: ChatSelectedEntity;
+  totalReviews: number | null;
+}
+
+export interface ChatEntityClarificationSlot {
+  candidates: ChatEntityClarificationCandidate[];
+  continuationToken?: string | null;
+  expectedEntityKind?: ChatEntityClarificationCandidate['entityKind'] | null;
+  label: string;
+  query: string;
+  requiresClarification: boolean;
+  slotId: string;
+  totalCandidates?: number | null;
+}
+
+export interface ChatEntityClarificationRenderData {
+  family: string;
+  kind: 'entity_clarification';
+  originalPrompt: string;
+  slots: ChatEntityClarificationSlot[];
+}
+
 export type ChatRenderData =
   | ChatMetricHistoryRenderData
-  | ChatMomentumCurrentPlayersRenderData;
+  | ChatMomentumCurrentPlayersRenderData
+  | ChatEntityClarificationRenderData;
 
 type TigerRenderContractName =
   | 'compareEntities'
@@ -224,4 +261,78 @@ export function buildTigerChatRenderData(params: {
   }
 
   return null;
+}
+
+function buildClarificationSelectedEntity(
+  candidate: SessionChatSelectionCandidate
+): ChatSelectedEntity | null {
+  if (!candidate.platformEntityId) {
+    return null;
+  }
+
+  return {
+    displayName: candidate.displayName,
+    entityKind: candidate.entityKind,
+    entityUid: candidate.entityUid,
+    matchQuality: candidate.matchQuality ?? 'exact',
+    platform: candidate.platform === 'steam' ? 'steam' : 'publisheriq',
+    platformEntityId: candidate.platformEntityId,
+  };
+}
+
+export function buildTigerClarificationRenderData(params: {
+  originalPrompt: string;
+  selectionState: SessionChatSelectionState | null | undefined;
+}): ChatEntityClarificationRenderData | null {
+  const selectionState = params.selectionState;
+  if (!selectionState?.slots?.length) {
+    return null;
+  }
+
+  const slots = selectionState.slots
+    .filter((slot) => slot.requiresClarification && slot.candidates.length > 0)
+    .map((slot) => ({
+      candidates: slot.candidates
+        .map((candidate) => {
+          const selectedEntity = buildClarificationSelectedEntity(candidate);
+          if (!selectedEntity) {
+            return null;
+          }
+
+          return {
+            displayName: candidate.displayName,
+            entityKind: candidate.entityKind,
+            entityUid: candidate.entityUid,
+            matchQuality: candidate.matchQuality ?? 'exact',
+            matchSource: candidate.matchSource ?? null,
+            ordinal: candidate.ordinal,
+            platform: selectedEntity.platform,
+            platformEntityId: selectedEntity.platformEntityId,
+            releaseYear: candidate.releaseYear ?? null,
+            resolutionTier: candidate.resolutionTier ?? null,
+            selectedEntity,
+            totalReviews: candidate.totalReviews ?? null,
+          };
+        })
+        .filter((candidate): candidate is ChatEntityClarificationCandidate => candidate !== null),
+      continuationToken: slot.continuationToken ?? null,
+      expectedEntityKind: slot.expectedEntityKind ?? null,
+      label: slot.label,
+      query: slot.query,
+      requiresClarification: slot.requiresClarification,
+      slotId: slot.slotId,
+      totalCandidates: slot.totalCandidates ?? slot.candidates.length,
+    }))
+    .filter((slot) => slot.candidates.length > 0);
+
+  if (slots.length === 0) {
+    return null;
+  }
+
+  return {
+    family: selectionState.family,
+    kind: 'entity_clarification',
+    originalPrompt: params.originalPrompt,
+    slots,
+  };
 }

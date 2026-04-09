@@ -2,6 +2,27 @@ export type EntityKind = 'game' | 'publisher' | 'developer';
 export type EntityPlatform = 'steam' | 'publisheriq';
 export type DataPlaneSource = 'supabase-postgres' | 'tiger';
 export type MatchQuality = 'exact' | 'prefix' | 'substring' | 'fuzzy';
+export type ResolveEntitiesResolutionMode = 'default' | 'chat_strict';
+export type ResolveEntityMatchSource =
+  | 'platform_entity_id'
+  | 'canonical_name'
+  | 'normalized_name'
+  | 'alias'
+  | 'normalized_alias'
+  | 'legacy_name';
+export type ResolveEntityResolutionTier =
+  | 'platform_id_exact'
+  | 'canonical_exact'
+  | 'alias_exact'
+  | 'normalized_exact'
+  | 'canonical_prefix'
+  | 'alias_prefix'
+  | 'legacy_prefix'
+  | 'canonical_substring'
+  | 'alias_substring'
+  | 'legacy_substring'
+  | 'legacy_exact'
+  | 'fuzzy';
 export type ContractStatus = 'ready' | 'planned';
 export type ContractRuntimeReadiness = 'ready' | 'blocked';
 export type SemanticSearchMode = 'similarity' | 'concept';
@@ -200,10 +221,12 @@ export interface QueryProvenance {
 }
 
 export interface ResolveEntitiesRequest {
+  continuationToken?: string | null;
   entityKinds?: EntityKind[];
   includeMetrics?: boolean;
   limit?: number;
   query: string;
+  resolutionMode?: ResolveEntitiesResolutionMode;
 }
 
 export interface ResolvedEntity {
@@ -218,10 +241,12 @@ export interface ResolvedEntity {
     totalReviews: number | null;
   };
   matchQuality: MatchQuality;
+  matchSource?: ResolveEntityMatchSource | null;
   matchedName: string;
   platform: EntityPlatform;
   platformEntityId: string;
   releaseYear?: number | null;
+  resolutionTier?: ResolveEntityResolutionTier | null;
   signals?: {
     gameCount?: number | null;
   };
@@ -229,12 +254,16 @@ export interface ResolvedEntity {
 
 export interface ResolveEntitiesResponse {
   ambiguity: {
+    bestTier?: ResolveEntityResolutionTier | null;
+    bestTierCount?: number | null;
     candidateNames: string[];
     message: string | null;
     requiresClarification: boolean;
   };
+  continuationToken?: string | null;
   entities: ResolvedEntity[];
   provenance: QueryProvenance;
+  totalCandidates?: number;
 }
 
 export interface SearchCatalogRequest {

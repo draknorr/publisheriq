@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildTigerChatRenderData } from './chat-render-data';
+import {
+  buildTigerChatRenderData,
+  buildTigerClarificationRenderData,
+} from './chat-render-data';
 import { removeMarkdownTables } from '@/components/chat/content/parsers';
 
 test('buildTigerChatRenderData maps current-player momentum rows to render data', () => {
@@ -112,6 +115,118 @@ test('buildTigerChatRenderData maps metric-history responses to chart render dat
       },
     ],
     startDate: '2026-03-30',
+  });
+});
+
+test('buildTigerClarificationRenderData maps ambiguous selection state to clickable render data', () => {
+  const renderData = buildTigerClarificationRenderData({
+    originalPrompt: "What's the CCU for Counter-Strike 2?",
+    selectionState: {
+      family: 'entity_overview',
+      slots: [
+        {
+          candidates: [
+            {
+              displayName: 'Counter-Strike 2',
+              entityKind: 'game',
+              entityUid: 'steam:game:730',
+              matchQuality: 'exact',
+              matchSource: 'canonical_name',
+              ordinal: 1,
+              platform: 'steam',
+              platformEntityId: '730',
+              releaseYear: 2023,
+              resolutionTier: 'canonical_exact',
+              score: 100,
+              totalReviews: 2000000,
+            },
+            {
+              displayName: 'Counter-Strike: Condition Zero',
+              entityKind: 'game',
+              entityUid: 'steam:game:80',
+              matchQuality: 'exact',
+              matchSource: 'canonical_name',
+              ordinal: 2,
+              platform: 'steam',
+              platformEntityId: '80',
+              releaseYear: 2004,
+              resolutionTier: 'canonical_exact',
+              score: 99,
+              totalReviews: 100000,
+            },
+          ],
+          continuationToken: null,
+          expectedEntityKind: 'game',
+          label: 'game',
+          query: 'Counter-Strike 2',
+          requiresClarification: true,
+          selectedEntityUid: null,
+          slotId: 'primary',
+          totalCandidates: 2,
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(renderData, {
+    family: 'entity_overview',
+    kind: 'entity_clarification',
+    originalPrompt: "What's the CCU for Counter-Strike 2?",
+    slots: [
+      {
+        candidates: [
+          {
+            displayName: 'Counter-Strike 2',
+            entityKind: 'game',
+            entityUid: 'steam:game:730',
+            matchQuality: 'exact',
+            matchSource: 'canonical_name',
+            ordinal: 1,
+            platform: 'steam',
+            platformEntityId: '730',
+            releaseYear: 2023,
+            resolutionTier: 'canonical_exact',
+            selectedEntity: {
+              displayName: 'Counter-Strike 2',
+              entityKind: 'game',
+              entityUid: 'steam:game:730',
+              matchQuality: 'exact',
+              platform: 'steam',
+              platformEntityId: '730',
+            },
+            totalReviews: 2000000,
+          },
+          {
+            displayName: 'Counter-Strike: Condition Zero',
+            entityKind: 'game',
+            entityUid: 'steam:game:80',
+            matchQuality: 'exact',
+            matchSource: 'canonical_name',
+            ordinal: 2,
+            platform: 'steam',
+            platformEntityId: '80',
+            releaseYear: 2004,
+            resolutionTier: 'canonical_exact',
+            selectedEntity: {
+              displayName: 'Counter-Strike: Condition Zero',
+              entityKind: 'game',
+              entityUid: 'steam:game:80',
+              matchQuality: 'exact',
+              platform: 'steam',
+              platformEntityId: '80',
+            },
+            totalReviews: 100000,
+          },
+        ],
+        continuationToken: null,
+        expectedEntityKind: 'game',
+        label: 'game',
+        query: 'Counter-Strike 2',
+        requiresClarification: true,
+        slotId: 'primary',
+        totalCandidates: 2,
+      },
+    ],
   });
 });
 
