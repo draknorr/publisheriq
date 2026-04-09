@@ -1772,6 +1772,79 @@ test('chat route preserves Tiger primary selection state for deterministic clari
   assertExhausted();
 });
 
+test('chat route strips empty Tiger clarification state before emitting message_end', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'What is the CCU for Counter-Strike 2?' }],
+    },
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        response: {
+          contractResult: null,
+          info: {
+            attempts: [{
+              contractName: 'resolveEntities',
+              httpStatus: 500,
+              reason: 'Internal server error',
+              status: 'error',
+              timingMs: 570,
+            }],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'entity_overview',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'primary_success',
+          },
+          renderedText: 'I found a likely match for Counter-Strike 2. Choose the exact one below.',
+          sessionState: {
+            lastAnswer: {
+              clarificationNeeded: true,
+              family: 'entity_overview',
+              summary: 'Tiger needs clarification for entity_overview.',
+            },
+            selectionState: {
+              family: 'entity_overview',
+              slots: [{
+                candidates: [],
+                continuationToken: null,
+                expectedEntityKind: 'game',
+                label: 'Counter-Strike 2',
+                query: 'Counter-Strike 2',
+                requiresClarification: true,
+                selectedEntityUid: null,
+                slotId: 'primary',
+                totalCandidates: 0,
+              }],
+            },
+          },
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const endEvent = getEndEvent(events);
+
+  assert.ok(endEvent);
+  assert.equal(endEvent.renderData, undefined);
+  assert.equal(endEvent.sessionContext?.selectionState ?? null, null);
+  assert.equal(endEvent.sessionContext?.lastAnswer?.clarificationNeeded, false);
+  assert.equal(
+    endEvent.sessionContext?.lastAnswer?.summary,
+    'System could not resolve a stable entity for entity_overview.'
+  );
+  assertExhausted();
+});
+
 test('chat route preserves Tiger fallback metadata and attaches Tiger shadow metadata for legacy recent-news topic answers', async (t) => {
   setScopedEnv(t, 'CHAT_PHASE1_QUALITY_ENABLED', 'true');
   setScopedEnv(t, 'CHAT_TIGER_LEGACY_FALLBACK_ENABLED', 'true');

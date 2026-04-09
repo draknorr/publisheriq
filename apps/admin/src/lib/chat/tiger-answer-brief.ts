@@ -375,8 +375,9 @@ function buildSelectionSuggestionRequestOptions(
 }
 
 function buildClarificationSuggestions(selectionState: SessionChatSelectionState): QuerySuggestion[] {
-  if (selectionState.slots.length === 1) {
-    const slot = selectionState.slots[0];
+  const slots = selectionState.slots.filter((slot) => slot.candidates.length > 0);
+  if (slots.length === 1) {
+    const slot = slots[0];
     return slot.candidates.map((candidate) => ({
       category: candidate.entityKind,
       label: formatSelectionCandidateLabel(slot, candidate),
@@ -385,7 +386,7 @@ function buildClarificationSuggestions(selectionState: SessionChatSelectionState
     }));
   }
 
-  const [left, right] = selectionState.slots;
+  const [left, right] = slots;
   if (!left || !right) {
     return [];
   }
@@ -424,6 +425,20 @@ function buildSelectionSwitchSuggestions(selectionState: SessionChatSelectionSta
   );
 
   return dedupeSuggestions(suggestions, 3);
+}
+
+function buildZeroCandidateClarificationText(
+  selectionState: SessionChatSelectionState | null,
+  clarificationText?: string | null
+): string {
+  const query = selectionState?.slots.find((slot) => slot.query.trim().length > 0)?.query.trim() ?? null;
+
+  if (query) {
+    return `I couldn't safely resolve "${query}" from the current data. Try the exact game, publisher, or developer name.`;
+  }
+
+  return clarificationText?.trim()
+    || 'I couldn\'t safely resolve that title from the current data. Try a more specific name.';
 }
 
 function shouldSurfaceAlternateSelectionHint(
@@ -1813,9 +1828,10 @@ export function buildTigerClarificationBrief(params: {
   selectionState: SessionChatSelectionState | null;
 }): TigerAnswerBrief {
   const { clarificationText, intent, selectionState } = params;
+  const slotsWithCandidates = selectionState?.slots.filter((slot) => slot.candidates.length > 0) ?? [];
 
-  if (!selectionState || selectionState.slots.length === 0) {
-    const directAnswer = clarificationText?.trim() || 'I found multiple likely matches. Which one did you want?';
+  if (!selectionState || selectionState.slots.length === 0 || slotsWithCandidates.length === 0) {
+    const directAnswer = buildZeroCandidateClarificationText(selectionState, clarificationText);
     return {
       answerKind: 'clarification',
       directAnswer,
@@ -1831,8 +1847,8 @@ export function buildTigerClarificationBrief(params: {
     };
   }
 
-  if (selectionState.slots.length === 1) {
-    const slot = selectionState.slots[0];
+  if (slotsWithCandidates.length === 1) {
+    const slot = slotsWithCandidates[0];
     const labels = slot.candidates
       .map((candidate) => `${formatSelectionCandidateLabel(slot, candidate)} (${candidate.entityKind})`);
 
@@ -1860,7 +1876,7 @@ export function buildTigerClarificationBrief(params: {
     };
   }
 
-  const slotPrompts = selectionState.slots.map((slot) => {
+  const slotPrompts = slotsWithCandidates.map((slot) => {
     const topCandidates = slot.candidates
       .slice(0, 2)
       .map((candidate) => `${formatSelectionCandidateLabel(slot, candidate)} (${candidate.entityKind})`)

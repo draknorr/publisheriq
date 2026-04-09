@@ -47,6 +47,7 @@ async function withServer(
   callback: (origin: string) => Promise<void>,
   params?: {
     relatedEntitiesFallback?: Record<string, unknown> | null;
+    sourceFallback?: Record<string, unknown> | null;
   }
 ): Promise<void> {
   const server = createQueryApiServer({
@@ -54,6 +55,9 @@ async function withServer(
     dataPlane: dataPlane as any,
     ...(params?.relatedEntitiesFallback
       ? { relatedEntitiesFallback: params.relatedEntitiesFallback as any }
+      : {}),
+    ...(params?.sourceFallback
+      ? { sourceFallback: params.sourceFallback as any }
       : {}),
   });
 
@@ -81,6 +85,39 @@ test('query-api keeps /healthz public but protects contract routes with bearer a
     assert.equal(protectedResponse.status, 401);
     assert.deepEqual(await protectedResponse.json(), { error: 'Unauthorized' });
   });
+});
+
+test('query-api falls back to the source service for /healthz when the Tiger primary throws', async () => {
+  await withServer(
+    createDataPlaneStub({
+      healthCheck: async () => {
+        throw new Error('Tiger primary is unavailable');
+      },
+    }),
+    null,
+    async (origin) => {
+      const response = await fetch(`${origin}/healthz`);
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        ok: true,
+        provenance: {
+          capturedAt: '2026-04-01T00:00:00.000Z',
+          source: 'supabase-postgres',
+          tables: [],
+        },
+      });
+    },
+    {
+      sourceFallback: createDataPlaneStub({
+        healthCheck: async () => ({
+          capturedAt: '2026-04-01T00:00:00.000Z',
+          source: 'supabase-postgres',
+          tables: [],
+        }),
+      }),
+    }
+  );
 });
 
 test('query-api routes semantic-search requests to the data-plane service', async () => {
@@ -146,6 +183,79 @@ test('query-api routes semantic-search requests to the data-plane service', asyn
         results: [{ id: 367520, name: 'Hollow Knight', score: 0.94 }],
         sufficient_to_answer: true,
       });
+    }
+  );
+});
+
+test('query-api falls back to the source service for resolve-entities when the Tiger primary throws', async () => {
+  await withServer(
+    createDataPlaneStub({
+      resolveEntities: async () => {
+        throw new Error('Tiger primary is unavailable');
+      },
+    }),
+    null,
+    async (origin) => {
+      const response = await fetch(`${origin}/v1/contracts/resolve-entities`, {
+        body: JSON.stringify({
+          entityKinds: ['game'],
+          includeMetrics: false,
+          query: 'Counter-Strike 2',
+          resolutionMode: 'chat_strict',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'Counter-Strike 2',
+          entityKind: 'game',
+          entityUid: 'steam:game:730',
+          matchQuality: 'exact',
+          matchedName: 'Counter-Strike 2',
+          platform: 'steam',
+          platformEntityId: '730',
+        }],
+        provenance: {
+          capturedAt: '2026-04-01T00:00:00.000Z',
+          source: 'supabase-postgres',
+          tables: ['public.apps'],
+        },
+        totalCandidates: 1,
+      });
+    },
+    {
+      sourceFallback: createDataPlaneStub({
+        resolveEntities: async () => ({
+          ambiguity: {
+            message: null,
+            requiresClarification: false,
+          },
+          entities: [{
+            confidence: 0.99,
+            displayName: 'Counter-Strike 2',
+            entityKind: 'game',
+            entityUid: 'steam:game:730',
+            matchQuality: 'exact',
+            matchedName: 'Counter-Strike 2',
+            platform: 'steam',
+            platformEntityId: '730',
+          }],
+          provenance: {
+            capturedAt: '2026-04-01T00:00:00.000Z',
+            source: 'supabase-postgres',
+            tables: ['public.apps'],
+          },
+          totalCandidates: 1,
+        }),
+      }),
     }
   );
 });

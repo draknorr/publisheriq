@@ -1,7 +1,31 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildTigerSuccessBrief } from './tiger-answer-brief';
+import { buildTigerClarificationBrief, buildTigerSuccessBrief } from './tiger-answer-brief';
+
+test('buildTigerClarificationBrief uses safe fallback copy when no clarification candidates exist', () => {
+  const brief = buildTigerClarificationBrief({
+    clarificationText: 'Internal server error',
+    intent: 'entity_overview',
+    selectionState: {
+      family: 'entity_overview',
+      slots: [{
+        candidates: [],
+        label: 'Counter-Strike 2',
+        query: 'Counter-Strike 2',
+        requiresClarification: true,
+        selectedEntityUid: null,
+        slotId: 'primary',
+      }],
+    },
+  });
+
+  assert.equal(
+    brief.directAnswer,
+    'I couldn\'t safely resolve "Counter-Strike 2" from the current data. Try the exact game, publisher, or developer name.'
+  );
+  assert.deepEqual(brief.followUpSuggestions, []);
+});
 
 test('buildTigerSuccessBrief keeps current-player momentum facts player-centric', () => {
   const brief = buildTigerSuccessBrief({

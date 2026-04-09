@@ -1395,6 +1395,14 @@ function buildTigerPrimaryNoResultText(params: {
 }): string | null {
   const firstReason = params.attempts.find((attempt) => attempt.reason?.trim())?.reason?.trim() ?? null;
   const request = isRecord(params.request) ? params.request : null;
+  const isStructuredRuntimeFailure = firstReason != null
+    && /internal server error|failed to fetch|fetch failed|network|timeout|timed out|connection|socket|econn|abort/i.test(firstReason);
+
+  if (params.matchedIntent === 'entity_overview') {
+    return isStructuredRuntimeFailure
+      ? 'I could not load a stable overview for that title from the current structured data right now. Try the exact name or ask again in a moment.'
+      : 'I could not resolve a single game, publisher, or developer for that request. Try the exact name.';
+  }
 
   if (params.matchedIntent === 'relation_lookup') {
     const relationKind = request?.relationKind === 'dlc' ? 'dlc' : request?.relationKind === 'franchise_games' ? 'franchise_games' : null;
@@ -1459,6 +1467,10 @@ function buildTigerPrimaryNoResultText(params: {
 
   if (params.matchedIntent === 'catalog_search') {
     return 'I could not find catalog rows that satisfied the current filters in the available data.';
+  }
+
+  if (isStructuredRuntimeFailure) {
+    return 'I could not finish that structured lookup right now. Please try again in a moment.';
   }
 
   return firstReason ?? null;
@@ -4711,6 +4723,10 @@ function buildSelectionState(params: {
   slots: RankedSelectionSlot[];
 }): SessionChatSelectionState | null {
   if (params.slots.length === 0) {
+    return null;
+  }
+
+  if (!params.slots.some((slot) => slot.candidates.length > 0)) {
     return null;
   }
 
@@ -9272,7 +9288,9 @@ export async function runTigerPrimaryEvaluation(params: {
           matchedIntent,
           mode,
           renderMode: 'deterministic',
-          route: 'primary_success',
+          route: outcome.attempts.some((attempt) => attempt.status === 'error')
+            ? 'error'
+            : 'primary_success',
         },
         renderedText: renderTigerAnswerBrief(answerBrief),
         sessionState: {

@@ -164,6 +164,43 @@ function isLocalHostRequest(request: NextRequest): boolean {
   return readRequestHostCandidates(request).some((hostname) => LOCAL_BYPASS_HOSTS.has(hostname));
 }
 
+function normalizeTigerSelectionState(
+  selectionState: SessionChatSelectionState | null | undefined
+): SessionChatSelectionState | null {
+  if (!selectionState?.slots?.length) {
+    return null;
+  }
+
+  const slotsWithCandidates = selectionState.slots.filter((slot) => slot.candidates.length > 0);
+  if (slotsWithCandidates.length === 0) {
+    return null;
+  }
+
+  return slotsWithCandidates.length === selectionState.slots.length
+    ? selectionState
+    : {
+        ...selectionState,
+        slots: slotsWithCandidates,
+      };
+}
+
+function normalizeTigerLastAnswer(params: {
+  lastAnswer: SessionChatContext['lastAnswer'];
+  selectionState: SessionChatSelectionState | null;
+}): SessionChatContext['lastAnswer'] {
+  if (!params.lastAnswer?.clarificationNeeded || params.selectionState) {
+    return params.lastAnswer ?? null;
+  }
+
+  return {
+    ...params.lastAnswer,
+    clarificationNeeded: false,
+    summary: params.lastAnswer.family
+      ? `System could not resolve a stable entity for ${params.lastAnswer.family}.`
+      : 'System could not resolve a stable entity.',
+  };
+}
+
 export interface ChatRouteDependencies {
   createProvider: typeof createProvider;
   createServerClient: typeof createServerClient;
@@ -1708,6 +1745,13 @@ export async function handleChatStreamRequest(
         const tigerPrimaryInfo = tigerPrimaryEvaluation.info;
         totalToolsMs += sumTigerAttemptTimingMs(tigerPrimaryInfo.attempts);
         tigerPrimaryResult = tigerPrimaryInfo;
+        const normalizedTigerSelectionState = normalizeTigerSelectionState(
+          tigerPrimaryEvaluation.sessionState?.selectionState
+        );
+        const normalizedTigerLastAnswer = normalizeTigerLastAnswer({
+          lastAnswer: tigerPrimaryEvaluation.sessionState?.lastAnswer ?? null,
+          selectionState: normalizedTigerSelectionState,
+        });
         const tigerRenderData = tigerPrimaryEvaluation.contractResult
           ? buildTigerChatRenderData({
               contractName: tigerPrimaryEvaluation.contractResult.contractName,
@@ -1715,7 +1759,7 @@ export async function handleChatStreamRequest(
             })
           : buildTigerClarificationRenderData({
               originalPrompt: lastUserPrompt,
-              selectionState: tigerPrimaryEvaluation.sessionState?.selectionState,
+              selectionState: normalizedTigerSelectionState,
             });
         recordExecutionTrace(
           buildTigerAttemptTraceEntries({
@@ -1784,12 +1828,14 @@ export async function handleChatStreamRequest(
           }
 
           tigerRequestState = tigerPrimaryEvaluation.sessionState?.requestState ?? null;
-          updatedSessionContext = applyTigerPrimarySessionState({
-            baseContext: updatedSessionContext,
-            lastAnswer: tigerPrimaryEvaluation.sessionState?.lastAnswer,
-            requestState: tigerPrimaryEvaluation.sessionState?.requestState,
-            selectionState: tigerPrimaryEvaluation.sessionState?.selectionState,
-          });
+          if (tigerPrimaryEvaluation.sessionState) {
+            updatedSessionContext = applyTigerPrimarySessionState({
+              baseContext: updatedSessionContext,
+              lastAnswer: normalizedTigerLastAnswer,
+              requestState: tigerPrimaryEvaluation.sessionState.requestState,
+              selectionState: normalizedTigerSelectionState,
+            });
+          }
 
           let primaryText = tigerPrimaryEvaluation.renderedText;
           const primaryAnswerBrief = tigerPrimaryEvaluation.answerBrief;

@@ -7,6 +7,26 @@ import {
 } from './chat-render-data';
 import { removeMarkdownTables } from '@/components/chat/content/parsers';
 
+test('buildTigerClarificationRenderData ignores clarification slots without candidates', () => {
+  const renderData = buildTigerClarificationRenderData({
+    originalPrompt: 'What is the CCU for Counter-Strike 2?',
+    selectionState: {
+      family: 'entity_overview',
+      slots: [{
+        candidates: [],
+        label: 'Counter-Strike 2',
+        query: 'Counter-Strike 2',
+        requiresClarification: true,
+        selectedEntityUid: null,
+        slotId: 'primary',
+        totalCandidates: 0,
+      }],
+    },
+  });
+
+  assert.equal(renderData, null);
+});
+
 test('buildTigerChatRenderData maps current-player momentum rows to render data', () => {
   const renderData = buildTigerChatRenderData({
     contractName: 'discoverMomentum',

@@ -97,6 +97,35 @@ interface QueryApiService {
   traceMetricHistory: DataPlaneService['traceMetricHistory'];
 }
 
+async function executeWithSourceFallback<T>(params: {
+  action: string;
+  primaryOperation: () => Promise<T>;
+  fallbackOperation?: (() => Promise<T>) | null;
+}): Promise<T> {
+  try {
+    return await params.primaryOperation();
+  } catch (error) {
+    if (!params.fallbackOperation) {
+      throw error;
+    }
+
+    logger.warn('Query API primary request failed; retrying with source fallback', {
+      action: params.action,
+      error,
+    });
+
+    try {
+      return await params.fallbackOperation();
+    } catch (fallbackError) {
+      logger.error('Query API source fallback failed', {
+        action: params.action,
+        error: fallbackError,
+      });
+      throw error;
+    }
+  }
+}
+
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, {
     'content-type': 'application/json; charset=utf-8',
@@ -213,8 +242,9 @@ export function createQueryApiRequestHandler(params: {
   bearerToken: string | null;
   dataPlane: QueryApiService;
   relatedEntitiesFallback?: QueryApiService | null;
+  sourceFallback?: QueryApiService | null;
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
-  const { bearerToken, dataPlane, relatedEntitiesFallback = null } = params;
+  const { bearerToken, dataPlane, relatedEntitiesFallback = null, sourceFallback = null } = params;
 
   return async (request, response) => {
     try {
@@ -229,39 +259,63 @@ export function createQueryApiRequestHandler(params: {
       }
 
       if (request.method === 'GET' && url.pathname === '/healthz') {
-        const provenance = await dataPlane.healthCheck();
+        const provenance = await executeWithSourceFallback({
+          action: 'healthCheck',
+          fallbackOperation: sourceFallback ? () => sourceFallback.healthCheck() : null,
+          primaryOperation: () => dataPlane.healthCheck(),
+        });
         sendJson(response, 200, { ok: true, provenance });
         return;
       }
 
       if (request.method === 'GET' && url.pathname === '/readyz') {
-        const readiness = await dataPlane.readinessCheck();
+        const readiness = await executeWithSourceFallback({
+          action: 'readinessCheck',
+          fallbackOperation: sourceFallback ? () => sourceFallback.readinessCheck() : null,
+          primaryOperation: () => dataPlane.readinessCheck(),
+        });
         sendJson(response, readiness.ready ? 200 : 503, readiness);
         return;
       }
 
       if (request.method === 'GET' && url.pathname === '/v1/contracts') {
-        sendJson(response, 200, await dataPlane.describeContracts());
+        sendJson(response, 200, await executeWithSourceFallback({
+          action: 'describeContracts',
+          fallbackOperation: sourceFallback ? () => sourceFallback.describeContracts() : null,
+          primaryOperation: () => dataPlane.describeContracts(),
+        }));
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/resolve-entities') {
         const body = await readJsonBody<ResolveEntitiesRequest>(request);
-        const result = await dataPlane.resolveEntities(body);
+        const result = await executeWithSourceFallback({
+          action: 'resolveEntities',
+          fallbackOperation: sourceFallback ? () => sourceFallback.resolveEntities(body) : null,
+          primaryOperation: () => dataPlane.resolveEntities(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/get-entity-overview') {
         const body = await readJsonBody<GetEntityOverviewRequest>(request);
-        const result = await dataPlane.getEntityOverview(body);
+        const result = await executeWithSourceFallback({
+          action: 'getEntityOverview',
+          fallbackOperation: sourceFallback ? () => sourceFallback.getEntityOverview(body) : null,
+          primaryOperation: () => dataPlane.getEntityOverview(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/get-related-entities') {
         const body = await readJsonBody<GetRelatedEntitiesRequest>(request);
-        let result = await dataPlane.getRelatedEntities(body);
+        let result = await executeWithSourceFallback({
+          action: 'getRelatedEntities',
+          fallbackOperation: sourceFallback ? () => sourceFallback.getRelatedEntities(body) : null,
+          primaryOperation: () => dataPlane.getRelatedEntities(body),
+        });
 
         if (
           relatedEntitiesFallback
@@ -297,84 +351,132 @@ export function createQueryApiRequestHandler(params: {
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/get-user-context') {
         const body = await readJsonBody<GetUserContextRequest>(request);
-        const result = await dataPlane.getUserContext(body);
+        const result = await executeWithSourceFallback({
+          action: 'getUserContext',
+          fallbackOperation: sourceFallback ? () => sourceFallback.getUserContext(body) : null,
+          primaryOperation: () => dataPlane.getUserContext(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/search-catalog') {
         const body = await readJsonBody<SearchCatalogRequest>(request);
-        const result = await dataPlane.searchCatalog(body);
+        const result = await executeWithSourceFallback({
+          action: 'searchCatalog',
+          fallbackOperation: sourceFallback ? () => sourceFallback.searchCatalog(body) : null,
+          primaryOperation: () => dataPlane.searchCatalog(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/discover-momentum') {
         const body = await readJsonBody<DiscoverMomentumRequest>(request);
-        const result = await dataPlane.discoverMomentum(body);
+        const result = await executeWithSourceFallback({
+          action: 'discoverMomentum',
+          fallbackOperation: sourceFallback ? () => sourceFallback.discoverMomentum(body) : null,
+          primaryOperation: () => dataPlane.discoverMomentum(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/search-change-activity') {
         const body = await readJsonBody<SearchChangeActivityRequest>(request);
-        const result = await dataPlane.searchChangeActivity(body);
+        const result = await executeWithSourceFallback({
+          action: 'searchChangeActivity',
+          fallbackOperation: sourceFallback ? () => sourceFallback.searchChangeActivity(body) : null,
+          primaryOperation: () => dataPlane.searchChangeActivity(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/discover-change-patterns') {
         const body = await readJsonBody<DiscoverChangePatternsRequest>(request);
-        const result = await dataPlane.discoverChangePatterns(body);
+        const result = await executeWithSourceFallback({
+          action: 'discoverChangePatterns',
+          fallbackOperation: sourceFallback ? () => sourceFallback.discoverChangePatterns(body) : null,
+          primaryOperation: () => dataPlane.discoverChangePatterns(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/rank-entities') {
         const body = await readJsonBody<RankEntitiesRequest>(request);
-        const result = await dataPlane.rankEntities(body);
+        const result = await executeWithSourceFallback({
+          action: 'rankEntities',
+          fallbackOperation: sourceFallback ? () => sourceFallback.rankEntities(body) : null,
+          primaryOperation: () => dataPlane.rankEntities(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/compare-entities') {
         const body = await readJsonBody<CompareEntitiesRequest>(request);
-        const result = await dataPlane.compareEntities(body);
+        const result = await executeWithSourceFallback({
+          action: 'compareEntities',
+          fallbackOperation: sourceFallback ? () => sourceFallback.compareEntities(body) : null,
+          primaryOperation: () => dataPlane.compareEntities(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/trace-metric-history') {
         const body = await readJsonBody<TraceMetricHistoryRequest>(request);
-        const result = await dataPlane.traceMetricHistory(body);
+        const result = await executeWithSourceFallback({
+          action: 'traceMetricHistory',
+          fallbackOperation: sourceFallback ? () => sourceFallback.traceMetricHistory(body) : null,
+          primaryOperation: () => dataPlane.traceMetricHistory(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/explain-changes') {
         const body = await readJsonBody<ExplainChangesRequest>(request);
-        const result = await dataPlane.explainChanges(body);
+        const result = await executeWithSourceFallback({
+          action: 'explainChanges',
+          fallbackOperation: sourceFallback ? () => sourceFallback.explainChanges(body) : null,
+          primaryOperation: () => dataPlane.explainChanges(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/search-documents') {
         const body = await readJsonBody<SearchDocumentsRequest>(request);
-        const result = await dataPlane.searchDocuments(body);
+        const result = await executeWithSourceFallback({
+          action: 'searchDocuments',
+          fallbackOperation: sourceFallback ? () => sourceFallback.searchDocuments(body) : null,
+          primaryOperation: () => dataPlane.searchDocuments(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/semantic-search') {
         const body = await readJsonBody<SemanticSearchRequest>(request);
-        const result = await dataPlane.semanticSearch(body);
+        const result = await executeWithSourceFallback({
+          action: 'semanticSearch',
+          fallbackOperation: sourceFallback ? () => sourceFallback.semanticSearch(body) : null,
+          primaryOperation: () => dataPlane.semanticSearch(body),
+        });
         sendJson(response, 200, result);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/v1/contracts/continue-result-set') {
         const body = await readJsonBody<ContinueResultSetRequest>(request);
-        const result = await dataPlane.continueResultSet(body);
+        const result = await executeWithSourceFallback({
+          action: 'continueResultSet',
+          fallbackOperation: sourceFallback ? () => sourceFallback.continueResultSet(body) : null,
+          primaryOperation: () => dataPlane.continueResultSet(body),
+        });
         sendJson(response, 200, result);
         return;
       }
@@ -419,6 +521,7 @@ export function createQueryApiServer(params?: {
   config?: ReturnType<typeof loadQueryApiConfig> | null;
   dataPlane?: QueryApiService;
   relatedEntitiesFallback?: QueryApiService | null;
+  sourceFallback?: QueryApiService | null;
 }): ReturnType<typeof createServer> {
   loadQueryApiEnvFiles();
 
@@ -436,12 +539,20 @@ export function createQueryApiServer(params?: {
         ? createRelatedEntitiesFallback(config)
         : null
     );
+  const sourceFallback =
+    params?.sourceFallback
+    ?? (
+      !params?.dataPlane && config?.source === 'tiger'
+        ? createSourceFallback(config)
+        : null
+    );
 
   return createServer(
     createQueryApiRequestHandler({
       bearerToken: params?.bearerToken ?? config?.bearerToken ?? null,
       dataPlane,
       relatedEntitiesFallback,
+      sourceFallback,
     })
   );
 }
@@ -491,6 +602,28 @@ function createRelatedEntitiesFallback(
     };
 
     return fallbackService;
+  } catch {
+    return null;
+  }
+}
+
+function createSourceFallback(
+  primaryConfig: ReturnType<typeof loadQueryApiConfig> | null
+): QueryApiService | null {
+  if (!primaryConfig || primaryConfig.source !== 'tiger') {
+    return null;
+  }
+
+  try {
+    const fallbackConfig = loadSourceBaselineConfig();
+    if (
+      fallbackConfig.source === primaryConfig.source
+      && fallbackConfig.connectionString === primaryConfig.connectionString
+    ) {
+      return null;
+    }
+
+    return new DataPlaneService(fallbackConfig);
   } catch {
     return null;
   }
