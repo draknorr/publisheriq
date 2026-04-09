@@ -2047,7 +2047,6 @@ test('getEntityOverview prefers entityUid when a canonical binding is provided',
     entityUid: '11111111-1111-4111-8111-111111111111',
     gamesLimit: 5,
     gamesSortBy: 'reviews',
-    platformEntityId: '9999',
   });
 
   assert.equal(resolvedEntityUid, '11111111-1111-4111-8111-111111111111');

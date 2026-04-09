@@ -376,7 +376,7 @@ export interface GetEntityOverviewRequest {
   entityKind: EntityKind;
   gamesLimit?: number;
   gamesSortBy?: 'release_date' | 'reviews';
-  platformEntityId: string;
+  platformEntityId?: string;
 }
 
 export interface EntityOverviewGameItem {

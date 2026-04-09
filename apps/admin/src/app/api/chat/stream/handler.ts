@@ -466,7 +466,7 @@ function normalizeSelectedEntities(value: unknown): ChatSelectedEntity[] {
         ? item.platformEntityId.trim()
         : typeof item.platformEntityId === 'number'
           ? String(item.platformEntityId)
-          : '';
+          : null;
     const matchQuality =
       typeof item.matchQuality === 'string' && validMatchQualities.has(item.matchQuality as NonNullable<ChatSelectedEntity['matchQuality']>)
         ? item.matchQuality as NonNullable<ChatSelectedEntity['matchQuality']>
@@ -475,7 +475,6 @@ function normalizeSelectedEntities(value: unknown): ChatSelectedEntity[] {
     if (
       !displayName
       || !entityUid
-      || !platformEntityId
       || !validKinds.has(entityKind as ChatSelectedEntity['entityKind'])
       || !validPlatforms.has(platform as ChatSelectedEntity['platform'])
     ) {
@@ -488,7 +487,7 @@ function normalizeSelectedEntities(value: unknown): ChatSelectedEntity[] {
       entityUid,
       matchQuality,
       platform: platform as ChatSelectedEntity['platform'],
-      platformEntityId,
+      ...(platformEntityId ? { platformEntityId } : {}),
     });
   }
 
@@ -513,7 +512,7 @@ function buildSelectedEntitySelectionState(
         matchQuality: entity.matchQuality ?? 'exact',
         ordinal: index + 1,
         platform: entity.platform,
-        platformEntityId: entity.platformEntityId,
+        platformEntityId: entity.platformEntityId ?? null,
         releaseYear: null,
         resolutionTier: null,
         score: 100,

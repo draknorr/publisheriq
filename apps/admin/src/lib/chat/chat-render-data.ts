@@ -61,7 +61,7 @@ export interface ChatEntityClarificationCandidate {
   matchSource: NonNullable<SessionChatSelectionCandidate['matchSource']> | null;
   ordinal: number;
   platform: ChatSelectedEntity['platform'];
-  platformEntityId: string;
+  platformEntityId?: string | null;
   releaseYear: number | null;
   resolutionTier: NonNullable<SessionChatSelectionCandidate['resolutionTier']> | null;
   selectedEntity: ChatSelectedEntity;
@@ -265,18 +265,14 @@ export function buildTigerChatRenderData(params: {
 
 function buildClarificationSelectedEntity(
   candidate: SessionChatSelectionCandidate
-): ChatSelectedEntity | null {
-  if (!candidate.platformEntityId) {
-    return null;
-  }
-
+): ChatSelectedEntity {
   return {
     displayName: candidate.displayName,
     entityKind: candidate.entityKind,
     entityUid: candidate.entityUid,
     matchQuality: candidate.matchQuality ?? 'exact',
     platform: candidate.platform === 'steam' ? 'steam' : 'publisheriq',
-    platformEntityId: candidate.platformEntityId,
+    ...(candidate.platformEntityId ? { platformEntityId: candidate.platformEntityId } : {}),
   };
 }
 
@@ -295,10 +291,6 @@ export function buildTigerClarificationRenderData(params: {
       candidates: slot.candidates
         .map((candidate) => {
           const selectedEntity = buildClarificationSelectedEntity(candidate);
-          if (!selectedEntity) {
-            return null;
-          }
-
           return {
             displayName: candidate.displayName,
             entityKind: candidate.entityKind,
@@ -307,14 +299,15 @@ export function buildTigerClarificationRenderData(params: {
             matchSource: candidate.matchSource ?? null,
             ordinal: candidate.ordinal,
             platform: selectedEntity.platform,
-            platformEntityId: selectedEntity.platformEntityId,
+            ...(selectedEntity.platformEntityId
+              ? { platformEntityId: selectedEntity.platformEntityId }
+              : {}),
             releaseYear: candidate.releaseYear ?? null,
             resolutionTier: candidate.resolutionTier ?? null,
             selectedEntity,
             totalReviews: candidate.totalReviews ?? null,
           };
-        })
-        .filter((candidate): candidate is ChatEntityClarificationCandidate => candidate !== null),
+        }),
       continuationToken: slot.continuationToken ?? null,
       expectedEntityKind: slot.expectedEntityKind ?? null,
       label: slot.label,

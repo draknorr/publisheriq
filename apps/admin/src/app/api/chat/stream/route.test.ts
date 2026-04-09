@@ -1698,16 +1698,23 @@ test('chat route preserves Tiger primary selection state for deterministic clari
                   entityKind: 'developer',
                   entityUid: 'developer:publisheriq:1',
                   matchQuality: 'exact',
+                  matchSource: null,
                   ordinal: 1,
                   platform: 'publisheriq',
-                  platformEntityId: '1',
+                  platformEntityId: null,
+                  releaseYear: null,
+                  resolutionTier: null,
                   score: 100,
+                  totalReviews: null,
                 }],
+                continuationToken: null,
+                expectedEntityKind: 'developer',
                 label: 'FromSoftware',
                 query: 'FromSoftware',
                 requiresClarification: true,
                 selectedEntityUid: null,
                 slotId: 'compare:0',
+                totalCandidates: 1,
               }],
             },
           },
@@ -1725,6 +1732,41 @@ test('chat route preserves Tiger primary selection state for deterministic clari
   const endEvent = getEndEvent(events);
 
   assert.ok(endEvent);
+  assert.deepEqual(endEvent.renderData, {
+    family: 'entity_compare',
+    kind: 'entity_clarification',
+    originalPrompt: 'compare FromSoftware to Rockstar Games',
+    slots: [
+      {
+        candidates: [{
+          displayName: 'FromSoftware',
+          entityKind: 'developer',
+          entityUid: 'developer:publisheriq:1',
+          matchQuality: 'exact',
+          matchSource: null,
+          ordinal: 1,
+          platform: 'publisheriq',
+          releaseYear: null,
+          resolutionTier: null,
+          selectedEntity: {
+            displayName: 'FromSoftware',
+            entityKind: 'developer',
+            entityUid: 'developer:publisheriq:1',
+            matchQuality: 'exact',
+            platform: 'publisheriq',
+          },
+          totalReviews: null,
+        }],
+        continuationToken: null,
+        expectedEntityKind: 'developer',
+        label: 'FromSoftware',
+        query: 'FromSoftware',
+        requiresClarification: true,
+        slotId: 'compare:0',
+        totalCandidates: 1,
+      },
+    ],
+  });
   assert.equal(endEvent.sessionContext?.selectionState?.family, 'entity_compare');
   assert.equal(endEvent.sessionContext?.lastAnswer?.clarificationNeeded, true);
   assertExhausted();

@@ -230,6 +230,81 @@ test('buildTigerClarificationRenderData maps ambiguous selection state to clicka
   });
 });
 
+test('buildTigerClarificationRenderData preserves candidates when platformEntityId is missing', () => {
+  const renderData = buildTigerClarificationRenderData({
+    originalPrompt: "What's the CCU for Counter-Strike 2?",
+    selectionState: {
+      family: 'entity_overview',
+      slots: [
+        {
+          candidates: [
+            {
+              displayName: 'Counter-Strike 2',
+              entityKind: 'game',
+              entityUid: 'steam:game:730',
+              matchQuality: 'exact',
+              matchSource: 'canonical_name',
+              ordinal: 1,
+              platform: 'steam',
+              platformEntityId: null,
+              releaseYear: 2023,
+              resolutionTier: 'canonical_exact',
+              score: 100,
+              totalReviews: 2000000,
+            },
+          ],
+          continuationToken: null,
+          expectedEntityKind: 'game',
+          label: 'game',
+          query: 'Counter-Strike 2',
+          requiresClarification: true,
+          selectedEntityUid: null,
+          slotId: 'primary',
+          totalCandidates: 1,
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(renderData, {
+    family: 'entity_overview',
+    kind: 'entity_clarification',
+    originalPrompt: "What's the CCU for Counter-Strike 2?",
+    slots: [
+      {
+        candidates: [
+          {
+            displayName: 'Counter-Strike 2',
+            entityKind: 'game',
+            entityUid: 'steam:game:730',
+            matchQuality: 'exact',
+            matchSource: 'canonical_name',
+            ordinal: 1,
+            platform: 'steam',
+            releaseYear: 2023,
+            resolutionTier: 'canonical_exact',
+            selectedEntity: {
+              displayName: 'Counter-Strike 2',
+              entityKind: 'game',
+              entityUid: 'steam:game:730',
+              matchQuality: 'exact',
+              platform: 'steam',
+            },
+            totalReviews: 2000000,
+          },
+        ],
+        continuationToken: null,
+        expectedEntityKind: 'game',
+        label: 'game',
+        query: 'Counter-Strike 2',
+        requiresClarification: true,
+        slotId: 'primary',
+        totalCandidates: 1,
+      },
+    ],
+  });
+});
+
 test('removeMarkdownTables strips structured tables but preserves surrounding copy', () => {
   const content = [
     'Here are the current leaders.',

@@ -5873,7 +5873,7 @@ function extractRelatedEntityQuery(prompt: string): string | null {
 async function buildRelatedEntitiesRequest(params: {
   prompt: string;
   selectionState?: SessionChatSelectionState | null;
-}): Promise<{
+  }): Promise<{
   attempts: TigerShadowAttempt[];
   request: GetRelatedEntitiesRequest | null;
   selectionState: SessionChatSelectionState | null;
@@ -5898,7 +5898,7 @@ async function buildRelatedEntitiesRequest(params: {
     query: sourceQuery,
     selectionState: params.selectionState,
   });
-  if (!resolved.entity?.platformEntityId) {
+  if (!resolved.entity?.entityUid) {
     return {
       attempts: [resolved.attempt],
       request: null,
@@ -5926,8 +5926,10 @@ async function buildRelatedEntitiesRequest(params: {
       ...(Object.keys(filters).length > 0 ? { filters } : {}),
       limit: extractRequestedTopCount(params.prompt, relationKind === 'dlc' ? 20 : 10, 20),
       relationKind,
-      sourceAppid: Number.parseInt(resolved.entity.platformEntityId, 10),
       sourceEntityUid: resolved.entity.entityUid,
+      ...(resolved.entity.platformEntityId
+        ? { sourceAppid: Number.parseInt(resolved.entity.platformEntityId, 10) }
+        : {}),
     },
     selectionState: resolved.selectionState,
   };
@@ -8296,7 +8298,7 @@ async function runEntityOverviewShadow(prompt: string): Promise<TigerShadowAttem
   });
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
-  if (!entity?.platformEntityId || !entity.entityKind) {
+  if (!entity?.entityUid || !entity.entityKind) {
     attempts.push(
       buildSkippedAttempt(
         'getEntityOverview',
@@ -8314,7 +8316,7 @@ async function runEntityOverviewShadow(prompt: string): Promise<TigerShadowAttem
       entityKind: entity.entityKind,
       gamesLimit: entity.entityKind === 'game' ? 0 : 5,
       gamesSortBy: /\b(?:top|best)\b/i.test(prompt) ? 'reviews' : 'release_date',
-      platformEntityId: entity.platformEntityId,
+      ...(entity.platformEntityId ? { platformEntityId: entity.platformEntityId } : {}),
     },
     { timeoutMs: readShadowTimeoutMs() }
   );
@@ -8348,7 +8350,7 @@ async function runEntityOverviewPrimary(params: {
   prompt: string;
   queryOverride?: string | null;
   selectionState?: SessionChatSelectionState | null;
-}): Promise<{
+  }): Promise<{
   attempts: TigerShadowAttempt[];
   clarificationText?: string | null;
   request: {
@@ -8356,7 +8358,7 @@ async function runEntityOverviewPrimary(params: {
     entityKind: 'developer' | 'game' | 'publisher';
     gamesLimit: number;
     gamesSortBy: 'release_date' | 'reviews';
-    platformEntityId: string;
+    platformEntityId?: string;
   } | null;
   response: (GetEntityOverviewResponse & {
     viewMode: 'company_count' | 'company_games' | 'company_metrics' | 'game_overview';
@@ -8378,7 +8380,7 @@ async function runEntityOverviewPrimary(params: {
   });
   const attempts: TigerShadowAttempt[] = [resolveAttempt];
 
-  if (!entity?.platformEntityId || !entity.entityKind) {
+  if (!entity?.entityUid || !entity.entityKind) {
     attempts.push(
       buildSkippedAttempt(
         'getEntityOverview',
@@ -8399,7 +8401,7 @@ async function runEntityOverviewPrimary(params: {
     entityKind: entity.entityKind as 'developer' | 'game' | 'publisher',
     gamesLimit: entity.entityKind === 'game' ? 0 : 5,
     gamesSortBy: /\b(?:top|best)\b/i.test(params.prompt) ? 'reviews' as const : 'release_date' as const,
-    platformEntityId: entity.platformEntityId,
+    ...(entity.platformEntityId ? { platformEntityId: entity.platformEntityId } : {}),
   };
 
   const startedAt = performance.now();

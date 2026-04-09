@@ -362,10 +362,6 @@ function buildCandidateSwitchQuery(
 function buildSelectionSuggestionRequestOptions(
   candidate: SessionChatSelectionCandidate
 ): { selectedEntities: ChatSelectedEntity[] } | undefined {
-  if (!candidate.platformEntityId) {
-    return undefined;
-  }
-
   return {
     selectedEntities: [{
       displayName: candidate.displayName,
@@ -373,7 +369,7 @@ function buildSelectionSuggestionRequestOptions(
       entityUid: candidate.entityUid,
       matchQuality: candidate.matchQuality ?? 'exact',
       platform: candidate.platform === 'steam' ? 'steam' : 'publisheriq',
-      platformEntityId: candidate.platformEntityId,
+      ...(candidate.platformEntityId ? { platformEntityId: candidate.platformEntityId } : {}),
     }],
   };
 }

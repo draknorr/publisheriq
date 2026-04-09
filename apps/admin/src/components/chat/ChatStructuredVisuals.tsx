@@ -340,10 +340,11 @@ function ClarificationSlotVisual({
           <button
             key={`${slot.slotId}-${candidate.entityUid}`}
             type="button"
+            disabled={!onSuggestionClick}
             onClick={() => onSuggestionClick?.(originalPrompt, {
               selectedEntities: [candidate.selectedEntity],
             })}
-            className="w-full rounded-2xl border border-border-subtle bg-surface-base/80 px-4 py-3 text-left transition-colors hover:border-border-muted hover:bg-surface-elevated"
+            className="w-full rounded-2xl border border-border-subtle bg-surface-base/80 px-4 py-3 text-left transition-colors hover:border-border-muted hover:bg-surface-elevated disabled:cursor-default disabled:hover:border-border-subtle disabled:hover:bg-surface-base/80"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
@@ -361,14 +362,14 @@ function ClarificationSlotVisual({
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-text-muted">
                   <span>{clarificationTierLabel(candidate)}</span>
                   {typeof candidate.releaseYear === 'number' && <span>{candidate.releaseYear}</span>}
-                  <span>ID {candidate.platformEntityId}</span>
+                  {candidate.platformEntityId && <span>ID {candidate.platformEntityId}</span>}
                   {candidate.totalReviews != null && (
                     <span>{formatCompactNumber(candidate.totalReviews)} reviews</span>
                   )}
                 </div>
               </div>
               <span className="text-caption font-medium text-text-secondary">
-                Select
+                {onSuggestionClick ? 'Select' : 'Reply to select'}
               </span>
             </div>
           </button>
@@ -385,7 +386,7 @@ function EntityClarificationVisual({
   onSuggestionClick?: (query: string, requestOptions?: ChatRequestOptions) => void;
   renderData: Extract<ChatRenderData, { kind: 'entity_clarification' }>;
 }): ReactNode {
-  if (renderData.slots.length === 0 || !onSuggestionClick) {
+  if (renderData.slots.length === 0) {
     return null;
   }
 
@@ -396,7 +397,9 @@ function EntityClarificationVisual({
           Select The Exact Match
         </p>
         <p className="text-body-sm text-text-secondary">
-          Chat could not safely choose a single title. Pick the exact game below.
+          {onSuggestionClick
+            ? 'Chat could not safely choose a single title. Pick the exact game below.'
+            : 'Chat could not safely choose a single title. Reply with the numbered option below.'}
         </p>
       </div>
 

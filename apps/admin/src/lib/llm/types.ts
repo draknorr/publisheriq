@@ -9,7 +9,7 @@ export interface ChatSelectedEntity {
   entityUid: string;
   matchQuality?: 'exact' | 'prefix' | 'substring' | 'fuzzy' | null;
   platform: 'steam' | 'publisheriq';
-  platformEntityId: string;
+  platformEntityId?: string | null;
 }
 
 export interface ChatRequestOptions {

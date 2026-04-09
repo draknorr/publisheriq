@@ -1889,7 +1889,7 @@ export class DataPlaneService {
     await this.assertContractRuntime('getEntityOverview');
 
     let entityKind = request.entityKind;
-    let platformEntityId = request.platformEntityId.trim();
+    let platformEntityId = request.platformEntityId?.trim() ?? '';
     let entityUid = request.entityUid?.trim() ?? '';
 
     if (entityUid) {
@@ -1909,7 +1909,7 @@ export class DataPlaneService {
         'INVALID_ENTITY_OVERVIEW_ID',
         {
           entityKind,
-          platformEntityId: request.platformEntityId,
+          platformEntityId: request.platformEntityId ?? null,
         }
       );
     }
