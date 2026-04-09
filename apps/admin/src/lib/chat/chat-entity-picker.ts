@@ -85,6 +85,10 @@ const ENTITY_SEARCH_PATTERNS = [
   /\bshow\s+(.+?)\s+(?:ccu|owners?|reviews?|review score|sentiment|price|discount|playtime)\b/i,
   /\b(?:about|for|on|of)\s+(.+?)(?:\s+(?:this|last|over|in|during|from|while|since|with)\b|[?!.]|$)/i,
 ];
+const REVERSED_GAME_METRIC_ENTITY_SEARCH_PATTERN =
+  /\bwhat\s+(?:the\s+)?(?:review score|price|discount|ccu|owners?|player count|total reviews?)\s+is\s+(.+?)(?:[?!.]|$)/i;
+const NON_ENTITY_GAME_METRIC_QUERY_PATTERN =
+  /^(?:the\s+)?(?:highest|most|top|best|largest|biggest|trending|breaking out|hot right now|all games?|all titles?|games?|titles?)\b/i;
 
 const ENTITY_QUALITY_ORDER: Record<ChatEntityMatchQuality, number> = {
   exact: 0,
@@ -110,6 +114,20 @@ function normalizeEntityQuery(value: string | null | undefined): string {
     .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function matchReversedGameMetricEntitySearch(input: string): RegExpMatchArray | null {
+  const match = input.match(REVERSED_GAME_METRIC_ENTITY_SEARCH_PATTERN);
+  const candidate = normalizeEntityQuery(match?.[1] ?? null);
+  if (!candidate) {
+    return null;
+  }
+
+  if (NON_ENTITY_GAME_METRIC_QUERY_PATTERN.test(candidate)) {
+    return null;
+  }
+
+  return match;
 }
 
 function escapeRegExp(value: string): string {
@@ -162,6 +180,12 @@ export function extractEntitySearchQuery(input: string): string {
     if (candidate) {
       return candidate;
     }
+  }
+
+  const reversedGameMetricMatch = matchReversedGameMetricEntitySearch(trimmedInput);
+  const reversedGameMetricCandidate = normalizeEntityQuery(reversedGameMetricMatch?.[1] ?? null);
+  if (reversedGameMetricCandidate) {
+    return reversedGameMetricCandidate;
   }
 
   return trimmedInput;

@@ -7112,59 +7112,59 @@ export class DataPlaneService {
           SELECT
             e.platform_entity_id::int AS entity_id,
             e.canonical_name AS display_name,
-            a.alias AS matched_name,
+            entity_alias.alias AS matched_name,
             CASE
-              WHEN lower(a.alias) = q.raw_query THEN 'alias'
-              WHEN a.normalized_alias = q.normalized_query OR replace(a.normalized_alias, ' ', '') = q.compact_query THEN 'normalized_alias'
+              WHEN lower(entity_alias.alias) = q.raw_query THEN 'alias'
+              WHEN entity_alias.normalized_alias = q.normalized_query OR replace(entity_alias.normalized_alias, ' ', '') = q.compact_query THEN 'normalized_alias'
               ELSE 'alias'
             END AS match_source,
             CASE
-              WHEN lower(a.alias) = q.raw_query THEN 'exact'
-              WHEN a.normalized_alias = q.normalized_query THEN 'exact'
-              WHEN replace(a.normalized_alias, ' ', '') = q.compact_query THEN 'exact'
-              WHEN lower(a.alias) LIKE q.raw_prefix THEN 'prefix'
-              WHEN a.normalized_alias LIKE q.normalized_prefix THEN 'prefix'
-              WHEN lower(a.alias) LIKE q.raw_substring THEN 'substring'
-              WHEN a.normalized_alias LIKE q.normalized_substring THEN 'substring'
+              WHEN lower(entity_alias.alias) = q.raw_query THEN 'exact'
+              WHEN entity_alias.normalized_alias = q.normalized_query THEN 'exact'
+              WHEN replace(entity_alias.normalized_alias, ' ', '') = q.compact_query THEN 'exact'
+              WHEN lower(entity_alias.alias) LIKE q.raw_prefix THEN 'prefix'
+              WHEN entity_alias.normalized_alias LIKE q.normalized_prefix THEN 'prefix'
+              WHEN lower(entity_alias.alias) LIKE q.raw_substring THEN 'substring'
+              WHEN entity_alias.normalized_alias LIKE q.normalized_substring THEN 'substring'
               ELSE 'fuzzy'
             END AS match_quality,
             CASE
-              WHEN lower(a.alias) = q.raw_query THEN 1
-              WHEN a.normalized_alias = q.normalized_query OR replace(a.normalized_alias, ' ', '') = q.compact_query THEN 2
-              WHEN lower(a.alias) LIKE q.raw_prefix OR a.normalized_alias LIKE q.normalized_prefix THEN 3
-              WHEN lower(a.alias) LIKE q.raw_substring OR a.normalized_alias LIKE q.normalized_substring THEN 4
+              WHEN lower(entity_alias.alias) = q.raw_query THEN 1
+              WHEN entity_alias.normalized_alias = q.normalized_query OR replace(entity_alias.normalized_alias, ' ', '') = q.compact_query THEN 2
+              WHEN lower(entity_alias.alias) LIKE q.raw_prefix OR entity_alias.normalized_alias LIKE q.normalized_prefix THEN 3
+              WHEN lower(entity_alias.alias) LIKE q.raw_substring OR entity_alias.normalized_alias LIKE q.normalized_substring THEN 4
               ELSE 5
             END AS match_rank,
             CASE
-              WHEN lower(a.alias) = q.raw_query THEN 'alias_exact'
-              WHEN a.normalized_alias = q.normalized_query OR replace(a.normalized_alias, ' ', '') = q.compact_query THEN 'normalized_exact'
-              WHEN lower(a.alias) LIKE q.raw_prefix OR a.normalized_alias LIKE q.normalized_prefix THEN 'alias_prefix'
-              WHEN lower(a.alias) LIKE q.raw_substring OR a.normalized_alias LIKE q.normalized_substring THEN 'alias_substring'
+              WHEN lower(entity_alias.alias) = q.raw_query THEN 'alias_exact'
+              WHEN entity_alias.normalized_alias = q.normalized_query OR replace(entity_alias.normalized_alias, ' ', '') = q.compact_query THEN 'normalized_exact'
+              WHEN lower(entity_alias.alias) LIKE q.raw_prefix OR entity_alias.normalized_alias LIKE q.normalized_prefix THEN 'alias_prefix'
+              WHEN lower(entity_alias.alias) LIKE q.raw_substring OR entity_alias.normalized_alias LIKE q.normalized_substring THEN 'alias_substring'
               ELSE 'fuzzy'
             END AS resolution_tier,
             GREATEST(
-              COALESCE(similarity(lower(a.alias), q.raw_query), 0),
-              COALESCE(similarity(replace(lower(a.alias), ' ', ''), q.compact_query), 0)
+              COALESCE(similarity(lower(entity_alias.alias), q.raw_query), 0),
+              COALESCE(similarity(replace(lower(entity_alias.alias), ' ', ''), q.compact_query), 0)
             ) AS similarity_score,
             ${gameMetricSelect}
           FROM ${entitiesTable} e
-          JOIN ${aliasesTable} a ON a.entity_uid = e.entity_uid
+          JOIN ${aliasesTable} entity_alias ON entity_alias.entity_uid = e.entity_uid
           CROSS JOIN query_terms q
           ${gameJoinSql}
           ${companyJoinSql}
           WHERE e.entity_kind = $9
             AND e.platform = $10
             AND (
-              lower(a.alias) = q.raw_query
-              OR a.normalized_alias = q.normalized_query
-              OR replace(a.normalized_alias, ' ', '') = q.compact_query
-              OR lower(a.alias) LIKE q.raw_prefix
-              OR a.normalized_alias LIKE q.normalized_prefix
-              OR lower(a.alias) LIKE q.raw_substring
-              OR a.normalized_alias LIKE q.normalized_substring
+              lower(entity_alias.alias) = q.raw_query
+              OR entity_alias.normalized_alias = q.normalized_query
+              OR replace(entity_alias.normalized_alias, ' ', '') = q.compact_query
+              OR lower(entity_alias.alias) LIKE q.raw_prefix
+              OR entity_alias.normalized_alias LIKE q.normalized_prefix
+              OR lower(entity_alias.alias) LIKE q.raw_substring
+              OR entity_alias.normalized_alias LIKE q.normalized_substring
               OR GREATEST(
-                COALESCE(similarity(lower(a.alias), q.raw_query), 0),
-                COALESCE(similarity(replace(lower(a.alias), ' ', ''), q.compact_query), 0)
+                COALESCE(similarity(lower(entity_alias.alias), q.raw_query), 0),
+                COALESCE(similarity(replace(lower(entity_alias.alias), ' ', ''), q.compact_query), 0)
               ) >= q.fuzzy_threshold
             )
         ),

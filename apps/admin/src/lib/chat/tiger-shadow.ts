@@ -98,6 +98,10 @@ const COMPANY_PORTFOLIO_METRIC_PROMPT_PATTERN =
   /\bhow many\s+(?:players?|owners?|reviews?)\s+do\s+(.+?)\s+games?\s+have\b/i;
 const GAME_METRIC_OVERVIEW_PROMPT_PATTERN =
   /\bhow many\s+(?:players?|owners?|reviews?)\s+does\s+(.+?)\s+have\b|\bwhat(?:'s| is)\s+(?:the\s+)?(?:review score|price|discount|ccu|owners?|player count|total reviews?)\s+for\s+(.+?)(?:[?!.]|$)/i;
+const GAME_METRIC_OVERVIEW_REVERSED_PROMPT_PATTERN =
+  /\bwhat\s+(?:the\s+)?(?:review score|price|discount|ccu|owners?|player count|total reviews?)\s+is\s+(.+?)(?:[?!.]|$)/i;
+const NON_ENTITY_GAME_METRIC_QUERY_PATTERN =
+  /^(?:the\s+)?(?:highest|most|top|best|largest|biggest|trending|breaking out|hot right now|all games?|all titles?|games?|titles?)\b/i;
 const SEMANTIC_SIMILARITY_PROMPT_PATTERN =
   /\b(?:games?|publishers?|developers?|studios?)\b.*\b(?:like|similar to)\b|\b(?:similar to|like)\b.*\b(?:games?|publishers?|developers?|studios?)\b/i;
 const CONCEPT_DISCOVERY_PROMPT_PATTERN =
@@ -1711,13 +1715,13 @@ function inferEntityOverviewIntent(prompt: string): boolean {
 
   return COMPANY_COUNT_PROMPT_PATTERN.test(prompt)
     || COMPANY_PORTFOLIO_METRIC_PROMPT_PATTERN.test(prompt)
-    || GAME_METRIC_OVERVIEW_PROMPT_PATTERN.test(prompt);
+    || hasGameMetricOverviewPrompt(prompt);
 }
 
 function isSingleEntityMetricOverviewPrompt(prompt: string): boolean {
   return COMPANY_COUNT_PROMPT_PATTERN.test(prompt)
     || COMPANY_PORTFOLIO_METRIC_PROMPT_PATTERN.test(prompt)
-    || GAME_METRIC_OVERVIEW_PROMPT_PATTERN.test(prompt);
+    || hasGameMetricOverviewPrompt(prompt);
 }
 
 function inferRelationIntent(prompt: string): boolean {
@@ -2076,6 +2080,29 @@ function normalizeEntityQuery(candidate: string | null): string | null {
   return normalized.length > 1 ? normalized : null;
 }
 
+function matchGameMetricOverviewPrompt(prompt: string): RegExpMatchArray | null {
+  const directMatch = prompt.match(GAME_METRIC_OVERVIEW_PROMPT_PATTERN);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const reversedMatch = prompt.match(GAME_METRIC_OVERVIEW_REVERSED_PROMPT_PATTERN);
+  const reversedQuery = normalizeEntityQuery(reversedMatch?.[1] ?? null);
+  if (!reversedQuery) {
+    return null;
+  }
+
+  if (NON_ENTITY_GAME_METRIC_QUERY_PATTERN.test(reversedQuery)) {
+    return null;
+  }
+
+  return reversedMatch;
+}
+
+function hasGameMetricOverviewPrompt(prompt: string): boolean {
+  return matchGameMetricOverviewPrompt(prompt) !== null;
+}
+
 function extractGameNameFromSessionContext(sessionContext: SessionChatContext | null): string | null {
   if (!sessionContext?.entities?.length) {
     return null;
@@ -2118,6 +2145,12 @@ function extractEntityQueryFromPrompt(prompt: string): string | null {
     }
   }
 
+  const gameMetricMatch = matchGameMetricOverviewPrompt(prompt);
+  const gameMetricQuery = normalizeEntityQuery(gameMetricMatch?.[1] ?? gameMetricMatch?.[2] ?? null);
+  if (gameMetricQuery) {
+    return gameMetricQuery;
+  }
+
   return null;
 }
 
@@ -2134,7 +2167,7 @@ function extractEntityOverviewQuery(prompt: string): string | null {
     return companyMetricQuery;
   }
 
-  const gameMetricMatch = prompt.match(GAME_METRIC_OVERVIEW_PROMPT_PATTERN);
+  const gameMetricMatch = matchGameMetricOverviewPrompt(prompt);
   const gameMetricQuery = normalizeEntityQuery(gameMetricMatch?.[1] ?? gameMetricMatch?.[2] ?? null);
   if (gameMetricQuery) {
     return gameMetricQuery;
@@ -2351,7 +2384,7 @@ function inferEntityOverviewResolutionPreference(
     return 'company';
   }
 
-  if (GAME_METRIC_OVERVIEW_PROMPT_PATTERN.test(prompt)) {
+  if (hasGameMetricOverviewPrompt(prompt)) {
     return 'game';
   }
 
