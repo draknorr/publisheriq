@@ -1164,6 +1164,38 @@ function extractTigerPrimaryReasons(
   );
 }
 
+const TIGER_RUNTIME_FAILURE_PATTERN =
+  /internal server error|failed to fetch|fetch failed|network|timeout|timed out|connection|socket|econn|abort/i;
+
+function isTigerContractRuntimeBlockedAttempt(
+  attempt: NonNullable<MessageEndEvent['tigerPrimary']>['attempts'][number]
+): boolean {
+  if (attempt.errorCode === 'CONTRACT_RUNTIME_UNAVAILABLE') {
+    return true;
+  }
+
+  return typeof attempt.reason === 'string'
+    && /not ready on .* until the required tables are present and backfilled|backfilled/i.test(attempt.reason);
+}
+
+function isTigerTransientAttemptFailure(
+  attempt: NonNullable<MessageEndEvent['tigerPrimary']>['attempts'][number]
+): boolean {
+  if (isTigerContractRuntimeBlockedAttempt(attempt)) {
+    return false;
+  }
+
+  if (attempt.httpStatus === 429) {
+    return true;
+  }
+
+  if (typeof attempt.httpStatus === 'number' && attempt.httpStatus >= 500) {
+    return true;
+  }
+
+  return typeof attempt.reason === 'string' && TIGER_RUNTIME_FAILURE_PATTERN.test(attempt.reason);
+}
+
 function getContinuationMatchedIntent(
   sourceContract: TigerContractContinuationResult['sourceContract']
 ): 'catalog_search' | 'momentum_discovery' | 'semantic_search' {
@@ -1184,6 +1216,12 @@ function buildTigerOnlyFallbackReply(params: {
   const { tigerPrimary } = params;
   const primaryReason = extractTigerPrimaryReasons(tigerPrimary)[0] ?? null;
   const reasonSuffix = primaryReason ? `\n\nReason: ${primaryReason}` : '';
+  const hasCompareRuntimeBlockedFailure =
+    tigerPrimary.matchedIntent === 'entity_compare'
+    && tigerPrimary.attempts.some(isTigerContractRuntimeBlockedAttempt);
+  const hasCompareTransientFailure =
+    tigerPrimary.matchedIntent === 'entity_compare'
+    && tigerPrimary.attempts.some(isTigerTransientAttemptFailure);
   const weeklyReviewSentimentNoResults =
     tigerPrimary.matchedIntent === 'momentum_discovery'
     && primaryReason != null
@@ -1193,6 +1231,12 @@ function buildTigerOnlyFallbackReply(params: {
     case 'entity_overview':
       return `I couldn't route that overview cleanly in the system yet because it couldn't resolve a single stable game or company. Try the exact Steam title or the exact studio or publisher name.${reasonSuffix}`;
     case 'entity_compare':
+      if (hasCompareRuntimeBlockedFailure) {
+        return `I couldn't complete that comparison from the current Tiger data slice yet because the compare surface isn't fully ready in this environment.`;
+      }
+      if (hasCompareTransientFailure) {
+        return `I couldn't complete that comparison from Tiger right now. Please try again in a moment.`;
+      }
       return `I couldn't route that comparison cleanly in the system yet. Try \`compare FromSoftware and Rockstar Games by reviews\` or name the exact entities you want compared.${reasonSuffix}`;
     case 'catalog_search':
       return `I couldn't route that catalog search cleanly in the system yet. Try a simpler request like \`show me all games by FromSoftware\` or \`show me Linux games with overwhelmingly positive reviews\`.${reasonSuffix}`;

@@ -77,6 +77,22 @@
     "notes": "Guard against cross-kind fuzzy-game misresolution in compare mode."
   },
   {
+    "id": "TC-P0-05A",
+    "priority": "P0",
+    "family": "company_comparison",
+    "primaryPersona": "Investor / Portfolio Analyst",
+    "prompt": "compare Marathon to Destiny 2",
+    "expectedBehavior": "success",
+    "expectedRoutes": ["primary_success"],
+    "expectedContracts": ["compareEntities"],
+    "mustAvoidBackends": ["legacy", "cube", "supabase", "qdrant"],
+    "factualAnchors": ["Marathon", "Destiny 2"],
+    "antiAnchors": ["Legacy fallback", "Qdrant", "structured lookup"],
+    "latencyBudgetMs": 25000,
+    "uiSmoke": true,
+    "notes": "Production regression guard for Tiger game-vs-game compare reliability."
+  },
+  {
     "id": "TC-P0-06",
     "priority": "P0",
     "family": "publisher_lookup",
