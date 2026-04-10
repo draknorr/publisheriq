@@ -3402,6 +3402,292 @@ for (const prompt of [
   });
 }
 
+test('Tiger primary retries transient compare failures once before returning the Tiger comparison', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  let compareCallCount = 0;
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      if (body.query === 'Hades') {
+        return jsonResponse({
+          ambiguity: {
+            requiresClarification: false,
+          },
+          entities: [
+            {
+              confidence: 0.99,
+              displayName: 'Hades',
+              entityKind: 'game',
+              entityUid: 'game:steam:1145360',
+              platform: 'steam',
+              platformEntityId: '1145360',
+            },
+          ],
+        });
+      }
+
+      if (body.query === 'Dead Cells') {
+        return jsonResponse({
+          ambiguity: {
+            requiresClarification: false,
+          },
+          entities: [
+            {
+              confidence: 0.99,
+              displayName: 'Dead Cells',
+              entityKind: 'game',
+              entityUid: 'game:steam:588650',
+              platform: 'steam',
+              platformEntityId: '588650',
+            },
+          ],
+        });
+      }
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/compare-entities');
+    assert.deepEqual(body, {
+      entityUids: ['game:steam:1145360', 'game:steam:588650'],
+      metrics: ['total_reviews'],
+    });
+
+    compareCallCount += 1;
+    if (compareCallCount === 1) {
+      return jsonResponse({
+        error: 'Internal Server Error',
+      }, 503);
+    }
+
+    return jsonResponse({
+      entityKind: 'game',
+      highlights: [
+        {
+          displayName: 'Hades',
+          entityUid: 'game:steam:1145360',
+          metric: 'total_reviews',
+          value: 250000,
+        },
+      ],
+      items: [
+        {
+          displayName: 'Hades',
+          entityKind: 'game',
+          entityUid: 'game:steam:1145360',
+          metrics: {
+            ccuPeak: 38000,
+            gameCount: null,
+            ownersMidpoint: 4500000,
+            reviewScore: 98,
+            totalReviews: 250000,
+          },
+          platform: 'steam',
+          platformEntityId: '1145360',
+        },
+        {
+          displayName: 'Dead Cells',
+          entityKind: 'game',
+          entityUid: 'game:steam:588650',
+          metrics: {
+            ccuPeak: 12000,
+            gameCount: null,
+            ownersMidpoint: 3200000,
+            reviewScore: 97,
+            totalReviews: 140000,
+          },
+          platform: 'steam',
+          platformEntityId: '588650',
+        },
+      ],
+      metrics: ['total_reviews'],
+      platform: 'steam',
+      sufficientToAnswer: true,
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'Compare Hades and Dead Cells by reviews',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  const compareAttempts = result.info.attempts.filter((attempt) => attempt.contractName === 'compareEntities');
+
+  assert.equal(compareCallCount, 2);
+  assert.equal(result.info.matchedIntent, 'entity_compare');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'compareEntities');
+  assert.deepEqual(compareAttempts.map((attempt) => attempt.status), ['error', 'success']);
+  assert.match(result.renderedText ?? '', /Hades/);
+  assert.match(result.renderedText ?? '', /Dead Cells/);
+  assert.match(result.renderedText ?? '', /Total Reviews/);
+});
+
+test('Tiger primary does not retry compare when Tiger reports the contract runtime is blocked', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  let compareCallCount = 0;
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      if (body.query === 'Hades') {
+        return jsonResponse({
+          ambiguity: {
+            requiresClarification: false,
+          },
+          entities: [
+            {
+              confidence: 0.99,
+              displayName: 'Hades',
+              entityKind: 'game',
+              entityUid: 'game:steam:1145360',
+              platform: 'steam',
+              platformEntityId: '1145360',
+            },
+          ],
+        });
+      }
+
+      if (body.query === 'Dead Cells') {
+        return jsonResponse({
+          ambiguity: {
+            requiresClarification: false,
+          },
+          entities: [
+            {
+              confidence: 0.99,
+              displayName: 'Dead Cells',
+              entityKind: 'game',
+              entityUid: 'game:steam:588650',
+              platform: 'steam',
+              platformEntityId: '588650',
+            },
+          ],
+        });
+      }
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/compare-entities');
+    assert.deepEqual(body, {
+      entityUids: ['game:steam:1145360', 'game:steam:588650'],
+      metrics: ['total_reviews'],
+    });
+
+    compareCallCount += 1;
+
+    return jsonResponse({
+      blockingTables: ['legacy.publishers'],
+      code: 'CONTRACT_RUNTIME_UNAVAILABLE',
+      error: 'compareEntities is not ready on tiger until the required tables are present and backfilled.',
+    }, 503);
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'Compare Hades and Dead Cells by reviews',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  const compareAttempts = result.info.attempts.filter((attempt) => attempt.contractName === 'compareEntities');
+
+  assert.equal(compareCallCount, 1);
+  assert.equal(result.info.matchedIntent, 'entity_compare');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult, null);
+  assert.deepEqual(compareAttempts.map((attempt) => attempt.status), ['error']);
+  assert.match(result.renderedText ?? '', /current Tiger data slice yet/i);
+  assert.match(result.renderedText ?? '', /compare surface is not fully ready/i);
+});
+
+test('Tiger primary returns compare-specific Tiger copy after the transient retry also fails', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  let compareCallCount = 0;
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const body = JSON.parse(String(init.body));
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      if (body.query === 'Hades') {
+        return jsonResponse({
+          ambiguity: {
+            requiresClarification: false,
+          },
+          entities: [
+            {
+              confidence: 0.99,
+              displayName: 'Hades',
+              entityKind: 'game',
+              entityUid: 'game:steam:1145360',
+              platform: 'steam',
+              platformEntityId: '1145360',
+            },
+          ],
+        });
+      }
+
+      if (body.query === 'Dead Cells') {
+        return jsonResponse({
+          ambiguity: {
+            requiresClarification: false,
+          },
+          entities: [
+            {
+              confidence: 0.99,
+              displayName: 'Dead Cells',
+              entityKind: 'game',
+              entityUid: 'game:steam:588650',
+              platform: 'steam',
+              platformEntityId: '588650',
+            },
+          ],
+        });
+      }
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/compare-entities');
+    assert.deepEqual(body, {
+      entityUids: ['game:steam:1145360', 'game:steam:588650'],
+      metrics: ['total_reviews'],
+    });
+
+    compareCallCount += 1;
+
+    return jsonResponse({
+      error: 'Internal Server Error',
+    }, 503);
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'Compare Hades and Dead Cells by reviews',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  const compareAttempts = result.info.attempts.filter((attempt) => attempt.contractName === 'compareEntities');
+
+  assert.equal(compareCallCount, 2);
+  assert.equal(result.info.matchedIntent, 'entity_compare');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult, null);
+  assert.deepEqual(compareAttempts.map((attempt) => attempt.status), ['error', 'error']);
+  assert.match(result.renderedText ?? '', /complete that comparison from Tiger right now/i);
+  assert.doesNotMatch(result.renderedText ?? '', /structured lookup right now/i);
+});
+
 test('Tiger primary routes compare follow-ups through compareEntities using the carried candidate set', async (t) => {
   setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
   setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');

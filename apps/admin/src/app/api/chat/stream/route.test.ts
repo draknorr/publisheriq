@@ -984,6 +984,59 @@ test('chat route uses review-trend-aware Tiger-only fallback copy for empty week
   assertExhausted();
 });
 
+test('chat route uses compare-specific Tiger-only fallback copy for Tiger compare runtime failures', async () => {
+  const request = createJsonNextRequest({
+    body: {
+      messages: [{ role: 'user', content: 'compare Marathon to Destiny 2' }],
+    },
+  });
+
+  const { assertExhausted, deps } = createScriptedChatDeps({
+    tigerPrimaryCalls: [
+      {
+        response: {
+          contractResult: null,
+          info: {
+            attempts: [
+              {
+                contractName: 'compareEntities',
+                httpStatus: 503,
+                reason: 'fetch failed',
+                status: 'error',
+                timingMs: 6,
+              },
+            ],
+            cohort: 'default',
+            enabled: true,
+            matchedIntent: 'entity_compare',
+            mode: 'all',
+            renderMode: 'deterministic',
+            route: 'error',
+          },
+          renderedText: null,
+          sessionState: null,
+        },
+      },
+    ],
+  });
+
+  const response = await handleChatStreamRequest(request, {
+    deps,
+    requireEvalSecret: false,
+  });
+
+  const events = await collectStreamEvents(response);
+  const text = getTextEvents(events)[0]?.delta ?? '';
+  const endEvent = getEndEvent(events);
+
+  assert.deepEqual(getEventTypes(events), ['text_delta', 'message_end']);
+  assert.ok(endEvent);
+  assert.equal(endEvent.tigerPrimary?.route, 'primary_success');
+  assert.match(text, /complete that comparison from Tiger right now/i);
+  assert.doesNotMatch(text, /route that comparison cleanly/i);
+  assertExhausted();
+});
+
 test('chat route includes execution trace metadata for eval requests', async (t) => {
   setScopedEnv(t, 'CHAT_EVAL_SECRET', 'test-secret');
   setScopedEnv(t, 'CHAT_TIGER_LEGACY_FALLBACK_ENABLED', 'true');

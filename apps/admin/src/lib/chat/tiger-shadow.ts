@@ -594,6 +594,49 @@ interface QueryApiResponse<T> {
   reason?: string | null;
 }
 
+const TIGER_RUNTIME_FAILURE_PATTERN =
+  /internal server error|failed to fetch|fetch failed|network|timeout|timed out|connection|socket|econn|abort/i;
+
+function isTigerNetworkRuntimeFailure(reason: string | null | undefined): boolean {
+  return typeof reason === 'string' && TIGER_RUNTIME_FAILURE_PATTERN.test(reason);
+}
+
+function isTigerContractRuntimeBlockedFailure(params: {
+  errorCode?: string | null;
+  reason?: string | null;
+}): boolean {
+  if (params.errorCode === 'CONTRACT_RUNTIME_UNAVAILABLE') {
+    return true;
+  }
+
+  return typeof params.reason === 'string'
+    && /not ready on .* until the required tables are present and backfilled|backfilled/i.test(params.reason);
+}
+
+function isTigerTransientRuntimeFailure(params: {
+  errorCode?: string | null;
+  httpStatus?: number | null;
+  reason?: string | null;
+}): boolean {
+  if (isTigerContractRuntimeBlockedFailure(params)) {
+    return false;
+  }
+
+  if (params.httpStatus === 429) {
+    return true;
+  }
+
+  if (typeof params.httpStatus === 'number' && params.httpStatus >= 500) {
+    return true;
+  }
+
+  return isTigerNetworkRuntimeFailure(params.reason);
+}
+
+function hasStableCompareResponse(response: CompareEntitiesResponse | null | undefined): boolean {
+  return (response?.items?.length ?? 0) >= 2 && response?.sufficientToAnswer === true;
+}
+
 interface SearchCatalogShadowRequest {
   appids?: number[];
   facetQuery?: string;
@@ -1401,7 +1444,13 @@ function buildTigerPrimaryNoResultText(params: {
   const firstReason = params.attempts.find((attempt) => attempt.reason?.trim())?.reason?.trim() ?? null;
   const request = isRecord(params.request) ? params.request : null;
   const isStructuredRuntimeFailure = firstReason != null
-    && /internal server error|failed to fetch|fetch failed|network|timeout|timed out|connection|socket|econn|abort/i.test(firstReason);
+    && isTigerNetworkRuntimeFailure(firstReason);
+  const hasTransientRuntimeFailure = params.attempts.some(
+    (attempt) => attempt.status === 'error' && isTigerTransientRuntimeFailure(attempt)
+  );
+  const hasContractRuntimeBlockedFailure = params.attempts.some(
+    (attempt) => attempt.status === 'error' && isTigerContractRuntimeBlockedFailure(attempt)
+  );
 
   if (params.matchedIntent === 'entity_overview') {
     return isStructuredRuntimeFailure
@@ -1452,6 +1501,18 @@ function buildTigerPrimaryNoResultText(params: {
     return scope.length > 0
       ? `I could not find any rows that met the current ranking thresholds for ${joinTigerHumanList(scope)}.`
       : 'I could not find any rows that produced a stable ranking for this request in the current structured snapshot.';
+  }
+
+  if (params.matchedIntent === 'entity_compare') {
+    if (hasContractRuntimeBlockedFailure) {
+      return 'I could not complete that comparison from the current Tiger data slice yet because the compare surface is not fully ready in this environment.';
+    }
+
+    if (hasTransientRuntimeFailure) {
+      return 'I could not complete that comparison from Tiger right now. Please try again in a moment.';
+    }
+
+    return 'I could not find a stable Tiger comparison set for that request.';
   }
 
   if (params.matchedIntent === 'momentum_discovery') {
@@ -8904,11 +8965,13 @@ async function runCompareEntitiesPrimary(params: {
   }
 
   const request: CompareEntitiesShadowRequest = builtRequest.request;
+  const selectionState = builtRequest.selectionState ?? params.sessionContext?.selectionState ?? null;
+  const timeoutMs = readPrimaryTimeoutMs();
   const startedAt = performance.now();
   const response = await postToQueryApi<CompareEntitiesResponse>(
     '/v1/contracts/compare-entities',
     request,
-    { timeoutMs: readPrimaryTimeoutMs() }
+    { timeoutMs }
   );
   const timingMs = Math.round(performance.now() - startedAt);
 
@@ -8921,11 +8984,56 @@ async function runCompareEntitiesPrimary(params: {
       status: 'error',
       timingMs,
     });
+
+    if (isTigerTransientRuntimeFailure(response)) {
+      const retryStartedAt = performance.now();
+      const retryResponse = await postToQueryApi<CompareEntitiesResponse>(
+        '/v1/contracts/compare-entities',
+        request,
+        { timeoutMs }
+      );
+      const retryTimingMs = Math.round(performance.now() - retryStartedAt);
+
+      if (!retryResponse.ok) {
+        attempts.push({
+          contractName: 'compareEntities',
+          errorCode: retryResponse.errorCode,
+          httpStatus: retryResponse.httpStatus,
+          reason: retryResponse.reason,
+          status: 'error',
+          timingMs: retryTimingMs,
+        });
+
+        return {
+          attempts,
+          request,
+          response: null,
+          selectionState,
+        };
+      }
+
+      attempts.push({
+        contractName: 'compareEntities',
+        httpStatus: retryResponse.httpStatus,
+        resultCount: retryResponse.data?.items?.length ?? 0,
+        status: 'success',
+        sufficientToAnswer: retryResponse.data?.sufficientToAnswer ?? false,
+        timingMs: retryTimingMs,
+      });
+
+      return {
+        attempts,
+        request,
+        response: hasStableCompareResponse(retryResponse.data) ? (retryResponse.data ?? null) : null,
+        selectionState,
+      };
+    }
+
     return {
       attempts,
       request,
       response: null,
-      selectionState: builtRequest.selectionState ?? params.sessionContext?.selectionState ?? null,
+      selectionState,
     };
   }
 
@@ -8941,11 +9049,8 @@ async function runCompareEntitiesPrimary(params: {
   return {
     attempts,
     request,
-    response:
-      (response.data?.items?.length ?? 0) >= 2 && response.data?.sufficientToAnswer
-        ? response.data ?? null
-        : null,
-    selectionState: builtRequest.selectionState ?? params.sessionContext?.selectionState ?? null,
+    response: hasStableCompareResponse(response.data) ? (response.data ?? null) : null,
+    selectionState,
   };
 }
 
