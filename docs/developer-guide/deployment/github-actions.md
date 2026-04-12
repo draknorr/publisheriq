@@ -141,6 +141,8 @@ Tiger-specific workflows:
     recovery, and validate path against preview
   - supports optional table narrowing and custom lookbacks for fast workflow
     verification without legacy or metrics backfills
+  - supports `stop_after_classification=true` when you only want the initial
+    reconcile classification and recovery routing decision
 
 All Tiger workflows upload the generated Tiger manifest directory as a workflow
 artifact so you can inspect parity output after each run.
@@ -200,13 +202,14 @@ gh workflow run steamspy-sync.yml -f max_pages=10
 
 ### Tiger Preview Events/News
 
-| Input                     | Default         | Description                                                                                               |
-| ------------------------- | --------------- | --------------------------------------------------------------------------------------------------------- |
-| `events_news_tables`      | empty           | Optional comma-separated `EVENTS_NEWS_SYNC_TABLES` override; empty runs all three events/news tables      |
-| `event_day_lookback`      | `3`             | Trailing UTC days to reconcile for `app_change_events`                                                    |
-| `news_day_lookback`       | `7`             | Trailing UTC days to reconcile for `steam_news_items`                                                     |
-| `projection_day_lookback` | `7`             | Trailing UTC days of projection churn to consider during reconcile and validate                           |
-| `projection_repair_scope` | `recent_window` | First-pass projection repair scope; uses the same app-change retry and projection fallback recovery rules |
+| Input                       | Default         | Description                                                                                                                        |
+| --------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `events_news_tables`        | empty           | Optional comma-separated `EVENTS_NEWS_SYNC_TABLES` override; empty runs all three events/news tables                               |
+| `event_day_lookback`        | `3`             | Trailing UTC days to reconcile for `app_change_events`                                                                             |
+| `news_day_lookback`         | `7`             | Trailing UTC days to reconcile for `steam_news_items`                                                                              |
+| `projection_day_lookback`   | `7`             | Trailing UTC days of projection churn to consider during reconcile and validate                                                    |
+| `projection_repair_scope`   | `recent_window` | First-pass projection repair scope; uses the same app-change retry and projection fallback recovery rules                          |
+| `stop_after_classification` | `false`         | Smoke-test mode; runs the initial reconcile and classification only, then skips retries, exact-parity fallback, and final validate |
 
 ## Monitoring
 

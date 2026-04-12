@@ -32,15 +32,18 @@ Apply the Tiger bootstrap SQL in this order:
 7. `packages/data-plane/sql/tiger-bootstrap/0022_legacy_feature_and_user_context.sql`
 8. `packages/data-plane/sql/tiger-bootstrap/0040_metrics_daily_metrics.sql`
 9. `packages/data-plane/sql/tiger-bootstrap/0050_events_and_news.sql`
+10. `packages/data-plane/sql/tiger-bootstrap/0051_events_and_news_projection_performance.sql`
 
 Then seed core identity:
 
-10. `packages/data-plane/sql/tiger-bootstrap/0030_seed_core_identity_from_legacy.sql`
+11. `packages/data-plane/sql/tiger-bootstrap/0030_seed_core_identity_from_legacy.sql`
 
-For an already-bootstrapped Tiger target, apply only the incremental identity delta:
+For an already-bootstrapped Tiger target, apply only the incremental deltas that
+are not already present:
 
 1. `packages/data-plane/sql/tiger-bootstrap/0015_core_identity_loose_lookup.sql`
 2. `packages/data-plane/sql/tiger-bootstrap/0030_seed_core_identity_from_legacy.sql`
+3. `packages/data-plane/sql/tiger-bootstrap/0051_events_and_news_projection_performance.sql`
 
 Use `pnpm tiger:target-baseline` before and after the bootstrap window so you
 have a recorded snapshot of the target service.
@@ -66,6 +69,12 @@ Run the initial production load in this order:
 
 The same order applies to the preview Tiger database, but point
 `TIGER_PRIMARY_URL` at the preview target instead of production.
+
+Performance note:
+
+- the live source Postgres should also be on the latest Supabase migrations so
+  `public.steam_news_search_projection` includes
+  `idx_steam_news_search_projection_sort_time_gid`
 
 ## 4. Deploy Railway Query API
 
@@ -169,6 +178,9 @@ Fast preview validation:
   metrics backfills
 - this workflow supports optional table narrowing through
   `events_news_tables=steam_news_items,app_change_events,steam_news_search_projection`
+- set `stop_after_classification=true` when you only want to verify the initial
+  failure classification and recovery routing without waiting for retry,
+  exact-parity fallback, or final validate
 
 ## 7. Smoke Test Before Go-Live
 

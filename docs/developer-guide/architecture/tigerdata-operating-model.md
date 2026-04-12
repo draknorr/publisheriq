@@ -124,7 +124,8 @@ The key phases are:
 5. feature and user context
 6. metrics daily history
 7. events and news
-8. core identity seed
+8. events/news performance delta
+9. core identity seed
 
 ### 3. Backfill TigerData from the live source
 
@@ -167,7 +168,10 @@ has historical month drift, the workflow automatically reruns a projection-only
 select `projection_repair_scope=exact_parity` to force that historical repair
 on the first reconcile pass, and can use the preview-only
 `tiger-preview-events-news.yml` workflow for faster events/news recovery
-verification without legacy or metrics backfills.
+verification without legacy or metrics backfills. When the goal is only to
+confirm the classifier and routing logic, `stop_after_classification=true`
+turns that preview workflow into a smoke test that skips retries, fallback, and
+the final validate pass.
 
 The exact-parity milestone note remains historical documentation, but the current operational expectation is that these validations continue to gate trust in the Tiger-backed document and change contracts.
 

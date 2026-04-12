@@ -23,6 +23,11 @@ on:
         description: "Projection repair scope for events/news reconcile (recent_window or exact_parity)"
         required: false
         default: "recent_window"
+      stop_after_classification:
+        description: "Stop after initial classification and skip retries, fallback, and final validate"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: tiger-preview-events-news
@@ -37,6 +42,7 @@ env:
   NEWS_DAY_LOOKBACK: ${{ github.event.inputs.news_day_lookback || '7' }}
   PROJECTION_DAY_LOOKBACK: ${{ github.event.inputs.projection_day_lookback || '7' }}
   PROJECTION_REPAIR_SCOPE: ${{ github.event.inputs.projection_repair_scope || 'recent_window' }}
+  STOP_AFTER_CLASSIFICATION: ${{ github.event.inputs.stop_after_classification || 'false' }}
 
 jobs:
   reconcile:
@@ -84,6 +90,7 @@ jobs:
           RECONCILE_MANIFEST_PATH: docs/reference/tiger-target-baseline/${{ env.TIGER_RUN_DATE }}/tiger-preview-events-news-reconcile-${{ github.run_id }}/events-news-sync-manifest.json
           RECONCILE_OUTCOME: ${{ steps.reconcile_events_news.outcome }}
           REQUESTED_PROJECTION_REPAIR_SCOPE: ${{ env.PROJECTION_REPAIR_SCOPE }}
+          STOP_AFTER_CLASSIFICATION: ${{ env.STOP_AFTER_CLASSIFICATION }}
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -93,6 +100,7 @@ jobs:
           const manifestPath = process.env.RECONCILE_MANIFEST_PATH;
           const reconcileOutcome = process.env.RECONCILE_OUTCOME;
           const requestedScope = process.env.REQUESTED_PROJECTION_REPAIR_SCOPE ?? 'recent_window';
+          const stopAfterClassification = process.env.STOP_AFTER_CLASSIFICATION === 'true';
 
           function setOutput(name, value) {
             fs.appendFileSync(outputPath, `${name}=${value}\n`);
@@ -119,6 +127,9 @@ jobs:
 
           if (reconcileOutcome !== 'failure') {
             appendSummary(`Initial Tiger events/news reconcile succeeded with scope \`${requestedScope}\`.`);
+            if (stopAfterClassification) {
+              appendSummary('Smoke mode enabled: stopping after initial classification.');
+            }
             process.exit(0);
           }
 
@@ -246,10 +257,13 @@ jobs:
           appendSummary(
             `Initial Tiger events/news reconcile classification: \`${classification}\`.`
           );
+          if (stopAfterClassification) {
+            appendSummary('Smoke mode enabled: stopping after initial classification.');
+          }
           NODE
 
       - name: Fail on non-recoverable Tiger events/news reconcile failure
-        if: steps.reconcile_events_news.outcome == 'failure' && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry != 'true' && steps.inspect_reconcile_manifest.outputs.needs_exact_parity_fallback != 'true'
+        if: env.STOP_AFTER_CLASSIFICATION != 'true' && steps.reconcile_events_news.outcome == 'failure' && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry != 'true' && steps.inspect_reconcile_manifest.outputs.needs_exact_parity_fallback != 'true'
         env:
           RECONCILE_CLASSIFICATION: ${{ steps.inspect_reconcile_manifest.outputs.classification }}
           RECONCILE_MANIFEST_PATH: docs/reference/tiger-target-baseline/${{ env.TIGER_RUN_DATE }}/tiger-preview-events-news-reconcile-${{ github.run_id }}/events-news-sync-manifest.json
@@ -267,7 +281,7 @@ jobs:
 
       - name: Reconcile Tiger app change retry
         id: retry_app_change_reconcile
-        if: steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true'
+        if: env.STOP_AFTER_CLASSIFICATION != 'true' && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true'
         continue-on-error: true
         run: pnpm tiger:reconcile-events-news
         env:
@@ -282,7 +296,7 @@ jobs:
 
       - name: Validate Tiger app change retry
         id: validate_app_change_retry
-        if: always() && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true'
+        if: always() && env.STOP_AFTER_CLASSIFICATION != 'true' && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true'
         continue-on-error: true
         run: pnpm tiger:reconcile-events-news
         env:
@@ -297,7 +311,7 @@ jobs:
 
       - name: Inspect Tiger app change retry validate manifest
         id: inspect_app_change_retry_manifest
-        if: always() && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true'
+        if: always() && env.STOP_AFTER_CLASSIFICATION != 'true' && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true'
         env:
           APP_CHANGE_VALIDATE_MANIFEST_PATH: docs/reference/tiger-target-baseline/${{ env.TIGER_RUN_DATE }}/tiger-preview-events-news-validate-app-change-retry-${{ github.run_id }}/events-news-sync-manifest.json
         run: |
@@ -381,7 +395,7 @@ jobs:
           NODE
 
       - name: Fail on non-recoverable Tiger app change retry failure
-        if: steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true' && steps.inspect_app_change_retry_manifest.outputs.app_change_retry_passed != 'true'
+        if: env.STOP_AFTER_CLASSIFICATION != 'true' && steps.inspect_reconcile_manifest.outputs.needs_app_change_retry == 'true' && steps.inspect_app_change_retry_manifest.outputs.app_change_retry_passed != 'true'
         env:
           APP_CHANGE_RETRY_CLASSIFICATION: ${{ steps.inspect_app_change_retry_manifest.outputs.app_change_retry_classification }}
           APP_CHANGE_VALIDATE_MANIFEST_PATH: docs/reference/tiger-target-baseline/${{ env.TIGER_RUN_DATE }}/tiger-preview-events-news-validate-app-change-retry-${{ github.run_id }}/events-news-sync-manifest.json
@@ -398,7 +412,7 @@ jobs:
           exit 1
 
       - name: Reconcile Tiger projection exact parity fallback
-        if: steps.inspect_reconcile_manifest.outputs.needs_exact_parity_fallback == 'true' && (steps.inspect_reconcile_manifest.outputs.needs_app_change_retry != 'true' || steps.inspect_app_change_retry_manifest.outputs.app_change_retry_passed == 'true')
+        if: env.STOP_AFTER_CLASSIFICATION != 'true' && steps.inspect_reconcile_manifest.outputs.needs_exact_parity_fallback == 'true' && (steps.inspect_reconcile_manifest.outputs.needs_app_change_retry != 'true' || steps.inspect_app_change_retry_manifest.outputs.app_change_retry_passed == 'true')
         run: pnpm tiger:reconcile-events-news
         env:
           DATA_PLANE_STATEMENT_TIMEOUT_MS: "120000"
@@ -411,6 +425,7 @@ jobs:
           EVENTS_NEWS_SYNC_TABLES: steam_news_search_projection
 
       - name: Validate Tiger events and news parity
+        if: env.STOP_AFTER_CLASSIFICATION != 'true'
         run: pnpm tiger:reconcile-events-news
         env:
           DATA_PLANE_STATEMENT_TIMEOUT_MS: "120000"
