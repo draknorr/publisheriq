@@ -7204,12 +7204,84 @@ test('Tiger primary resolves YouTube growth prompts and maps last 1 day to the 1
   assert.match(result.renderedText ?? '', /Hollow Knight Lore Theory Just Exploded/);
 });
 
-test('Tiger primary does not silently route generic latest-video prompts to YouTube', async (t) => {
+test('Tiger primary routes generic latest-video prompts to YouTube when they clearly target one game', async (t) => {
   setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
   setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
 
-  setScopedFetch(t, async () => {
-    assert.fail('generic latest-video prompt should not call query-api');
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(request.query, 'ARC Raiders');
+      return jsonResponse({
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'ARC Raiders',
+          entityKind: 'game',
+          entityUid: '11111111-1111-4111-8111-111111111111',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '1149460',
+        }],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-youtube-game-coverage');
+    assert.deepEqual(request, {
+      contentClass: null,
+      entityUid: '11111111-1111-4111-8111-111111111111',
+      limit: 10,
+      view: 'latest_videos',
+      window: null,
+    });
+
+    return jsonResponse({
+      availability: {
+        blockingTables: [],
+        reason: null,
+        state: 'ready',
+      },
+      cadence: null,
+      contentClass: null,
+      contentMix: [],
+      creators: [],
+      entity: {
+        displayName: 'ARC Raiders',
+        entityKind: 'game',
+        entityUid: '11111111-1111-4111-8111-111111111111',
+        platform: 'steam',
+        platformEntityId: '1149460',
+      },
+      items: [{
+        channelTitle: 'Creator One',
+        contentClass: 'standard_video',
+        publishedAt: '2026-04-07T07:56:34.000Z',
+        title: 'ARC Raiders Just Buffed This Key Room',
+        viewCount: 32037,
+      }],
+      limit: 10,
+      resolvedWindow: 'current',
+      sufficientToAnswer: true,
+      summary: {
+        distinctUploadChannels30d: 32,
+        distinctUploadChannels7d: 18,
+        freshestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        latestSnapshotAt: '2026-04-07T08:00:32.000Z',
+        matchedPrimaryVideoCount: 100,
+        matchedVideoViewDelta1d: 258971,
+        matchedVideoViewDelta7d: 258971,
+        newMatchedVideos1d: 51,
+        newMatchedVideos30d: 100,
+        newMatchedVideos7d: 88,
+      },
+      view: 'latest_videos',
+    });
   });
 
   const result = await runTigerPrimaryEvaluation({
@@ -7219,8 +7291,388 @@ test('Tiger primary does not silently route generic latest-video prompts to YouT
     userId: 'user-1',
   });
 
-  assert.equal(result.info.matchedIntent, null);
-  assert.equal(result.info.route, 'unmatched');
+  assert.equal(result.info.matchedIntent, 'youtube_game_activity');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'getYoutubeGameCoverage');
+  assert.match(result.renderedText ?? '', /Latest YouTube videos for ARC Raiders/);
+});
+
+test('Tiger primary routes generic creator-coverage prompts to YouTube with a weekly window', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(request.query, 'ARC Raiders');
+      return jsonResponse({
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'ARC Raiders',
+          entityKind: 'game',
+          entityUid: '11111111-1111-4111-8111-111111111111',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '1149460',
+        }],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-youtube-game-coverage');
+    assert.deepEqual(request, {
+      contentClass: null,
+      entityUid: '11111111-1111-4111-8111-111111111111',
+      limit: 10,
+      view: 'creator_coverage',
+      window: '7d',
+    });
+
+    return jsonResponse({
+      availability: {
+        blockingTables: [],
+        reason: null,
+        state: 'ready',
+      },
+      cadence: null,
+      contentClass: null,
+      contentMix: [],
+      creators: [{
+        channelSubscriberCount: 120000,
+        channelTitle: 'Creator One',
+        latestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        matchedVideoCount: 4,
+        totalMatchedViews: 98000,
+      }],
+      entity: {
+        displayName: 'ARC Raiders',
+        entityKind: 'game',
+        entityUid: '11111111-1111-4111-8111-111111111111',
+        platform: 'steam',
+        platformEntityId: '1149460',
+      },
+      items: [],
+      limit: 10,
+      resolvedWindow: '7d',
+      sufficientToAnswer: true,
+      summary: {
+        distinctUploadChannels30d: 32,
+        distinctUploadChannels7d: 18,
+        freshestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        latestSnapshotAt: '2026-04-07T08:00:32.000Z',
+        matchedPrimaryVideoCount: 100,
+        matchedVideoViewDelta1d: 258971,
+        matchedVideoViewDelta7d: 258971,
+        newMatchedVideos1d: 51,
+        newMatchedVideos30d: 100,
+        newMatchedVideos7d: 88,
+      },
+      view: 'creator_coverage',
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'Who is covering ARC Raiders this week?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'youtube_game_activity');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'getYoutubeGameCoverage');
+  assert.match(result.renderedText ?? '', /YouTube creator coverage for ARC Raiders in the last 7 days/);
+});
+
+test('Tiger primary routes cadence prompts to YouTube with a 14-day window', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(request.query, 'ARC Raiders');
+      return jsonResponse({
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'ARC Raiders',
+          entityKind: 'game',
+          entityUid: '11111111-1111-4111-8111-111111111111',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '1149460',
+        }],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-youtube-game-coverage');
+    assert.deepEqual(request, {
+      contentClass: null,
+      entityUid: '11111111-1111-4111-8111-111111111111',
+      limit: 10,
+      view: 'cadence',
+      window: '14d',
+    });
+
+    return jsonResponse({
+      availability: {
+        blockingTables: [],
+        reason: null,
+        state: 'ready',
+      },
+      cadence: {
+        distinctUploadChannels: 23,
+        matchedVideoViewDelta: 145000,
+        newMatchedVideos: 31,
+        viewsOnNewVideos: 420000,
+        window: '14d',
+      },
+      contentClass: null,
+      contentMix: [],
+      creators: [],
+      entity: {
+        displayName: 'ARC Raiders',
+        entityKind: 'game',
+        entityUid: '11111111-1111-4111-8111-111111111111',
+        platform: 'steam',
+        platformEntityId: '1149460',
+      },
+      items: [],
+      limit: 10,
+      resolvedWindow: '14d',
+      sufficientToAnswer: true,
+      summary: {
+        distinctUploadChannels30d: 32,
+        distinctUploadChannels7d: 18,
+        freshestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        latestSnapshotAt: '2026-04-07T08:00:32.000Z',
+        matchedPrimaryVideoCount: 100,
+        matchedVideoViewDelta1d: 258971,
+        matchedVideoViewDelta7d: 258971,
+        newMatchedVideos1d: 51,
+        newMatchedVideos30d: 100,
+        newMatchedVideos7d: 88,
+      },
+      view: 'cadence',
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'How many upload channels posted about ARC Raiders in the last 14 days?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'youtube_game_activity');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'getYoutubeGameCoverage');
+  assert.match(result.renderedText ?? '', /YouTube activity for ARC Raiders in the last 14 days/);
+});
+
+test('Tiger primary routes generic content-mix prompts to YouTube with a monthly window', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(request.query, 'ARC Raiders');
+      return jsonResponse({
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'ARC Raiders',
+          entityKind: 'game',
+          entityUid: '11111111-1111-4111-8111-111111111111',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '1149460',
+        }],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-youtube-game-coverage');
+    assert.deepEqual(request, {
+      contentClass: null,
+      entityUid: '11111111-1111-4111-8111-111111111111',
+      limit: 10,
+      view: 'content_mix',
+      window: '30d',
+    });
+
+    return jsonResponse({
+      availability: {
+        blockingTables: [],
+        reason: null,
+        state: 'ready',
+      },
+      cadence: null,
+      contentClass: null,
+      contentMix: [{
+        contentClass: 'standard_video',
+        distinctUploadChannels: 12,
+        matchedPrimaryVideoCount: 44,
+        matchedVideoViewDelta: 120000,
+        newMatchedVideos: 18,
+      }, {
+        contentClass: 'short',
+        distinctUploadChannels: 19,
+        matchedPrimaryVideoCount: 31,
+        matchedVideoViewDelta: 240000,
+        newMatchedVideos: 26,
+      }],
+      creators: [],
+      entity: {
+        displayName: 'ARC Raiders',
+        entityKind: 'game',
+        entityUid: '11111111-1111-4111-8111-111111111111',
+        platform: 'steam',
+        platformEntityId: '1149460',
+      },
+      items: [],
+      limit: 10,
+      resolvedWindow: '30d',
+      sufficientToAnswer: true,
+      summary: {
+        distinctUploadChannels30d: 32,
+        distinctUploadChannels7d: 18,
+        freshestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        latestSnapshotAt: '2026-04-07T08:00:32.000Z',
+        matchedPrimaryVideoCount: 100,
+        matchedVideoViewDelta1d: 258971,
+        matchedVideoViewDelta7d: 258971,
+        newMatchedVideos1d: 51,
+        newMatchedVideos30d: 100,
+        newMatchedVideos7d: 88,
+      },
+      view: 'content_mix',
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'What content mix does ARC Raiders have this month?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'youtube_game_activity');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'getYoutubeGameCoverage');
+  assert.match(result.renderedText ?? '', /YouTube content mix for ARC Raiders in the last 30 days/);
+});
+
+test('Tiger primary routes generic most-viewed prompts to YouTube top videos with a 3-day window', async (t) => {
+  setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
+  setScopedEnv(t, 'CHAT_TIGER_YOUTUBE_ENABLED', 'true');
+  setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
+
+  setScopedFetch(t, async (url, init) => {
+    assert.ok(init?.body);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+
+    if (url.pathname === '/v1/contracts/resolve-entities') {
+      assert.equal(request.query, 'ARC Raiders');
+      return jsonResponse({
+        ambiguity: {
+          message: null,
+          requiresClarification: false,
+        },
+        entities: [{
+          confidence: 0.99,
+          displayName: 'ARC Raiders',
+          entityKind: 'game',
+          entityUid: '11111111-1111-4111-8111-111111111111',
+          matchQuality: 'exact',
+          platform: 'steam',
+          platformEntityId: '1149460',
+        }],
+      });
+    }
+
+    assert.equal(url.pathname, '/v1/contracts/get-youtube-game-coverage');
+    assert.deepEqual(request, {
+      contentClass: null,
+      entityUid: '11111111-1111-4111-8111-111111111111',
+      limit: 10,
+      view: 'top_videos',
+      window: '3d',
+    });
+
+    return jsonResponse({
+      availability: {
+        blockingTables: [],
+        reason: null,
+        state: 'ready',
+      },
+      cadence: null,
+      contentClass: null,
+      contentMix: [],
+      creators: [],
+      entity: {
+        displayName: 'ARC Raiders',
+        entityKind: 'game',
+        entityUid: '11111111-1111-4111-8111-111111111111',
+        platform: 'steam',
+        platformEntityId: '1149460',
+      },
+      items: [{
+        channelTitle: 'Creator One',
+        contentClass: 'standard_video',
+        publishedAt: '2026-04-07T07:56:34.000Z',
+        title: 'ARC Raiders Just Buffed This Key Room',
+        viewCount: 32037,
+      }],
+      limit: 10,
+      resolvedWindow: '3d',
+      sufficientToAnswer: true,
+      summary: {
+        distinctUploadChannels30d: 32,
+        distinctUploadChannels7d: 18,
+        freshestMatchedUploadAt: '2026-04-07T07:56:34.000Z',
+        latestSnapshotAt: '2026-04-07T08:00:32.000Z',
+        matchedPrimaryVideoCount: 100,
+        matchedVideoViewDelta1d: 258971,
+        matchedVideoViewDelta7d: 258971,
+        newMatchedVideos1d: 51,
+        newMatchedVideos30d: 100,
+        newMatchedVideos7d: 88,
+      },
+      view: 'top_videos',
+    });
+  });
+
+  const result = await runTigerPrimaryEvaluation({
+    isEvalRequest: true,
+    prompt: 'What are the most-viewed videos for ARC Raiders in the last 72 hours?',
+    sessionContext: null,
+    userId: 'user-1',
+  });
+
+  assert.equal(result.info.matchedIntent, 'youtube_game_activity');
+  assert.equal(result.info.route, 'primary_success');
+  assert.equal(result.contractResult?.contractName, 'getYoutubeGameCoverage');
+  assert.match(result.renderedText ?? '', /Top YouTube videos for ARC Raiders in the last 3 days/);
 });
 
 test('Tiger primary renders a blocked explanation for noisy YouTube titles', async (t) => {

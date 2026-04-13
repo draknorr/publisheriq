@@ -10679,28 +10679,27 @@ export class DataPlaneService {
       return 'current';
     }
 
+    const normalizedWindow = window.trim().toLowerCase();
     if (
-      window !== 'current'
-      && window !== '1d'
-      && window !== '7d'
-      && window !== '30d'
+      normalizedWindow !== 'current'
+      && this.parseYoutubeCoverageWindowDays(normalizedWindow) == null
     ) {
       throw new PublisherIQError(
         'getYoutubeGameCoverage requires a supported time window.',
         'INVALID_YOUTUBE_WINDOW',
-        { window }
+        { window: normalizedWindow }
       );
     }
 
-    if (view === 'video_growth' && window === 'current') {
+    if (view === 'video_growth' && normalizedWindow === 'current') {
       return '1d';
     }
 
-    if ((view === 'content_mix' || view === 'cadence') && window === 'current') {
+    if ((view === 'content_mix' || view === 'cadence') && normalizedWindow === 'current') {
       return '7d';
     }
 
-    return window;
+    return normalizedWindow as YoutubeCoverageWindow;
   }
 
   private buildYoutubeCoverageResponse(params: {
@@ -10784,15 +10783,39 @@ export class DataPlaneService {
   private youtubeIntervalLiteral(
     window: Exclude<YoutubeCoverageWindow, 'current'>
   ): string {
-    if (window === '1d') {
-      return "INTERVAL '1 day'";
+    const days = this.parseYoutubeCoverageWindowDays(window);
+    if (days == null) {
+      throw new PublisherIQError(
+        'getYoutubeGameCoverage requires a supported time window.',
+        'INVALID_YOUTUBE_WINDOW',
+        { window }
+      );
     }
 
-    if (window === '7d') {
-      return "INTERVAL '7 days'";
+    return `INTERVAL '${days} days'`;
+  }
+
+  private parseYoutubeCoverageWindowDays(
+    window: string
+  ): 1 | 2 | 3 | 7 | 14 | 30 | null {
+    const match = window.match(/^(\d+)d$/);
+    if (!match) {
+      return null;
     }
 
-    return "INTERVAL '30 days'";
+    const days = Number(match[1]);
+    if (
+      days === 1
+      || days === 2
+      || days === 3
+      || days === 7
+      || days === 14
+      || days === 30
+    ) {
+      return days;
+    }
+
+    return null;
   }
 
   private async queryYoutubeGameOverrideState(appid: number): Promise<string | null> {

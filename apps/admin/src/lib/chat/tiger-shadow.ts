@@ -74,6 +74,10 @@ const CHANGE_DISCOVERY_PROMPT_PATTERN =
   /\b(biggest steam page refreshes?|store-?page changes?|release timing changes?|changed tags?(?: or genres?)?|marketing push|relaunch pattern|teasing a big update|sustained response|under-marketed|signable indie games|agency leads|without an announcement)\b/i;
 const YOUTUBE_EXPLICIT_PROMPT_PATTERN =
   /\byoutube\b|\b(?:creators?|channels?|shorts?)\b|\b(?:live(?:\s+or\s+recent\s+live)?(?:\s+videos?)?|livestreams?|upload channels?)\b/i;
+const YOUTUBE_IMPLICIT_ACTIVITY_PROMPT_PATTERN =
+  /\b(?:latest|newest|recent|fresh(?:est|ness)?|top|biggest|largest|most-viewed|most views|growing|growth|fastest-growing|creator pickup|cover(?:ing|age)|upload channels?|new matched videos?|new uploads?|latest uploads?|latest posts?|content mix|formats?|cadence|activity)\b/i;
+const YOUTUBE_ACTIVITY_DETAIL_PROMPT_PATTERN =
+  /\b(?:videos?|uploads?|creators?|channels?|who(?:'s|\s+is)?\s+covering|posted about|making content for|creator pickup|upload channels?|content mix|formats?|cadence|fresh(?:est|ness)?|activity|top videos?|most-viewed|most views|fastest-growing|growth)\b/i;
 const PROSPECT_DISCOVERY_PROMPT_PATTERN =
   /\b(?:agency|prospects?|marketing[- ]agency|under-?marketed|signable|lead quality|evidence quality)\b/i;
 const MOMENTUM_PROMPT_PATTERN =
@@ -156,9 +160,16 @@ const YOUTUBE_ENTITY_QUERY_PATTERNS = [
   /\b(?:videos?|uploads?|shorts?|creators?|channels?)\s+(?:for|about|on)\s+(.+?)(?:\s+\b(?:on youtube|youtube|right now|today|this week|this month|in the last|over the last|sorted by|with|that)\b|[?!.]|$)/i,
   /\b(?:creators?|channels?)\s+(?:are\s+)?(?:covering|posting about|making content for)\s+(.+?)(?:\s+\b(?:on youtube|youtube|right now|today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
   /\bwhich\s+(?:creators?|channels?)\s+(?:are\s+)?(?:covering|posting about|making content for)\s+(.+?)(?:\s+\b(?:on youtube|youtube|right now|today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
+  /\bwho(?:'s|\s+is)?\s+covering\s+(.+?)(?:\s+\b(?:right now|today|this week|this month|on youtube|youtube|in the last|over the last)\b|[?!.]|$)/i,
   /\bwhich\s+(.+?)\s+youtube\s+(?:videos?|uploads?|shorts?|livestreams?|live\s+videos?)\s+are\s+(?:growing|growing fastest|fastest-growing|taking off|breaking out)\b/i,
   /\bwhat\s+does\s+the\s+youtube\s+content\s+mix\s+look\s+like\s+for\s+(.+?)(?:[?!.]|$)/i,
+  /\bwhat\s+(?:content\s+mix|formats?)\s+does\s+(.+?)\s+have(?:\s+\b(?:today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
   /\bhow\s+many\s+.+?\s+did\s+(.+?)\s+get\s+in\s+the\s+last\s+\d+\s+days?(?:[?!.]|$)/i,
+  /\bhow\s+many\s+(?:new\s+)?(?:videos?|uploads?|creators?|channels?|upload channels?)\s+did\s+(.+?)\s+get(?:\s+\b(?:today|this week|this month|in the last|over the last|during the last|past)\b|[?!.]|$)/i,
+  /\bhow\s+fresh\s+is\s+(?:the\s+)?(?:youtube\s+)?activity\s+(?:around|for)\s+(.+?)(?:[?!.]|$)/i,
+  /\bwhen\s+was\s+(?:the\s+)?freshest\s+(?:matched\s+)?upload\s+(?:for|about)\s+(.+?)(?:[?!.]|$)/i,
+  /\b(?:is|does)\s+(.+?)\s+(?:have|get|show)\s+(?:broad\s+)?creator\s+pickup(?:\s+\b(?:today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
+  /\bhow\s+many\s+upload\s+channels?\s+(?:posted|covered|are\s+covering)\s+(?:about\s+)?(.+?)(?:\s+\b(?:today|this week|this month|in the last|over the last)\b|[?!.]|$)/i,
   /\bwhich\s+.+?\s+for\s+(.+?)\s+on\s+youtube\b/i,
 ];
 
@@ -1899,10 +1910,6 @@ function inferYoutubeGameActivityIntent(prompt: string): boolean {
     return false;
   }
 
-  if (!YOUTUBE_EXPLICIT_PROMPT_PATTERN.test(prompt)) {
-    return false;
-  }
-
   if (
     inferCompareIntent(prompt)
     || inferMetricHistoryIntent(prompt)
@@ -1914,14 +1921,22 @@ function inferYoutubeGameActivityIntent(prompt: string): boolean {
     return false;
   }
 
-  return /\b(?:videos?|uploads?|creators?|channels?|shorts?|live|livestreams?|content mix|format|formats|cadence|fresh(?:est|ness)?|growing|growth|biggest|most-viewed)\b/i.test(
-    prompt
-  );
+  if (YOUTUBE_EXPLICIT_PROMPT_PATTERN.test(prompt)) {
+    return YOUTUBE_ACTIVITY_DETAIL_PROMPT_PATTERN.test(prompt);
+  }
+
+  return Boolean(extractYoutubeEntityQuery(prompt))
+    && YOUTUBE_IMPLICIT_ACTIVITY_PROMPT_PATTERN.test(prompt)
+    && YOUTUBE_ACTIVITY_DETAIL_PROMPT_PATTERN.test(prompt);
 }
 
 function inferYoutubeCoverageView(prompt: string): YoutubeCoverageView {
   if (
-    /\b(?:creators?|channels?)\b/i.test(prompt)
+    (
+      /\b(?:creators?|channels?)\b/i.test(prompt)
+      || /\bwho(?:'s|\s+is)\s+covering\b/i.test(prompt)
+    )
+    && !/\b(?:how many|distinct)\b/i.test(prompt)
     && !/\b(?:biggest|most-viewed|most views|growing|growth)\b/i.test(prompt)
   ) {
     return 'creator_coverage';
@@ -1934,7 +1949,7 @@ function inferYoutubeCoverageView(prompt: string): YoutubeCoverageView {
   }
 
   if (
-    /\b(?:how many|distinct upload channels?|broad creator pickup|burst of new videos|fresh(?:est|ness)?|recent youtube activity|new matched videos?)\b/i.test(prompt)
+    /\b(?:how many|distinct upload channels?|broad creator pickup|burst of new videos|fresh(?:est|ness)?|recent youtube activity|new matched videos?|new uploads?|how fresh|freshest upload|upload channels?)\b/i.test(prompt)
   ) {
     return 'cadence';
   }
@@ -1957,8 +1972,54 @@ function inferYoutubeCoverageWindow(prompt: string): YoutubeCoverageWindow | nul
     return '1d';
   }
 
+  if (/\b(?:last|past)\s+48\s+hours?\b|\b(?:last|past)\s+2\s+days?\b/i.test(prompt)) {
+    return '2d';
+  }
+
+  if (/\b(?:last|past)\s+72\s+hours?\b|\b(?:last|past)\s+3\s+days?\b/i.test(prompt)) {
+    return '3d';
+  }
+
+  const weekMatch = prompt.match(/\b(?:last|past)\s+(\d+)\s+weeks?\b/i);
+  if (weekMatch) {
+    const weeks = Number(weekMatch[1]);
+    if (weeks === 1) {
+      return '7d';
+    }
+    if (weeks === 2) {
+      return '14d';
+    }
+  }
+
+  const dayMatch = prompt.match(/\b(?:last|past|over the last|in the last|during the last)\s+(\d+)\s+days?\b/i);
+  if (dayMatch) {
+    const days = Number(dayMatch[1]);
+    if (days === 1) {
+      return '1d';
+    }
+    if (days === 2) {
+      return '2d';
+    }
+    if (days === 3) {
+      return '3d';
+    }
+    if (days === 7) {
+      return '7d';
+    }
+    if (days === 14) {
+      return '14d';
+    }
+    if (days === 30) {
+      return '30d';
+    }
+  }
+
   if (/\b(?:last|past)\s+7\s+days?\b|\bthis week\b/i.test(prompt)) {
     return '7d';
+  }
+
+  if (/\b(?:last|past)\s+14\s+days?\b|\b(?:this|past|last)\s+2\s+weeks?\b/i.test(prompt)) {
+    return '14d';
   }
 
   if (/\b(?:last|past)\s+30\s+days?\b|\bthis month\b/i.test(prompt)) {
@@ -1969,6 +2030,10 @@ function inferYoutubeCoverageWindow(prompt: string): YoutubeCoverageWindow | nul
 }
 
 function inferYoutubeContentClass(prompt: string): YoutubeContentClass | null {
+  if (/\b(?:all formats?|all videos?)\b/i.test(prompt)) {
+    return null;
+  }
+
   if (/\b(?:live(?:\s+or\s+recent\s+live)?|livestreams?)\b/i.test(prompt)) {
     return 'live_or_recent_live';
   }
@@ -9630,6 +9695,84 @@ function formatYoutubeDate(value: string | null | undefined): string {
   });
 }
 
+function formatYoutubeWindowLabel(value: YoutubeCoverageWindow | null | undefined): string | null {
+  if (!value || value === 'current') {
+    return null;
+  }
+
+  const parsed = Number(value.slice(0, -1));
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return value;
+  }
+
+  if (parsed === 1) {
+    return 'the last 1 day';
+  }
+
+  return `the last ${parsed} days`;
+}
+
+function formatYoutubeContentClassLabel(
+  value: YoutubeContentClass | null | undefined,
+  params?: {
+    plural?: boolean;
+  }
+): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const plural = params?.plural ?? false;
+  if (value === 'short') {
+    return plural ? 'YouTube shorts' : 'short';
+  }
+
+  if (value === 'live_or_recent_live') {
+    return plural ? 'live or recent-live videos' : 'live or recent-live';
+  }
+
+  return plural ? 'standard YouTube videos' : 'standard video';
+}
+
+function buildYoutubeCoverageHeader(response: GetYoutubeGameCoverageResponse): string {
+  const entityName = response.entity.displayName;
+  const windowLabel = formatYoutubeWindowLabel(response.resolvedWindow);
+  const classLabel = formatYoutubeContentClassLabel(response.contentClass, { plural: true });
+  const windowSuffix = windowLabel ? ` in ${windowLabel}` : '';
+
+  if (response.view === 'creator_coverage') {
+    return `YouTube creator coverage for ${entityName}${windowSuffix}`;
+  }
+
+  if (response.view === 'top_videos') {
+    if (classLabel) {
+      return `Top ${classLabel} for ${entityName}${windowSuffix}`;
+    }
+    return `Top YouTube videos for ${entityName}${windowSuffix}`;
+  }
+
+  if (response.view === 'video_growth') {
+    if (classLabel) {
+      return `Fastest-growing ${classLabel} for ${entityName}${windowSuffix}`;
+    }
+    return `Fastest-growing YouTube videos for ${entityName}${windowSuffix}`;
+  }
+
+  if (response.view === 'content_mix') {
+    return `YouTube content mix for ${entityName}${windowSuffix}`;
+  }
+
+  if (response.view === 'cadence') {
+    return `YouTube activity for ${entityName}${windowSuffix ?? ''}`.trim();
+  }
+
+  if (classLabel) {
+    return `Latest ${classLabel} for ${entityName}${windowSuffix}`;
+  }
+
+  return `Latest YouTube videos for ${entityName}${windowSuffix}`;
+}
+
 function buildYoutubeFollowUpSuggestions(params: {
   entityName: string;
   view: YoutubeCoverageView;
@@ -9638,32 +9781,33 @@ function buildYoutubeFollowUpSuggestions(params: {
   const suggestions =
     params.view === 'creator_coverage'
       ? [
+          `How many upload channels posted about ${entity} in the last 14 days?`,
           `Show the fastest-growing YouTube videos for ${entity} in the last 7 days`,
-          `What does the YouTube content mix look like for ${entity}?`,
-          `Show the top YouTube videos for ${entity}`,
+          `Show the top YouTube videos for ${entity} in the last 14 days`,
         ]
       : params.view === 'video_growth'
         ? [
-            `Show the latest YouTube videos for ${entity}`,
-            `Which creators are covering ${entity} on YouTube?`,
+            `Show the fastest-growing YouTube shorts for ${entity} in the last 7 days`,
+            `Show the latest YouTube videos for ${entity} in the last 7 days`,
             `What does the YouTube content mix look like for ${entity}?`,
           ]
         : params.view === 'content_mix'
           ? [
-              `Show the latest YouTube videos for ${entity}`,
-              `Which creators are covering ${entity} on YouTube?`,
+              `How many new YouTube videos did ${entity} get in the last 14 days?`,
+              `Which creators are covering ${entity} this week?`,
               `Show the fastest-growing YouTube videos for ${entity} in the last 7 days`,
             ]
           : params.view === 'cadence'
             ? [
-                `Show the latest YouTube videos for ${entity}`,
-                `Which creators are covering ${entity} on YouTube?`,
-                `Show the top YouTube videos for ${entity}`,
+                `How many upload channels posted about ${entity} this week?`,
+                `Show the latest YouTube videos for ${entity} in the last 7 days`,
+                `Show the top YouTube videos for ${entity} in the last 14 days`,
               ]
             : [
-                `Which creators are covering ${entity} on YouTube?`,
+                `Show the latest YouTube shorts for ${entity} in the last 7 days`,
+                `Which creators are covering ${entity} this week?`,
                 `Show the fastest-growing YouTube videos for ${entity} in the last 7 days`,
-                `What does the YouTube content mix look like for ${entity}?`,
+                `How many new YouTube videos did ${entity} get in the last 14 days?`,
               ];
 
   return suggestions.map((query) => ({
@@ -9694,31 +9838,20 @@ function renderYoutubeGameCoverage(response: GetYoutubeGameCoverageResponse | nu
   }
 
   const summary = response.summary ?? {};
-  const header =
-    response.view === 'creator_coverage'
-      ? `YouTube creator coverage for ${entityName}`
-      : response.view === 'top_videos'
-        ? `Top YouTube videos for ${entityName}`
-        : response.view === 'video_growth'
-          ? `Fastest-growing YouTube videos for ${entityName}`
-          : response.view === 'content_mix'
-            ? `YouTube content mix for ${entityName}`
-            : response.view === 'cadence'
-              ? `YouTube cadence for ${entityName}`
-              : `Latest YouTube videos for ${entityName}`;
+  const header = buildYoutubeCoverageHeader(response);
   const summaryLines = [
-    `- ${formatYoutubeMetric(summary.matchedPrimaryVideoCount)} matched primary videos in the current set`,
-    `- ${formatYoutubeMetric(summary.newMatchedVideos1d)} new matched videos in 1d, ${formatYoutubeMetric(summary.newMatchedVideos7d)} in 7d, ${formatYoutubeMetric(summary.newMatchedVideos30d)} in 30d`,
-    `- ${formatYoutubeMetric(summary.distinctUploadChannels7d)} distinct upload channels in 7d and ${formatYoutubeMetric(summary.distinctUploadChannels30d)} in 30d`,
+    `- matched set: ${formatYoutubeMetric(summary.matchedPrimaryVideoCount)} primary videos`,
+    `- creator breadth: ${formatYoutubeMetric(summary.distinctUploadChannels7d)} channels in 7d, ${formatYoutubeMetric(summary.distinctUploadChannels30d)} in 30d`,
+    `- fresh uploads: ${formatYoutubeMetric(summary.newMatchedVideos1d)} in 1d, ${formatYoutubeMetric(summary.newMatchedVideos7d)} in 7d, ${formatYoutubeMetric(summary.newMatchedVideos30d)} in 30d`,
     `- freshest matched upload: ${formatYoutubeDate(summary.freshestMatchedUploadAt)}`,
-    `- latest snapshot: ${formatYoutubeDate(summary.latestSnapshotAt)}`,
+    `- latest snapshot seen: ${formatYoutubeDate(summary.latestSnapshotAt)}`,
   ];
 
   if (response.view === 'creator_coverage') {
     const rows = (response.creators ?? []).slice(0, response.limit ?? 10);
     const body = rows.length > 0
       ? rows.map((row, index) =>
-        `${index + 1}. ${row.channelTitle ?? 'Unknown channel'} (${formatYoutubeMetric(row.channelSubscriberCount ?? null)} subscribers, ${formatYoutubeMetric(row.matchedVideoCount ?? null)} matched videos, ${formatYoutubeMetric(row.totalMatchedViews ?? null)} current matched views, latest ${formatYoutubeDate(row.latestMatchedUploadAt)})`
+        `${index + 1}. ${row.channelTitle ?? 'Unknown channel'} (${formatYoutubeMetric(row.matchedVideoCount ?? null)} matched videos • ${formatYoutubeMetric(row.totalMatchedViews ?? null)} current matched views • ${formatYoutubeMetric(row.channelSubscriberCount ?? null)} subscribers • latest ${formatYoutubeDate(row.latestMatchedUploadAt)})`
       ).join('\n')
       : 'No creator rows were available in the current filtered slice.';
 
@@ -9729,7 +9862,7 @@ function renderYoutubeGameCoverage(response: GetYoutubeGameCoverageResponse | nu
     const rows = response.contentMix ?? [];
     const body = rows.length > 0
       ? rows.map((row) =>
-        `- ${row.contentClass ?? 'unknown'}: ${formatYoutubeMetric(row.matchedPrimaryVideoCount ?? null)} matched videos, ${formatYoutubeMetric(row.newMatchedVideos ?? null)} new in ${response.resolvedWindow ?? 'current'}, ${formatYoutubeMetric(row.distinctUploadChannels ?? null)} upload channels, ${formatYoutubeMetric(row.matchedVideoViewDelta ?? null)} view delta`
+        `- ${formatYoutubeContentClassLabel(row.contentClass, { plural: true }) ?? 'unknown'}: ${formatYoutubeMetric(row.matchedPrimaryVideoCount ?? null)} matched videos, ${formatYoutubeMetric(row.newMatchedVideos ?? null)} new in ${formatYoutubeWindowLabel(response.resolvedWindow) ?? 'the current slice'}, ${formatYoutubeMetric(row.distinctUploadChannels ?? null)} upload channels, ${formatYoutubeMetric(row.matchedVideoViewDelta ?? null)} observed view delta`
       ).join('\n')
       : 'No content-mix rows were available in the current filtered slice.';
 
@@ -9740,10 +9873,10 @@ function renderYoutubeGameCoverage(response: GetYoutubeGameCoverageResponse | nu
     const cadence = response.cadence;
     const body = cadence
       ? [
-          `- ${formatYoutubeMetric(cadence.newMatchedVideos ?? null)} new matched videos in ${cadence.window ?? response.resolvedWindow ?? 'the current window'}`,
+          `- ${formatYoutubeMetric(cadence.newMatchedVideos ?? null)} new matched videos in ${formatYoutubeWindowLabel(cadence.window) ?? 'the current window'}`,
           `- ${formatYoutubeMetric(cadence.distinctUploadChannels ?? null)} distinct upload channels`,
-          `- ${formatYoutubeMetric(cadence.viewsOnNewVideos ?? null)} current views on new-window uploads`,
-          `- ${formatYoutubeMetric(cadence.matchedVideoViewDelta ?? null)} view delta across re-snapshotted matched videos`,
+          `- ${formatYoutubeMetric(cadence.viewsOnNewVideos ?? null)} current views on uploads inside that window`,
+          `- ${formatYoutubeMetric(cadence.matchedVideoViewDelta ?? null)} observed view delta across re-snapshotted matched videos`,
         ].join('\n')
       : 'No cadence summary was available in the current filtered slice.';
 
@@ -9759,7 +9892,7 @@ function renderYoutubeGameCoverage(response: GetYoutubeGameCoverageResponse | nu
         row.viewCount != null ? `${formatYoutubeMetric(row.viewCount)} views` : null,
         row.viewDelta != null ? `${formatYoutubeMetric(row.viewDelta)} delta` : null,
         row.growthPct != null ? `${formatYoutubePercent(row.growthPct)} growth` : null,
-        row.contentClass ?? null,
+        formatYoutubeContentClassLabel(row.contentClass) ?? null,
       ].filter((value): value is string => Boolean(value));
       return `${index + 1}. ${row.title ?? 'Untitled video'}${details.length > 0 ? ` (${details.join(' • ')})` : ''}`;
     }).join('\n')

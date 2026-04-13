@@ -1134,7 +1134,8 @@ export type YoutubeContentClass =
   | 'standard_video'
   | 'short'
   | 'live_or_recent_live';
-export type YoutubeCoverageWindow = 'current' | '1d' | '7d' | '30d';
+type YoutubeCoverageWindowDays = 1 | 2 | 3 | 7 | 14 | 30;
+export type YoutubeCoverageWindow = 'current' | `${YoutubeCoverageWindowDays}d`;
 
 export interface GetYoutubeGameCoverageRequest {
   contentClass?: YoutubeContentClass | null;
