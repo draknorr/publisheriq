@@ -627,7 +627,8 @@ type YoutubeContentClass =
   | 'standard_video'
   | 'short'
   | 'live_or_recent_live';
-type YoutubeCoverageWindow = 'current' | '1d' | '7d' | '30d';
+type YoutubeCoverageWindowDays = 1 | 2 | 3 | 7 | 14 | 30;
+type YoutubeCoverageWindow = 'current' | `${YoutubeCoverageWindowDays}d`;
 
 interface GetYoutubeGameCoverageRequest {
   contentClass?: YoutubeContentClass | null;
@@ -648,7 +649,7 @@ interface GetYoutubeGameCoverageResponse {
     matchedVideoViewDelta?: number;
     newMatchedVideos?: number;
     viewsOnNewVideos?: number;
-    window?: '1d' | '7d' | '30d';
+    window?: YoutubeCoverageWindow;
   } | null;
   contentClass?: YoutubeContentClass | null;
   contentMix?: Array<{
@@ -9734,6 +9735,83 @@ function formatYoutubeContentClassLabel(
   return plural ? 'standard YouTube videos' : 'standard video';
 }
 
+function formatYoutubeContentClassTableLabel(value: YoutubeContentClass | null | undefined): string {
+  if (value === 'short') {
+    return 'Shorts';
+  }
+
+  if (value === 'live_or_recent_live') {
+    return 'Live / recent live';
+  }
+
+  return 'Standard video';
+}
+
+function sanitizeYoutubeMarkdownTableCell(value: string | null | undefined): string {
+  const normalized = (value ?? 'n/a')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\|/g, '\\|')
+    .trim();
+
+  return normalized || 'n/a';
+}
+
+function normalizeYoutubeMarkdownInlineText(value: string | null | undefined, fallback = 'n/a'): string {
+  const normalized = (value ?? fallback)
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized || fallback;
+}
+
+function escapeYoutubeMarkdownLinkLabel(value: string | null | undefined): string {
+  return normalizeYoutubeMarkdownInlineText(value ?? 'Untitled', 'Untitled')
+    .replace(/\\/g, '\\\\')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]');
+}
+
+function formatYoutubeMarkdownLink(
+  label: string | null | undefined,
+  url: string | null | undefined
+): string {
+  const safeLabel = escapeYoutubeMarkdownLinkLabel(label ?? 'Untitled');
+  const safeUrl = url?.trim() ?? '';
+  if (!/^https?:\/\//i.test(safeUrl)) {
+    return safeLabel;
+  }
+
+  return `[${safeLabel}](<${safeUrl.replace(/>/g, '%3E')}>)`;
+}
+
+function formatYoutubeVideoLink(row: {
+  title?: string;
+  url?: string;
+}): string {
+  return formatYoutubeMarkdownLink(row.title ?? 'Untitled video', row.url);
+}
+
+function formatYoutubeChannelLink(row: {
+  channelId?: string;
+  channelTitle?: string;
+}): string {
+  const title = normalizeYoutubeMarkdownInlineText(row.channelTitle ?? 'Unknown channel', 'Unknown channel');
+  if (!row.channelId) {
+    return title;
+  }
+
+  return formatYoutubeMarkdownLink(title, `https://www.youtube.com/channel/${encodeURIComponent(row.channelId)}`);
+}
+
+function buildYoutubeMarkdownTable(columns: string[], rows: string[][]): string {
+  const header = `| ${columns.map((column) => sanitizeYoutubeMarkdownTableCell(column)).join(' | ')} |`;
+  const divider = `| ${columns.map(() => '---').join(' | ')} |`;
+  const body = rows.map((row) => `| ${row.map((cell) => sanitizeYoutubeMarkdownTableCell(cell)).join(' | ')} |`);
+  return [header, divider, ...body].join('\n');
+}
+
 function buildYoutubeCoverageHeader(response: GetYoutubeGameCoverageResponse): string {
   const entityName = response.entity.displayName;
   const windowLabel = formatYoutubeWindowLabel(response.resolvedWindow);
@@ -9840,65 +9918,94 @@ function renderYoutubeGameCoverage(response: GetYoutubeGameCoverageResponse | nu
   const summary = response.summary ?? {};
   const header = buildYoutubeCoverageHeader(response);
   const summaryLines = [
-    `- matched set: ${formatYoutubeMetric(summary.matchedPrimaryVideoCount)} primary videos`,
-    `- creator breadth: ${formatYoutubeMetric(summary.distinctUploadChannels7d)} channels in 7d, ${formatYoutubeMetric(summary.distinctUploadChannels30d)} in 30d`,
-    `- fresh uploads: ${formatYoutubeMetric(summary.newMatchedVideos1d)} in 1d, ${formatYoutubeMetric(summary.newMatchedVideos7d)} in 7d, ${formatYoutubeMetric(summary.newMatchedVideos30d)} in 30d`,
-    `- freshest matched upload: ${formatYoutubeDate(summary.freshestMatchedUploadAt)}`,
+    `- matched set: ${formatYoutubeMetric(summary.matchedPrimaryVideoCount)} primary videos; fresh uploads: ${formatYoutubeMetric(summary.newMatchedVideos1d)} in 1d, ${formatYoutubeMetric(summary.newMatchedVideos7d)} in 7d, ${formatYoutubeMetric(summary.newMatchedVideos30d)} in 30d`,
+    `- creator breadth: ${formatYoutubeMetric(summary.distinctUploadChannels7d)} channels in 7d, ${formatYoutubeMetric(summary.distinctUploadChannels30d)} in 30d; freshest matched upload: ${formatYoutubeDate(summary.freshestMatchedUploadAt)}`,
     `- latest snapshot seen: ${formatYoutubeDate(summary.latestSnapshotAt)}`,
   ];
+  const heading = `### ${header}`;
 
   if (response.view === 'creator_coverage') {
     const rows = (response.creators ?? []).slice(0, response.limit ?? 10);
     const body = rows.length > 0
-      ? rows.map((row, index) =>
-        `${index + 1}. ${row.channelTitle ?? 'Unknown channel'} (${formatYoutubeMetric(row.matchedVideoCount ?? null)} matched videos • ${formatYoutubeMetric(row.totalMatchedViews ?? null)} current matched views • ${formatYoutubeMetric(row.channelSubscriberCount ?? null)} subscribers • latest ${formatYoutubeDate(row.latestMatchedUploadAt)})`
-      ).join('\n')
+      ? buildYoutubeMarkdownTable(
+          ['Channel', 'Matched Videos', 'Current Matched Views', 'Subscribers', 'Latest Upload'],
+          rows.map((row) => [
+            formatYoutubeChannelLink(row),
+            formatYoutubeMetric(row.matchedVideoCount ?? null),
+            formatYoutubeMetric(row.totalMatchedViews ?? null),
+            formatYoutubeMetric(row.channelSubscriberCount ?? null),
+            formatYoutubeDate(row.latestMatchedUploadAt),
+          ])
+        )
       : 'No creator rows were available in the current filtered slice.';
 
-    return `${header}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
+    return `${heading}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
   }
 
   if (response.view === 'content_mix') {
     const rows = response.contentMix ?? [];
     const body = rows.length > 0
-      ? rows.map((row) =>
-        `- ${formatYoutubeContentClassLabel(row.contentClass, { plural: true }) ?? 'unknown'}: ${formatYoutubeMetric(row.matchedPrimaryVideoCount ?? null)} matched videos, ${formatYoutubeMetric(row.newMatchedVideos ?? null)} new in ${formatYoutubeWindowLabel(response.resolvedWindow) ?? 'the current slice'}, ${formatYoutubeMetric(row.distinctUploadChannels ?? null)} upload channels, ${formatYoutubeMetric(row.matchedVideoViewDelta ?? null)} observed view delta`
-      ).join('\n')
+      ? buildYoutubeMarkdownTable(
+          ['Format', 'Matched Videos', 'New Videos', 'Upload Channels', 'View Delta'],
+          rows.map((row) => [
+            formatYoutubeContentClassTableLabel(row.contentClass),
+            formatYoutubeMetric(row.matchedPrimaryVideoCount ?? null),
+            formatYoutubeMetric(row.newMatchedVideos ?? null),
+            formatYoutubeMetric(row.distinctUploadChannels ?? null),
+            formatYoutubeMetric(row.matchedVideoViewDelta ?? null),
+          ])
+        )
       : 'No content-mix rows were available in the current filtered slice.';
 
-    return `${header}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
+    return `${heading}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
   }
 
   if (response.view === 'cadence') {
     const cadence = response.cadence;
     const body = cadence
-      ? [
-          `- ${formatYoutubeMetric(cadence.newMatchedVideos ?? null)} new matched videos in ${formatYoutubeWindowLabel(cadence.window) ?? 'the current window'}`,
-          `- ${formatYoutubeMetric(cadence.distinctUploadChannels ?? null)} distinct upload channels`,
-          `- ${formatYoutubeMetric(cadence.viewsOnNewVideos ?? null)} current views on uploads inside that window`,
-          `- ${formatYoutubeMetric(cadence.matchedVideoViewDelta ?? null)} observed view delta across re-snapshotted matched videos`,
-        ].join('\n')
+      ? buildYoutubeMarkdownTable(
+          ['Window', 'New Videos', 'Upload Channels', 'Views On New Uploads', 'View Delta'],
+          [[
+            formatYoutubeWindowLabel(cadence.window) ?? 'current',
+            formatYoutubeMetric(cadence.newMatchedVideos ?? null),
+            formatYoutubeMetric(cadence.distinctUploadChannels ?? null),
+            formatYoutubeMetric(cadence.viewsOnNewVideos ?? null),
+            formatYoutubeMetric(cadence.matchedVideoViewDelta ?? null),
+          ]]
+        )
       : 'No cadence summary was available in the current filtered slice.';
 
-    return `${header}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
+    return `${heading}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
   }
 
   const rows = (response.items ?? []).slice(0, response.limit ?? 10);
   const body = rows.length > 0
-    ? rows.map((row, index) => {
-      const details = [
-        row.channelTitle ? `${row.channelTitle}` : null,
-        row.publishedAt ? formatYoutubeDate(row.publishedAt) : null,
-        row.viewCount != null ? `${formatYoutubeMetric(row.viewCount)} views` : null,
-        row.viewDelta != null ? `${formatYoutubeMetric(row.viewDelta)} delta` : null,
-        row.growthPct != null ? `${formatYoutubePercent(row.growthPct)} growth` : null,
-        formatYoutubeContentClassLabel(row.contentClass) ?? null,
-      ].filter((value): value is string => Boolean(value));
-      return `${index + 1}. ${row.title ?? 'Untitled video'}${details.length > 0 ? ` (${details.join(' • ')})` : ''}`;
-    }).join('\n')
+    ? response.view === 'video_growth'
+      ? buildYoutubeMarkdownTable(
+          ['Video', 'Channel', 'Published', 'View Delta', 'Growth', 'Current Views', 'Format'],
+          rows.map((row) => [
+            formatYoutubeVideoLink(row),
+            formatYoutubeChannelLink(row),
+            formatYoutubeDate(row.publishedAt),
+            formatYoutubeMetric(row.viewDelta ?? null),
+            formatYoutubePercent(row.growthPct ?? null),
+            formatYoutubeMetric(row.viewCount ?? null),
+            formatYoutubeContentClassTableLabel(row.contentClass),
+          ])
+        )
+      : buildYoutubeMarkdownTable(
+          ['Video', 'Channel', 'Published', 'Views', 'Format'],
+          rows.map((row) => [
+            formatYoutubeVideoLink(row),
+            formatYoutubeChannelLink(row),
+            formatYoutubeDate(row.publishedAt),
+            formatYoutubeMetric(row.viewCount ?? null),
+            formatYoutubeContentClassTableLabel(row.contentClass),
+          ])
+        )
     : 'No matched YouTube rows were available in the current filtered slice.';
 
-  return `${header}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
+  return `${heading}\n\n${summaryLines.join('\n')}\n\n${body}`.trim();
 }
 
 async function runYoutubeGameCoveragePrimary(params: {
