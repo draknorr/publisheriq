@@ -3590,6 +3590,7 @@ export type Database = {
       get_change_feed_activity: {
         Args: {
           p_app_types?: string[]
+          p_appids?: number[]
           p_cursor_activity_id?: string
           p_cursor_score?: number
           p_cursor_time?: string
@@ -3677,6 +3678,7 @@ export type Database = {
       get_change_feed_news: {
         Args: {
           p_app_types?: string[]
+          p_appids?: number[]
           p_cursor_gid?: string
           p_cursor_time?: string
           p_days?: number

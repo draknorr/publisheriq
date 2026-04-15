@@ -84,6 +84,19 @@ function filterAppTypes(values: string[]): AppType[] | null {
   return filtered.length > 0 ? filtered : null;
 }
 
+function filterAppIds(values: string[]): number[] | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const parsed = values
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value): value is number => Number.isInteger(value) && value > 0);
+  const unique = Array.from(new Set(parsed));
+
+  return unique.length > 0 ? unique.slice(0, 5) : null;
+}
+
 function filterSources(values: string[]): ChangeFeedSource[] | null {
   if (values.length === 0) {
     return null;
@@ -220,6 +233,7 @@ export interface ChangeFeedActivityParams {
   view: ChangeActivityView;
   mode: ChangeActivityMode;
   sort: ChangeActivitySort;
+  appIds: number[] | null;
   appTypes: AppType[] | null;
   signalFamilies: ChangeActivitySignalFamily[] | null;
   search: string | null;
@@ -243,6 +257,7 @@ export function parseChangeFeedActivityParams(
     view,
     mode: parseChangeActivityMode(searchParams.get('mode')),
     sort: resolveChangeActivitySort(searchParams.get('sort'), view),
+    appIds: filterAppIds(parseStringList(searchParams.get('appIds'))),
     appTypes: filterAppTypes(parseStringList(searchParams.get('appTypes'))),
     signalFamilies: filterSignalFamilies(parseStringList(searchParams.get('signals'))),
     search: normalizeText(searchParams.get('search')),
@@ -357,6 +372,26 @@ export function mapChangeActivityRow(row: RawChangeActivityRow): ChangeActivityR
     relatedAnnouncementCount: row.related_announcement_count,
     externalUrl: row.external_url,
   };
+}
+
+export function buildActivityNextCursor(
+  items: Array<Pick<RawChangeActivityRow, 'activity_id' | 'occurred_at' | 'sort_score'>>,
+  limit: number
+): string | null {
+  if (items.length < limit || items.length === 0) {
+    return null;
+  }
+
+  const lastItem = items[items.length - 1];
+  if (lastItem.sort_score == null) {
+    return null;
+  }
+
+  return encodeActivityScoreCursor({
+    score: lastItem.sort_score,
+    time: lastItem.occurred_at,
+    id: lastItem.activity_id,
+  });
 }
 
 function mapChangeDetailEvent(event: RawChangeBurstDetailEvent): ChangeDetailEvent {

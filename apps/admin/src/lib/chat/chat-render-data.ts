@@ -384,12 +384,14 @@ function buildYoutubeLinkCell(text: string, href: string | null = null): ChatYou
 }
 
 function buildYoutubePaginationState(params: {
+  fallbackTotalRows?: number | null;
   limit: number;
   offset: number;
   rowCount: number;
   value: Record<string, unknown> | null;
 }): ChatYoutubePaginationState {
-  const totalRows = Math.max(0, Math.trunc(getNumber(params.value?.totalRows) ?? params.rowCount));
+  const inferredTotalRows = getNumber(params.value?.totalRows) ?? params.fallbackTotalRows ?? params.rowCount;
+  const totalRows = Math.max(0, Math.trunc(inferredTotalRows));
   const offset = Math.max(0, Math.trunc(getNumber(params.value?.offset) ?? params.offset));
   const limit = Math.max(1, Math.trunc(getNumber(params.value?.limit) ?? params.limit));
 
@@ -400,6 +402,48 @@ function buildYoutubePaginationState(params: {
     offset,
     totalRows,
   };
+}
+
+function inferYoutubePaginationTotalRows(params: {
+  response: Record<string, unknown>;
+  rowCount: number;
+  view: ChatYoutubeCoverageView;
+  window: ChatYoutubeCoverageWindow | null;
+}): number | null {
+  const summary = isRecord(params.response.summary) ? params.response.summary : null;
+  if (!summary) {
+    return null;
+  }
+
+  if (params.view === 'latest_videos' || params.view === 'top_videos') {
+    if (params.window === 'current') {
+      return getNumber(summary.matchedPrimaryVideoCount);
+    }
+
+    if (params.window === '1d') {
+      return getNumber(summary.newMatchedVideos1d);
+    }
+
+    if (params.window === '7d') {
+      return getNumber(summary.newMatchedVideos7d);
+    }
+
+    if (params.window === '30d') {
+      return getNumber(summary.newMatchedVideos30d);
+    }
+  }
+
+  if (params.view === 'creator_coverage') {
+    if (params.window === '7d') {
+      return getNumber(summary.distinctUploadChannels7d);
+    }
+
+    if (params.window === '30d') {
+      return getNumber(summary.distinctUploadChannels30d);
+    }
+  }
+
+  return params.rowCount > 0 ? params.rowCount : null;
 }
 
 function buildYoutubeGameActivityRenderData(
@@ -462,6 +506,12 @@ function buildYoutubeGameActivityRenderData(
     return {
       kind: 'youtube_game_activity',
       pagination: buildYoutubePaginationState({
+        fallbackTotalRows: inferYoutubePaginationTotalRows({
+          response,
+          rowCount: rows.length,
+          view,
+          window: resolvedWindow,
+        }),
         limit,
         offset: request.offset,
         rowCount: rows.length,
@@ -598,6 +648,12 @@ function buildYoutubeGameActivityRenderData(
   return {
     kind: 'youtube_game_activity',
     pagination: buildYoutubePaginationState({
+      fallbackTotalRows: inferYoutubePaginationTotalRows({
+        response,
+        rowCount: rows.length,
+        view,
+        window: resolvedWindow,
+      }),
       limit,
       offset: request.offset,
       rowCount: rows.length,

@@ -168,6 +168,7 @@ export interface ChangeActivityDetail {
   hasBeforeAfter: boolean;
   relatedAnnouncementCount: number;
   externalUrl: string | null;
+  rawEvents: ChangeDetailEvent[];
   diffs: ChangeDiffPreview[];
   relatedAnnouncements: ChangeAnnouncementPreview[];
   aftermath: ChangeBurstImpact | null;
@@ -183,6 +184,7 @@ export interface ChangeFeedActivityResponse {
     mode: ChangeActivityMode;
     sort: ChangeActivitySort;
     limit: number;
+    appIds: number[] | null;
     appTypes: AppType[] | null;
     signalFamilies: ChangeActivitySignalFamily[] | null;
     search: string | null;

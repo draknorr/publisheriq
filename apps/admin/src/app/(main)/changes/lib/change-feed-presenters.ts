@@ -811,6 +811,7 @@ export function buildChangeActivityDetail(detail: ChangeBurstDetail): ChangeActi
 
   return {
     ...row,
+    rawEvents: detail.events,
     diffs: detail.events
       .map(buildDiffPreview)
       .filter((diff): diff is ChangeDiffPreview => Boolean(diff)),
@@ -830,6 +831,7 @@ export function buildAnnouncementActivityDetail(args: {
   return {
     ...row,
     summary: args.excerpt ?? row.summary,
+    rawEvents: [],
     diffs: [],
     relatedAnnouncements: [buildAnnouncementPreview({ ...args.row, excerpt: args.excerpt })],
     aftermath: null,

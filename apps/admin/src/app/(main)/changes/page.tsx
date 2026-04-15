@@ -1,11 +1,7 @@
 import type { Metadata } from 'next';
 import { isSupabaseConfigured } from '@/lib/supabase';
-import { getUser } from '@/lib/supabase/server';
 import { ConfigurationRequired } from '@/components/ConfigurationRequired';
-import type { ChangeFeedActivityResponse } from './lib';
 import {
-  fetchChangeFeedActivityResponse,
-  parseChangeFeedActivityParams,
   parseChangeActivityMode,
   parseChangeActivityView,
 } from './lib';
@@ -85,18 +81,6 @@ export default async function ChangeFeedPage({ searchParams }: PageProps) {
     urlSearchParams.set('days', rangeToDays(params.range));
   }
 
-  let initialActivityResponse: ChangeFeedActivityResponse | undefined;
-
-  if (await getUser()) {
-    try {
-      initialActivityResponse = await fetchChangeFeedActivityResponse(
-        parseChangeFeedActivityParams(urlSearchParams)
-      );
-    } catch (error) {
-      console.error('Failed to prefetch Steam Activity data:', error);
-    }
-  }
-
   return (
     <ChangeFeedPageClient
       initialMode={params.mode ?? legacyMode}
@@ -106,7 +90,6 @@ export default async function ChangeFeedPage({ searchParams }: PageProps) {
       initialSignals={params.signals}
       initialSort={params.sort}
       initialSearch={params.search}
-      initialActivityResponse={initialActivityResponse}
     />
   );
 }

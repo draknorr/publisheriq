@@ -13,7 +13,6 @@ import type {
   ChangeFeedActivityResponse,
   ChangeFeedBurstsResponse,
   ChangeFeedNewsResponse,
-  ChangeFeedPreset,
   ChangeRecentNewsFeedScope,
   ChangeRecentNewsDigestItem,
   ChangeRecentNewsTopicMatchItem,
@@ -21,6 +20,7 @@ import type {
   ChangeNewsRow,
   JsonValue,
   RawChangeBurstRow,
+  RawChangeActivityRow,
   RawChatRecentNewsRow,
   RawChatRecentNewsTopicRow,
   RawChatChangeActivityCandidateRow,
@@ -48,9 +48,12 @@ import type {
 } from './change-feed-query';
 import {
   buildNextCursor,
+  buildActivityNextCursor,
   decodeActivityCursor,
+  decodeActivityScoreCursor,
   encodeActivityCursor,
   isMissingChangeFeedRpcError,
+  mapChangeActivityRow,
   mapChangeBurstRow,
   mapChangeNewsRow,
   toSqlChangeFeedPreset,
@@ -599,6 +602,7 @@ function isDefaultActivityRequest(params: ChangeFeedActivityParams): boolean {
     params.view === 'overview' &&
     params.mode === 'all' &&
     params.sort === 'relevant' &&
+    params.appIds === null &&
     params.appTypes === null &&
     params.signalFamilies === null &&
     params.search === null &&
@@ -636,9 +640,9 @@ function normalizeChatActivitySort(
   return params.view === 'all-activity' && params.sort === 'relevant' ? 'newest' : params.sort;
 }
 
-function getChatBurstPreset(
+function getActivityBurstPreset(
   params: Pick<ChangeFeedActivityParams, 'view' | 'signalFamilies' | 'search'>
-): ChangeFeedPreset {
+): 'high-signal' | 'upcoming-radar' | 'all-changes' {
   if (params.view === 'launch-watch') {
     return 'upcoming-radar';
   }
@@ -663,10 +667,23 @@ function buildActivityMeta(params: ChangeFeedActivityParams): ChangeFeedActivity
     mode: params.mode,
     sort: normalizeChatActivitySort(params),
     limit: params.limit,
+    appIds: params.appIds,
     appTypes: params.appTypes,
     signalFamilies: params.signalFamilies,
     search: params.search,
   };
+}
+
+function filterActivitiesByAppIds(
+  items: ChangeActivityRow[],
+  appIds: number[] | null
+): ChangeActivityRow[] {
+  if (!appIds || appIds.length === 0) {
+    return items;
+  }
+
+  const allowed = new Set(appIds);
+  return items.filter((item) => allowed.has(item.appid));
 }
 
 function mapChatChangeActivityCandidateRow(row: RawChatChangeActivityCandidateRow): ChangeActivityRow {
@@ -730,6 +747,7 @@ async function fetchChatChangeRows(params: ChangeFeedActivityParams): Promise<Ch
   );
 
   let items = (data ?? []).map(mapChatChangeActivityCandidateRow);
+  items = filterActivitiesByAppIds(items, params.appIds);
   items = filterActivitiesBySignalFamilies(items, params.signalFamilies);
   items = filterActivitiesForView(items, params.view);
   items = sortActivities(items, sort);
@@ -756,6 +774,7 @@ export async function fetchChatChangeActivityResponse(
     });
 
     let items = newsResponse.items.map(buildAnnouncementActivityRow);
+    items = filterActivitiesByAppIds(items, params.appIds);
     items = filterActivitiesBySignalFamilies(items, params.signalFamilies);
     items = filterActivitiesForView(items, params.view);
     items = sortActivities(items, sort);
@@ -799,6 +818,7 @@ export async function fetchChatChangeActivityResponse(
     ...changeItems,
     ...(newsResponse.items ?? []).map(buildAnnouncementActivityRow),
   ];
+  items = filterActivitiesByAppIds(items, params.appIds);
   items = filterActivitiesBySignalFamilies(items, params.signalFamilies);
   items = filterActivitiesForView(items, params.view);
   items = sortActivities(items, sort);
@@ -1035,11 +1055,12 @@ export async function fetchChatRecentNewsTopicSearch(
   return items;
 }
 
-async function fetchComposedChangeFeedActivityResponse(
+async function fetchComposedChangeFeedActivityFallback(
   params: ChangeFeedActivityParams
 ): Promise<ChangeFeedActivityResponse> {
   const { offset } = decodeActivityCursor(params.cursor);
   const internalLimit = Math.min(Math.max(offset + params.limit + 100, 150), 1000);
+  const sort = normalizeChatActivitySort(params);
   const changeSignalFamilies = params.signalFamilies?.filter((family) => family !== 'announcement') ?? null;
 
   const [changeRows, newsResponse] = await Promise.all([
@@ -1048,7 +1069,7 @@ async function fetchComposedChangeFeedActivityResponse(
       : (async () => {
           const burstsResponse = await fetchChangeFeedBurstsResponse({
             days: params.days,
-            preset: getChatBurstPreset({
+            preset: getActivityBurstPreset({
               view: params.view,
               signalFamilies: changeSignalFamilies,
               search: params.search,
@@ -1062,13 +1083,10 @@ async function fetchComposedChangeFeedActivityResponse(
           });
 
           let items = burstsResponse.items.map(buildChangeActivityRow);
+          items = filterActivitiesByAppIds(items, params.appIds);
           items = filterActivitiesBySignalFamilies(items, changeSignalFamilies);
           items = filterActivitiesForView(items, params.view);
-          items = sortActivities(
-            items,
-            params.view === 'all-activity' && params.sort === 'relevant' ? 'newest' : params.sort
-          );
-
+          items = sortActivities(items, sort);
           return items;
         })(),
     fetchChangeFeedNewsResponse({
@@ -1086,30 +1104,24 @@ async function fetchComposedChangeFeedActivityResponse(
     ...(newsResponse.items ?? []).map(buildAnnouncementActivityRow),
   ];
 
+  items = filterActivitiesByAppIds(items, params.appIds);
   items = filterActivitiesForView(items, params.view);
   items = filterActivitiesBySignalFamilies(items, params.signalFamilies);
-  items = sortActivities(
-    items,
-    params.view === 'all-activity' && params.sort === 'relevant' ? 'newest' : params.sort
-  );
+  items = sortActivities(items, sort);
 
   const pageItems = items.slice(offset, offset + params.limit);
   const nextCursor =
-    items.length > offset + params.limit ? encodeActivityCursor({ offset: offset + params.limit }) : null;
+    items.length > offset + params.limit
+      ? encodeActivityCursor({ offset: offset + params.limit })
+      : null;
 
   return {
     items: pageItems,
     nextCursor,
-    meta: {
-      days: params.days,
-      view: params.view,
-      mode: params.mode,
-      sort: params.view === 'all-activity' && params.sort === 'relevant' ? 'newest' : params.sort,
-      limit: params.limit,
-      appTypes: params.appTypes,
-      signalFamilies: params.signalFamilies,
-      search: params.search,
-    },
+    meta: buildActivityMeta({
+      ...params,
+      sort,
+    }),
   };
 }
 
@@ -1126,7 +1138,41 @@ export async function fetchChangeFeedActivityResponse(
     return defaultActivityCache.data;
   }
 
-  const response = await fetchComposedChangeFeedActivityResponse(params);
+  let response: ChangeFeedActivityResponse;
+
+  try {
+    const sort = normalizeChatActivitySort(params);
+    const cursor = decodeActivityScoreCursor(params.cursor);
+    const data = await executeChangeFeedRpc<RawChangeActivityRow[]>('get_change_feed_activity', {
+      p_days: params.days,
+      p_view: params.view,
+      p_mode: params.mode,
+      p_app_types: params.appTypes,
+      p_appids: params.appIds,
+      p_search: params.search,
+      p_signal_families: params.signalFamilies,
+      p_sort: sort,
+      p_cursor_score: cursor?.score ?? null,
+      p_cursor_time: cursor?.time ?? null,
+      p_cursor_activity_id: cursor?.id ?? null,
+      p_limit: params.limit,
+    });
+
+    response = {
+      items: (data ?? []).map(mapChangeActivityRow),
+      nextCursor: buildActivityNextCursor(data ?? [], params.limit),
+      meta: buildActivityMeta({
+        ...params,
+        sort,
+      }),
+    };
+  } catch (error) {
+    if (!(error instanceof ChangeFeedUnavailableError)) {
+      throw error;
+    }
+
+    response = await fetchComposedChangeFeedActivityFallback(params);
+  }
 
   if (isDefaultRequest) {
     defaultActivityCache = {

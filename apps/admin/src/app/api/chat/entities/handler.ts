@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { postToQueryApi } from '@/lib/query-api-client';
 import { createServerClient } from '@/lib/supabase/server';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import type {
   ChatEntityKind,
+  ChatEntityMatchQuality,
   ChatEntityPickerRequest,
   ChatEntityPickerResponse,
   ChatEntityPickerResults,
@@ -21,11 +23,13 @@ const DEFAULT_ENTITY_KINDS: ChatEntityKind[] = [
 export interface ChatEntityRouteDeps {
   createServerClient: typeof createServerClient;
   postToQueryApi: typeof postToQueryApi;
+  searchGameAutocomplete: typeof searchGameAutocompleteFallback;
 }
 
 const defaultDeps: ChatEntityRouteDeps = {
   createServerClient,
   postToQueryApi,
+  searchGameAutocomplete: searchGameAutocompleteFallback,
 };
 
 function createEmptyResults(): ChatEntityPickerResults {
@@ -43,6 +47,120 @@ function createEmptyResults(): ChatEntityPickerResults {
       tables: [],
     },
     totalCandidates: 0,
+  };
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function determineMatchQuality(query: string, candidateName: string): ChatEntityMatchQuality {
+  const normalizedQuery = normalizeSearchText(query);
+  const normalizedName = normalizeSearchText(candidateName);
+
+  if (!normalizedQuery || !normalizedName) {
+    return 'fuzzy';
+  }
+  if (normalizedName === normalizedQuery) {
+    return 'exact';
+  }
+  if (normalizedName.startsWith(normalizedQuery)) {
+    return 'prefix';
+  }
+  if (normalizedName.includes(normalizedQuery)) {
+    return 'substring';
+  }
+  return 'fuzzy';
+}
+
+function matchQualityRank(matchQuality: ChatEntityMatchQuality): number {
+  switch (matchQuality) {
+    case 'exact':
+      return 0;
+    case 'prefix':
+      return 1;
+    case 'substring':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+async function searchGameAutocompleteFallback(
+  query: string,
+  limit: number
+): Promise<ChatEntityPickerResults> {
+  const supabase = getServiceSupabase();
+  const boundedLimit = Math.max(1, Math.min(limit, 10));
+  const fetchLimit = Math.min(Math.max(boundedLimit * 3, 10), 25);
+
+  const { data, error } = await supabase
+    .from('apps')
+    .select('appid, name, release_date')
+    .eq('type', 'game')
+    .eq('is_delisted', false)
+    .ilike('name', `%${query}%`)
+    .limit(fetchLimit);
+
+  if (error) {
+    throw error;
+  }
+
+  const entities = (data ?? [])
+    .map((app) => {
+      const matchQuality = determineMatchQuality(query, app.name);
+      return {
+        confidence:
+          matchQuality === 'exact'
+            ? 0.99
+            : matchQuality === 'prefix'
+              ? 0.92
+              : matchQuality === 'substring'
+                ? 0.84
+                : 0.72,
+        displayName: app.name,
+        entityKind: 'game' as const,
+        entityUid: `game:steam:${app.appid}`,
+        matchQuality,
+        matchedName: app.name,
+        platform: 'steam' as const,
+        platformEntityId: String(app.appid),
+        releaseYear: app.release_date ? new Date(app.release_date).getFullYear() : null,
+      };
+    })
+    .sort((left, right) => {
+      const qualityDelta = matchQualityRank(left.matchQuality) - matchQualityRank(right.matchQuality);
+      if (qualityDelta !== 0) {
+        return qualityDelta;
+      }
+
+      const lengthDelta = left.displayName.length - right.displayName.length;
+      if (lengthDelta !== 0) {
+        return lengthDelta;
+      }
+
+      return left.displayName.localeCompare(right.displayName);
+    })
+    .slice(0, boundedLimit);
+
+  return {
+    ambiguity: {
+      candidateNames: [],
+      message: null,
+      requiresClarification: false,
+    },
+    continuationToken: null,
+    entities,
+    provenance: {
+      capturedAt: new Date().toISOString(),
+      source: 'supabase-fallback',
+      tables: ['public.apps'],
+    },
+    totalCandidates: entities.length,
   };
 }
 
@@ -144,6 +262,10 @@ export async function handleChatEntityRequest(
     const includeMetrics = resolutionMode === 'autocomplete'
       ? false
       : body?.includeMetrics ?? true;
+    const allowGameAutocompleteFallback =
+      resolutionMode === 'autocomplete'
+      && entityKinds.length === 1
+      && entityKinds[0] === 'game';
 
     const result = await deps.postToQueryApi<ChatEntityPickerResults>(
       '/v1/contracts/resolve-entities',
@@ -159,6 +281,22 @@ export async function handleChatEntityRequest(
     );
 
     if (!result.ok || !result.data) {
+      if (allowGameAutocompleteFallback) {
+        try {
+          const fallbackResults = await deps.searchGameAutocomplete(query, limit);
+          return NextResponse.json({
+            success: true,
+            query,
+            results: fallbackResults,
+            timing: {
+              total_ms: Date.now() - startTime,
+            },
+          });
+        } catch (fallbackError) {
+          console.error('Chat entity fallback search error:', fallbackError);
+        }
+      }
+
       return NextResponse.json(
         {
           success: false,

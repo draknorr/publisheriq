@@ -26,6 +26,9 @@ test('chat entity route returns 401 when unauthenticated', async () => {
     postToQueryApi: async () => {
       throw new Error('query-api should not be called for unauthenticated requests');
     },
+    searchGameAutocomplete: async () => {
+      throw new Error('fallback should not run for unauthenticated requests');
+    },
   };
 
   const response = await handleChatEntityRequest(makeRequest({ query: 'Counter-Strike 2' }), deps);
@@ -104,6 +107,9 @@ test('chat entity route proxies resolve-entities and trims the query', async () 
         data: resolveResults,
       };
     }) as ChatEntityRouteDeps['postToQueryApi'],
+    searchGameAutocomplete: async () => {
+      throw new Error('fallback should not run when query-api succeeds');
+    },
   };
 
   const response = await handleChatEntityRequest(
@@ -180,6 +186,9 @@ test('chat entity route defaults explicit company autocomplete to publisher and 
         } satisfies ChatEntityPickerResults,
       };
     }) as ChatEntityRouteDeps['postToQueryApi'],
+    searchGameAutocomplete: async () => {
+      throw new Error('fallback should not run for company autocomplete');
+    },
   };
 
   const response = await handleChatEntityRequest(
@@ -206,4 +215,72 @@ test('chat entity route defaults explicit company autocomplete to publisher and 
       },
     },
   ]);
+});
+
+test('chat entity route falls back to local game autocomplete when query-api is unavailable', async () => {
+  const deps: ChatEntityRouteDeps = {
+    createServerClient: async () =>
+      ({
+        auth: {
+          getUser: async () => ({ data: { user: { id: 'user-1' } } }),
+        },
+      }) as never,
+    postToQueryApi: async () => ({
+      ok: false,
+      httpStatus: 502,
+      reason: 'fetch failed',
+    }),
+    searchGameAutocomplete: async (_query, _limit) => ({
+      ambiguity: {
+        candidateNames: [],
+        message: null,
+        requiresClarification: false,
+      },
+      continuationToken: null,
+      entities: [
+        {
+          confidence: 0.99,
+          displayName: 'Worthy or Not',
+          entityKind: 'game',
+          entityUid: 'game:steam:4384120',
+          matchQuality: 'prefix',
+          matchedName: 'Worthy or Not',
+          platform: 'steam',
+          platformEntityId: '4384120',
+          releaseYear: 2026,
+        },
+      ],
+      provenance: {
+        capturedAt: '2026-04-15T05:15:00.000Z',
+        source: 'supabase-fallback',
+        tables: ['public.apps'],
+      },
+      totalCandidates: 1,
+    }),
+  };
+
+  const response = await handleChatEntityRequest(
+    makeRequest({
+      query: 'Worthy',
+      limit: 6,
+      resolutionMode: 'autocomplete',
+      resolutionPreference: 'game',
+      entityKinds: ['game'],
+    }),
+    deps
+  );
+
+  assert.equal(response.status, 200);
+
+  const payload = (await response.json()) as {
+    query: string;
+    results: ChatEntityPickerResults;
+    success: boolean;
+  };
+
+  assert.equal(payload.success, true);
+  assert.equal(payload.query, 'Worthy');
+  assert.equal(payload.results.provenance.source, 'supabase-fallback');
+  assert.equal(payload.results.entities[0]?.displayName, 'Worthy or Not');
+  assert.equal(payload.results.entities[0]?.platformEntityId, '4384120');
 });

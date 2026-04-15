@@ -203,6 +203,50 @@ test('buildTigerChatRenderData maps YouTube latest-video responses to structured
   assert.equal(renderData.table.rows[0]?.cells[3]?.text, '32,037');
 });
 
+test('buildTigerChatRenderData infers YouTube latest-video pagination from summary counts when pagination metadata is missing', () => {
+  const renderData = buildTigerChatRenderData({
+    contractName: 'getYoutubeGameCoverage',
+    response: {
+      availability: { blockingTables: [], reason: null, state: 'ready' },
+      entity: {
+        displayName: 'ARC Raiders',
+        entityKind: 'game',
+        entityUid: 'steam:game:1149460',
+        platform: 'steam',
+        platformEntityId: '1149460',
+      },
+      items: Array.from({ length: 10 }, (_, index) => ({
+        channelId: `channel-${index + 1}`,
+        channelTitle: `Creator ${index + 1}`,
+        contentClass: 'standard_video',
+        publishedAt: '2026-04-12T07:00:00.000Z',
+        title: `Video ${index + 1}`,
+        url: `https://www.youtube.com/watch?v=video-${index + 1}`,
+        videoId: `video-${index + 1}`,
+        viewCount: 1000 + index,
+      })),
+      limit: 10,
+      resolvedWindow: '7d',
+      summary: {
+        newMatchedVideos7d: 347,
+      },
+      view: 'latest_videos',
+    },
+  });
+
+  if (!renderData || renderData.kind !== 'youtube_game_activity') {
+    assert.fail('Expected YouTube game activity render data');
+  }
+
+  assert.deepEqual(renderData.pagination, {
+    hasNextPage: true,
+    hasPreviousPage: false,
+    limit: 10,
+    offset: 0,
+    totalRows: 347,
+  });
+});
+
 test('buildTigerChatRenderData maps YouTube content-mix responses with views', () => {
   const renderData = buildTigerChatRenderData({
     contractName: 'getYoutubeGameCoverage',
