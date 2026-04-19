@@ -3591,6 +3591,7 @@ export type Database = {
         Args: {
           p_app_types?: string[]
           p_appids?: number[]
+          p_all_history?: boolean
           p_cursor_activity_id?: string
           p_cursor_score?: number
           p_cursor_time?: string
@@ -3679,6 +3680,7 @@ export type Database = {
         Args: {
           p_app_types?: string[]
           p_appids?: number[]
+          p_all_history?: boolean
           p_cursor_gid?: string
           p_cursor_time?: string
           p_days?: number

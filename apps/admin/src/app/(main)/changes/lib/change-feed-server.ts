@@ -49,8 +49,9 @@ import type {
 import {
   buildNextCursor,
   buildActivityNextCursor,
+  buildChangeFeedActivityRpcArgs,
+  buildChangeFeedNewsRpcArgs,
   decodeActivityCursor,
-  decodeActivityScoreCursor,
   encodeActivityCursor,
   isMissingChangeFeedRpcError,
   mapChangeActivityRow,
@@ -588,6 +589,8 @@ function isDefaultBurstsRequest(params: ChangeFeedBurstParams): boolean {
 function isDefaultNewsRequest(params: ChangeFeedNewsParams): boolean {
   return (
     params.days === 7 &&
+    params.historyScope === 'range' &&
+    params.appIds === null &&
     params.appTypes === null &&
     params.search === null &&
     params.cursorTime === null &&
@@ -599,6 +602,7 @@ function isDefaultNewsRequest(params: ChangeFeedNewsParams): boolean {
 function isDefaultActivityRequest(params: ChangeFeedActivityParams): boolean {
   return (
     params.days === 7 &&
+    params.historyScope === 'range' &&
     params.view === 'overview' &&
     params.mode === 'all' &&
     params.sort === 'relevant' &&
@@ -663,6 +667,7 @@ function getActivityBurstPreset(
 function buildActivityMeta(params: ChangeFeedActivityParams): ChangeFeedActivityResponse['meta'] {
   return {
     days: params.days,
+    historyScope: params.historyScope,
     view: params.view,
     mode: params.mode,
     sort: normalizeChatActivitySort(params),
@@ -766,6 +771,8 @@ export async function fetchChatChangeActivityResponse(
   if (params.mode === 'announcements') {
     const newsResponse = await fetchChangeFeedNewsResponse({
       days: params.days,
+      historyScope: params.historyScope,
+      appIds: params.appIds,
       appTypes: params.appTypes,
       search: params.search,
       cursorTime: null,
@@ -807,6 +814,8 @@ export async function fetchChatChangeActivityResponse(
 
   const newsResponse = await fetchChangeFeedNewsResponse({
     days: params.days,
+    historyScope: params.historyScope,
+    appIds: params.appIds,
     appTypes: params.appTypes,
     search: params.search,
     cursorTime: null,
@@ -916,12 +925,7 @@ export async function fetchChangeFeedNewsResponse(
   }
 
   const data = await executeChangeFeedRpc<RawChangeNewsRow[]>('get_change_feed_news', {
-    p_days: params.days,
-    p_app_types: params.appTypes,
-    p_search: params.search,
-    p_cursor_time: params.cursorTime,
-    p_cursor_gid: params.cursorKey,
-    p_limit: params.limit,
+    ...buildChangeFeedNewsRpcArgs(params),
   });
 
   const items = (data ?? []).map(mapChangeNewsRow);
@@ -930,7 +934,9 @@ export async function fetchChangeFeedNewsResponse(
     nextCursor: buildNextCursor(items, params.limit),
     meta: {
       days: params.days,
+      historyScope: params.historyScope,
       limit: params.limit,
+      appIds: params.appIds,
       appTypes: params.appTypes,
       search: params.search,
     },
@@ -1091,6 +1097,8 @@ async function fetchComposedChangeFeedActivityFallback(
         })(),
     fetchChangeFeedNewsResponse({
       days: params.days,
+      historyScope: params.historyScope,
+      appIds: params.appIds,
       appTypes: params.appTypes,
       search: params.search,
       cursorTime: null,
@@ -1142,21 +1150,10 @@ export async function fetchChangeFeedActivityResponse(
 
   try {
     const sort = normalizeChatActivitySort(params);
-    const cursor = decodeActivityScoreCursor(params.cursor);
-    const data = await executeChangeFeedRpc<RawChangeActivityRow[]>('get_change_feed_activity', {
-      p_days: params.days,
-      p_view: params.view,
-      p_mode: params.mode,
-      p_app_types: params.appTypes,
-      p_appids: params.appIds,
-      p_search: params.search,
-      p_signal_families: params.signalFamilies,
-      p_sort: sort,
-      p_cursor_score: cursor?.score ?? null,
-      p_cursor_time: cursor?.time ?? null,
-      p_cursor_activity_id: cursor?.id ?? null,
-      p_limit: params.limit,
-    });
+    const data = await executeChangeFeedRpc<RawChangeActivityRow[]>(
+      'get_change_feed_activity',
+      buildChangeFeedActivityRpcArgs(params, sort)
+    );
 
     response = {
       items: (data ?? []).map(mapChangeActivityRow),

@@ -14,6 +14,7 @@ import type {
   ChangeFeedCursor,
   ChangeFeedPreset,
   ChangeFeedSource,
+  ChangeHistoryScope,
   ChangeNewsRow,
   JsonValue,
   RawChangeActivityRow,
@@ -230,6 +231,7 @@ export interface ChangeFeedBurstParams {
 
 export interface ChangeFeedActivityParams {
   days: number;
+  historyScope: ChangeHistoryScope;
   view: ChangeActivityView;
   mode: ChangeActivityMode;
   sort: ChangeActivitySort;
@@ -242,6 +244,40 @@ export interface ChangeFeedActivityParams {
   excludeActivityIds?: string[] | null;
 }
 
+export interface ChangeFeedActivityRpcArgs extends Record<string, unknown> {
+  p_days: number;
+  p_view: ChangeActivityView;
+  p_mode: ChangeActivityMode;
+  p_app_types: AppType[] | null;
+  p_appids: number[] | null;
+  p_all_history: boolean;
+  p_search: string | null;
+  p_signal_families: ChangeActivitySignalFamily[] | null;
+  p_sort: ChangeActivitySort;
+  p_cursor_score: number | null;
+  p_cursor_time: string | null;
+  p_cursor_activity_id: string | null;
+  p_limit: number;
+}
+
+export interface ChangeFeedNewsRpcArgs extends Record<string, unknown> {
+  p_days: number;
+  p_app_types: AppType[] | null;
+  p_appids: number[] | null;
+  p_all_history: boolean;
+  p_search: string | null;
+  p_cursor_time: string | null;
+  p_cursor_gid: string | null;
+  p_limit: number;
+}
+
+export function resolveChangeHistoryScope(
+  value: string | null | undefined,
+  appIds: number[] | null
+): ChangeHistoryScope {
+  return value === 'all' && appIds && appIds.length > 0 ? 'all' : 'range';
+}
+
 export function parseChangeFeedActivityParams(
   searchParams: URLSearchParams
 ): ChangeFeedActivityParams {
@@ -251,13 +287,15 @@ export function parseChangeFeedActivityParams(
     MAX_LIMIT
   );
   const view = parseChangeActivityView(searchParams.get('view'));
+  const appIds = filterAppIds(parseStringList(searchParams.get('appIds')));
 
   return {
     days,
+    historyScope: resolveChangeHistoryScope(searchParams.get('history'), appIds),
     view,
     mode: parseChangeActivityMode(searchParams.get('mode')),
     sort: resolveChangeActivitySort(searchParams.get('sort'), view),
-    appIds: filterAppIds(parseStringList(searchParams.get('appIds'))),
+    appIds,
     appTypes: filterAppTypes(parseStringList(searchParams.get('appTypes'))),
     signalFamilies: filterSignalFamilies(parseStringList(searchParams.get('signals'))),
     search: normalizeText(searchParams.get('search')),
@@ -287,6 +325,8 @@ export function parseChangeFeedBurstParams(searchParams: URLSearchParams): Chang
 
 export interface ChangeFeedNewsParams {
   days: number;
+  historyScope: ChangeHistoryScope;
+  appIds: number[] | null;
   appTypes: AppType[] | null;
   search: string | null;
   cursorTime: string | null;
@@ -297,14 +337,53 @@ export interface ChangeFeedNewsParams {
 export function parseChangeFeedNewsParams(searchParams: URLSearchParams): ChangeFeedNewsParams {
   const days = Math.min(Math.max(parseInteger(searchParams.get('days'), DEFAULT_DAYS), 1), 30);
   const limit = Math.min(Math.max(parseInteger(searchParams.get('limit'), DEFAULT_LIMIT), 1), MAX_LIMIT);
+  const appIds = filterAppIds(parseStringList(searchParams.get('appIds')));
 
   return {
     days,
+    historyScope: resolveChangeHistoryScope(searchParams.get('history'), appIds),
+    appIds,
     appTypes: filterAppTypes(parseStringList(searchParams.get('appTypes'))),
     search: normalizeText(searchParams.get('search')),
     cursorTime: normalizeText(searchParams.get('cursorTime')),
     cursorKey: normalizeCursor(searchParams.get('cursorKey')),
     limit,
+  };
+}
+
+export function buildChangeFeedActivityRpcArgs(
+  params: ChangeFeedActivityParams,
+  sort: ChangeActivitySort = params.sort
+): ChangeFeedActivityRpcArgs {
+  const cursor = decodeActivityScoreCursor(params.cursor);
+
+  return {
+    p_days: params.days,
+    p_view: params.view,
+    p_mode: params.mode,
+    p_app_types: params.appTypes,
+    p_appids: params.appIds,
+    p_all_history: params.historyScope === 'all' && Boolean(params.appIds?.length),
+    p_search: params.search,
+    p_signal_families: params.signalFamilies,
+    p_sort: sort,
+    p_cursor_score: cursor?.score ?? null,
+    p_cursor_time: cursor?.time ?? null,
+    p_cursor_activity_id: cursor?.id ?? null,
+    p_limit: params.limit,
+  };
+}
+
+export function buildChangeFeedNewsRpcArgs(params: ChangeFeedNewsParams): ChangeFeedNewsRpcArgs {
+  return {
+    p_days: params.days,
+    p_app_types: params.appTypes,
+    p_appids: params.appIds,
+    p_all_history: params.historyScope === 'all' && Boolean(params.appIds?.length),
+    p_search: params.search,
+    p_cursor_time: params.cursorTime,
+    p_cursor_gid: params.cursorKey,
+    p_limit: params.limit,
   };
 }
 

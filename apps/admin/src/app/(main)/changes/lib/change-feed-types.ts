@@ -26,6 +26,8 @@ export const CHANGE_ACTIVITY_SORTS = [
 
 export type ChangeActivitySort = (typeof CHANGE_ACTIVITY_SORTS)[number];
 
+export type ChangeHistoryScope = 'range' | 'all';
+
 export const CHANGE_ACTIVITY_SIGNAL_FAMILIES = [
   'announcement',
   'release',
@@ -180,6 +182,7 @@ export interface ChangeFeedActivityResponse {
   nextCursor: string | null;
   meta: {
     days: number;
+    historyScope: ChangeHistoryScope;
     view: ChangeActivityView;
     mode: ChangeActivityMode;
     sort: ChangeActivitySort;
@@ -365,7 +368,9 @@ export interface ChangeFeedNewsResponse {
   nextCursor: ChangeFeedCursor | null;
   meta: {
     days: number;
+    historyScope: ChangeHistoryScope;
     limit: number;
+    appIds: number[] | null;
     appTypes: AppType[] | null;
     search: string | null;
   };

@@ -14,11 +14,13 @@ import type {
   ChangeFeedActivityDetailResponse,
   ChangeFeedActivityResponse,
   ChangeFeedStatus,
+  ChangeHistoryScope,
 } from './lib';
 import {
   CHANGE_ACTIVITY_SIGNAL_FAMILIES,
   CHANGE_FEED_APP_TYPES,
-  getDefaultChangeActivitySort,
+  buildChangeFeedUrl,
+  parseChangeFeedSelectedGames,
   parseChangeActivityMode,
   parseChangeActivityView,
   resolveChangeActivitySort,
@@ -74,27 +76,6 @@ function parseSignalFamilies(value: string | null | undefined): ChangeActivitySi
     );
 }
 
-function parseAppIds(value: string | null | undefined): number[] {
-  if (!value) {
-    return [];
-  }
-
-  return value
-    .split(',')
-    .map((entry) => Number.parseInt(entry.trim(), 10))
-    .filter((entry) => Number.isInteger(entry) && entry > 0);
-}
-
-function parseSelectedGames(searchParams: ReturnType<typeof useSearchParams>): SelectedGame[] {
-  const appIds = parseAppIds(searchParams.get('appIds'));
-  const appNames = searchParams.getAll('appNames');
-
-  return appIds.map((appid, index) => ({
-    appid,
-    name: appNames[index]?.trim() || `App ${appid}`,
-  }));
-}
-
 function rangeToDays(range: FeedRange): number {
   switch (range) {
     case '24h':
@@ -106,52 +87,9 @@ function rangeToDays(range: FeedRange): number {
   }
 }
 
-function buildUrl(
-  pathname: string,
-  searchParams: ReturnType<typeof useSearchParams>,
-  updates: Record<string, FilterUpdateValue>
-): string {
-  const params = new URLSearchParams(searchParams.toString());
-  const nextViewUpdate = Array.isArray(updates.view) ? updates.view[0] : updates.view;
-  const nextView = parseChangeActivityView(nextViewUpdate ?? searchParams.get('view'));
-  const defaultSort = getDefaultChangeActivitySort(nextView);
-
-  for (const [key, value] of Object.entries(updates)) {
-    params.delete(key);
-
-    if (Array.isArray(value)) {
-      if (value.length === 0) {
-        continue;
-      }
-
-      if (key === 'appNames') {
-        value.forEach((entry) => params.append(key, entry));
-      } else {
-        params.set(key, value.join(','));
-      }
-      continue;
-    }
-
-    const shouldDelete =
-      value == null ||
-      value === '' ||
-      value === 'all' ||
-      (key === 'view' && value === 'overview') ||
-      (key === 'mode' && value === 'all') ||
-      (key === 'range' && value === '7d') ||
-      (key === 'sort' && value === defaultSort);
-
-    if (!shouldDelete) {
-      params.set(key, value);
-    }
-  }
-
-  const query = params.toString();
-  return query ? `${pathname}?${query}` : pathname;
-}
-
 function buildActivityParams(args: {
   range: FeedRange;
+  historyScope: ChangeHistoryScope;
   view: ChangeActivityView;
   mode: ChangeActivityMode;
   sort: ChangeActivitySort;
@@ -170,6 +108,9 @@ function buildActivityParams(args: {
 
   if (args.appIds.length > 0) {
     params.set('appIds', args.appIds.join(','));
+  }
+  if (args.historyScope === 'all' && args.appIds.length > 0) {
+    params.set('history', 'all');
   }
   if (args.appType !== 'all') {
     params.set('appTypes', args.appType);
@@ -224,13 +165,18 @@ export function ChangeFeedPageClient({
   const signalFamilies = parseSignalFamilies(searchParams.get('signals') ?? initialSignals);
   const sort = resolveChangeActivitySort(searchParams.get('sort') ?? initialSort, view);
   const search = searchParams.get('search') ?? initialSearch ?? '';
-  const selectedGames = parseSelectedGames(searchParams);
+  const selectedGames = parseChangeFeedSelectedGames(
+    new URLSearchParams(searchParams.toString())
+  ) as SelectedGame[];
   const selectedAppIds = selectedGames.map((game) => game.appid);
+  const historyScope: ChangeHistoryScope = selectedAppIds.length > 0 ? 'all' : 'range';
   const selectedActivityId = searchParams.get('activity');
+  const inspectorDisplay = searchParams.get('inspector') === 'full' ? 'full' : 'side';
   const queryKey = [
     view,
     mode,
     range,
+    historyScope,
     appType,
     signalFamilies.join(','),
     sort,
@@ -278,8 +224,9 @@ export function ChangeFeedPageClient({
     }
 
     const timeoutId = window.setTimeout(() => {
-      const nextUrl = buildUrl(pathname, searchParams, {
+      const nextUrl = buildChangeFeedUrl(pathname, new URLSearchParams(searchParams.toString()), {
         search: deferredSearch || null,
+        history: selectedAppIds.length > 0 ? 'all' : null,
         activity: null,
         cursor: null,
       });
@@ -292,7 +239,7 @@ export function ChangeFeedPageClient({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [deferredSearch, pathname, router, search, searchParams, startTransition]);
+  }, [deferredSearch, pathname, router, search, searchParams, selectedAppIds.length, startTransition]);
 
   useEffect(() => {
     if (previousQueryKeyRef.current === queryKey) {
@@ -344,6 +291,7 @@ export function ChangeFeedPageClient({
       try {
         const params = buildActivityParams({
           range,
+          historyScope,
           view,
           mode,
           sort,
@@ -392,6 +340,7 @@ export function ChangeFeedPageClient({
     signalFamilies,
     search,
     selectedAppIds,
+    historyScope,
   ]);
 
   useEffect(() => {
@@ -478,8 +427,13 @@ export function ChangeFeedPageClient({
   }, [details, selectedActivityId]);
 
   const handleUpdateFilters = (updates: Record<string, FilterUpdateValue>) => {
-    const nextUrl = buildUrl(pathname, searchParams, {
+    const shouldKeepAllHistory =
+      updates.history === undefined &&
+      updates.appIds !== null &&
+      (typeof updates.appIds === 'string' || Array.isArray(updates.appIds) || selectedAppIds.length > 0);
+    const nextUrl = buildChangeFeedUrl(pathname, new URLSearchParams(searchParams.toString()), {
       ...updates,
+      ...(shouldKeepAllHistory ? { history: 'all' } : {}),
       activity: updates.activity ?? null,
       cursor: null,
     });
@@ -491,7 +445,7 @@ export function ChangeFeedPageClient({
 
   const handleClearFilters = () => {
     setSearchInput('');
-    const nextUrl = buildUrl(pathname, searchParams, {
+    const nextUrl = buildChangeFeedUrl(pathname, new URLSearchParams(searchParams.toString()), {
       view: null,
       mode: null,
       range: null,
@@ -501,7 +455,9 @@ export function ChangeFeedPageClient({
       search: null,
       appIds: null,
       appNames: null,
+      history: null,
       activity: null,
+      inspector: null,
       cursor: null,
     });
 
@@ -521,6 +477,7 @@ export function ChangeFeedPageClient({
     try {
       const params = buildActivityParams({
         range,
+        historyScope,
         view,
         mode,
         sort,
@@ -590,6 +547,7 @@ export function ChangeFeedPageClient({
       view={view}
       mode={mode}
       range={range}
+      historyScope={historyScope}
       sort={sort}
       appType={appType}
       signalFamilies={signalFamilies}
@@ -601,6 +559,23 @@ export function ChangeFeedPageClient({
       onSelectActivity={(activityId) => {
         handleUpdateFilters({
           activity: activityId,
+        });
+      }}
+      inspectorDisplay={inspectorDisplay}
+      onExpandInspector={() => {
+        if (!selectedActivityId) {
+          return;
+        }
+
+        handleUpdateFilters({
+          activity: selectedActivityId,
+          inspector: 'full',
+        });
+      }}
+      onCloseFullInspector={() => {
+        handleUpdateFilters({
+          activity: selectedActivityId,
+          inspector: null,
         });
       }}
       onInspectorModeChange={setInspectorMode}

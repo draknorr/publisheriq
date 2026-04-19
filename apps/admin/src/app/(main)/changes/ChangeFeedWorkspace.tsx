@@ -5,9 +5,12 @@ import Link from 'next/link';
 import {
   ArrowRight,
   BellRing,
+  Check,
+  Copy,
   ExternalLink,
   Filter,
   Loader2,
+  Maximize2,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -23,6 +26,7 @@ import type {
   ChangeBurstImpactWindow,
   ChangeDiffPreview,
   ChangeFeedStatus,
+  ChangeHistoryScope,
 } from './lib';
 import {
   CHANGE_ACTIVITY_MODES,
@@ -30,6 +34,7 @@ import {
   CHANGE_ACTIVITY_SORTS,
   CHANGE_ACTIVITY_VIEWS,
   CHANGE_FEED_APP_TYPES,
+  buildChangeFeedActivityPermalink,
   formatChangeLabel,
 } from './lib';
 import { ChangeFeedGamePicker, type SelectedGame } from './ChangeFeedGamePicker';
@@ -58,6 +63,7 @@ interface ChangeFeedWorkspaceProps {
   view: ChangeActivityView;
   mode: ChangeActivityMode;
   range: FeedRange;
+  historyScope: ChangeHistoryScope;
   sort: ChangeActivitySort;
   appType: AppTypeFilter;
   signalFamilies: ChangeActivitySignalFamily[];
@@ -67,6 +73,9 @@ interface ChangeFeedWorkspaceProps {
   onClearFilters: () => void;
   onToggleAdvancedFilters: () => void;
   onSelectActivity: (activityId: string | null) => void;
+  inspectorDisplay: 'side' | 'full';
+  onExpandInspector: () => void;
+  onCloseFullInspector: () => void;
   onInspectorModeChange: (mode: InspectorMode) => void;
   onLoadMore: () => void;
 }
@@ -335,6 +344,20 @@ function isImageUrl(value: string | null): boolean {
   return /\.(png|jpe?g|gif|webp)(\?|$)/i.test(value);
 }
 
+function getMediaFrameClass(label: string): string {
+  const normalizedLabel = label.toLowerCase();
+
+  if (normalizedLabel.includes('capsule')) {
+    return 'aspect-[184/69]';
+  }
+
+  if (normalizedLabel.includes('header')) {
+    return 'aspect-[460/215]';
+  }
+
+  return 'aspect-video';
+}
+
 function groupByDate(items: ChangeActivityRow[]): Array<{ key: string; label: string; items: ChangeActivityRow[] }> {
   const groups = new Map<string, ChangeActivityRow[]>();
 
@@ -374,21 +397,33 @@ function buildRowSecondaryText(row: ChangeActivityRow): string {
   return factText || row.summary;
 }
 
+function getSteamUrl(row: Pick<ChangeActivityRow, 'appid' | 'externalUrl'> | null): string | null {
+  if (!row) {
+    return null;
+  }
+
+  return row.externalUrl ?? `https://store.steampowered.com/app/${row.appid}`;
+}
+
 function FilterChip({
   label,
   active = false,
+  disabled = false,
   onClick,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       className={`
         inline-flex h-7 items-center rounded-md border px-2.5 text-[11px] font-medium uppercase tracking-[0.08em] transition-colors
+        ${disabled ? 'cursor-not-allowed opacity-45' : ''}
         ${active ? 'border-accent-primary/35 bg-accent-primary/10 text-text-primary' : 'border-border-subtle bg-surface text-text-secondary hover:bg-surface-elevated/70 hover:text-text-primary'}
       `}
     >
@@ -488,6 +523,7 @@ function ImpactWindowCard({
 
 function DiffPreviewBlock({ diff }: { diff: ChangeDiffPreview }) {
   const imageGallery = [...diff.added, ...diff.removed].filter(isImageUrl);
+  const mediaFrameClass = getMediaFrameClass(diff.label);
   const compactMeta = [
     diff.added.length > 0 ? `${diff.added.length} added` : null,
     diff.removed.length > 0 ? `${diff.removed.length} removed` : null,
@@ -512,7 +548,8 @@ function DiffPreviewBlock({ diff }: { diff: ChangeDiffPreview }) {
               <img
                 src={diff.beforeImageUrl}
                 alt={`${diff.label} before`}
-                className="mt-2 h-20 w-full border border-border-subtle object-cover"
+                loading="lazy"
+                className={`mt-2 w-full border border-border-subtle bg-surface object-contain ${mediaFrameClass}`}
               />
             ) : (
               <div className="mt-2 bg-surface px-2.5 py-2 text-[11px] leading-5 text-text-secondary">
@@ -526,7 +563,8 @@ function DiffPreviewBlock({ diff }: { diff: ChangeDiffPreview }) {
               <img
                 src={diff.afterImageUrl}
                 alt={`${diff.label} after`}
-                className="mt-2 h-20 w-full border border-border-subtle object-cover"
+                loading="lazy"
+                className={`mt-2 w-full border border-border-subtle bg-surface object-contain ${mediaFrameClass}`}
               />
             ) : (
               <div className="mt-2 bg-surface px-2.5 py-2 text-[11px] leading-5 text-text-secondary">
@@ -536,13 +574,14 @@ function DiffPreviewBlock({ diff }: { diff: ChangeDiffPreview }) {
           </div>
         </div>
         {imageGallery.length > 0 && (
-          <div className="grid grid-cols-2 gap-2 border-t border-border-subtle px-3 py-2">
+          <div className="grid gap-2 border-t border-border-subtle px-3 py-2 sm:grid-cols-2">
             {imageGallery.map((url) => (
               <img
                 key={`${diff.id}-${url}`}
                 src={url}
                 alt={diff.label}
-                className="h-16 w-full border border-border-subtle object-cover"
+                loading="lazy"
+                className={`w-full border border-border-subtle bg-surface object-contain ${mediaFrameClass}`}
               />
             ))}
           </div>
@@ -585,13 +624,14 @@ function DiffPreviewBlock({ diff }: { diff: ChangeDiffPreview }) {
           </div>
         </div>
         {imageGallery.length > 0 ? (
-          <div className="grid grid-cols-2 gap-2 px-3 py-2">
+          <div className="grid gap-2 px-3 py-2 sm:grid-cols-2">
             {imageGallery.map((url) => (
               <img
                 key={url}
                 src={url}
                 alt={diff.label}
-                className="h-16 w-full border border-border-subtle object-cover"
+                loading="lazy"
+                className={`w-full border border-border-subtle bg-surface object-contain ${mediaFrameClass}`}
               />
             ))}
           </div>
@@ -727,6 +767,43 @@ function RawEventCard({
   );
 }
 
+function EventTimeline({ events }: { events: ChangeActivityDetail['rawEvents'] }) {
+  if (events.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="overflow-hidden border border-border-subtle bg-surface/20">
+      <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2">
+        <p className="text-[11px] uppercase tracking-[0.08em] text-text-tertiary">
+          Event timeline
+        </p>
+        <span className="font-mono text-[11px] text-text-muted">{events.length}</span>
+      </div>
+      <div className="divide-y divide-border-subtle">
+        {events.map((event) => (
+          <div key={`timeline-${event.eventId}`} className="grid gap-2 px-3 py-2 md:grid-cols-[116px_minmax(0,1fr)]">
+            <div className="text-[11px] text-text-muted">
+              <p className="font-mono">{formatAbsoluteTime(event.occurredAt)}</p>
+              <p>{formatSourceLabel(event.source)}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium text-text-primary">
+                {formatChangeLabel(event.changeType)}
+              </p>
+              <p className="mt-1 truncate text-[11px] text-text-secondary">
+                {summarizeValue(event.beforeValue, 52)}
+                <span className="px-1 text-text-muted">→</span>
+                {summarizeValue(event.afterValue, 52)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function AnnouncementRawRecord({
   detail,
 }: {
@@ -807,6 +884,8 @@ function ReadableInspector({
           </div>
         </section>
       )}
+
+      {detail.activityKind === 'change' && <EventTimeline events={detail.rawEvents} />}
 
       {companionAnnouncements.length > 0 && (
         <section className="overflow-hidden border border-border-subtle bg-surface/20">
@@ -917,11 +996,15 @@ function RawInspector({
 function TimelineRow({
   row,
   isSelected,
+  copied,
   onInspect,
+  onCopyPermalink,
 }: {
   row: ChangeActivityRow;
   isSelected: boolean;
+  copied: boolean;
   onInspect: () => void;
+  onCopyPermalink: () => void;
 }) {
   const secondaryText = buildRowSecondaryText(row);
 
@@ -1013,6 +1096,16 @@ function TimelineRow({
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.08em]">
             <button
               type="button"
+              onClick={onCopyPermalink}
+              className="inline-flex items-center gap-1 text-text-secondary transition-colors hover:text-text-primary"
+              title={copied ? 'Copied permalink' : 'Copy permalink'}
+              aria-label={copied ? 'Copied permalink' : 'Copy permalink'}
+            >
+              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              Link
+            </button>
+            <button
+              type="button"
               onClick={onInspect}
               className={`
                 transition-colors
@@ -1042,20 +1135,24 @@ function TimelineRow({
 function Timeline({
   items,
   selectedActivityId,
+  copiedActivityId,
   loading,
   error,
   cursor,
   loadingMore,
   onSelectActivity,
+  onCopyActivityLink,
   onLoadMore,
 }: {
   items: ChangeActivityRow[];
   selectedActivityId: string | null;
+  copiedActivityId: string | null;
   loading: boolean;
   error: string | null;
   cursor: string | null;
   loadingMore: boolean;
   onSelectActivity: (activityId: string) => void;
+  onCopyActivityLink: (activityId: string) => void;
   onLoadMore: () => void;
 }) {
   const groups = useMemo(() => groupByDate(items), [items]);
@@ -1109,7 +1206,9 @@ function Timeline({
                 key={row.activityId}
                 row={row}
                 isSelected={selectedActivityId === row.activityId}
+                copied={copiedActivityId === row.activityId}
                 onInspect={() => onSelectActivity(row.activityId)}
+                onCopyPermalink={() => onCopyActivityLink(row.activityId)}
               />
             ))}
           </div>
@@ -1134,6 +1233,11 @@ function InspectorPanel({
   selectedDetailLoading,
   selectedDetailError,
   inspectorMode,
+  variant = 'side',
+  copied = false,
+  onCopyPermalink,
+  onExpand,
+  onClose,
   onInspectorModeChange,
 }: {
   hasSelectedActivity: boolean;
@@ -1142,10 +1246,16 @@ function InspectorPanel({
   selectedDetailLoading: boolean;
   selectedDetailError: string | null;
   inspectorMode: InspectorMode;
+  variant?: 'side' | 'full';
+  copied?: boolean;
+  onCopyPermalink?: () => void;
+  onExpand?: () => void;
+  onClose?: () => void;
   onInspectorModeChange: (mode: InspectorMode) => void;
 }) {
   const detail = selectedDetail ?? null;
   const row = selectedRow ?? detail;
+  const steamUrl = getSteamUrl(row);
   const activeInspector =
     detail && inspectorMode === 'readable' ? (
       <ReadableInspector key={`readable-${detail.activityId}`} detail={detail} />
@@ -1161,7 +1271,13 @@ function InspectorPanel({
     : 'Readable and raw evidence appear here once an activity is selected.';
 
   return (
-    <div className="sticky top-24 overflow-hidden border border-border-subtle bg-surface/95">
+    <div
+      className={
+        variant === 'full'
+          ? 'flex min-h-0 flex-1 flex-col overflow-hidden bg-surface/95'
+          : 'sticky top-24 overflow-hidden border border-border-subtle bg-surface/95'
+      }
+    >
       <div className="space-y-2 border-b border-border-subtle px-3 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1175,29 +1291,90 @@ function InspectorPanel({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1 border border-border-subtle bg-surface/35 p-0.5">
-            <button
-              type="button"
-              onClick={() => onInspectorModeChange('raw')}
-              className={
-                inspectorMode === 'raw'
-                  ? 'bg-surface-elevated px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-primary'
-                  : 'px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-tertiary transition-colors hover:text-text-secondary'
-              }
-            >
-              Raw
-            </button>
-            <button
-              type="button"
-              onClick={() => onInspectorModeChange('readable')}
-              className={
-                inspectorMode === 'readable'
-                  ? 'bg-surface-elevated px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-primary'
-                  : 'px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-tertiary transition-colors hover:text-text-secondary'
-              }
-            >
-              Readable
-            </button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+            {detail && (
+              <>
+                {onCopyPermalink && (
+                  <button
+                    type="button"
+                    onClick={onCopyPermalink}
+                    className="inline-flex h-7 w-7 items-center justify-center border border-border-subtle bg-surface/35 text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+                    title={copied ? 'Copied permalink' : 'Copy permalink'}
+                    aria-label={copied ? 'Copied permalink' : 'Copy permalink'}
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+                {variant === 'full' && (
+                  <>
+                    <Link
+                      href={`/apps/${detail.appid}`}
+                      className="inline-flex h-7 items-center gap-1 border border-border-subtle bg-surface/35 px-2 text-[11px] uppercase tracking-[0.08em] text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+                    >
+                      App
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                    {steamUrl && (
+                      <a
+                        href={steamUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-7 items-center gap-1 border border-border-subtle bg-surface/35 px-2 text-[11px] uppercase tracking-[0.08em] text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+                      >
+                        Steam
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+            {variant === 'side' && onExpand && detail && (
+              <button
+                type="button"
+                onClick={onExpand}
+                className="inline-flex h-7 w-7 items-center justify-center border border-border-subtle bg-surface/35 text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+                title="Open full inspector"
+                aria-label="Open full inspector"
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {variant === 'full' && onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-7 w-7 items-center justify-center border border-border-subtle bg-surface/35 text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+                title="Close inspector"
+                aria-label="Close inspector"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <div className="flex items-center gap-1 border border-border-subtle bg-surface/35 p-0.5">
+              <button
+                type="button"
+                onClick={() => onInspectorModeChange('raw')}
+                className={
+                  inspectorMode === 'raw'
+                    ? 'bg-surface-elevated px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-primary'
+                    : 'px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-tertiary transition-colors hover:text-text-secondary'
+                }
+              >
+                Raw
+              </button>
+              <button
+                type="button"
+                onClick={() => onInspectorModeChange('readable')}
+                className={
+                  inspectorMode === 'readable'
+                    ? 'bg-surface-elevated px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-primary'
+                    : 'px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-tertiary transition-colors hover:text-text-secondary'
+                }
+              >
+                Readable
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1228,7 +1405,7 @@ function InspectorPanel({
         )}
       </div>
 
-      <div className="space-y-2 px-3 py-3">
+      <div className={variant === 'full' ? 'min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3' : 'space-y-2 px-3 py-3'}>
         {hasSelectedActivity && (row || detail) && selectedDetailLoading && (
           <div className="flex items-center gap-2 border border-border-subtle bg-surface/20 px-3 py-2 text-[12px] text-text-secondary">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1254,9 +1431,9 @@ function InspectorPanel({
                 App
                 <ArrowRight className="h-3 w-3" />
               </Link>
-              {detail.externalUrl && (
+              {steamUrl && (
                 <a
-                  href={detail.externalUrl}
+                  href={steamUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-accent-primary transition-colors hover:text-accent-primary/80"
@@ -1303,6 +1480,7 @@ export function ChangeFeedWorkspace({
   view,
   mode,
   range,
+  historyScope,
   sort,
   appType,
   signalFamilies,
@@ -1312,14 +1490,41 @@ export function ChangeFeedWorkspace({
   onClearFilters,
   onToggleAdvancedFilters,
   onSelectActivity,
+  inspectorDisplay,
+  onExpandInspector,
+  onCloseFullInspector,
   onInspectorModeChange,
   onLoadMore,
 }: ChangeFeedWorkspaceProps) {
   const [compactInspectorDismissed, setCompactInspectorDismissed] = useState(false);
+  const [copiedActivityId, setCopiedActivityId] = useState<string | null>(null);
+  const selectedDetailVisible = Boolean(selectedActivityId);
 
   useEffect(() => {
     setCompactInspectorDismissed(false);
   }, [selectedActivityId]);
+
+  useEffect(() => {
+    if (!selectedDetailVisible || inspectorDisplay !== 'full') {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onCloseFullInspector();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [inspectorDisplay, onCloseFullInspector, selectedDetailVisible]);
 
   const availableGames = useMemo(
     () =>
@@ -1339,10 +1544,24 @@ export function ChangeFeedWorkspace({
   const groupedCount = useMemo(() => groupByDate(items).length, [items]);
   const activeSignalSet = useMemo(() => new Set(signalFamilies), [signalFamilies]);
   const selectedAppSummary = selectedApps.map((game) => game.name).join(', ');
-  const selectedDetailVisible = Boolean(selectedActivityId);
   const visibleChangeCount = items.filter((item) => item.activityKind === 'change').length;
   const visibleAnnouncementCount = items.filter((item) => item.activityKind === 'announcement').length;
   const isDemoFilterActive = appType === 'demo';
+  const isAllHistory = historyScope === 'all' && selectedApps.length > 0;
+
+  const copyActivityLink = async (activityId: string) => {
+    try {
+      await navigator.clipboard.writeText(
+        buildChangeFeedActivityPermalink(activityId, window.location.origin)
+      );
+      setCopiedActivityId(activityId);
+      window.setTimeout(() => {
+        setCopiedActivityId((current) => (current === activityId ? null : current));
+      }, 1800);
+    } catch (error) {
+      console.error('Failed to copy activity link:', error);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -1387,11 +1606,19 @@ export function ChangeFeedWorkspace({
             />
           ))}
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            {isAllHistory && (
+              <FilterChip
+                label="All history"
+                active
+                onClick={() => undefined}
+              />
+            )}
             {(['24h', '7d', '30d'] as const).map((option) => (
               <FilterChip
                 key={option}
                 label={RANGE_LABELS[option]}
-                active={range === option}
+                active={!isAllHistory && range === option}
+                disabled={isAllHistory}
                 onClick={() => onUpdateFilters({ range: option, activity: null })}
               />
             ))}
@@ -1417,6 +1644,7 @@ export function ChangeFeedWorkspace({
               onUpdateFilters({
                 appIds: selection.appIds,
                 appNames: selection.appNames,
+                history: games.length > 0 ? 'all' : null,
                 activity: null,
               });
             }}
@@ -1515,6 +1743,11 @@ export function ChangeFeedWorkspace({
                 Exact: {selectedAppSummary}
               </span>
             )}
+            {isAllHistory && (
+              <span className="border border-border-subtle bg-surface/65 px-2 py-1 text-text-secondary">
+                History: all stored
+              </span>
+            )}
             {signalFamilies.map((family) => (
               <span
                 key={family}
@@ -1555,11 +1788,13 @@ export function ChangeFeedWorkspace({
             <Timeline
               items={items}
               selectedActivityId={selectedActivityId}
+              copiedActivityId={copiedActivityId}
               loading={loading}
               error={error}
               cursor={cursor}
               loadingMore={loadingMore}
               onSelectActivity={onSelectActivity}
+              onCopyActivityLink={copyActivityLink}
               onLoadMore={onLoadMore}
             />
           )}
@@ -1573,12 +1808,17 @@ export function ChangeFeedWorkspace({
             selectedDetailLoading={selectedDetailLoading}
             selectedDetailError={selectedDetailError}
             inspectorMode={inspectorMode}
+            copied={Boolean(selectedActivityId && copiedActivityId === selectedActivityId)}
+            onCopyPermalink={
+              selectedActivityId ? () => copyActivityLink(selectedActivityId) : undefined
+            }
+            onExpand={onExpandInspector}
             onInspectorModeChange={onInspectorModeChange}
           />
         </aside>
       </div>
 
-      {selectedDetailVisible && !compactInspectorDismissed && (
+      {selectedDetailVisible && inspectorDisplay !== 'full' && !compactInspectorDismissed && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border-subtle bg-surface-raised shadow-lg xl:hidden">
           <div className="max-h-[84vh] overflow-y-auto p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -1604,6 +1844,39 @@ export function ChangeFeedWorkspace({
               selectedDetailLoading={selectedDetailLoading}
               selectedDetailError={selectedDetailError}
               inspectorMode={inspectorMode}
+              copied={Boolean(selectedActivityId && copiedActivityId === selectedActivityId)}
+              onCopyPermalink={
+                selectedActivityId ? () => copyActivityLink(selectedActivityId) : undefined
+              }
+              onExpand={onExpandInspector}
+              onInspectorModeChange={onInspectorModeChange}
+            />
+          </div>
+        </div>
+      )}
+
+      {selectedDetailVisible && inspectorDisplay === 'full' && (
+        <div className="fixed inset-0 z-50 bg-surface-raised">
+          <div className="absolute inset-0 bg-surface-raised" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Activity inspector"
+            className="relative z-10 flex h-full min-h-0 flex-col"
+          >
+            <InspectorPanel
+              hasSelectedActivity={selectedDetailVisible}
+              selectedRow={selectedRow}
+              selectedDetail={selectedDetail}
+              selectedDetailLoading={selectedDetailLoading}
+              selectedDetailError={selectedDetailError}
+              inspectorMode={inspectorMode}
+              variant="full"
+              copied={Boolean(selectedActivityId && copiedActivityId === selectedActivityId)}
+              onCopyPermalink={
+                selectedActivityId ? () => copyActivityLink(selectedActivityId) : undefined
+              }
+              onClose={onCloseFullInspector}
               onInspectorModeChange={onInspectorModeChange}
             />
           </div>
