@@ -541,6 +541,7 @@ export async function diffVerifiedHeroMedia(
       source: 'media',
       beforeValue: previousUrl,
       afterValue: nextUrl,
+      context: { mediaChangeReason: 'content_hash_changed' },
     });
     changedAssets.push({ kind, url: nextUrl });
   }

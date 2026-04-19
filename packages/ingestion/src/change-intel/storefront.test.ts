@@ -150,6 +150,7 @@ test('verified hero media diff suppresses query-only churn but keeps real change
   });
 
   assert.deepEqual(changedResult.events.map((event) => event.eventType), ['header_url_changed']);
+  assert.deepEqual(changedResult.events[0]?.context, { mediaChangeReason: 'content_hash_changed' });
   assert.deepEqual(changedResult.changedAssets, [
     { kind: 'header', url: 'https://cdn.example.com/header.jpg?t=300' },
   ]);

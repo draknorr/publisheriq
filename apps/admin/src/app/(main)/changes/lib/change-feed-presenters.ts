@@ -150,6 +150,78 @@ function toScalarText(value: JsonValue | undefined): string | null {
   return truncate(JSON.stringify(value), 200);
 }
 
+function canonicalizeMediaUrlForComparison(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    const withoutHash = trimmed.split('#', 1)[0] ?? '';
+    const withoutQuery = withoutHash.split('?', 1)[0] ?? '';
+    return withoutQuery.trim() || null;
+  }
+}
+
+function extractSteamAssetTimestamp(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return parsed.searchParams.get('t');
+  } catch {
+    const match = /[?&]t=([^&#]+)/.exec(value);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+}
+
+function isQueryOnlyMediaUrlChange(beforeUrl: string | null, afterUrl: string | null): boolean {
+  if (!beforeUrl || !afterUrl || beforeUrl === afterUrl) {
+    return false;
+  }
+
+  const beforeCanonical = canonicalizeMediaUrlForComparison(beforeUrl);
+  const afterCanonical = canonicalizeMediaUrlForComparison(afterUrl);
+
+  return Boolean(beforeCanonical && afterCanonical && beforeCanonical === afterCanonical);
+}
+
+function uniqueNonNull(values: Array<string | null>): string[] {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+}
+
+function buildQueryOnlyMediaNote(beforeUrls: string[], afterUrls: string[]): string {
+  const beforeTimestamps = uniqueNonNull(beforeUrls.map(extractSteamAssetTimestamp));
+  const afterTimestamps = uniqueNonNull(afterUrls.map(extractSteamAssetTimestamp));
+  const baseNote = 'Steam asset timestamp refreshed; image path unchanged.';
+
+  if (beforeTimestamps.length === 1 && afterTimestamps.length === 1) {
+    return `${baseNote} t: ${beforeTimestamps[0]} -> ${afterTimestamps[0]}`;
+  }
+
+  return baseNote;
+}
+
+function getContextString(event: ChangeDetailEvent, key: string): string | null {
+  const value = event.context[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function hasVerifiedContentHashChange(event: ChangeDetailEvent): boolean {
+  return getContextString(event, 'mediaChangeReason') === 'content_hash_changed';
+}
+
 function formatCurrencyFromCents(value: JsonValue | undefined): string | null {
   if (typeof value !== 'number') {
     return null;
@@ -651,6 +723,26 @@ function contextArray(event: ChangeDetailEvent, key: 'added' | 'removed'): strin
   return toStringList(event.context[key]);
 }
 
+function buildMediaDiffOrTimestampNote(
+  event: ChangeDetailEvent,
+  label: string,
+  note: string | null = null
+): ChangeDiffPreview {
+  const beforeUrl = toScalarText(event.beforeValue);
+  const afterUrl = toScalarText(event.afterValue);
+
+  if (isQueryOnlyMediaUrlChange(beforeUrl, afterUrl) && !hasVerifiedContentHashChange(event)) {
+    const timestampNote = buildQueryOnlyMediaNote(beforeUrl ? [beforeUrl] : [], afterUrl ? [afterUrl] : []);
+    return buildNoteDiff(
+      String(event.eventId),
+      label,
+      note ? `${note}. ${timestampNote}` : timestampNote
+    );
+  }
+
+  return buildMediaDiff(String(event.eventId), label, beforeUrl, afterUrl, note);
+}
+
 export function buildDiffPreview(event: ChangeDetailEvent): ChangeDiffPreview | null {
   switch (event.changeType) {
     case 'release_date_text_change':
@@ -729,26 +821,11 @@ export function buildDiffPreview(event: ChangeDetailEvent): ChangeDiffPreview | 
         null
       );
     case 'header_url_changed':
-      return buildMediaDiff(
-        String(event.eventId),
-        'Header art',
-        toScalarText(event.beforeValue),
-        toScalarText(event.afterValue)
-      );
+      return buildMediaDiffOrTimestampNote(event, 'Header art');
     case 'capsule_url_changed':
-      return buildMediaDiff(
-        String(event.eventId),
-        'Capsule art',
-        toScalarText(event.beforeValue),
-        toScalarText(event.afterValue)
-      );
+      return buildMediaDiffOrTimestampNote(event, 'Capsule art');
     case 'background_url_changed':
-      return buildMediaDiff(
-        String(event.eventId),
-        'Background art',
-        toScalarText(event.beforeValue),
-        toScalarText(event.afterValue)
-      );
+      return buildMediaDiffOrTimestampNote(event, 'Background art');
     case 'screenshot_added':
       return buildListDiff(
         String(event.eventId),
@@ -790,11 +867,9 @@ export function buildDiffPreview(event: ChangeDetailEvent): ChangeDiffPreview | 
     case 'trailer_reordered':
       return buildNoteDiff(String(event.eventId), 'Trailer order', 'Reordered trailer sequence');
     case 'trailer_thumbnail_changed':
-      return buildMediaDiff(
-        String(event.eventId),
+      return buildMediaDiffOrTimestampNote(
+        event,
         'Trailer thumbnail',
-        toScalarText(event.beforeValue),
-        toScalarText(event.afterValue),
         toScalarText(event.context.movieName) ?? null
       );
     default:
@@ -806,15 +881,131 @@ export function buildDiffPreview(event: ChangeDetailEvent): ChangeDiffPreview | 
   }
 }
 
+interface ScreenshotDiffEntry {
+  eventId: number;
+  url: string;
+  canonicalUrl: string | null;
+}
+
+function toScreenshotEntries(event: ChangeDetailEvent, side: 'beforeValue' | 'afterValue'): ScreenshotDiffEntry[] {
+  return toStringList(event[side]).map((url) => ({
+    eventId: event.eventId,
+    url,
+    canonicalUrl: canonicalizeMediaUrlForComparison(url),
+  }));
+}
+
+function buildScreenshotDiffPreviews(events: ChangeDetailEvent[]): ChangeDiffPreview[] {
+  const addedEvents = events.filter((event) => event.changeType === 'screenshot_added');
+  const removedEvents = events.filter((event) => event.changeType === 'screenshot_removed');
+  const addedEntries = addedEvents.flatMap((event) => toScreenshotEntries(event, 'afterValue'));
+  const removedEntries = removedEvents.flatMap((event) => toScreenshotEntries(event, 'beforeValue'));
+  const unmatchedAdded = [...addedEntries];
+  const timestampPairs: Array<{ beforeUrl: string; afterUrl: string }> = [];
+
+  const unmatchedRemoved = removedEntries.filter((removed) => {
+    if (!removed.canonicalUrl) {
+      return true;
+    }
+
+    const addedIndex = unmatchedAdded.findIndex(
+      (added) => added.canonicalUrl && added.canonicalUrl === removed.canonicalUrl
+    );
+
+    if (addedIndex === -1) {
+      return true;
+    }
+
+    const [added] = unmatchedAdded.splice(addedIndex, 1);
+    if (isQueryOnlyMediaUrlChange(removed.url, added.url)) {
+      timestampPairs.push({ beforeUrl: removed.url, afterUrl: added.url });
+    }
+
+    return false;
+  });
+
+  const diffs: ChangeDiffPreview[] = [];
+  const eventIds = [...addedEvents, ...removedEvents].map((event) => event.eventId).sort((left, right) => left - right);
+
+  if (timestampPairs.length > 0) {
+    diffs.push(
+      buildNoteDiff(
+        `screenshots-query-only-${eventIds.join('-')}`,
+        'Screenshots',
+        buildQueryOnlyMediaNote(
+          timestampPairs.map((pair) => pair.beforeUrl),
+          timestampPairs.map((pair) => pair.afterUrl)
+        )
+      )
+    );
+  }
+
+  if (unmatchedAdded.length > 0) {
+    diffs.push(
+      buildListDiff(
+        `screenshots-added-${eventIds.join('-')}`,
+        'Screenshots added',
+        unmatchedAdded.map((entry) => entry.url),
+        [],
+        null,
+        null
+      )
+    );
+  }
+
+  if (unmatchedRemoved.length > 0) {
+    diffs.push(
+      buildListDiff(
+        `screenshots-removed-${eventIds.join('-')}`,
+        'Screenshots removed',
+        [],
+        unmatchedRemoved.map((entry) => entry.url),
+        null,
+        null
+      )
+    );
+  }
+
+  return diffs;
+}
+
+export function buildDiffPreviews(events: ChangeDetailEvent[]): ChangeDiffPreview[] {
+  const screenshotEvents = events.filter((event) =>
+    event.changeType === 'screenshot_added' || event.changeType === 'screenshot_removed'
+  );
+  const screenshotDiffs = buildScreenshotDiffPreviews(screenshotEvents);
+  let screenshotDiffsInserted = false;
+  const diffs: ChangeDiffPreview[] = [];
+
+  for (const event of events) {
+    if (event.changeType === 'screenshot_added' || event.changeType === 'screenshot_removed') {
+      if (!screenshotDiffsInserted) {
+        diffs.push(...screenshotDiffs);
+        screenshotDiffsInserted = true;
+      }
+      continue;
+    }
+
+    const diff = buildDiffPreview(event);
+    if (diff) {
+      diffs.push(diff);
+    }
+  }
+
+  if (!screenshotDiffsInserted && screenshotDiffs.length > 0) {
+    diffs.push(...screenshotDiffs);
+  }
+
+  return diffs;
+}
+
 export function buildChangeActivityDetail(detail: ChangeBurstDetail): ChangeActivityDetail {
   const row = buildChangeActivityRow(detail);
 
   return {
     ...row,
     rawEvents: detail.events,
-    diffs: detail.events
-      .map(buildDiffPreview)
-      .filter((diff): diff is ChangeDiffPreview => Boolean(diff)),
+    diffs: buildDiffPreviews(detail.events),
     relatedAnnouncements: detail.relatedNews.map((newsItem) => buildAnnouncementPreview(newsItem)),
     aftermath: detail.impact,
     body: null,
