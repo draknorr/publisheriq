@@ -11,6 +11,7 @@ import type {
   ChangeDetailEvent,
   ChangeDiffPreview,
   ChangeNewsRow,
+  ChangeTextDiffSection,
   JsonValue,
 } from './change-feed-types';
 
@@ -93,17 +94,65 @@ function isRecentRelease(releaseDate: string | null): boolean {
   return diffMs >= 0 && diffMs <= 1000 * 60 * 60 * 24 * 30;
 }
 
+const HTML_ENTITY_MAP: Record<string, string> = {
+  amp: '&',
+  apos: "'",
+  gt: '>',
+  lt: '<',
+  nbsp: ' ',
+  quot: '"',
+};
+
+const DESCRIPTION_TEXT_FIELDS = [
+  { key: 'about', label: 'About this game' },
+  { key: 'detailed', label: 'Detailed description' },
+] as const;
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+    const normalized = entity.toLowerCase();
+    const named = HTML_ENTITY_MAP[normalized];
+    if (named) {
+      return named;
+    }
+
+    if (normalized.startsWith('#x')) {
+      const codePoint = Number.parseInt(normalized.slice(2), 16);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+
+    if (normalized.startsWith('#')) {
+      const codePoint = Number.parseInt(normalized.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+
+    return match;
+  });
+}
+
 function stripHtml(value: string | null): string | null {
   if (!value) {
     return null;
   }
 
-  return value
+  const text = decodeHtmlEntities(value)
+    .replace(/\r\n?/g, '\n')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '\n- ')
+    .replace(/<\/(?:p|div|section|article|li|ul|ol|h[1-6]|blockquote)>/gi, '\n\n')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/\[\*\]/g, '\n- ')
+    .replace(/\[url=[^\]]+\]/gi, '')
+    .replace(/\[\/url\]/gi, '')
+    .replace(/\[\/?(?:b|i|u|h[1-6]|list|olist|quote|code|strike|table|tr|td|th)[^\]]*\]/gi, '')
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  return text || null;
 }
 
 function truncate(value: string | null, max = 200): string | null {
@@ -148,6 +197,111 @@ function toScalarText(value: JsonValue | undefined): string | null {
   }
 
   return truncate(JSON.stringify(value), 200);
+}
+
+function isJsonRecord(value: JsonValue | undefined): value is Record<string, JsonValue | undefined> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function toReadableText(value: JsonValue | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return stripHtml(value);
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  return null;
+}
+
+function getDescriptionTextKeys(
+  beforeValue: JsonValue | undefined,
+  afterValue: JsonValue | undefined
+): string[] {
+  const orderedKeys = DESCRIPTION_TEXT_FIELDS.map((field) => field.key);
+  const discoveredKeys = new Set<string>();
+
+  for (const value of [beforeValue, afterValue]) {
+    if (!isJsonRecord(value)) {
+      continue;
+    }
+
+    for (const [key, entry] of Object.entries(value)) {
+      if (
+        (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') &&
+        stripHtml(String(entry))
+      ) {
+        discoveredKeys.add(key);
+      }
+    }
+  }
+
+  return [
+    ...orderedKeys.filter((key) => discoveredKeys.has(key)),
+    ...Array.from(discoveredKeys)
+      .filter((key) => !orderedKeys.includes(key as (typeof orderedKeys)[number]))
+      .sort(),
+  ];
+}
+
+function getDescriptionFieldLabel(key: string): string {
+  return DESCRIPTION_TEXT_FIELDS.find((field) => field.key === key)?.label ?? formatTokenLabel(key);
+}
+
+function buildDescriptionTextSections(
+  beforeValue: JsonValue | undefined,
+  afterValue: JsonValue | undefined,
+  fallbackLabel: string
+): ChangeTextDiffSection[] {
+  if (!isJsonRecord(beforeValue) && !isJsonRecord(afterValue)) {
+    const beforeText = toReadableText(beforeValue);
+    const afterText = toReadableText(afterValue);
+
+    return beforeText || afterText
+      ? [{ id: 'copy', label: fallbackLabel, beforeText, afterText }]
+      : [];
+  }
+
+  const keys = getDescriptionTextKeys(beforeValue, afterValue);
+
+  return keys
+    .map((key) => {
+      const beforeText = isJsonRecord(beforeValue) ? toReadableText(beforeValue[key]) : null;
+      const afterText = isJsonRecord(afterValue) ? toReadableText(afterValue[key]) : null;
+
+      if (!beforeText && !afterText) {
+        return null;
+      }
+
+      if (beforeText === afterText) {
+        return null;
+      }
+
+      return {
+        id: key,
+        label: getDescriptionFieldLabel(key),
+        beforeText,
+        afterText,
+      };
+    })
+    .filter((section): section is ChangeTextDiffSection => Boolean(section));
+}
+
+function joinTextSections(
+  sections: ChangeTextDiffSection[],
+  side: 'beforeText' | 'afterText'
+): string | null {
+  const text = sections
+    .map((section) => section[side])
+    .filter((value): value is string => Boolean(value))
+    .join('\n\n');
+
+  return text || null;
 }
 
 function canonicalizeMediaUrlForComparison(value: string | null): string | null {
@@ -668,13 +822,20 @@ function buildListDiff(
   };
 }
 
-function buildTextDiff(id: string, label: string, beforeText: string | null, afterText: string | null): ChangeDiffPreview {
+function buildTextDiff(
+  id: string,
+  label: string,
+  beforeText: string | null,
+  afterText: string | null,
+  textSections?: ChangeTextDiffSection[]
+): ChangeDiffPreview {
   return {
     id,
     label,
     kind: 'text',
     beforeText,
     afterText,
+    textSections,
     added: [],
     removed: [],
     beforeImageUrl: null,
@@ -717,6 +878,29 @@ function buildNoteDiff(id: string, label: string, note: string): ChangeDiffPrevi
     afterImageUrl: null,
     note,
   };
+}
+
+function buildDescriptionTextDiff(
+  event: ChangeDetailEvent,
+  label: string
+): ChangeDiffPreview {
+  const textSections = buildDescriptionTextSections(event.beforeValue, event.afterValue, label);
+
+  if (textSections.length === 0) {
+    return buildNoteDiff(
+      String(event.eventId),
+      label,
+      'Readable description copy did not change; embedded markup or media attributes changed. Open Raw for the exact payload.'
+    );
+  }
+
+  return buildTextDiff(
+    String(event.eventId),
+    label,
+    joinTextSections(textSections, 'beforeText'),
+    joinTextSections(textSections, 'afterText'),
+    textSections
+  );
 }
 
 function contextArray(event: ChangeDetailEvent, key: 'added' | 'removed'): string[] {
@@ -789,19 +973,9 @@ export function buildDiffPreview(event: ChangeDetailEvent): ChangeDiffPreview | 
         toScalarText(event.afterValue)
       );
     case 'description_rewrite':
-      return buildTextDiff(
-        String(event.eventId),
-        'Store description',
-        truncate(stripHtml(toScalarText(event.beforeValue)), 260),
-        truncate(stripHtml(toScalarText(event.afterValue)), 260)
-      );
+      return buildDescriptionTextDiff(event, 'Store description');
     case 'short_description_rewrite':
-      return buildTextDiff(
-        String(event.eventId),
-        'Short description',
-        truncate(stripHtml(toScalarText(event.beforeValue)), 220),
-        truncate(stripHtml(toScalarText(event.afterValue)), 220)
-      );
+      return buildDescriptionTextDiff(event, 'Short description');
     case 'genres_changed':
     case 'categories_changed':
     case 'languages_changed':

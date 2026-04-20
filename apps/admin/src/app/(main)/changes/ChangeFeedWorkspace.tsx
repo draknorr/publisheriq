@@ -27,6 +27,7 @@ import type {
   ChangeDiffPreview,
   ChangeFeedStatus,
   ChangeHistoryScope,
+  ChangeTextDiffSection,
 } from './lib';
 import {
   CHANGE_ACTIVITY_MODES,
@@ -42,6 +43,7 @@ import { ChangeFeedGamePicker, type SelectedGame } from './ChangeFeedGamePicker'
 type FeedRange = '24h' | '7d' | '30d';
 type AppTypeFilter = 'all' | AppType;
 type InspectorMode = 'readable' | 'raw';
+type DescriptionDiffMode = 'changes' | 'before' | 'after';
 
 interface ChangeFeedWorkspaceProps {
   authReady: boolean;
@@ -521,6 +523,284 @@ function ImpactWindowCard({
   );
 }
 
+interface DescriptionSectionView extends ChangeTextDiffSection {
+  groupLabel: string;
+}
+
+interface TextChangeSegment {
+  kind: 'equal' | 'added' | 'removed';
+  text: string;
+}
+
+const DESCRIPTION_DIFF_MODE_LABELS: Record<DescriptionDiffMode, string> = {
+  changes: 'Changes',
+  before: 'Before',
+  after: 'After',
+};
+
+function getDescriptionSections(diffs: ChangeDiffPreview[]): DescriptionSectionView[] {
+  return diffs.flatMap((diff) => {
+    const sections = diff.textSections?.length
+      ? diff.textSections
+      : [
+          {
+            id: diff.id,
+            label: diff.label,
+            beforeText: diff.beforeText,
+            afterText: diff.afterText,
+          },
+        ];
+
+    return sections
+      .filter((section) => section.beforeText || section.afterText)
+      .map((section) => ({
+        ...section,
+        id: `${diff.id}-${section.id}`,
+        groupLabel: diff.label,
+      }));
+  });
+}
+
+function tokenizeTextForDiff(value: string): string[] {
+  return value.match(/\n+|[^\S\n]+|[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*|[^A-Za-z0-9\s]+/g) ?? [];
+}
+
+function compactTextSegments(segments: TextChangeSegment[]): TextChangeSegment[] {
+  const compacted: TextChangeSegment[] = [];
+
+  for (const segment of segments) {
+    if (!segment.text) {
+      continue;
+    }
+
+    const previous = compacted[compacted.length - 1];
+    if (previous && previous.kind === segment.kind) {
+      previous.text += segment.text;
+      continue;
+    }
+
+    compacted.push({ ...segment });
+  }
+
+  return compacted;
+}
+
+function diffTextSegments(beforeText: string | null, afterText: string | null): TextChangeSegment[] {
+  const before = beforeText ?? '';
+  const after = afterText ?? '';
+
+  if (!before && !after) {
+    return [];
+  }
+
+  if (before === after) {
+    return [{ kind: 'equal', text: before }];
+  }
+
+  const beforeTokens = tokenizeTextForDiff(before);
+  const afterTokens = tokenizeTextForDiff(after);
+  let prefixLength = 0;
+
+  while (
+    prefixLength < beforeTokens.length &&
+    prefixLength < afterTokens.length &&
+    beforeTokens[prefixLength] === afterTokens[prefixLength]
+  ) {
+    prefixLength += 1;
+  }
+
+  let suffixLength = 0;
+  while (
+    suffixLength < beforeTokens.length - prefixLength &&
+    suffixLength < afterTokens.length - prefixLength &&
+    beforeTokens[beforeTokens.length - 1 - suffixLength] === afterTokens[afterTokens.length - 1 - suffixLength]
+  ) {
+    suffixLength += 1;
+  }
+
+  const beforeMiddle = beforeTokens.slice(prefixLength, beforeTokens.length - suffixLength);
+  const afterMiddle = afterTokens.slice(prefixLength, afterTokens.length - suffixLength);
+  const prefix = beforeTokens.slice(0, prefixLength).join('');
+  const suffix = suffixLength > 0 ? beforeTokens.slice(beforeTokens.length - suffixLength).join('') : '';
+  const segments: TextChangeSegment[] = [];
+
+  if (prefix) {
+    segments.push({ kind: 'equal', text: prefix });
+  }
+
+  if (beforeMiddle.length * afterMiddle.length > 700_000) {
+    if (beforeMiddle.length > 0) {
+      segments.push({ kind: 'removed', text: beforeMiddle.join('') });
+    }
+    if (afterMiddle.length > 0) {
+      segments.push({ kind: 'added', text: afterMiddle.join('') });
+    }
+  } else {
+    const table = Array.from(
+      { length: beforeMiddle.length + 1 },
+      () => new Uint16Array(afterMiddle.length + 1)
+    );
+
+    for (let i = beforeMiddle.length - 1; i >= 0; i -= 1) {
+      for (let j = afterMiddle.length - 1; j >= 0; j -= 1) {
+        table[i][j] =
+          beforeMiddle[i] === afterMiddle[j]
+            ? table[i + 1][j + 1] + 1
+            : Math.max(table[i + 1][j], table[i][j + 1]);
+      }
+    }
+
+    let beforeIndex = 0;
+    let afterIndex = 0;
+    while (beforeIndex < beforeMiddle.length && afterIndex < afterMiddle.length) {
+      if (beforeMiddle[beforeIndex] === afterMiddle[afterIndex]) {
+        segments.push({ kind: 'equal', text: beforeMiddle[beforeIndex] });
+        beforeIndex += 1;
+        afterIndex += 1;
+      } else if (table[beforeIndex + 1][afterIndex] >= table[beforeIndex][afterIndex + 1]) {
+        segments.push({ kind: 'removed', text: beforeMiddle[beforeIndex] });
+        beforeIndex += 1;
+      } else {
+        segments.push({ kind: 'added', text: afterMiddle[afterIndex] });
+        afterIndex += 1;
+      }
+    }
+
+    while (beforeIndex < beforeMiddle.length) {
+      segments.push({ kind: 'removed', text: beforeMiddle[beforeIndex] });
+      beforeIndex += 1;
+    }
+
+    while (afterIndex < afterMiddle.length) {
+      segments.push({ kind: 'added', text: afterMiddle[afterIndex] });
+      afterIndex += 1;
+    }
+  }
+
+  if (suffix) {
+    segments.push({ kind: 'equal', text: suffix });
+  }
+
+  return compactTextSegments(segments);
+}
+
+function DescriptionText({ value }: { value: string | null }) {
+  if (!value) {
+    return <p className="text-[12px] text-text-muted">No copy</p>;
+  }
+
+  return (
+    <p className="whitespace-pre-wrap break-words text-[13px] leading-6 text-text-secondary">
+      {value}
+    </p>
+  );
+}
+
+function ChangeTrackedText({
+  beforeText,
+  afterText,
+}: {
+  beforeText: string | null;
+  afterText: string | null;
+}) {
+  const segments = useMemo(() => diffTextSegments(beforeText, afterText), [beforeText, afterText]);
+
+  if (segments.length === 0) {
+    return <p className="text-[12px] text-text-muted">No readable copy changed</p>;
+  }
+
+  return (
+    <p className="whitespace-pre-wrap break-words text-[13px] leading-6 text-text-secondary">
+      {segments.map((segment, index) => {
+        const key = `${segment.kind}-${index}-${segment.text.slice(0, 12)}`;
+
+        if (segment.kind === 'added') {
+          return (
+            <ins
+              key={key}
+              className="rounded-[2px] bg-accent-green/15 px-0.5 text-accent-green no-underline"
+            >
+              {segment.text}
+            </ins>
+          );
+        }
+
+        if (segment.kind === 'removed') {
+          return (
+            <del
+              key={key}
+              className="rounded-[2px] bg-accent-red/15 px-0.5 text-accent-red decoration-accent-red/70"
+            >
+              {segment.text}
+            </del>
+          );
+        }
+
+        return <span key={key}>{segment.text}</span>;
+      })}
+    </p>
+  );
+}
+
+function DescriptionDiffSection({ diffs }: { diffs: ChangeDiffPreview[] }) {
+  const [mode, setMode] = useState<DescriptionDiffMode>('changes');
+  const sections = useMemo(() => getDescriptionSections(diffs), [diffs]);
+
+  if (sections.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="overflow-hidden border border-border-subtle bg-surface/20">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[12px] font-medium text-text-primary">Description changes</p>
+          <p className="mt-1 text-[11px] text-text-muted">
+            {sections.length} {sections.length === 1 ? 'section' : 'sections'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 border border-border-subtle bg-surface/35 p-0.5">
+          {(['changes', 'before', 'after'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setMode(option)}
+              className={
+                mode === option
+                  ? 'bg-surface-elevated px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-primary'
+                  : 'px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-text-tertiary transition-colors hover:text-text-secondary'
+              }
+            >
+              {DESCRIPTION_DIFF_MODE_LABELS[option]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="max-h-[min(52vh,640px)] overflow-y-auto">
+        <div className="divide-y divide-border-subtle">
+          {sections.map((section) => (
+            <article key={section.id} className="px-3 py-3">
+              <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-text-tertiary">
+                  {section.groupLabel}
+                </p>
+                {section.label !== section.groupLabel && (
+                  <p className="text-[12px] font-medium text-text-primary">{section.label}</p>
+                )}
+              </div>
+              {mode === 'changes' ? (
+                <ChangeTrackedText beforeText={section.beforeText} afterText={section.afterText} />
+              ) : (
+                <DescriptionText value={mode === 'before' ? section.beforeText : section.afterText} />
+              )}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function DiffPreviewBlock({ diff }: { diff: ChangeDiffPreview }) {
   const imageGallery = [...diff.added, ...diff.removed].filter(isImageUrl);
   const mediaFrameClass = getMediaFrameClass(diff.label);
@@ -859,6 +1139,9 @@ function ReadableInspector({
   const companionAnnouncements =
     detail.activityKind === 'change' ? detail.relatedAnnouncements : [];
   const announcementBody = stripHtml(detail.body);
+  const descriptionDiffs = detail.diffs.filter((diff) => diff.kind === 'text');
+  const otherDiffs = detail.diffs.filter((diff) => diff.kind !== 'text');
+  const readableDiffBlockCount = otherDiffs.length + (descriptionDiffs.length > 0 ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -875,10 +1158,11 @@ function ReadableInspector({
             <h4 className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
               Key changes
             </h4>
-            <span className="font-mono text-[11px] text-text-muted">{detail.diffs.length}</span>
+            <span className="font-mono text-[11px] text-text-muted">{readableDiffBlockCount}</span>
           </div>
           <div className="space-y-1.5">
-            {detail.diffs.map((diff) => (
+            {descriptionDiffs.length > 0 && <DescriptionDiffSection diffs={descriptionDiffs} />}
+            {otherDiffs.map((diff) => (
               <DiffPreviewBlock key={diff.id} diff={diff} />
             ))}
           </div>

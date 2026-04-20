@@ -114,11 +114,19 @@ export interface ChangeDiffPreview {
   kind: 'scalar' | 'list' | 'text' | 'media' | 'note';
   beforeText: string | null;
   afterText: string | null;
+  textSections?: ChangeTextDiffSection[];
   added: string[];
   removed: string[];
   beforeImageUrl: string | null;
   afterImageUrl: string | null;
   note: string | null;
+}
+
+export interface ChangeTextDiffSection {
+  id: string;
+  label: string;
+  beforeText: string | null;
+  afterText: string | null;
 }
 
 export interface ChangeAnnouncementPreview {

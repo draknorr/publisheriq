@@ -101,3 +101,73 @@ test('mixed screenshot churn keeps real added and removed images', () => {
   assert.deepEqual(diffs[1]?.added, [addedReal]);
   assert.deepEqual(diffs[2]?.removed, [removedReal]);
 });
+
+test('description rewrite objects become readable text sections', () => {
+  const diffs = buildDiffPreviews([
+    changeEvent({
+      source: 'storefront',
+      changeType: 'description_rewrite',
+      beforeValue: {
+        about:
+          '<p class="bb_paragraph">Explore &amp; survive.</p><video poster="https://cdn.example.com/poster.avif?t=1"><source src="https://cdn.example.com/movie.webm?t=1"></video>',
+        detailed: '<p>Old world.</p>',
+      } satisfies JsonValue,
+      afterValue: {
+        about: '<p class="bb_paragraph">Explore &amp; survive with friends.</p>',
+        detailed: '<p>Old world.</p><p>New bosses.</p>',
+      } satisfies JsonValue,
+    }),
+  ]);
+
+  assert.equal(diffs.length, 1);
+  assert.equal(diffs[0]?.kind, 'text');
+  assert.equal(diffs[0]?.label, 'Store description');
+  assert.equal(diffs[0]?.textSections?.length, 2);
+  assert.equal(diffs[0]?.textSections?.[0]?.label, 'About this game');
+  assert.equal(diffs[0]?.textSections?.[0]?.beforeText, 'Explore & survive.');
+  assert.equal(diffs[0]?.textSections?.[0]?.afterText, 'Explore & survive with friends.');
+  assert.equal(diffs[0]?.textSections?.[1]?.label, 'Detailed description');
+  assert.equal(diffs[0]?.textSections?.[1]?.afterText, 'Old world.\n\nNew bosses.');
+  assert.ok(!diffs[0]?.beforeText?.includes('<video'));
+  assert.ok(!diffs[0]?.beforeText?.includes('poster.avif'));
+});
+
+test('description markup-only changes render as a readable note', () => {
+  const diffs = buildDiffPreviews([
+    changeEvent({
+      source: 'storefront',
+      changeType: 'description_rewrite',
+      beforeValue: {
+        about:
+          '<video class="bb_img" autoplay muted poster="https://cdn.example.com/poster.avif?t=100"><source src="https://cdn.example.com/movie.webm?t=100"></video>',
+      } satisfies JsonValue,
+      afterValue: {
+        about:
+          '<video class="bb_img" autoplay muted poster="https://cdn.example.com/poster.avif?t=200"><source src="https://cdn.example.com/movie.webm?t=200"></video>',
+      } satisfies JsonValue,
+    }),
+  ]);
+
+  assert.equal(diffs.length, 1);
+  assert.equal(diffs[0]?.kind, 'note');
+  assert.equal(diffs[0]?.label, 'Store description');
+  assert.match(diffs[0]?.note ?? '', /Readable description copy did not change/);
+});
+
+test('short description rewrites keep full readable strings', () => {
+  const diffs = buildDiffPreviews([
+    changeEvent({
+      source: 'storefront',
+      changeType: 'short_description_rewrite',
+      beforeValue: 'Battle beyond the Underworld.',
+      afterValue: 'Fight deeper into the Underworld.',
+    }),
+  ]);
+
+  assert.equal(diffs.length, 1);
+  assert.equal(diffs[0]?.kind, 'text');
+  assert.equal(diffs[0]?.label, 'Short description');
+  assert.equal(diffs[0]?.textSections?.length, 1);
+  assert.equal(diffs[0]?.textSections?.[0]?.beforeText, 'Battle beyond the Underworld.');
+  assert.equal(diffs[0]?.textSections?.[0]?.afterText, 'Fight deeper into the Underworld.');
+});
