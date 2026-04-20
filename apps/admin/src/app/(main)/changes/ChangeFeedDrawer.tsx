@@ -4,7 +4,9 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import { Badge, Card } from '@/components/ui';
-import type { ChangeBurstDetail, ChangeBurstImpactWindow, ChangeBurstRow } from './lib';
+import type { ChangeBurstDetail, ChangeBurstRow } from './lib';
+import { buildChangeImpactMetricRows } from './lib';
+import { ChangeImpactMetricTable } from './ChangeImpactMetricTable';
 
 interface ChangeFeedDrawerProps {
   isOpen: boolean;
@@ -93,51 +95,6 @@ function formatValue(value: unknown): string {
   }
 }
 
-function formatMetric(value: number | null, kind: 'number' | 'price' | 'percent' = 'number'): string {
-  if (value == null) {
-    return '—';
-  }
-
-  if (kind === 'price') {
-    return `$${(value / 100).toFixed(2)}`;
-  }
-
-  if (kind === 'percent') {
-    return `${value}%`;
-  }
-
-  return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
-}
-
-function hasImpactWindow(window: ChangeBurstImpactWindow | null): boolean {
-  if (!window) {
-    return false;
-  }
-
-  return Object.values(window).some((value) => value !== null);
-}
-
-function ImpactCard({
-  title,
-  window,
-}: {
-  title: string;
-  window: ChangeBurstImpactWindow | null;
-}) {
-  return (
-    <div className="rounded-lg border border-border-subtle bg-surface-elevated p-3">
-      <p className="text-caption uppercase tracking-wide text-text-tertiary">{title}</p>
-      <div className="mt-2 space-y-1 text-body-sm text-text-secondary">
-        <p>Peak CCU: <span className="text-text-primary">{formatMetric(window?.ccuPeak ?? null)}</span></p>
-        <p>Reviews: <span className="text-text-primary">{formatMetric(window?.totalReviews ?? null)}</span></p>
-        <p>Review score: <span className="text-text-primary">{formatMetric(window?.reviewScore ?? null, 'percent')}</span></p>
-        <p>Price: <span className="text-text-primary">{formatMetric(window?.priceCents ?? null, 'price')}</span></p>
-        <p>Discount: <span className="text-text-primary">{formatMetric(window?.discountPercent ?? null, 'percent')}</span></p>
-      </div>
-    </div>
-  );
-}
-
 export function ChangeFeedDrawer({
   isOpen,
   summary,
@@ -173,11 +130,12 @@ export function ChangeFeedDrawer({
   }
 
   const displayDetail = detail ?? summary;
-  const showImpact =
-    detail?.impact &&
-    (hasImpactWindow(detail.impact.baseline7d) ||
-      hasImpactWindow(detail.impact.response1d) ||
-      hasImpactWindow(detail.impact.response7d));
+  const impactRows = detail
+    ? buildChangeImpactMetricRows(detail.impact, {
+        changeTypes: detail.events.map((event) => event.changeType),
+      })
+    : [];
+  const showImpact = impactRows.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -262,21 +220,16 @@ export function ChangeFeedDrawer({
               </div>
 
               {showImpact && detail.impact && (
-                <Card padding="md">
-                  <div>
-                    <p className="text-caption uppercase tracking-wide text-text-tertiary">
-                      Impact snapshot
+                <Card padding="none" className="overflow-hidden">
+                  <div className="flex min-w-0 items-center gap-2 border-b border-border-subtle px-3 py-2">
+                    <p className="truncate text-caption uppercase tracking-wide text-text-tertiary">
+                      Metric Change
                     </p>
-                    <p className="mt-1 text-body-sm text-text-secondary">
-                      Baseline and response windows around this burst.
-                    </p>
+                    <span className="font-mono text-[11px] text-text-muted">
+                      {impactRows.length}
+                    </span>
                   </div>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <ImpactCard title="Baseline 7d" window={detail.impact.baseline7d} />
-                    <ImpactCard title="Response 1d" window={detail.impact.response1d} />
-                    <ImpactCard title="Response 7d" window={detail.impact.response7d} />
-                  </div>
+                  <ChangeImpactMetricTable rows={impactRows} />
                 </Card>
               )}
 

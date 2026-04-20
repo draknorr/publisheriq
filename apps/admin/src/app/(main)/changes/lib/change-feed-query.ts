@@ -494,22 +494,68 @@ function toStringOrNull(value: JsonValue | undefined): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+function toPositiveNumberOrNull(value: JsonValue | undefined): number | null {
+  const numberValue = toNumberOrNull(value);
+  return numberValue !== null && numberValue > 0 ? numberValue : null;
+}
+
+function asJsonRecord(value: JsonValue | undefined): Record<string, JsonValue | undefined> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, JsonValue | undefined>;
+}
+
 function mapImpactWindow(value: JsonValue | undefined): ChangeBurstImpactWindow | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
 
   const record = value as Record<string, JsonValue | undefined>;
+  const dailyMetrics = asJsonRecord(record.daily_metrics);
+  const reviewDeltas = asJsonRecord(record.review_deltas);
+  const ccu = asJsonRecord(record.ccu);
+  const metricDays =
+    toPositiveNumberOrNull(record.metric_days) ?? toPositiveNumberOrNull(dailyMetrics?.days);
+  const reviewDays =
+    toPositiveNumberOrNull(record.review_days) ?? toPositiveNumberOrNull(reviewDeltas?.days);
+  const ccuSamples =
+    toPositiveNumberOrNull(record.ccu_samples) ?? toPositiveNumberOrNull(ccu?.samples);
 
   return {
-    ccuPeak: toNumberOrNull(record.ccu_peak),
-    totalReviews: toNumberOrNull(record.total_reviews),
+    ccuPeak:
+      toNumberOrNull(record.ccu_peak) ??
+      toNumberOrNull(ccu?.max_player_count) ??
+      toNumberOrNull(dailyMetrics?.max_ccu_peak),
+    totalReviews:
+      toNumberOrNull(record.total_reviews) ?? toNumberOrNull(dailyMetrics?.max_total_reviews),
     positiveReviews: toNumberOrNull(record.positive_reviews),
     negativeReviews: toNumberOrNull(record.negative_reviews),
-    reviewScore: toNumberOrNull(record.review_score),
+    reviewsAdded: reviewDays
+      ? toNumberOrNull(record.reviews_added) ?? toNumberOrNull(reviewDeltas?.reviews_added)
+      : null,
+    positiveAdded: reviewDays
+      ? toNumberOrNull(record.positive_added) ?? toNumberOrNull(reviewDeltas?.positive_added)
+      : null,
+    negativeAdded: reviewDays
+      ? toNumberOrNull(record.negative_added) ?? toNumberOrNull(reviewDeltas?.negative_added)
+      : null,
+    avgDailyReviews: reviewDays
+      ? toNumberOrNull(record.avg_daily_reviews) ?? toNumberOrNull(reviewDeltas?.avg_daily_velocity)
+      : null,
+    reviewScore:
+      toNumberOrNull(record.review_score) ?? toNumberOrNull(dailyMetrics?.avg_review_score),
     reviewScoreLabel: toStringOrNull(record.review_score_label),
-    priceCents: toNumberOrNull(record.price_cents),
-    discountPercent: toNumberOrNull(record.discount_percent),
+    priceCents:
+      toNumberOrNull(record.price_cents) ?? toNumberOrNull(dailyMetrics?.avg_price_cents),
+    discountPercent:
+      toNumberOrNull(record.discount_percent) ??
+      toNumberOrNull(dailyMetrics?.avg_discount_percent),
+    metricDays,
+    reviewDays,
+    ccuSamples,
+    ccuSource: toStringOrNull(record.ccu_source) ?? toStringOrNull(ccu?.source),
   };
 }
 

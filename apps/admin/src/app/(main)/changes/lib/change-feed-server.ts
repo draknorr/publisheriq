@@ -182,13 +182,23 @@ interface ChatRecentNewsTopicSearchParams {
 
 interface RawChangeWindowMetricsPayload {
   daily_metrics?: {
+    days?: number | null;
     avg_price_cents?: number | null;
     avg_discount_percent?: number | null;
     max_total_reviews?: number | null;
     avg_review_score?: number | null;
     max_ccu_peak?: number | null;
   } | null;
+  review_deltas?: {
+    days?: number | null;
+    reviews_added?: number | null;
+    positive_added?: number | null;
+    negative_added?: number | null;
+    avg_daily_velocity?: number | null;
+  } | null;
   ccu?: {
+    samples?: number | null;
+    source?: string | null;
     max_player_count?: number | null;
   } | null;
 }
@@ -411,20 +421,41 @@ function mapMetricsImpactWindow(value: JsonValue): ChangeBurstImpactWindow | nul
 
   const payload = value as RawChangeWindowMetricsPayload;
   const dailyMetrics = payload.daily_metrics ?? null;
+  const reviewDeltas = payload.review_deltas ?? null;
   const ccu = payload.ccu ?? null;
+  const metricDays = toPositiveCount(dailyMetrics?.days);
+  const reviewDays = toPositiveCount(reviewDeltas?.days);
+  const ccuSamples = toPositiveCount(ccu?.samples);
 
   const window: ChangeBurstImpactWindow = {
-    ccuPeak: ccu?.max_player_count ?? dailyMetrics?.max_ccu_peak ?? null,
-    totalReviews: dailyMetrics?.max_total_reviews ?? null,
+    ccuPeak: toFiniteNumber(ccu?.max_player_count) ?? toFiniteNumber(dailyMetrics?.max_ccu_peak),
+    totalReviews: toFiniteNumber(dailyMetrics?.max_total_reviews),
     positiveReviews: null,
     negativeReviews: null,
-    reviewScore: dailyMetrics?.avg_review_score ?? null,
+    reviewsAdded: reviewDays ? toFiniteNumber(reviewDeltas?.reviews_added) : null,
+    positiveAdded: reviewDays ? toFiniteNumber(reviewDeltas?.positive_added) : null,
+    negativeAdded: reviewDays ? toFiniteNumber(reviewDeltas?.negative_added) : null,
+    avgDailyReviews: reviewDays ? toFiniteNumber(reviewDeltas?.avg_daily_velocity) : null,
+    reviewScore: toFiniteNumber(dailyMetrics?.avg_review_score),
     reviewScoreLabel: null,
-    priceCents: dailyMetrics?.avg_price_cents ?? null,
-    discountPercent: dailyMetrics?.avg_discount_percent ?? null,
+    priceCents: toFiniteNumber(dailyMetrics?.avg_price_cents),
+    discountPercent: toFiniteNumber(dailyMetrics?.avg_discount_percent),
+    metricDays,
+    reviewDays,
+    ccuSamples,
+    ccuSource: typeof ccu?.source === 'string' ? ccu.source : null,
   };
 
   return Object.values(window).some((field) => field !== null) ? window : null;
+}
+
+function toFiniteNumber(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function toPositiveCount(value: number | null | undefined): number | null {
+  const numberValue = toFiniteNumber(value);
+  return numberValue !== null && numberValue > 0 ? numberValue : null;
 }
 
 async function fetchBurstImpact(

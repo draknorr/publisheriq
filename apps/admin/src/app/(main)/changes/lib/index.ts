@@ -1,3 +1,4 @@
+export * from './change-impact-metrics';
 export * from './change-feed-presenters';
 export * from './change-feed-query';
 export * from './change-feed-server';

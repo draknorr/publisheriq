@@ -234,10 +234,18 @@ export interface ChangeBurstImpactWindow {
   totalReviews: number | null;
   positiveReviews: number | null;
   negativeReviews: number | null;
+  reviewsAdded: number | null;
+  positiveAdded: number | null;
+  negativeAdded: number | null;
+  avgDailyReviews: number | null;
   reviewScore: number | null;
   reviewScoreLabel: string | null;
   priceCents: number | null;
   discountPercent: number | null;
+  metricDays: number | null;
+  reviewDays: number | null;
+  ccuSamples: number | null;
+  ccuSource: string | null;
 }
 
 export interface ChangeBurstImpact {

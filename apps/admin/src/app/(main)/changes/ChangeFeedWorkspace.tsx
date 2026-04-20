@@ -23,7 +23,6 @@ import type {
   ChangeActivitySignalFamily,
   ChangeActivitySort,
   ChangeActivityView,
-  ChangeBurstImpactWindow,
   ChangeDiffPreview,
   ChangeFeedStatus,
   ChangeHistoryScope,
@@ -35,10 +34,12 @@ import {
   CHANGE_ACTIVITY_SORTS,
   CHANGE_ACTIVITY_VIEWS,
   CHANGE_FEED_APP_TYPES,
+  buildChangeImpactMetricRows,
   buildChangeFeedActivityPermalink,
   formatChangeLabel,
 } from './lib';
 import { ChangeFeedGamePicker, type SelectedGame } from './ChangeFeedGamePicker';
+import { ChangeImpactMetricTable } from './ChangeImpactMetricTable';
 
 type FeedRange = '24h' | '7d' | '30d';
 type AppTypeFilter = 'all' | AppType;
@@ -314,30 +315,6 @@ function formatValue(value: unknown): string {
   }
 }
 
-function formatMetric(value: number | null, kind: 'number' | 'price' | 'percent' = 'number'): string {
-  if (value == null) {
-    return '—';
-  }
-
-  if (kind === 'price') {
-    return `$${(value / 100).toFixed(2)}`;
-  }
-
-  if (kind === 'percent') {
-    return `${Math.round(value)}%`;
-  }
-
-  return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
-}
-
-function hasImpactWindow(window: ChangeBurstImpactWindow | null): boolean {
-  if (!window) {
-    return false;
-  }
-
-  return Object.values(window).some((value) => value !== null);
-}
-
 function isImageUrl(value: string | null): boolean {
   if (!value) {
     return false;
@@ -481,46 +458,6 @@ function formatSourceLabel(source: ChangeActivityDetail['rawEvents'][number]['so
     default:
       return formatTokenLabel(source);
   }
-}
-
-function ImpactWindowCard({
-  title,
-  window,
-}: {
-  title: string;
-  window: ChangeBurstImpactWindow | null;
-}) {
-  return (
-    <div className="border border-border-subtle bg-surface/20 px-3 py-2">
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">{title}</p>
-      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] leading-5">
-        <div className="flex items-center justify-between gap-2 text-text-secondary">
-          <dt>Peak CCU</dt>
-          <dd className="text-text-primary">{formatMetric(window?.ccuPeak ?? null)}</dd>
-        </div>
-        <div className="flex items-center justify-between gap-2 text-text-secondary">
-          <dt>Reviews</dt>
-          <dd className="text-text-primary">{formatMetric(window?.totalReviews ?? null)}</dd>
-        </div>
-        <div className="flex items-center justify-between gap-2 text-text-secondary">
-          <dt>Score</dt>
-          <dd className="text-text-primary">
-            {formatMetric(window?.reviewScore ?? null, 'percent')}
-          </dd>
-        </div>
-        <div className="flex items-center justify-between gap-2 text-text-secondary">
-          <dt>Price</dt>
-          <dd className="text-text-primary">{formatMetric(window?.priceCents ?? null, 'price')}</dd>
-        </div>
-        <div className="col-span-2 flex items-center justify-between gap-2 text-text-secondary">
-          <dt>Discount</dt>
-          <dd className="text-text-primary">
-            {formatMetric(window?.discountPercent ?? null, 'percent')}
-          </dd>
-        </div>
-      </dl>
-    </div>
-  );
 }
 
 interface DescriptionSectionView extends ChangeTextDiffSection {
@@ -1124,18 +1061,11 @@ function ReadableInspector({
 }: {
   detail: ChangeActivityDetail;
 }) {
-  const showAftermathSection =
-    detail.aftermath &&
-    (hasImpactWindow(detail.aftermath.baseline7d) ||
-      hasImpactWindow(detail.aftermath.response1d) ||
-      hasImpactWindow(detail.aftermath.response7d));
-  const visibleAftermathCount = detail.aftermath
-    ? [
-        detail.aftermath.baseline7d,
-        detail.aftermath.response1d,
-        detail.aftermath.response7d,
-      ].filter((window) => hasImpactWindow(window)).length
-    : 0;
+  const impactRows = buildChangeImpactMetricRows(detail.aftermath, {
+    changeTypes: detail.rawEvents.map((event) => event.changeType),
+    signalFamilies: detail.signalFamilies,
+  });
+  const showImpactSection = impactRows.length > 0;
   const companionAnnouncements =
     detail.activityKind === 'change' ? detail.relatedAnnouncements : [];
   const announcementBody = stripHtml(detail.body);
@@ -1230,18 +1160,16 @@ function ReadableInspector({
         </section>
       )}
 
-      {showAftermathSection && detail.aftermath && (
+      {showImpactSection && (
         <section className="overflow-hidden border border-border-subtle bg-surface/20">
           <div className="flex min-w-0 items-center gap-2 border-b border-border-subtle px-3 py-2">
             <p className="truncate text-[11px] uppercase tracking-[0.08em] text-text-tertiary">
-              Aftermath
+              Metric Change
             </p>
-            <span className="font-mono text-[11px] text-text-muted">{visibleAftermathCount}</span>
+            <span className="font-mono text-[11px] text-text-muted">{impactRows.length}</span>
           </div>
-          <div className="grid gap-2 px-3 py-2">
-            <ImpactWindowCard title="Baseline 7d" window={detail.aftermath.baseline7d} />
-            <ImpactWindowCard title="Response 1d" window={detail.aftermath.response1d} />
-            <ImpactWindowCard title="Response 7d" window={detail.aftermath.response7d} />
+          <div className="px-0 py-0">
+            <ChangeImpactMetricTable rows={impactRows} />
           </div>
         </section>
       )}
