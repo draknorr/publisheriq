@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
@@ -127,13 +128,25 @@ class S3ArchiveStore:
             ) from error
 
         addressing_style = "path" if config.force_path_style else "auto"
+        max_pool_connections = max(
+            10,
+            int(
+                os.environ.get(
+                    "CHANGE_INTEL_ARCHIVE_MAX_POOL_CONNECTIONS",
+                    os.environ.get("CHANGE_INTEL_ARCHIVE_WORKERS", "16"),
+                )
+            ),
+        )
         self._bucket = config.bucket
         self._prefix = config.prefix
         self._client = boto3.client(
             "s3",
             aws_access_key_id=config.access_key_id,
             aws_secret_access_key=config.secret_access_key,
-            config=Config(s3={"addressing_style": addressing_style}),
+            config=Config(
+                max_pool_connections=max_pool_connections,
+                s3={"addressing_style": addressing_style},
+            ),
             endpoint_url=config.endpoint,
             region_name=config.region,
         )
@@ -209,6 +222,10 @@ class TigerPICSChangeHistoryStore:
     def __init__(self, database_url: str, archive_store: S3ArchiveStore):
         self._database_url = database_url
         self._archive_store = archive_store
+        self._archive_workers = max(
+            1,
+            int(os.environ.get("CHANGE_INTEL_ARCHIVE_WORKERS", "16")),
+        )
 
     @classmethod
     def from_settings(cls, settings: Any) -> "TigerPICSChangeHistoryStore":
@@ -315,88 +332,111 @@ class TigerPICSChangeHistoryStore:
             return []
 
         from psycopg.rows import dict_row
-        from psycopg.types.json import Jsonb
 
-        inserted_rows: List[Dict[str, Any]] = []
+        def archive_row(row: Dict[str, Any]) -> Dict[str, Any]:
+            snapshot_data = row["snapshot_data"]
+            content_hash = row["content_hash"]
+            appid = int(row["appid"])
+            pointer = self._archive_store.write_json(
+                content_hash=content_hash,
+                key_parts=[str(appid), "pics", str(content_hash)],
+                kind="app-source-snapshot",
+                payload=snapshot_data,
+            )
+            payload: Dict[str, Any] = {
+                "appid": appid,
+                "archive_bucket": pointer.bucket,
+                "archive_byte_size": pointer.byte_size,
+                "archive_content_hash": pointer.content_hash,
+                "archive_content_type": pointer.content_type,
+                "archive_key": pointer.key,
+                "archived_at": datetime.now(timezone.utc).isoformat(),
+                "content_hash": content_hash,
+                "first_seen_at": row.get("first_seen_at") or row["observed_at"],
+                "last_seen_at": row.get("last_seen_at") or row["observed_at"],
+                "observed_at": row["observed_at"],
+                "previous_snapshot_id": row.get("previous_snapshot_id"),
+                "snapshot_summary": summarize_pics_snapshot(snapshot_data),
+                "trigger_cursor": row.get("trigger_cursor"),
+                "trigger_reason": row["trigger_reason"],
+            }
+            if preserve_ids:
+                payload["id"] = row.get("id")
+            return payload
+
+        if self._archive_workers == 1 or len(snapshot_rows) == 1:
+            payload = [archive_row(row) for row in snapshot_rows]
+        else:
+            with ThreadPoolExecutor(max_workers=self._archive_workers) as executor:
+                payload = list(executor.map(archive_row, snapshot_rows))
+
+        insert_id_sql = "id, " if preserve_ids else ""
+        select_id_sql = "id, " if preserve_ids else ""
+        record_id_sql = "id bigint," if preserve_ids else ""
+        conflict_sql = (
+            """
+            ON CONFLICT (id) DO UPDATE SET
+              observed_at = EXCLUDED.observed_at,
+              first_seen_at = EXCLUDED.first_seen_at,
+              last_seen_at = EXCLUDED.last_seen_at,
+              content_hash = EXCLUDED.content_hash,
+              previous_snapshot_id = EXCLUDED.previous_snapshot_id,
+              trigger_reason = EXCLUDED.trigger_reason,
+              trigger_cursor = EXCLUDED.trigger_cursor,
+              snapshot_summary = EXCLUDED.snapshot_summary,
+              archive_bucket = EXCLUDED.archive_bucket,
+              archive_key = EXCLUDED.archive_key,
+              archive_content_hash = EXCLUDED.archive_content_hash,
+              archive_byte_size = EXCLUDED.archive_byte_size,
+              archive_content_type = EXCLUDED.archive_content_type,
+              archived_at = EXCLUDED.archived_at
+            """
+            if preserve_ids
+            else ""
+        )
 
         with self._connect() as connection:
             with connection.cursor(row_factory=dict_row) as cursor:
-                for row in snapshot_rows:
-                    snapshot_data = row["snapshot_data"]
-                    content_hash = row["content_hash"]
-                    appid = int(row["appid"])
-                    pointer = self._archive_store.write_json(
-                        content_hash=content_hash,
-                        key_parts=[str(appid), "pics", str(content_hash)],
-                        kind="app-source-snapshot",
-                        payload=snapshot_data,
+                cursor.execute(
+                    f"""
+                    INSERT INTO docs.app_source_snapshots (
+                      {insert_id_sql}appid, source, observed_at, first_seen_at, last_seen_at,
+                      content_hash, previous_snapshot_id, trigger_reason, trigger_cursor,
+                      snapshot_summary, archive_bucket, archive_key, archive_content_hash,
+                      archive_byte_size, archive_content_type, archived_at
                     )
-                    insert_id_sql = "id, " if preserve_ids else ""
-                    values_id_sql = "%(id)s::bigint, " if preserve_ids else ""
-                    conflict_sql = (
-                        """
-                        ON CONFLICT (id) DO UPDATE SET
-                          observed_at = EXCLUDED.observed_at,
-                          first_seen_at = EXCLUDED.first_seen_at,
-                          last_seen_at = EXCLUDED.last_seen_at,
-                          content_hash = EXCLUDED.content_hash,
-                          previous_snapshot_id = EXCLUDED.previous_snapshot_id,
-                          trigger_reason = EXCLUDED.trigger_reason,
-                          trigger_cursor = EXCLUDED.trigger_cursor,
-                          snapshot_summary = EXCLUDED.snapshot_summary,
-                          archive_bucket = EXCLUDED.archive_bucket,
-                          archive_key = EXCLUDED.archive_key,
-                          archive_content_hash = EXCLUDED.archive_content_hash,
-                          archive_byte_size = EXCLUDED.archive_byte_size,
-                          archive_content_type = EXCLUDED.archive_content_type,
-                          archived_at = EXCLUDED.archived_at
-                        """
-                        if preserve_ids
-                        else ""
+                    SELECT
+                      {select_id_sql}appid, 'pics', observed_at, first_seen_at, last_seen_at,
+                      content_hash, previous_snapshot_id, trigger_reason, trigger_cursor,
+                      COALESCE(snapshot_summary, '{{}}'::jsonb), archive_bucket, archive_key,
+                      archive_content_hash, archive_byte_size, archive_content_type, archived_at
+                    FROM jsonb_to_recordset(%s::jsonb) AS snapshot_rows (
+                      {record_id_sql}
+                      appid integer,
+                      observed_at timestamptz,
+                      first_seen_at timestamptz,
+                      last_seen_at timestamptz,
+                      content_hash text,
+                      previous_snapshot_id bigint,
+                      trigger_reason text,
+                      trigger_cursor text,
+                      snapshot_summary jsonb,
+                      archive_bucket text,
+                      archive_key text,
+                      archive_content_hash text,
+                      archive_byte_size bigint,
+                      archive_content_type text,
+                      archived_at timestamptz
                     )
-                    cursor.execute(
-                        f"""
-                        INSERT INTO docs.app_source_snapshots (
-                          {insert_id_sql}appid, source, observed_at, first_seen_at, last_seen_at,
-                          content_hash, previous_snapshot_id, trigger_reason, trigger_cursor,
-                          snapshot_summary, archive_bucket, archive_key, archive_content_hash,
-                          archive_byte_size, archive_content_type, archived_at
-                        )
-                        VALUES (
-                          {values_id_sql}%(appid)s, 'pics', %(observed_at)s::timestamptz,
-                          %(first_seen_at)s::timestamptz, %(last_seen_at)s::timestamptz,
-                          %(content_hash)s, %(previous_snapshot_id)s::bigint, %(trigger_reason)s,
-                          %(trigger_cursor)s, %(snapshot_summary)s::jsonb, %(archive_bucket)s,
-                          %(archive_key)s, %(archive_content_hash)s, %(archive_byte_size)s::bigint,
-                          %(archive_content_type)s, %(archived_at)s::timestamptz
-                        )
-                        {conflict_sql}
-                        RETURNING id::text, appid
-                        """,
-                        {
-                            "appid": appid,
-                            "archive_bucket": pointer.bucket,
-                            "archive_byte_size": pointer.byte_size,
-                            "archive_content_hash": pointer.content_hash,
-                            "archive_content_type": pointer.content_type,
-                            "archive_key": pointer.key,
-                            "archived_at": datetime.now(timezone.utc).isoformat(),
-                            "content_hash": content_hash,
-                            "first_seen_at": row.get("first_seen_at") or row["observed_at"],
-                            "id": row.get("id"),
-                            "last_seen_at": row.get("last_seen_at") or row["observed_at"],
-                            "observed_at": row["observed_at"],
-                            "previous_snapshot_id": row.get("previous_snapshot_id"),
-                            "snapshot_summary": Jsonb(summarize_pics_snapshot(snapshot_data)),
-                            "trigger_cursor": row.get("trigger_cursor"),
-                            "trigger_reason": row["trigger_reason"],
-                        },
-                    )
-                    returned = cursor.fetchone()
-                    if returned:
-                        inserted_rows.append({"appid": returned["appid"], "id": returned["id"]})
-
-        return inserted_rows
+                    {conflict_sql}
+                    RETURNING id::text, appid
+                    """,
+                    (json.dumps(payload),),
+                )
+                return [
+                    {"appid": row["appid"], "id": row["id"]}
+                    for row in cursor.fetchall()
+                ]
 
     def insert_change_events(
         self,
