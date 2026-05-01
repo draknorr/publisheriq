@@ -17,6 +17,10 @@ on:
         description: "Maximum number of matched videos to refresh"
         required: false
         default: "500"
+      rollup_lookback_days:
+        description: "Lookback window for daily rollup rebuild"
+        required: false
+        default: "2"
 
 concurrency:
   group: youtube-production-sync
@@ -30,6 +34,8 @@ env:
   YOUTUBE_BOOTSTRAP_LOOKBACK_DAYS: ${{ github.event.inputs.bootstrap_lookback_days || '30' }}
   YOUTUBE_DISCOVERY_LIMIT: ${{ github.event.inputs.discovery_limit || '25' }}
   YOUTUBE_REFRESH_LIMIT: ${{ github.event.inputs.refresh_limit || '500' }}
+  YOUTUBE_ROLLUP_LOOKBACK_DAYS: ${{ github.event.inputs.rollup_lookback_days || '2' }}
+  DATA_PLANE_STATEMENT_TIMEOUT_MS: "120000"
 
 jobs:
   sync:
