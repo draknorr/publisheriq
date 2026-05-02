@@ -1637,7 +1637,9 @@ function joinTigerHumanList(values: string[]): string {
 
 function buildTigerPrimaryNoResultText(params: {
   attempts: TigerShadowAttempt[];
+  entityQuery?: string | null;
   matchedIntent: TigerPrimaryMatchedIntent;
+  prompt?: string;
   request?: unknown;
 }): string | null {
   const firstReason = params.attempts.find((attempt) => attempt.reason?.trim())?.reason?.trim() ?? null;
@@ -1729,11 +1731,25 @@ function buildTigerPrimaryNoResultText(params: {
   }
 
   if (params.matchedIntent === 'news_search') {
-    return 'I could not find relevant recent documents for that request in the current time window.';
+    const entityLabel =
+      params.entityQuery?.trim()
+      || extractEntityQueryFromPrompt(params.prompt ?? '')
+      || 'that title';
+    const windowLabel = hasExplicitPromptTimeWindow(params.prompt ?? '')
+      ? 'the requested time window'
+      : 'the recent document window';
+    return `I could not find relevant ${entityLabel} documents in ${windowLabel}.`;
   }
 
   if (params.matchedIntent === 'change_explanation') {
-    return 'I could not find enough recent Steam change evidence to explain that title from the current time window.';
+    const entityLabel =
+      params.entityQuery?.trim()
+      || extractEntityQueryFromPrompt(params.prompt ?? '')
+      || 'that title';
+    const windowLabel = hasExplicitPromptTimeWindow(params.prompt ?? '')
+      ? 'the requested time window'
+      : 'the recent change window';
+    return `I could not find enough Steam change evidence for ${entityLabel} in ${windowLabel}.`;
   }
 
   if (params.matchedIntent === 'catalog_search') {
@@ -2199,6 +2215,14 @@ function inferPrimarySemanticIntent(prompt: string): boolean {
 
   if (SEMANTIC_SIMILARITY_PROMPT_PATTERN.test(prompt)) {
     return true;
+  }
+
+  if (
+    /\bindie\b/i.test(prompt)
+    && /\b(?:top|best|popular|currently|right now)\b/i.test(prompt)
+    && /\bgames?\b/i.test(prompt)
+  ) {
+    return false;
   }
 
   if (
@@ -2787,6 +2811,7 @@ function resolveDocumentSearchWindowDays(prompt: string, entityQuery: string | n
     entityQuery
     && (
       shouldUseLatestNewsMode(prompt, entityQuery)
+      || /\b(?:patch notes?|update notes?)\b/i.test(prompt)
       || /\brecent\b/i.test(prompt) && NEWS_PROMPT_PATTERN.test(prompt)
     )
   ) {
@@ -6676,6 +6701,13 @@ function pickResolvedCompareEntityForGroup(params: {
     .sort((left, right) => right.score - left.score)[0] ?? null;
 }
 
+function looksLikeOrganizationCompareName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return /\b(?:software|softwere|softw|studio|studios|games|interactive|entertainment|digital|publishing|publisher|developer|inc|corp|llc|ltd|gmbh|s\.?a\.?)\b/i.test(normalized)
+    || /(?:soft|ware|works|arts|games)$/i.test(normalized)
+    || /[a-z][A-Z]/.test(name.trim());
+}
+
 async function resolveExplicitCompareEntitiesAttempt(params: {
   entityNames: string[];
   expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
@@ -6701,6 +6733,34 @@ async function resolveExplicitCompareEntitiesAttempt(params: {
   }
 
   const allowBroadFallback = params.expectedEntityKind == null;
+  const preferCompanyResolver =
+    allowBroadFallback
+    && params.entityNames.some((entityName) => looksLikeOrganizationCompareName(entityName));
+  if (preferCompanyResolver) {
+    const companyPass = await resolveExplicitCompareSlots({
+      entityKinds: ['publisher', 'developer', 'game'],
+      entityNames: params.entityNames,
+      expectedEntityKind: null,
+      resolutionPreference: 'company',
+      strictResolver: false,
+      timeoutMs: params.timeoutMs,
+    });
+    const companyAnalysis = analyzeExplicitCompareSlots({
+      expectedEntityKind: null,
+      slots: companyPass.slots,
+    });
+
+    return {
+      attempts: appendExplicitCompareFailureAttempt(
+        companyPass.attempts,
+        companyAnalysis.failureReason
+      ),
+      entityKind: companyAnalysis.entityKind,
+      entityUids: companyAnalysis.entityUids,
+      selectionState: companyAnalysis.selectionState,
+    };
+  }
+
   const primaryPass = await resolveExplicitCompareSlots({
     entityNames: params.entityNames,
     expectedEntityKind: allowBroadFallback ? 'game' : params.expectedEntityKind,
@@ -6755,17 +6815,21 @@ async function resolveExplicitCompareEntitiesAttempt(params: {
 }
 
 async function resolveExplicitCompareSlots(params: {
+  entityKinds?: SessionSelectionEntityKind[] | null;
   entityNames: string[];
   expectedEntityKind: 'developer' | 'game' | 'publisher' | null;
+  resolutionPreference?: EntityResolutionPreference;
   strictResolver: boolean;
   timeoutMs: number;
 }): Promise<CompareSlotResolutionResult> {
   const resolved = await Promise.all(
     params.entityNames.map((entityName, index) =>
       resolveSelectionSlotAttempt({
+        entityKinds: params.entityKinds,
         expectedEntityKind: params.expectedEntityKind,
         label: entityName,
         query: entityName,
+        resolutionPreference: params.resolutionPreference,
         slotId: `compare:${index}`,
         strictResolver: params.strictResolver,
         timeoutMs: params.timeoutMs,
@@ -10395,6 +10459,13 @@ function resolvePrimaryFollowUpContext(params: {
   return null;
 }
 
+function extractSelectedCandidateQueryFromSelectionState(
+  selectionState: SessionChatSelectionState | null | undefined
+): string | null {
+  const selectedCandidate = pickSelectedCandidateFromSelectionState(selectionState);
+  return selectedCandidate?.displayName?.trim() || null;
+}
+
 function getPrimaryInterpretationEntityHint(
   interpretation: TigerPromptInterpretation | null | undefined
 ): TigerPromptEntityHint | null {
@@ -10565,6 +10636,7 @@ export async function runTigerPrimaryEvaluation(params: {
       );
   const entityQuery =
     followUpContext?.entityQuery
+    ?? extractSelectedCandidateQueryFromSelectionState(followUpContext?.selectionState)
     ?? interpretationEntity?.query
     ?? extractGameNameFromSessionContext(params.sessionContext)
     ?? extractEntityQueryFromPrompt(params.prompt);
@@ -10752,7 +10824,9 @@ export async function runTigerPrimaryEvaluation(params: {
       const noResultText = isTigerPrimaryRenderableIntent(matchedIntent)
         ? buildTigerPrimaryNoResultText({
             attempts: outcome.attempts,
+            entityQuery,
             matchedIntent,
+            prompt: params.prompt,
             request: 'request' in outcome ? outcome.request : null,
           })
         : null;

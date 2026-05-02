@@ -877,6 +877,7 @@ test('chat route continues Tiger momentum result sets for natural follow-ups lik
   assert.equal(endEvent.sessionContext?.resultSet?.sourceContract, 'discoverMomentum');
   assert.deepEqual(endEvent.sessionContext?.resultSet?.shownIds, [730, 570, 320, 440, 1172470, 271590]);
   assert.equal(trace.queryApiCalls.length, 1);
+  assert.equal(trace.tigerPrimaryCalls.length, 0);
   assertExhausted();
 });
 

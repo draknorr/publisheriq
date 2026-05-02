@@ -388,14 +388,14 @@
     "family": "franchise_lookup",
     "primaryPersona": "Developer Studio Lead or Product Lead",
     "prompt": "Find games in the same series as Dark Souls",
-    "expectedBehavior": "unsupported",
+    "expectedBehavior": "clarification",
     "expectedRoutes": ["primary_success"],
-    "expectedContracts": [],
+    "expectedContracts": ["resolveEntities"],
     "mustAvoidBackends": ["legacy", "cube", "supabase", "qdrant"],
-    "factualAnchors": ["couldn't route"],
+    "factualAnchors": ["Dark Souls"],
     "antiAnchors": ["Legacy fallback", "Qdrant"],
     "latencyBudgetMs": 25000,
-    "notes": "same_franchise_only is intentionally unsupported in Tiger semantic search right now."
+    "notes": "Ambiguous same-series prompts should stay Tiger-owned and ask for the exact source title."
   },
   {
     "id": "TC-P2-02",
@@ -403,14 +403,14 @@
     "family": "game_similarity",
     "primaryPersona": "Developer Studio Lead or Product Lead",
     "prompt": "Games like Hades that are breaking out this week",
-    "expectedBehavior": "unsupported",
+    "expectedBehavior": "no_results",
     "expectedRoutes": ["primary_success"],
-    "expectedContracts": [],
+    "expectedContracts": ["semanticSearch", "discoverMomentum"],
     "mustAvoidBackends": ["legacy", "cube", "supabase", "qdrant"],
-    "factualAnchors": ["couldn't route"],
+    "factualAnchors": ["Hades"],
     "antiAnchors": ["Legacy fallback", "Qdrant"],
     "latencyBudgetMs": 25000,
-    "notes": "Mixed semantic-plus-momentum prompts should fail cleanly instead of misrouting."
+    "notes": "Mixed semantic-plus-momentum prompts should stay Tiger-owned and return a grounded no-result when the filtered set is empty."
   },
   {
     "id": "TC-P2-03",
@@ -418,13 +418,13 @@
     "family": "game_similarity",
     "primaryPersona": "Developer Studio Lead or Product Lead",
     "prompt": "Steam Deck games similar to Hades II from the same franchise",
-    "expectedBehavior": "unsupported",
+    "expectedBehavior": "success",
     "expectedRoutes": ["primary_success"],
-    "expectedContracts": [],
+    "expectedContracts": ["resolveEntities", "getRelatedEntities"],
     "mustAvoidBackends": ["legacy", "cube", "supabase", "qdrant"],
-    "factualAnchors": ["couldn't route"],
+    "factualAnchors": ["Hades"],
     "antiAnchors": ["Legacy fallback", "Qdrant"],
     "latencyBudgetMs": 25000,
-    "notes": "Unsupported compound semantic constraints should remain Tiger-owned and explicit."
+    "notes": "Same-franchise lookups are now supported by Tiger relations and should not be treated as unsupported semantic search."
   }
 ]

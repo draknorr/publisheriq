@@ -1780,109 +1780,115 @@ export async function handleChatStreamRequest(
           : { durationMs: 0, interpretation: null };
         totalLlmMs += tigerPromptInterpretation.durationMs;
 
-        const tigerPrimaryEvaluation = await deps.runTigerPrimaryEvaluation({
-          interpretation: tigerPromptInterpretation.interpretation,
-          isEvalRequest,
-          prompt: lastUserPrompt,
-          sessionContext: requestSessionContext,
-          userId,
-        });
-        const tigerPrimaryInfo = tigerPrimaryEvaluation.info;
-        totalToolsMs += sumTigerAttemptTimingMs(tigerPrimaryInfo.attempts);
-        tigerPrimaryResult = tigerPrimaryInfo;
-        const normalizedTigerSelectionState = normalizeTigerSelectionState(
-          tigerPrimaryEvaluation.sessionState?.selectionState
+        const prePrimaryContinuationResolution = resolveResultSetContinuation(
+          lastUserPrompt,
+          requestSessionContext
         );
-        const normalizedTigerLastAnswer = normalizeTigerLastAnswer({
-          lastAnswer: tigerPrimaryEvaluation.sessionState?.lastAnswer ?? null,
-          selectionState: normalizedTigerSelectionState,
-        });
-        const tigerRenderData = tigerPrimaryEvaluation.contractResult
-          ? buildTigerChatRenderData({
-              contractName: tigerPrimaryEvaluation.contractResult.contractName,
-              response: tigerPrimaryEvaluation.contractResult.response,
+
+        if (!prePrimaryContinuationResolution) {
+          const tigerPrimaryEvaluation = await deps.runTigerPrimaryEvaluation({
+            interpretation: tigerPromptInterpretation.interpretation,
+            isEvalRequest,
+            prompt: lastUserPrompt,
+            sessionContext: requestSessionContext,
+            userId,
+          });
+          const tigerPrimaryInfo = tigerPrimaryEvaluation.info;
+          totalToolsMs += sumTigerAttemptTimingMs(tigerPrimaryInfo.attempts);
+          tigerPrimaryResult = tigerPrimaryInfo;
+          const normalizedTigerSelectionState = normalizeTigerSelectionState(
+            tigerPrimaryEvaluation.sessionState?.selectionState
+          );
+          const normalizedTigerLastAnswer = normalizeTigerLastAnswer({
+            lastAnswer: tigerPrimaryEvaluation.sessionState?.lastAnswer ?? null,
+            selectionState: normalizedTigerSelectionState,
+          });
+          const tigerRenderData = tigerPrimaryEvaluation.contractResult
+            ? buildTigerChatRenderData({
+                contractName: tigerPrimaryEvaluation.contractResult.contractName,
+                response: tigerPrimaryEvaluation.contractResult.response,
+              })
+            : buildTigerClarificationRenderData({
+                originalPrompt: lastUserPrompt,
+                selectionState: normalizedTigerSelectionState,
+              });
+          recordExecutionTrace(
+            buildTigerAttemptTraceEntries({
+              attempts: tigerPrimaryInfo.attempts,
+              stage: 'tiger_primary',
             })
-          : buildTigerClarificationRenderData({
-              originalPrompt: lastUserPrompt,
-              selectionState: normalizedTigerSelectionState,
-            });
-        recordExecutionTrace(
-          buildTigerAttemptTraceEntries({
-            attempts: tigerPrimaryInfo.attempts,
-            stage: 'tiger_primary',
-          })
-        );
+          );
 
-        if (tigerPrimaryResult.route === 'primary_success' && tigerPrimaryEvaluation.renderedText) {
-          tigerFollowUpSuggestions = tigerPrimaryEvaluation.followUpSuggestions ?? undefined;
+          if (tigerPrimaryResult.route === 'primary_success' && tigerPrimaryEvaluation.renderedText) {
+            tigerFollowUpSuggestions = tigerPrimaryEvaluation.followUpSuggestions ?? undefined;
 
-          if (
-            tigerPrimaryEvaluation.contractResult &&
-            isRecord(tigerPrimaryEvaluation.contractResult.response)
-          ) {
-            const contractResult = tigerPrimaryEvaluation.contractResult;
-            const resultSet =
-              contractResult.contractName === 'discoverMomentum'
-                ? buildTigerPrimaryResultSet({
-                    family: 'momentum',
-                    result: contractResult.response as Record<string, unknown>,
-                    sourceArgs: contractResult.request,
-                    sourceContract: 'discoverMomentum',
-                    sourceTool: 'screen_games',
-                  })
-                : contractResult.contractName === 'rankEntities'
-                  ? null
-                : contractResult.contractName === 'searchCatalog'
-                ? buildTigerPrimaryResultSet({
-                    family: 'discovery',
-                    result: contractResult.response as Record<string, unknown>,
-                    sourceArgs: contractResult.request,
-                    sourceContract: 'searchCatalog',
-                  })
-                : contractResult.contractName === 'semanticSearch'
+            if (
+              tigerPrimaryEvaluation.contractResult &&
+              isRecord(tigerPrimaryEvaluation.contractResult.response)
+            ) {
+              const contractResult = tigerPrimaryEvaluation.contractResult;
+              const resultSet =
+                contractResult.contractName === 'discoverMomentum'
                   ? buildTigerPrimaryResultSet({
-                      family:
-                        contractResult.request.mode === 'concept'
-                          ? 'concept'
-                          : contractResult.request.entityKind === 'game'
-                            ? 'similarity'
-                            : 'company_similarity',
+                      family: 'momentum',
                       result: contractResult.response as Record<string, unknown>,
                       sourceArgs: contractResult.request,
-                      sourceContract: 'semanticSearch',
+                      sourceContract: 'discoverMomentum',
+                      sourceTool: 'screen_games',
                     })
-                  : null;
+                  : contractResult.contractName === 'rankEntities'
+                    ? null
+                  : contractResult.contractName === 'searchCatalog'
+                  ? buildTigerPrimaryResultSet({
+                      family: 'discovery',
+                      result: contractResult.response as Record<string, unknown>,
+                      sourceArgs: contractResult.request,
+                      sourceContract: 'searchCatalog',
+                    })
+                  : contractResult.contractName === 'semanticSearch'
+                    ? buildTigerPrimaryResultSet({
+                        family:
+                          contractResult.request.mode === 'concept'
+                            ? 'concept'
+                            : contractResult.request.entityKind === 'game'
+                              ? 'similarity'
+                              : 'company_similarity',
+                        result: contractResult.response as Record<string, unknown>,
+                        sourceArgs: contractResult.request,
+                        sourceContract: 'semanticSearch',
+                      })
+                    : null;
 
-            const syntheticToolCall =
-              contractResult.contractName === 'traceMetricHistory'
-              || contractResult.contractName === 'getYoutubeGameCoverage'
-              || contractResult.contractName === 'queryMonthlyPlaytime'
-                ? null
-                : buildTigerSyntheticToolCall({
-                    contractName: contractResult.contractName,
-                    request: contractResult.request,
-                    response: contractResult.response as Record<string, unknown>,
-                    resultSet,
-                  });
+              const syntheticToolCall =
+                contractResult.contractName === 'traceMetricHistory'
+                || contractResult.contractName === 'getYoutubeGameCoverage'
+                || contractResult.contractName === 'queryMonthlyPlaytime'
+                  ? null
+                  : buildTigerSyntheticToolCall({
+                      contractName: contractResult.contractName,
+                      request: contractResult.request,
+                      response: contractResult.response as Record<string, unknown>,
+                      resultSet,
+                    });
 
-            if (syntheticToolCall) {
-              updatedSessionContext = buildSessionContextFromTurn({
-                previousContext: requestSessionContext,
-                executedToolCalls: [syntheticToolCall],
-                terminalContract: null,
+              if (syntheticToolCall) {
+                updatedSessionContext = buildSessionContextFromTurn({
+                  previousContext: requestSessionContext,
+                  executedToolCalls: [syntheticToolCall],
+                  terminalContract: null,
+                });
+              }
+            }
+
+            tigerRequestState = tigerPrimaryEvaluation.sessionState?.requestState ?? null;
+            if (tigerPrimaryEvaluation.sessionState) {
+              updatedSessionContext = applyTigerPrimarySessionState({
+                baseContext: updatedSessionContext,
+                lastAnswer: normalizedTigerLastAnswer,
+                requestState: tigerPrimaryEvaluation.sessionState.requestState,
+                selectionState: normalizedTigerSelectionState,
               });
             }
-          }
-
-          tigerRequestState = tigerPrimaryEvaluation.sessionState?.requestState ?? null;
-          if (tigerPrimaryEvaluation.sessionState) {
-            updatedSessionContext = applyTigerPrimarySessionState({
-              baseContext: updatedSessionContext,
-              lastAnswer: normalizedTigerLastAnswer,
-              requestState: tigerPrimaryEvaluation.sessionState.requestState,
-              selectionState: normalizedTigerSelectionState,
-            });
-          }
 
           let primaryText = tigerPrimaryEvaluation.renderedText;
           const primaryAnswerBrief = tigerPrimaryEvaluation.answerBrief;
@@ -1973,6 +1979,7 @@ export async function handleChatStreamRequest(
           emitMessageEndEvent(endEvent);
           return;
         }
+        }
 
         const provider = deps.createProvider();
 
@@ -1987,7 +1994,7 @@ export async function handleChatStreamRequest(
         // Streaming /chat is the canonical production runtime. Keep one
         // structured tool surface here so change-intel behavior does not
         // silently disappear behind legacy SQL-mode environment toggles.
-        const systemPrompt = buildSystemPrompt(sessionContext);
+        const systemPrompt = buildSystemPrompt(requestSessionContext);
         const tools: Tool[] = CUBE_TOOLS;
 
         let messages: Message[] = [{ role: 'system', content: systemPrompt }, ...body.messages];
@@ -1997,7 +2004,7 @@ export async function handleChatStreamRequest(
         let lastCompanyState: CompanyAnswerState | null = null;
         const shouldBufferCompanyResponse = Boolean(classifyCompanyIntent(lastUserPrompt));
         const phase1State = chatPhase1QualityEnabled
-          ? createPhase1GuardrailState(Boolean(sessionContext))
+          ? createPhase1GuardrailState(Boolean(requestSessionContext))
           : null;
         let forceFinalRenderWithoutTools = false;
         let renderMode: 'model' | 'deterministic' = 'model';
@@ -2015,7 +2022,9 @@ export async function handleChatStreamRequest(
             >
           | null = null;
 
-        const continuationResolution = resolveResultSetContinuation(lastUserPrompt, sessionContext);
+        const continuationResolution =
+          prePrimaryContinuationResolution
+          ?? resolveResultSetContinuation(lastUserPrompt, requestSessionContext);
 
         if (continuationResolution) {
           if (continuationResolution.sourceContract) {
@@ -2081,7 +2090,7 @@ export async function handleChatStreamRequest(
                   && isRecord(contractResponse.data.effectiveArgs)
                   && isRecord(contractResponse.data.result)
                   ? buildMomentumRequestStateFromHandler({
-                      momentumPromptFamily: sessionContext?.requestState?.momentumPromptFamily ?? null,
+                      momentumPromptFamily: requestSessionContext?.requestState?.momentumPromptFamily ?? null,
                       request: contractResponse.data.effectiveArgs,
                       response: contractResponse.data.result,
                     })
@@ -2110,11 +2119,11 @@ export async function handleChatStreamRequest(
                   : buildTigerSuccessBrief({
                       fallbackMarkdown: renderTigerPrimaryResult({
                         matchedIntent: continuationMatchedIntent,
-                        momentumPromptFamily: sessionContext?.requestState?.momentumPromptFamily ?? null,
+                        momentumPromptFamily: requestSessionContext?.requestState?.momentumPromptFamily ?? null,
                         response: contractResponse.data.result,
                       }),
                       intent: continuationMatchedIntent,
-                      momentumPromptFamily: sessionContext?.requestState?.momentumPromptFamily ?? null,
+                      momentumPromptFamily: requestSessionContext?.requestState?.momentumPromptFamily ?? null,
                       response: contractResponse.data.result,
                       selectionState: null,
                     });

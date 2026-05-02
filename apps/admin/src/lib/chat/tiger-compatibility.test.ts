@@ -1129,7 +1129,7 @@ test('Tiger primary does not broaden entity-scoped topic news searches to unrela
   assert.equal(searchDocumentsCalls, 1);
   assert.equal(result.info.matchedIntent, 'news_search');
   assert.equal(result.info.route, 'primary_success');
-  assert.match(result.renderedText ?? '', /could not find relevant recent documents/i);
+  assert.match(result.renderedText ?? '', /could not find relevant hades ii documents/i);
 });
 
 test('Tiger primary returns clarification from a low-confidence interpreted intent before guessing', async (t) => {
@@ -2453,15 +2453,51 @@ test('Tiger primary clears stale entity switch hints on unrelated discovery prom
 
     return jsonResponse({
       interpretedFilters: {
+        appids: [],
+        developerIds: [],
+        developerQuery: null,
+        genres: [],
+        includeAppTypes: [],
+        isFree: null,
+        isReleased: null,
+        maxPriceCents: null,
+        minCcu: null,
+        minDiscountPercent: null,
+        minOwners: null,
+        minPriceCents: null,
+        minReviewScore: null,
+        minReviews: null,
+        onSale: null,
+        platforms: [],
+        publisherIds: [],
+        publisherQuery: null,
+        query: null,
+        releaseYear: null,
+        sortBy: 'reviews',
+        sortDirection: 'desc',
         tags: ['Indie'],
       },
       items: [
         {
           appid: 413150,
+          appType: 'game',
+          ccuPeak: 875343,
+          developers: ['ConcernedApe'],
+          developerIds: [123],
+          discountPercent: 0,
+          isFree: false,
+          isReleased: true,
           name: 'Stardew Valley',
+          ownersMidpoint: 15000000,
+          parentAppid: null,
           platforms: ['windows', 'macos', 'linux'],
+          priceCents: 1499,
+          publishers: ['ConcernedApe'],
+          publisherIds: [123],
+          releaseDate: '2016-02-26',
+          releaseState: 'released',
           releaseYear: 2016,
-          reviewScore: 9,
+          reviewScore: 98,
           totalReviews: 990611,
         },
       ],
@@ -3616,38 +3652,22 @@ for (const prompt of [
     assert.match(result.renderedText ?? '', /Total Reviews/);
     assert.deepEqual(resolutionBodiesByQuery.get('FromSoftware'), [
       {
-        entityKinds: ['game'],
-        includeMetrics: false,
-        limit: 25,
-        query: 'FromSoftware',
-        resolutionMode: 'chat_strict',
-        resolutionPreference: null,
-      },
-      {
-        entityKinds: ['game', 'publisher', 'developer'],
+        entityKinds: ['publisher', 'developer', 'game'],
         includeMetrics: false,
         limit: 6,
         query: 'FromSoftware',
-        resolutionMode: 'default',
-        resolutionPreference: null,
+        resolutionMode: 'autocomplete',
+        resolutionPreference: 'company',
       },
     ]);
     assert.deepEqual(resolutionBodiesByQuery.get('Team Cherry'), [
       {
-        entityKinds: ['game'],
-        includeMetrics: false,
-        limit: 25,
-        query: 'Team Cherry',
-        resolutionMode: 'chat_strict',
-        resolutionPreference: null,
-      },
-      {
-        entityKinds: ['game', 'publisher', 'developer'],
+        entityKinds: ['publisher', 'developer', 'game'],
         includeMetrics: false,
         limit: 6,
         query: 'Team Cherry',
-        resolutionMode: 'default',
-        resolutionPreference: null,
+        resolutionMode: 'autocomplete',
+        resolutionPreference: 'company',
       },
     ]);
   });
@@ -4215,11 +4235,17 @@ test('Tiger primary prefers company candidates over fuzzy game matches for organ
   setScopedEnv(t, 'CHAT_TIGER_PRIMARY_MODE', 'all');
   setScopedEnv(t, 'QUERY_API_BASE_URL', 'http://query-api.test');
 
+  let resolveCalls = 0;
   setScopedFetch(t, async (url, init) => {
     assert.ok(init?.body);
     const body = JSON.parse(String(init.body));
 
     if (url.pathname === '/v1/contracts/resolve-entities') {
+      resolveCalls += 1;
+      assert.equal(body.resolutionMode, 'autocomplete');
+      assert.equal(body.resolutionPreference, 'company');
+      assert.deepEqual(body.entityKinds, ['publisher', 'developer', 'game']);
+
       if (body.query === 'FromSoftwere') {
         return jsonResponse({
           ambiguity: {
@@ -4369,6 +4395,7 @@ test('Tiger primary prefers company candidates over fuzzy game matches for organ
   assert.equal(result.contractResult?.contractName, 'compareEntities');
   assert.match(result.renderedText ?? '', /FromSoftware/);
   assert.match(result.renderedText ?? '', /Rockstar Games/);
+  assert.equal(resolveCalls, 2);
 });
 
 test('Tiger primary reuses the prior family for "what about" single-entity follow-ups', async (t) => {
