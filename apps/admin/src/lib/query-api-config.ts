@@ -1,4 +1,7 @@
 const LOCAL_QUERY_API_BASE_URL = 'http://127.0.0.1:4318';
+const LEGACY_QUERY_API_BASE_URL = 'https://publisheriq-production.up.railway.app';
+const ACTIVE_PRODUCTION_QUERY_API_BASE_URL =
+  'https://publisheriq-query-api-prod-production.up.railway.app';
 const DEPLOYED_VERCEL_ENVS = new Set(['preview', 'production']);
 
 export interface ResolvedQueryApiBaseUrl {
@@ -12,7 +15,10 @@ export function resolveQueryApiBaseUrl(
   const explicitBaseUrl = env.QUERY_API_BASE_URL?.trim();
   if (explicitBaseUrl) {
     return {
-      baseUrl: explicitBaseUrl,
+      baseUrl:
+        explicitBaseUrl === LEGACY_QUERY_API_BASE_URL
+          ? ACTIVE_PRODUCTION_QUERY_API_BASE_URL
+          : explicitBaseUrl,
       reason: null,
     };
   }
