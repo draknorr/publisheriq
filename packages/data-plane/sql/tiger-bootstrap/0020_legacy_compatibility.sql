@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS legacy.apps (
     name text NOT NULL,
     type text DEFAULT 'game'::text,
     is_free boolean DEFAULT false,
+    has_purchase_packages boolean,
     release_date date,
     release_date_raw text,
     store_asset_mtime date,

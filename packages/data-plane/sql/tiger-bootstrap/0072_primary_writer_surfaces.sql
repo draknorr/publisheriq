@@ -1106,7 +1106,8 @@ CREATE OR REPLACE FUNCTION legacy.upsert_storefront_app(
     p_developers text[],
     p_publishers text[],
     p_dlc_appids integer[] DEFAULT ARRAY[]::integer[],
-    p_parent_appid integer DEFAULT NULL
+    p_parent_appid integer DEFAULT NULL,
+    p_has_purchase_packages boolean DEFAULT NULL
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -1119,14 +1120,14 @@ DECLARE
     v_publisher_name text;
 BEGIN
     INSERT INTO legacy.apps (
-      appid, name, type, is_free, is_delisted, release_date,
+      appid, name, type, is_free, is_delisted, has_purchase_packages, release_date,
       release_date_raw, has_workshop, current_price_cents,
       current_discount_percent, is_released, parent_appid,
       has_developer_info, updated_at
     )
     VALUES (
       p_appid, p_name, COALESCE(p_type, 'game'), COALESCE(p_is_free, false),
-      COALESCE(p_is_delisted, false), p_release_date, p_release_date_raw,
+      COALESCE(p_is_delisted, false), p_has_purchase_packages, p_release_date, p_release_date_raw,
       COALESCE(p_has_workshop, false), p_current_price_cents,
       COALESCE(p_current_discount_percent, 0), COALESCE(p_is_released, true),
       p_parent_appid,
@@ -1140,6 +1141,7 @@ BEGIN
       type = EXCLUDED.type,
       is_free = EXCLUDED.is_free,
       is_delisted = EXCLUDED.is_delisted,
+      has_purchase_packages = EXCLUDED.has_purchase_packages,
       release_date = EXCLUDED.release_date,
       release_date_raw = EXCLUDED.release_date_raw,
       has_workshop = EXCLUDED.has_workshop,
