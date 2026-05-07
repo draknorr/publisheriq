@@ -24,7 +24,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { Badge, Button, Card, SearchInput, UnderlineTabs } from '@/components/ui';
+import { Badge, Button, Card, Popover, SearchInput, UnderlineTabs } from '@/components/ui';
 import { useAuthReady } from '@/hooks/useAuthReady';
 import {
   downloadCsv,
@@ -77,7 +77,7 @@ interface DetailTarget {
 }
 
 const SORT_OPTIONS: Array<{ value: UnreleasedSortField; label: string; defaultOrder: SortOrder }> = [
-  { value: 'opportunity_score', label: 'Opportunity', defaultOrder: 'desc' },
+  { value: 'opportunity_score', label: 'Opportunity Score', defaultOrder: 'desc' },
   { value: 'latest_added_at', label: 'Latest Added', defaultOrder: 'desc' },
   { value: 'release_date', label: 'Release Date', defaultOrder: 'asc' },
   { value: 'latest_change_at', label: 'Recent Updates', defaultOrder: 'desc' },
@@ -115,6 +115,9 @@ const SIGNAL_OPTIONS = [
   { id: 'platform', label: 'Platform' },
   { id: 'build', label: 'Build' },
 ];
+
+const OPPORTUNITY_SCORE_HELP =
+  '0-100 opportunity signal, not a quality score. It combines release timing, recent Steam changes/news, store and media activity, page completeness, and publisher fit. Higher means a more active upcoming game that may be worth watching or outreach.';
 
 const PRESETS: Array<{
   id: string;
@@ -435,6 +438,35 @@ function FilterToggle({
   );
 }
 
+function OpportunityScoreTooltip() {
+  return (
+    <Popover
+      trigger={
+        <span
+          className="inline-flex text-text-muted transition-colors hover:text-text-secondary"
+          aria-label="How Opportunity Score is calculated"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </span>
+      }
+      content={
+        <div className="max-w-sm space-y-2 p-3 text-body-sm text-text-secondary">
+          <p>{OPPORTUNITY_SCORE_HELP}</p>
+          <div className="grid gap-1 text-caption text-text-muted">
+            <div>Release timing: up to 20</div>
+            <div>Recent changes/news: up to 20</div>
+            <div>Store/media activity: up to 20</div>
+            <div>Page completeness: up to 20</div>
+            <div>Publisher opportunity: up to 20</div>
+          </div>
+        </div>
+      }
+      position="top"
+      align="center"
+    />
+  );
+}
+
 function MetricStrip({ stats }: { stats: UnreleasedStats }) {
   const items = [
     { label: 'Tracked', value: formatNumber(stats.total_games), tone: 'text-text-primary' },
@@ -442,7 +474,7 @@ function MetricStrip({ stats }: { stats: UnreleasedStats }) {
     { label: 'Undated', value: formatNumber(stats.undated_count), tone: 'text-accent-blue' },
     { label: 'Active 30d', value: formatNumber(stats.active_30d_count), tone: 'text-accent-primary' },
     { label: 'Self Published', value: formatNumber(stats.self_published_count), tone: 'text-accent-purple' },
-    { label: 'Avg score', value: stats.avg_opportunity_score === null ? '-' : Math.round(stats.avg_opportunity_score).toString(), tone: 'text-accent-cyan' },
+    { label: 'Avg Opp. Score', value: stats.avg_opportunity_score === null ? '-' : Math.round(stats.avg_opportunity_score).toString(), tone: 'text-accent-cyan', help: true },
   ];
 
   return (
@@ -453,8 +485,9 @@ function MetricStrip({ stats }: { stats: UnreleasedStats }) {
           className="border border-border-subtle bg-surface-raised px-3 py-2"
         >
           <div className={`text-heading-md leading-none ${item.tone}`}>{item.value}</div>
-          <div className="mt-1 text-caption uppercase tracking-[0.04em] text-text-tertiary">
+          <div className="mt-1 flex items-center gap-1 text-caption uppercase tracking-[0.04em] text-text-tertiary">
             {item.label}
+            {item.help && <OpportunityScoreTooltip />}
           </div>
         </div>
       ))}
@@ -863,7 +896,7 @@ function DetailInspector({
               </h2>
               {game && (
                 <p className="mt-1 text-body-sm text-text-secondary">
-                  {formatDate(game.release_date)} • {formatReleaseLead(game)} • Score {game.opportunity_score}
+                  {formatDate(game.release_date)} • {formatReleaseLead(game)} • Opp. Score {game.opportunity_score}
                 </p>
               )}
             </div>
@@ -933,7 +966,10 @@ function DetailInspector({
               )}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="border border-border-subtle bg-surface px-3 py-2">
-                  <div className="text-caption text-text-tertiary">Score</div>
+                  <div className="flex items-center gap-1 text-caption text-text-tertiary">
+                    Opp. Score
+                    <OpportunityScoreTooltip />
+                  </div>
                   <div className="text-heading-md text-text-primary">{game.opportunity_score}</div>
                 </div>
                 <div className="border border-border-subtle bg-surface px-3 py-2">
@@ -1233,7 +1269,10 @@ function FiltersPanel({
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-body-sm font-medium text-text-secondary">Min opportunity</label>
+          <label className="mb-1.5 flex items-center gap-1 text-body-sm font-medium text-text-secondary">
+            Min Opportunity Score
+            <OpportunityScoreTooltip />
+          </label>
           <input
             type="number"
             min={0}
@@ -1381,17 +1420,20 @@ function GamesTable({
 }) {
   const allSelected = games.length > 0 && games.every((game) => selectedIds.has(game.appid));
   const selectedSome = games.some((game) => selectedIds.has(game.appid));
-  const header = (field: UnreleasedSortField, label: string, className = '') => {
+  const header = (field: UnreleasedSortField, label: string, className = '', showHelp = false) => {
     const active = sort === field;
     return (
       <th className={`px-3 py-2 text-left text-caption font-medium text-text-tertiary ${className}`}>
-        <button
-          onClick={() => onSort(field)}
-          className={`inline-flex items-center gap-1 hover:text-text-primary ${active ? 'text-accent-primary' : ''}`}
-        >
-          {label}
-          {active ? (order === 'asc' ? '↑' : '↓') : <ArrowUpDown className="h-3 w-3" />}
-        </button>
+        <div className="inline-flex items-center gap-1">
+          <button
+            onClick={() => onSort(field)}
+            className={`inline-flex items-center gap-1 hover:text-text-primary ${active ? 'text-accent-primary' : ''}`}
+          >
+            {label}
+            {active ? (order === 'asc' ? '↑' : '↓') : <ArrowUpDown className="h-3 w-3" />}
+          </button>
+          {showHelp && <OpportunityScoreTooltip />}
+        </div>
       </th>
     );
   };
@@ -1416,7 +1458,7 @@ function GamesTable({
                   {!allSelected && selectedSome && <span className="h-0.5 w-2 bg-white" />}
                 </button>
               </th>
-              {header('opportunity_score', 'Score', 'w-20')}
+              {header('opportunity_score', 'Opp. Score', 'w-24', true)}
               {header('name', 'Game', 'min-w-[270px]')}
               {header('release_date', 'Release', 'min-w-[150px]')}
               {header('latest_added_at', 'Added', 'min-w-[110px]')}
