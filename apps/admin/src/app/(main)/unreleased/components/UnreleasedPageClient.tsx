@@ -596,27 +596,87 @@ function TaxonomyPills({ labels, limit = 3 }: { labels: string[]; limit?: number
   );
 }
 
-function getMediaUrl(value: unknown): string | null {
+interface MediaAsset {
+  url: string;
+  previewUrl: string;
+  videoUrl: string | null;
+  title: string | null;
+}
+
+function firstString(values: unknown[]): string | null {
+  return values.find((item): item is string => typeof item === 'string' && item.length > 0) ?? null;
+}
+
+function getMediaAsset(value: unknown): MediaAsset | null {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
-  const candidates = [
+  const videoUrl = firstString([record.webmUrl, record.mp4Url, record.webm_max, record.mp4_max]);
+  const imageUrl = firstString([
     record.fullUrl,
-    record.thumbnailUrl,
-    record.webmUrl,
-    record.mp4Url,
     record.path_full,
+    record.thumbnailUrl,
     record.path_thumbnail,
     record.thumbnail,
     record.url,
-    record.webm_max,
-    record.mp4_max,
-  ];
-  return candidates.find((item): item is string => typeof item === 'string' && item.length > 0) ?? null;
+  ]);
+  const url = videoUrl ?? imageUrl;
+  const previewUrl = imageUrl ?? videoUrl;
+  if (!url || !previewUrl) return null;
+
+  return {
+    url,
+    previewUrl,
+    videoUrl,
+    title: typeof record.name === 'string' ? record.name : null,
+  };
 }
 
 function getHeroAssetUrl(assets: Record<string, unknown>): string | null {
   const candidates = [assets.header, assets.capsule, assets.background];
   return candidates.find((item): item is string => typeof item === 'string' && item.length > 0) ?? null;
+}
+
+function MediaImageFrame({
+  src,
+  href,
+  alt = '',
+  variant = 'standard',
+  overlay,
+}: {
+  src: string;
+  href?: string;
+  alt?: string;
+  variant?: 'compactHero' | 'hero' | 'standard';
+  overlay?: ReactNode;
+}) {
+  const aspectClass =
+    variant === 'compactHero'
+      ? 'aspect-[460/215]'
+      : variant === 'hero'
+        ? 'aspect-video'
+        : 'aspect-video';
+  const frameClass = `group relative flex w-full items-center justify-center overflow-hidden rounded-lg border border-border-subtle bg-surface-elevated ${aspectClass}`;
+  const image = (
+    <>
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        className="h-full w-full object-contain transition-opacity group-hover:opacity-95"
+      />
+      {overlay}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={frameClass}>
+        {image}
+      </a>
+    );
+  }
+
+  return <div className={frameClass}>{image}</div>;
 }
 
 function formatAbsoluteTime(timestamp: string | null | undefined): string {
@@ -861,8 +921,8 @@ function DetailInspector({
   if (!appid) return null;
 
   const game = detail?.game;
-  const screenshotUrls = detail?.screenshots.map(getMediaUrl).filter((item): item is string => Boolean(item)).slice(0, 6) ?? [];
-  const trailerUrls = detail?.trailers.map(getMediaUrl).filter((item): item is string => Boolean(item)).slice(0, 3) ?? [];
+  const screenshotAssets = detail?.screenshots.map(getMediaAsset).filter((item): item is MediaAsset => Boolean(item)).slice(0, 6) ?? [];
+  const trailerAssets = detail?.trailers.map(getMediaAsset).filter((item): item is MediaAsset => Boolean(item)).slice(0, 3) ?? [];
   const heroUrl = detail ? getHeroAssetUrl(detail.hero_assets) : null;
   const watched = game ? pinnedIds.has(game.appid) : false;
   const watching = game ? pinningIds.has(game.appid) : false;
@@ -958,10 +1018,10 @@ function DetailInspector({
           {!loading && !error && detail && game && activeTab === 'overview' && (
             <div className="space-y-5">
               {heroUrl && (
-                <img
+                <MediaImageFrame
                   src={heroUrl}
-                  alt=""
-                  className="h-32 w-full rounded-lg border border-border-subtle object-cover"
+                  href={heroUrl}
+                  variant="compactHero"
                 />
               )}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1050,13 +1110,13 @@ function DetailInspector({
           {!loading && !error && detail && game && activeTab === 'media' && (
             <div className="space-y-5">
               {heroUrl && (
-                <img
+                <MediaImageFrame
                   src={heroUrl}
-                  alt=""
-                  className="h-40 w-full rounded-lg border border-border-subtle object-cover"
+                  href={heroUrl}
+                  variant="hero"
                 />
               )}
-              {screenshotUrls.length === 0 && trailerUrls.length === 0 ? (
+              {screenshotAssets.length === 0 && trailerAssets.length === 0 ? (
                 <Card padding="md" className="rounded-lg">
                   <div className="flex items-start gap-3">
                     <Info className="mt-0.5 h-5 w-5 text-text-muted" />
@@ -1076,14 +1136,12 @@ function DetailInspector({
                       <Badge variant="default" size="sm">{game.screenshot_count}</Badge>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {screenshotUrls.map((url) => (
-                        <a key={url} href={url} target="_blank" rel="noopener noreferrer">
-                          <img
-                            src={url}
-                            alt=""
-                            className="aspect-video w-full rounded-lg border border-border-subtle object-cover transition-opacity hover:opacity-90"
-                          />
-                        </a>
+                      {screenshotAssets.map((asset) => (
+                        <MediaImageFrame
+                          key={asset.url}
+                          src={asset.previewUrl}
+                          href={asset.url}
+                        />
                       ))}
                     </div>
                   </section>
@@ -1093,23 +1151,39 @@ function DetailInspector({
                       <h3 className="text-subheading text-text-primary">Trailers</h3>
                       <Badge variant="default" size="sm">{game.movie_count}</Badge>
                     </div>
-                    {trailerUrls.length === 0 ? (
+                    {trailerAssets.length === 0 ? (
                       <Card padding="md" className="rounded-lg text-body-sm text-text-secondary">
                         Trailer count exists, but no playable URL was captured in the latest media payload.
                       </Card>
                     ) : (
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {trailerUrls.map((url) => (
-                          <a
-                            key={url}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex aspect-video items-center justify-center rounded-lg border border-border-subtle bg-surface text-text-secondary hover:border-border-muted hover:bg-surface-overlay hover:text-accent-primary"
-                          >
-                            <Play className="mr-2 h-4 w-4" />
-                            Open trailer
-                          </a>
+                        {trailerAssets.map((asset) => (
+                          asset.videoUrl ? (
+                            <div
+                              key={asset.url}
+                              className="overflow-hidden rounded-lg border border-border-subtle bg-surface-elevated"
+                            >
+                              <video
+                                src={asset.videoUrl}
+                                poster={asset.previewUrl !== asset.videoUrl ? asset.previewUrl : undefined}
+                                controls
+                                preload="metadata"
+                                className="aspect-video w-full object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <MediaImageFrame
+                              key={asset.url}
+                              src={asset.previewUrl}
+                              href={asset.url}
+                              overlay={
+                                <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded border border-border-subtle bg-surface-raised px-2 py-1 text-caption text-text-secondary">
+                                  <Play className="h-3.5 w-3.5" />
+                                  Trailer thumbnail
+                                </span>
+                              }
+                            />
+                          )
                         ))}
                       </div>
                     )}
