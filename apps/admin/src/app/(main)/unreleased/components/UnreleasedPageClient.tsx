@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowUpDown,
-  CalendarClock,
   Check,
   ChevronDown,
   Clock3,
@@ -2130,21 +2129,13 @@ export function UnreleasedPageClient({
 
   const activeCount = activeFilterCount(filters);
   const currentSort = SORT_OPTIONS.find((item) => item.value === filters.sort);
-  const projectionAge = stats.projection_refreshed_at ? formatRelative(stats.projection_refreshed_at) : 'unknown';
 
   return (
     <div className="space-y-5">
       <div className="border-b border-border-subtle pb-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <div className="mb-2 flex items-center gap-2 text-caption uppercase tracking-[0.08em] text-text-tertiary">
-              <CalendarClock className="h-4 w-4" />
-              Launch pipeline
-            </div>
             <h1 className="text-display text-text-primary">Unreleased Games</h1>
-            <p className="mt-1 max-w-3xl text-body text-text-secondary">
-              Upcoming Steam catalog, release signals, store changes, news, and publisher opportunity tracking.
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => void fetchData(filters, true)} disabled={isFetching}>
@@ -2266,14 +2257,10 @@ export function UnreleasedPageClient({
         </Card>
       )}
 
-      <div className="flex items-center justify-between gap-3 text-body-sm text-text-secondary">
+      <div className="flex items-center gap-3 text-body-sm text-text-secondary">
         <div>
           Showing {formatNumber(games.length)} visible rows sorted by {currentSort?.label ?? filters.sort}.
           {selectedGames.length > 0 && <span className="ml-2 text-accent-primary">{selectedGames.length} selected</span>}
-        </div>
-        <div className="flex items-center gap-2 text-caption text-text-tertiary">
-          <Newspaper className="h-3.5 w-3.5" />
-          Projection refreshed {projectionAge}
         </div>
       </div>
 
