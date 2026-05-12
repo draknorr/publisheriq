@@ -57,7 +57,7 @@ pnpm --filter @publisheriq/ingestion app-change-hints
 ### Drain Only News Jobs
 
 ```bash
-QUEUE_SOURCES=news MAX_IDLE_POLLS=10 pnpm --filter @publisheriq/ingestion change-intel-worker
+QUEUE_SOURCES=news NEWS_CATCHUP_SEED_LIMIT=0 MAX_IDLE_POLLS=10 pnpm --filter @publisheriq/ingestion change-intel-worker
 ```
 
 ### Drain Only Storefront Jobs
@@ -77,7 +77,7 @@ QUEUE_SOURCES=projection_refresh MAX_IDLE_POLLS=10 pnpm --filter @publisheriq/in
 ```bash
 CLAIM_LIMIT=25
 POLL_INTERVAL_MS=5000
-NEWS_CATCHUP_SEED_LIMIT=10
+NEWS_CATCHUP_SEED_LIMIT=0
 CLAIM_STALE_AFTER_MS=1800000
 STALE_CLAIM_SWEEP_INTERVAL_MS=60000
 ```

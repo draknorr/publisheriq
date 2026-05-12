@@ -92,11 +92,14 @@ config at `/packages/ingestion/railway.json`.
 CLAIM_LIMIT=25
 POLL_INTERVAL_MS=5000
 QUEUE_SOURCES=storefront,news,projection_refresh,hero_asset
-NEWS_CATCHUP_SEED_LIMIT=10
+NEWS_CATCHUP_SEED_LIMIT=0
 MAX_IDLE_POLLS=0
 CLAIM_STALE_AFTER_MS=1800000
 STALE_CLAIM_SWEEP_INTERVAL_MS=60000
 ```
+
+Keep `NEWS_CATCHUP_SEED_LIMIT=0` for continuously scheduled hot-refresh workers.
+Set a positive value only for intentional catch-up runs.
 
 ## Other Useful Environment Variables
 

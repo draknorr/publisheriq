@@ -291,7 +291,7 @@ async function main(): Promise<void> {
   const workerId = process.env.WORKER_ID || randomUUID();
   const claimLimit = parseInt(process.env.CLAIM_LIMIT || '25', 10);
   const pollIntervalMs = parseInt(process.env.POLL_INTERVAL_MS || '5000', 10);
-  const catchupSeedLimit = parseInt(process.env.NEWS_CATCHUP_SEED_LIMIT || '10', 10);
+  const catchupSeedLimit = parseInt(process.env.NEWS_CATCHUP_SEED_LIMIT || '0', 10);
   const maxCatchupSeedBatches = Math.max(0, parseInt(process.env.NEWS_CATCHUP_MAX_SEED_BATCHES || '0', 10));
   const maxHotNewsSeedBatches = Math.max(0, parseInt(process.env.HOT_NEWS_MAX_SEED_BATCHES || '0', 10));
   const maxIdlePolls = parseInt(process.env.MAX_IDLE_POLLS || '0', 10);

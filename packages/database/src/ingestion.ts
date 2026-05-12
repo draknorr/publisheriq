@@ -1033,7 +1033,7 @@ export async function listNewsCatchupCandidates(params: {
             )
           )
         ORDER BY
-          CASE WHEN s.last_news_sync IS NULL THEN 0 ELSE 1 END,
+          (s.last_news_sync IS NOT NULL),
           s.last_storefront_sync DESC,
           s.last_news_sync ASC NULLS FIRST,
           s.appid ASC
