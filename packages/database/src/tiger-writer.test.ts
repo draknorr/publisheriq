@@ -178,8 +178,57 @@ test('catalog.markStorefrontInaccessible updates apps and sync_status transactio
     pool.client?.calls.map((call) => call.sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ['BEGIN', 'UPDATE legacy.apps SET', 'INSERT INTO ops.sync_status', 'COMMIT']
   );
+  assert.match(pool.client?.calls[1]?.sql ?? '', /is_delisted = true/);
+  assert.match(pool.client?.calls[1]?.sql ?? '', /has_purchase_packages = NULL/);
   assert.deepEqual(pool.client?.calls[1]?.values, [123, '2026-04-29T00:00:00.000Z']);
   assert.deepEqual(pool.client?.calls[2]?.values, [123, '2026-04-29T00:00:00.000Z']);
+});
+
+test('catalog.upsertStorefrontApp passes demo and purchase-package args to Tiger function', async () => {
+  const pool = new CapturingPool([result()]);
+  const writer = createTigerWriterForPool(pool);
+
+  await writer.catalog.upsertStorefrontApp({
+    p_appid: 4615010,
+    p_name: 'Kibble Cats',
+    p_type: 'game',
+    p_is_free: false,
+    p_is_delisted: false,
+    p_release_date: null,
+    p_release_date_raw: 'Coming soon',
+    p_has_workshop: false,
+    p_current_price_cents: null,
+    p_current_discount_percent: 0,
+    p_is_released: false,
+    p_developers: ['Mokutori'],
+    p_publishers: ['Mokutori'],
+    p_dlc_appids: [],
+    p_parent_appid: null,
+    p_demo_appids: [4707330],
+    p_has_purchase_packages: false,
+  });
+
+  assert.match(pool.calls[0]?.sql ?? '', /\$16::integer\[\]/);
+  assert.match(pool.calls[0]?.sql ?? '', /\$17::boolean/);
+  assert.deepEqual(pool.calls[0]?.values, [
+    4615010,
+    'Kibble Cats',
+    'game',
+    false,
+    false,
+    null,
+    'Coming soon',
+    false,
+    null,
+    0,
+    false,
+    ['Mokutori'],
+    ['Mokutori'],
+    [],
+    null,
+    [4707330],
+    false,
+  ]);
 });
 
 test('reviews.promoteReviewsSyncBatch calls Tiger promotion RPC in bulk', async () => {

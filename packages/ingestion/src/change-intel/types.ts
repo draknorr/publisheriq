@@ -22,6 +22,7 @@ export type AppChangeType =
   | 'publisher_association_changed'
   | 'developer_association_changed'
   | 'dlc_references_changed'
+  | 'demo_references_changed'
   | 'package_references_changed'
   | 'build_id_changed'
   | 'last_content_update_changed'
@@ -92,6 +93,8 @@ export interface NormalizedStorefrontSnapshot {
   };
   controllerSupport: string | null;
   dlcAppids: number[];
+  demoAppids: number[];
+  hasPurchasePackages: boolean;
   packageIds: number[];
   packageGroupSubs: number[];
   heroImages: StorefrontHeroImages;

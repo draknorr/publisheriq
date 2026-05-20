@@ -395,7 +395,9 @@ export interface StorefrontAppUpsertArgs {
   p_current_discount_percent: number;
   p_current_price_cents: number | null;
   p_developers: string[];
+  p_demo_appids?: number[];
   p_dlc_appids?: number[];
+  p_has_purchase_packages?: boolean | null;
   p_has_workshop: boolean;
   p_is_delisted: boolean;
   p_is_free: boolean;
@@ -1405,7 +1407,9 @@ export class TigerCatalogRepository {
           $12::text[],
           $13::text[],
           $14::integer[],
-          $15::integer
+          $15::integer,
+          $16::integer[],
+          $17::boolean
         )
       `,
       [
@@ -1424,6 +1428,8 @@ export class TigerCatalogRepository {
         args.p_publishers,
         args.p_dlc_appids ?? [],
         args.p_parent_appid ?? null,
+        args.p_demo_appids ?? [],
+        args.p_has_purchase_packages ?? null,
       ]
     );
   }
@@ -1437,10 +1443,14 @@ export class TigerCatalogRepository {
         'catalog.markStorefrontInaccessible.apps',
         `
           UPDATE legacy.apps
-          SET catalog_seed_state = 'inaccessible',
+          SET catalog_seed_state = CASE
+                WHEN catalog_seed_state = 'stub' THEN 'inaccessible'
+                ELSE catalog_seed_state
+              END,
+              is_delisted = true,
+              has_purchase_packages = NULL,
               updated_at = $2::timestamptz
           WHERE appid = $1
-            AND catalog_seed_state = 'stub'
         `,
         [appid, observedAt]
       );

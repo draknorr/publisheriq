@@ -16,6 +16,7 @@ const baseSnapshot = normalizeStorefrontSnapshot({
   type: 'game',
   isFree: false,
   isDelisted: false,
+  hasPurchasePackages: true,
   developers: ['Studio'],
   publishers: ['Publisher'],
   releaseDate: '2026-03-01',
@@ -30,6 +31,7 @@ const baseSnapshot = normalizeStorefrontSnapshot({
   metacriticScore: null,
   totalRecommendations: 100,
   dlcAppids: [],
+  demoAppids: [],
   parentAppid: null,
   detailedDescription: 'Detailed copy',
   aboutTheGame: 'About copy',
@@ -61,6 +63,7 @@ test('storefront snapshot diff detects content changes', () => {
     },
     developers: ['Studio', 'Co-Dev'],
     packageIds: [1, 2],
+    demoAppids: [4707330],
   };
 
   const events = diffStorefrontSnapshots(baseSnapshot, changedSnapshot);
@@ -72,6 +75,7 @@ test('storefront snapshot diff detects content changes', () => {
   assert.ok(types.includes('price_change'));
   assert.ok(types.includes('discount_start'));
   assert.ok(types.includes('developer_association_changed'));
+  assert.ok(types.includes('demo_references_changed'));
   assert.ok(types.includes('package_references_changed'));
 });
 

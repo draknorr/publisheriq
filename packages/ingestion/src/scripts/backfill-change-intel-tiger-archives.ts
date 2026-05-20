@@ -151,18 +151,22 @@ function snapshotSummary(snapshot: Record<string, unknown>): Record<string, unkn
   const movies = Array.isArray(snapshot.movies) ? snapshot.movies : [];
   const genres = Array.isArray(snapshot.genres) ? snapshot.genres : [];
   const categories = Array.isArray(snapshot.categories) ? snapshot.categories : [];
+  const demoAppids = Array.isArray(snapshot.demoAppids) ? snapshot.demoAppids : [];
 
   return {
     comingSoon: snapshot.comingSoon ?? null,
     isDelisted: snapshot.isDelisted ?? null,
     isFree: snapshot.isFree ?? null,
+    hasPurchasePackages: snapshot.hasPurchasePackages ?? null,
     name: snapshot.name ?? null,
     price: snapshot.price ?? null,
     releaseDate: snapshot.releaseDate ?? null,
     releaseDateText: snapshot.releaseDateText ?? null,
     type: snapshot.type ?? null,
+    demoAppids,
     counts: {
       categories: categories.length,
+      demoAppids: demoAppids.length,
       genres: genres.length,
       movies: movies.length,
       screenshots: screenshots.length,

@@ -212,6 +212,8 @@ export function normalizeStorefrontSnapshot(details: ParsedStorefrontApp): Norma
     },
     controllerSupport: normalizeText(details.controllerSupport),
     dlcAppids: [...details.dlcAppids].sort((left, right) => left - right),
+    demoAppids: [...details.demoAppids].sort((left, right) => left - right),
+    hasPurchasePackages: details.hasPurchasePackages,
     packageIds: [...details.packageIds].sort((left, right) => left - right),
     packageGroupSubs: [...details.packageGroupSubs].sort((left, right) => left - right),
     heroImages: {
@@ -343,6 +345,13 @@ export function diffStorefrontSnapshots(
     'storefront',
     previousSnapshot.dlcAppids.map(String),
     nextSnapshot.dlcAppids.map(String)
+  );
+  maybePushArrayChange(
+    events,
+    'demo_references_changed',
+    'storefront',
+    (previousSnapshot.demoAppids ?? []).map(String),
+    (nextSnapshot.demoAppids ?? []).map(String)
   );
   maybePushArrayChange(
     events,

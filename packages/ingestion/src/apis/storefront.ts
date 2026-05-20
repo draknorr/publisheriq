@@ -16,7 +16,11 @@ export interface StorefrontAppDetails {
     required_age: number | string;
     is_free: boolean;
     controller_support?: string;
-    dlc?: number[];
+    dlc?: number[] | null;
+    demos?: Array<{
+      appid: number | string;
+      description?: string;
+    }> | null;
     detailed_description?: string;
     about_the_game?: string;
     short_description?: string;
@@ -47,7 +51,7 @@ export interface StorefrontAppDetails {
       initial_formatted: string;
       final_formatted: string;
     };
-    packages?: number[];
+    packages?: number[] | null;
     package_groups?: Array<{
       name: string;
       title: string;
@@ -65,8 +69,8 @@ export interface StorefrontAppDetails {
         can_get_free_license: string;
         is_free_license: boolean;
         price_in_cents_with_discount: number;
-      }>;
-    }>;
+      }> | null;
+    }> | null;
     platforms: {
       windows: boolean;
       mac: boolean;
@@ -121,7 +125,7 @@ export interface StorefrontAppDetails {
       ids: number[];
       notes: string;
     };
-    // For DLC items, fullgame contains the parent game info
+    // For DLC and demo items, fullgame contains the parent game info
     fullgame?: {
       appid: string;
       name: string;
@@ -137,7 +141,8 @@ export interface ParsedStorefrontApp {
   name: string;
   type: string;
   isFree: boolean;
-  isDelisted: boolean; // True when packages is null/empty (can't be purchased)
+  isDelisted: boolean; // True when the Storefront page is inaccessible/removed.
+  hasPurchasePackages: boolean;
   developers: string[];
   publishers: string[];
   releaseDate: string | null;
@@ -156,7 +161,8 @@ export interface ParsedStorefrontApp {
   metacriticScore: number | null;
   totalRecommendations: number | null;
   dlcAppids: number[];
-  parentAppid: number | null; // For DLC items, the base game appid from fullgame field
+  demoAppids: number[];
+  parentAppid: number | null; // For DLC/demo items, the base game appid from fullgame field
   detailedDescription: string | null;
   aboutTheGame: string | null;
   shortDescription: string | null;
@@ -233,10 +239,25 @@ function hasWorkshopSupport(categories?: Array<{ id: number }>): boolean {
   return categories.some((cat) => cat.id === STEAM_CATEGORY_WORKSHOP);
 }
 
+function normalizeAppidList(values: Array<number | string | null | undefined>): number[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    )
+  ).sort((left, right) => left - right);
+}
+
+function normalizeOptionalAppid(value: number | string | null | undefined): number | null {
+  const appid = Number(value);
+  return Number.isInteger(appid) && appid > 0 ? appid : null;
+}
+
 /**
  * Parse Storefront API response into a cleaner format
  */
-function parseStorefrontResponse(
+export function parseStorefrontResponse(
   appid: number,
   response: StorefrontAppDetails
 ): ParsedStorefrontApp | null {
@@ -245,16 +266,19 @@ function parseStorefrontResponse(
   }
 
   const data = response.data;
-
-  // Game is delisted if packages is null or empty (can't be purchased on Steam)
-  const isDelisted = !data.packages || data.packages.length === 0;
+  const packageIds = data.packages ?? [];
+  const packageGroupSubs = data.package_groups?.flatMap((group) =>
+    (group.subs ?? []).map((sub) => sub.packageid)
+  ) ?? [];
+  const hasPurchasePackages = packageIds.length > 0 || packageGroupSubs.length > 0;
 
   return {
     appid,
     name: data.name,
     type: data.type,
     isFree: data.is_free,
-    isDelisted,
+    isDelisted: false,
+    hasPurchasePackages,
     developers: data.developers || [],
     publishers: data.publishers || [],
     releaseDate: parseReleaseDate(data.release_date?.date || ''),
@@ -268,8 +292,9 @@ function parseStorefrontResponse(
     platforms: data.platforms || { windows: false, mac: false, linux: false },
     metacriticScore: data.metacritic?.score ?? null,
     totalRecommendations: data.recommendations?.total ?? null,
-    dlcAppids: data.dlc || [],
-    parentAppid: data.fullgame?.appid ? parseInt(data.fullgame.appid, 10) : null,
+    dlcAppids: normalizeAppidList(data.dlc ?? []),
+    demoAppids: normalizeAppidList((data.demos ?? []).map((demo) => demo.appid)),
+    parentAppid: normalizeOptionalAppid(data.fullgame?.appid),
     detailedDescription: data.detailed_description ?? null,
     aboutTheGame: data.about_the_game ?? null,
     shortDescription: data.short_description ?? null,
@@ -279,10 +304,8 @@ function parseStorefrontResponse(
     capsuleImage: data.capsule_imagev5 ?? data.capsule_image ?? null,
     backgroundImage: data.background_raw ?? data.background ?? null,
     website: data.website ?? null,
-    packageIds: data.packages ?? [],
-    packageGroupSubs: data.package_groups?.flatMap((group) =>
-      group.subs.map((sub) => sub.packageid)
-    ) ?? [],
+    packageIds,
+    packageGroupSubs,
     screenshots: (data.screenshots ?? []).map((screenshot) => ({
       id: screenshot.id ?? null,
       thumbnailUrl: screenshot.path_thumbnail ?? null,

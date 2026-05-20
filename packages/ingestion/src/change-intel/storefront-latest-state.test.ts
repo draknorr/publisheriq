@@ -19,6 +19,7 @@ function buildStorefrontApp(overrides: Partial<ParsedStorefrontApp> = {}): Parse
     type: 'game',
     isFree: false,
     isDelisted: false,
+    hasPurchasePackages: true,
     developers: ['Studio'],
     publishers: ['Publisher'],
     releaseDate: '2026-03-01',
@@ -33,6 +34,7 @@ function buildStorefrontApp(overrides: Partial<ParsedStorefrontApp> = {}): Parse
     metacriticScore: null,
     totalRecommendations: null,
     dlcAppids: [],
+    demoAppids: [],
     parentAppid: null,
     detailedDescription: null,
     aboutTheGame: null,
@@ -59,6 +61,7 @@ function buildNormalizedSnapshot(
     type: 'game',
     isFree: false,
     isDelisted: false,
+    hasPurchasePackages: true,
     comingSoon: false,
     releaseDate: '2026-03-31',
     releaseDateText: 'Mar 31, 2026',
@@ -79,6 +82,7 @@ function buildNormalizedSnapshot(
     platforms: { windows: true, mac: false, linux: false },
     controllerSupport: null,
     dlcAppids: [],
+    demoAppids: [],
     packageIds: [],
     packageGroupSubs: [],
     heroImages: {
@@ -127,6 +131,7 @@ test('upsertLatestStorefrontState sends null release_date to Tiger when parsing 
     p_type: 'game',
     p_is_free: false,
     p_is_delisted: false,
+    p_has_purchase_packages: true,
     p_release_date: null,
     p_release_date_raw: '',
     p_has_workshop: false,
@@ -171,6 +176,8 @@ test('buildNormalizedStorefrontSnapshotUpsertArgs replays stored storefront snap
       ],
       comingSoon: true,
       dlcAppids: [111, 222],
+      demoAppids: [333],
+      hasPurchasePackages: false,
       price: {
         currentCents: 90000,
         discountPercent: 15,
@@ -185,6 +192,7 @@ test('buildNormalizedStorefrontSnapshotUpsertArgs replays stored storefront snap
     p_type: 'game',
     p_is_free: false,
     p_is_delisted: false,
+    p_has_purchase_packages: false,
     p_release_date: '2026-03-31',
     p_release_date_raw: '',
     p_has_workshop: true,
@@ -194,5 +202,6 @@ test('buildNormalizedStorefrontSnapshotUpsertArgs replays stored storefront snap
     p_developers: ['Snapshot Studio'],
     p_publishers: ['Snapshot Publisher'],
     p_dlc_appids: [111, 222],
+    p_demo_appids: [333],
   });
 });

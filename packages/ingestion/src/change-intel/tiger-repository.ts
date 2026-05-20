@@ -177,13 +177,18 @@ function summarizeStorefrontSnapshot(snapshot: NormalizedStorefrontSnapshot): Re
     comingSoon: snapshot.comingSoon,
     isDelisted: snapshot.isDelisted,
     isFree: snapshot.isFree,
+    hasPurchasePackages: snapshot.hasPurchasePackages ?? (
+      (snapshot.packageIds?.length ?? 0) + (snapshot.packageGroupSubs?.length ?? 0)
+    ) > 0,
     name: snapshot.name,
     price: snapshot.price,
     releaseDate: snapshot.releaseDate,
     releaseDateText: snapshot.releaseDateText,
     type: snapshot.type,
+    demoAppids: snapshot.demoAppids ?? [],
     counts: {
       categories: snapshot.categories.length,
+      demoAppids: snapshot.demoAppids?.length ?? 0,
       developers: snapshot.developers.length,
       dlcAppids: snapshot.dlcAppids.length,
       genres: snapshot.genres.length,
