@@ -214,6 +214,7 @@ export class PublisherIQResearchService {
   async buildReportRecreationPack(
     request: ReportRecreationPackRequest
   ): Promise<ReportEvidencePack> {
+    const budget = normalizeBudget(request.budget);
     const archive = await this.searchReportArchive({
       limit: 5,
       query: request.reportId,
@@ -231,6 +232,7 @@ export class PublisherIQResearchService {
 
     return this.pack({
       artifacts,
+      budget,
       confidenceHints: [
         {
           confidence: 'high_confidence',
@@ -454,6 +456,7 @@ export class PublisherIQResearchService {
   }
 
   async buildGenreGrowthPack(request: GenreGrowthPackRequest): Promise<ReportEvidencePack> {
+    const budget = normalizeBudget(request.budget);
     const topN = clampInt(request.topN ?? 10, 1, 50);
     const year = request.year ?? new Date().getUTCFullYear();
     const artifacts = await this.findRelatedArtifacts(`tag genre market shifts ${year}`);
@@ -491,6 +494,7 @@ export class PublisherIQResearchService {
 
     return this.pack({
       artifacts,
+      budget,
       confidenceHints: defaultConfidenceHints(),
       entities: [{ displayName: `Genre growth ${year}`, entityKind: 'topic' }],
       limitations: [
@@ -506,6 +510,7 @@ export class PublisherIQResearchService {
   async buildYoutubeCreatorPack(
     request: YoutubeCreatorPackRequest
   ): Promise<ReportEvidencePack> {
+    const budget = normalizeBudget(request.budget);
     const resolved = await this.resolveEntity(request.game, ['game'], 'game');
     const sections: ReportEvidenceSection[] = [];
     const provenance: QueryProvenance[] = [];
@@ -525,13 +530,14 @@ export class PublisherIQResearchService {
       );
       if (youtube) {
         provenance.push(youtube.provenance);
-        sections.push(youtubeSection(youtube, normalizeBudget(request.budget)));
+        sections.push(youtubeSection(youtube, budget));
       }
     } else {
       limitations.push('The requested game could not be resolved through query-api.');
     }
 
     return this.pack({
+      budget,
       confidenceHints: defaultConfidenceHints(),
       entities: resolved ? [entityFromResolved(resolved)] : [],
       limitations,
@@ -545,6 +551,7 @@ export class PublisherIQResearchService {
   async buildCompanyDiligencePack(
     request: CompanyDiligencePackRequest
   ): Promise<ReportEvidencePack> {
+    const budget = normalizeBudget(request.budget);
     const resolved = await this.resolveEntity(request.company, ['publisher', 'developer'], 'company');
     const sections: ReportEvidenceSection[] = [];
     const provenance: QueryProvenance[] = [];
@@ -624,6 +631,7 @@ export class PublisherIQResearchService {
 
     return this.pack({
       artifacts,
+      budget,
       confidenceHints: defaultConfidenceHints(),
       entities,
       limitations,
@@ -637,6 +645,7 @@ export class PublisherIQResearchService {
   async buildUnreleasedOpportunityPack(
     request: UnreleasedOpportunityPackRequest
   ): Promise<ReportEvidencePack> {
+    const budget = normalizeBudget(request.budget);
     const artifacts = await this.findRelatedArtifacts('unreleased publisher opportunity');
     const sections: ReportEvidenceSection[] = [];
     const provenance: QueryProvenance[] = [];
@@ -646,7 +655,7 @@ export class PublisherIQResearchService {
         genres: request.filters?.genres ?? undefined,
         includeAppTypes: ['game'],
         isReleased: false,
-        limit: normalizeBudget(request.budget) === 'full' ? 50 : 25,
+        limit: budget === 'full' ? 50 : 25,
         releaseYear: releaseYearFilter(request.releaseWindow),
         sortBy: 'release_date',
         sortDirection: 'asc',
@@ -664,7 +673,7 @@ export class PublisherIQResearchService {
         summary:
           'Upcoming/unreleased catalog rows suitable for outreach and launch-readiness screening.',
         title: 'Unreleased Catalog Candidates',
-        truncated: catalog.items.length >= (normalizeBudget(request.budget) === 'full' ? 50 : 25),
+        truncated: catalog.items.length >= (budget === 'full' ? 50 : 25),
       }));
     }
 
@@ -674,6 +683,7 @@ export class PublisherIQResearchService {
 
     return this.pack({
       artifacts,
+      budget,
       confidenceHints: defaultConfidenceHints(),
       limitations: [
         'V1 combines query-api unreleased catalog reads with archived opportunity CSVs when present.',
@@ -690,6 +700,7 @@ export class PublisherIQResearchService {
     request: ReadonlyAnalysisRequest,
     role: ResearchRole
   ): Promise<ReadonlyAnalysisResponse> {
+    const budget = normalizeBudget(request.budget);
     const validation = validateReadonlySql(request.sql, {
       expectedRows: request.expectedRows ?? null,
       role,
@@ -764,6 +775,7 @@ export class PublisherIQResearchService {
     };
 
     const pack = this.pack({
+      budget,
       confidenceHints: [
         {
           confidence: 'directional_signal',

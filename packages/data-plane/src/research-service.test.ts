@@ -18,12 +18,39 @@ test('research archive search finds committed report artifacts', async () => {
 test('report recreation pack carries source artifacts and limitations', async () => {
   const service = new PublisherIQResearchService({});
   const pack = await service.buildReportRecreationPack({
+    budget: 'lite',
     reportId: 'tag genre market shifts 2026 04 06',
   });
 
   assert.equal(pack.packType, 'report_recreation');
+  assert.equal(pack.costEstimate.budget, 'lite');
   assert.ok(pack.sections.some((section) => section.id === 'archive-artifacts'));
   assert.ok(pack.limitations.some((limitation) => limitation.includes('archived evidence')));
+});
+
+test('research packs preserve the requested budget in cost metadata', async () => {
+  const service = new PublisherIQResearchService({});
+
+  const genre = await service.buildGenreGrowthPack({ budget: 'lite', year: 2026 });
+  assert.equal(genre.costEstimate.budget, 'lite');
+
+  const youtube = await service.buildYoutubeCreatorPack({
+    budget: 'full',
+    game: 'Not A Real Game',
+  });
+  assert.equal(youtube.costEstimate.budget, 'full');
+
+  const company = await service.buildCompanyDiligencePack({
+    budget: 'lite',
+    company: 'Not A Real Company',
+  });
+  assert.equal(company.costEstimate.budget, 'lite');
+
+  const unreleased = await service.buildUnreleasedOpportunityPack({
+    budget: 'full',
+    filters: {},
+  });
+  assert.equal(unreleased.costEstimate.budget, 'full');
 });
 
 test('readonly sql validation rejects writes and sensitive schemas', () => {
