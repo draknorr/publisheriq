@@ -14,21 +14,24 @@ test('loadConfig uses the hosted MCP URL by default', () => {
 
 test('forwards JSON-RPC requests with bearer auth', async () => {
   const calls = [];
-  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","id":1,"method":"tools/list"}', {
-    config: {
-      bearerToken: 'secret',
-      timeoutMs: 1000,
-      url: 'https://example.test/mcp',
-    },
-    fetchImpl: async (url, init) => {
-      calls.push({ init, url });
-      return jsonResponse({
-        id: 1,
-        jsonrpc: '2.0',
-        result: { tools: [] },
-      });
-    },
-  });
+  const response = await forwardJsonRpcLine(
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_report_archive","arguments":{"query":"mortal sin","limit":1}}}',
+    {
+      config: {
+        bearerToken: 'secret',
+        timeoutMs: 1000,
+        url: 'https://example.test/mcp',
+      },
+      fetchImpl: async (url, init) => {
+        calls.push({ init, url });
+        return jsonResponse({
+          id: 1,
+          jsonrpc: '2.0',
+          result: { content: [] },
+        });
+      },
+    }
+  );
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://example.test/mcp');
@@ -37,35 +40,104 @@ test('forwards JSON-RPC requests with bearer auth', async () => {
   assert.deepEqual(JSON.parse(response), {
     id: 1,
     jsonrpc: '2.0',
-    result: { tools: [] },
+    result: { content: [] },
   });
 });
 
-test('does not write a response for notification-only calls with no hosted response body', async () => {
-  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","method":"notifications/initialized"}', {
-    config: {
-      bearerToken: 'secret',
-      timeoutMs: 1000,
-      url: 'https://example.test/mcp',
+test('answers initialize locally without calling the hosted server', async () => {
+  let called = false;
+  const response = await forwardJsonRpcLine(
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"Claude","version":"0.1.0"}}}',
+    {
+      fetchImpl: async () => {
+        called = true;
+        return jsonResponse({});
+      },
+    }
+  );
+
+  assert.equal(called, false);
+  assert.deepEqual(JSON.parse(response), {
+    id: 1,
+    jsonrpc: '2.0',
+    result: {
+      capabilities: {
+        resources: {},
+        tools: {},
+      },
+      protocolVersion: '2025-11-25',
+      serverInfo: {
+        name: 'publisheriq-research',
+        version: '0.1.0',
+      },
     },
-    fetchImpl: async () => jsonResponse('', 202, false),
+  });
+});
+
+test('answers tools/list locally without requiring config', async () => {
+  let called = false;
+  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","id":2,"method":"tools/list"}', {
+    fetchImpl: async () => {
+      called = true;
+      return jsonResponse({});
+    },
   });
 
+  assert.equal(called, false);
+  const payload = JSON.parse(response);
+  assert.equal(payload.id, 2);
+  assert.equal(payload.jsonrpc, '2.0');
+  assert.ok(payload.result.tools.some((tool) => tool.name === 'build_game_research_pack'));
+});
+
+test('answers resources/list locally without requiring config', async () => {
+  let called = false;
+  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","id":3,"method":"resources/list"}', {
+    fetchImpl: async () => {
+      called = true;
+      return jsonResponse({});
+    },
+  });
+
+  assert.equal(called, false);
+  const payload = JSON.parse(response);
+  assert.equal(payload.id, 3);
+  assert.equal(payload.jsonrpc, '2.0');
+  assert.ok(
+    payload.result.resources.some(
+      (resource) => resource.uri === 'publisheriq://schemas/evidence-pack/v1'
+    )
+  );
+});
+
+test('does not write a response for notification-only initialization calls', async () => {
+  let called = false;
+  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","method":"notifications/initialized"}', {
+    fetchImpl: async () => {
+      called = true;
+      return jsonResponse('', 202, false);
+    },
+  });
+
+  assert.equal(called, false);
   assert.equal(response, null);
 });
 
 test('turns hosted auth failures into JSON-RPC errors', async () => {
-  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","id":2,"method":"tools/list"}', {
-    config: {
-      bearerToken: 'wrong',
-      timeoutMs: 1000,
-      url: 'https://example.test/mcp',
-    },
-    fetchImpl: async () => jsonResponse({ error: 'Unauthorized' }, 401),
-  });
+  const response = await forwardJsonRpcLine(
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search_report_archive","arguments":{"query":"mortal sin","limit":1}}}',
+    {
+      config: {
+        bearerToken: 'wrong',
+        timeoutMs: 1000,
+        url: 'https://example.test/mcp',
+      },
+      fetchImpl: async () => jsonResponse({ error: 'Unauthorized' }, 401),
+    }
+  );
 
   const payload = JSON.parse(response);
-  assert.equal(payload.id, 2);
+  assert.equal(payload.id, 4);
   assert.equal(payload.jsonrpc, '2.0');
   assert.equal(payload.error.code, -32000);
   assert.match(payload.error.message, /HTTP 401/);
@@ -73,7 +145,29 @@ test('turns hosted auth failures into JSON-RPC errors', async () => {
 
 test('reports missing token without calling the hosted server', async () => {
   let called = false;
-  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","id":3,"method":"tools/list"}', {
+  const response = await forwardJsonRpcLine(
+    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_report_archive","arguments":{"query":"mortal sin","limit":1}}}',
+    {
+      env: {
+        RESEARCH_MCP_URL: 'https://example.test/mcp',
+      },
+      fetchImpl: async () => {
+        called = true;
+        return jsonResponse({});
+      },
+    }
+  );
+
+  assert.equal(called, false);
+  const payload = JSON.parse(response);
+  assert.equal(payload.id, 5);
+  assert.equal(payload.error.code, -32000);
+  assert.match(payload.error.message, /RESEARCH_MCP_BEARER_TOKEN/);
+});
+
+test('local discovery works without a token', async () => {
+  let called = false;
+  const response = await forwardJsonRpcLine('{"jsonrpc":"2.0","id":6,"method":"tools/list"}', {
     env: {
       RESEARCH_MCP_URL: 'https://example.test/mcp',
     },
@@ -85,9 +179,8 @@ test('reports missing token without calling the hosted server', async () => {
 
   assert.equal(called, false);
   const payload = JSON.parse(response);
-  assert.equal(payload.id, 3);
-  assert.equal(payload.error.code, -32000);
-  assert.match(payload.error.message, /RESEARCH_MCP_BEARER_TOKEN/);
+  assert.equal(payload.id, 6);
+  assert.ok(payload.result.tools.length > 0);
 });
 
 test('returns JSON-RPC parse errors for invalid input', async () => {

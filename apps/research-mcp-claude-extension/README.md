@@ -1,8 +1,9 @@
 # PublisherIQ Research Claude Extension
 
 This package builds a Claude Desktop `.mcpb` extension for PublisherIQ Research.
-The extension runs a tiny local stdio proxy that forwards Claude MCP requests to
-the hosted PublisherIQ Research MCP endpoint.
+The extension runs a tiny local stdio proxy. It answers Claude's startup and
+tool/resource discovery calls locally, then forwards actual PublisherIQ data
+tool calls to the hosted PublisherIQ Research MCP endpoint.
 
 The bundle does not contain secrets. Claude Desktop prompts for the bearer token
 at install time and stores it as a sensitive setting.
@@ -29,6 +30,12 @@ https://publisheriq-research-mcp-prod-production.up.railway.app/mcp
 ```
 
 5. Paste the PublisherIQ Research MCP bearer token when prompted.
+
+If you are replacing an older local build, uninstall the existing PublisherIQ
+Research extension first, install the newly generated `.mcpb`, then fully quit
+and reopen Claude Desktop. Claude caches extension server processes aggressively
+enough that disabling and re-enabling is not always sufficient after proxy code
+changes.
 
 ## Smoke Prompts
 
