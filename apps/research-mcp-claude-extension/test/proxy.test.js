@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DEFAULT_MCP_URL, forwardJsonRpcLine, loadConfig } from '../server/proxy.js';
+import {
+  DEFAULT_MCP_URL,
+  forwardJsonRpcLine,
+  isCliEntrypoint,
+  loadConfig,
+} from '../server/proxy.js';
 
 test('loadConfig uses the hosted MCP URL by default', () => {
   const config = loadConfig({
@@ -181,6 +186,16 @@ test('local discovery works without a token', async () => {
   const payload = JSON.parse(response);
   assert.equal(payload.id, 6);
   assert.ok(payload.result.tools.length > 0);
+});
+
+test('recognizes CLI entrypoint paths with spaces', () => {
+  assert.equal(
+    isCliEntrypoint(
+      'file:///Users/example/Library/Application%20Support/Claude/Claude%20Extensions/local.mcpb.publisheriq.publisheriq-research/server/proxy.js',
+      '/Users/example/Library/Application Support/Claude/Claude Extensions/local.mcpb.publisheriq.publisheriq-research/server/proxy.js'
+    ),
+    true
+  );
 });
 
 test('returns JSON-RPC parse errors for invalid input', async () => {

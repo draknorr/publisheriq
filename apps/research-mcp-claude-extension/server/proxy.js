@@ -1,4 +1,5 @@
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_MCP_URL = 'https://publisheriq-research-mcp-prod-production.up.railway.app/mcp';
 
@@ -296,6 +297,18 @@ export function startProxy(options = {}) {
   });
 }
 
+export function isCliEntrypoint(metaUrl, argvPath = process.argv[1]) {
+  if (!argvPath) {
+    return false;
+  }
+
+  try {
+    return fileURLToPath(metaUrl) === argvPath;
+  } catch {
+    return false;
+  }
+}
+
 function localResponseFor(request, hasResponse) {
   switch (request.method) {
     case 'initialize':
@@ -393,6 +406,6 @@ function messageFromError(error) {
   return error instanceof Error ? error.message : 'Unknown PublisherIQ MCP proxy error.';
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isCliEntrypoint(import.meta.url)) {
   startProxy();
 }
